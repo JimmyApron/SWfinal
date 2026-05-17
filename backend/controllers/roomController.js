@@ -1,74 +1,99 @@
 const supabase = require("../supabaseClient");
 
-// 랜덤 초대코드 생성
-function generateInviteCode() {
+function makeInviteCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-// 방 생성
 async function createRoom(req, res) {
-  const { roomName, description } = req.body;
+  const { roomName, description, userId } = req.body;
 
-  if (!roomName) {
+  if (!roomName || !userId) {
     return res.status(400).json({
-      message: "방 이름은 필수입니다.",
+      message: "roomName과 userId가 필요합니다.",
     });
   }
 
-  const newRoom = {
-    roomName,
-    description: description || "",
-    inviteCode: generateInviteCode(),
-  };
+  const inviteCode = makeInviteCode();
 
-  const { data, error } = await supabase
+  const { data: room, error } = await supabase
     .from("rooms")
-    .insert([newRoom])
+    .insert({
+      roomName,
+      description: description || "",
+      inviteCode,
+    })
     .select()
     .single();
 
   if (error) {
     return res.status(500).json({
       message: "방 생성 실패",
-      error: error.message,
+      error,
+    });
+  }
+
+  const { error: memberError } = await supabase
+    .from("room_members")
+    .insert({
+      room_id: room.id,
+      user_id: userId,
+    });
+
+  if (memberError) {
+    return res.status(500).json({
+      message: "방은 생성됐지만 멤버 저장 실패",
+      error: memberError,
     });
   }
 
   return res.status(201).json({
     message: "방 생성 완료",
-    room: data,
+    room,
   });
 }
 
-// 초대코드로 방 입장
-async function joinRoomByInviteCode(req, res) {
-  const { inviteCode } = req.body;
+async function joinRoom(req, res) {
+  const { inviteCode, userId } = req.body;
 
-  if (!inviteCode) {
+  if (!inviteCode || !userId) {
     return res.status(400).json({
-      message: "초대코드를 입력하세요.",
+      message: "inviteCode와 userId가 필요합니다.",
     });
   }
 
-  const { data, error } = await supabase
+  const { data: room, error: roomError } = await supabase
     .from("rooms")
     .select("*")
-    .eq("inviteCode", inviteCode.toUpperCase())
+    .eq("inviteCode", inviteCode)
     .single();
 
-  if (error || !data) {
+  if (roomError || !room) {
     return res.status(404).json({
-      message: "해당 초대코드의 방을 찾을 수 없습니다.",
+      message: "존재하지 않는 초대코드입니다.",
     });
   }
 
-  return res.status(200).json({
-    message: "방 입장 성공",
-    room: data,
+  const { error: memberError } = await supabase
+    .from("room_members")
+    .upsert({
+      room_id: room.id,
+      user_id: userId,
+    });
+
+  if (memberError) {
+    return res.status(500).json({
+      message: "방 참가 실패",
+      error: memberError,
+    });
+  }
+
+  return res.json({
+    message: "방 참가 완료",
+    room,
   });
 }
 
 module.exports = {
   createRoom,
-  joinRoomByInviteCode,
+  joinRoom,
 };
