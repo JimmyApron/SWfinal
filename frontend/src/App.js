@@ -1,35 +1,25 @@
-import logo from './logo.svg';
-import './App.css';
-import { supabase } from './api/supabaseClient'  // ← 추가
-import { useEffect } from 'react' 
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+
+import RoomCreatePage from "./pages/RoomCreatePage";
+import RoomInvitePage from "./pages/RoomInvitePage";
 
 function App() {
-  useEffect(() => {                               // ← 추가
-    const test = async () => {
-      const { data, error } = await supabase.from('test').select('*')
-      console.log('data:', data)
-      console.log('error:', error)
-    }
-    test()
-  }, [])
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/"
+          element={<RoomCreatePage />}
+        />
+
+        <Route
+          path="/room-invite"
+          element={<RoomInvitePage />}
+        />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
 export default App;
+
