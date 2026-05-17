@@ -1,7 +1,17 @@
 import logo from './logo.svg';
 import './App.css';
+import { supabase } from './api/supabaseClient'  // ← 추가
+import { useEffect } from 'react' 
 
 function App() {
+  useEffect(() => {                               // ← 추가
+    const test = async () => {
+      const { data, error } = await supabase.from('test').select('*')
+      console.log('data:', data)
+      console.log('error:', error)
+    }
+    test()
+  }, [])
   return (
     <div className="App">
       <header className="App-header">

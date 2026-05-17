@@ -1,20 +1,20 @@
 require('dotenv').config();
-const mysql = require('mysql');
 
-const connection = mysql.createConnection({
+const { Client } = require('pg');
+
+const client = new Client({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  port: Number(process.env.DB_PORT),
+  port: process.env.DB_PORT,
+  ssl: {
+    rejectUnauthorized: false,
+  },
 });
 
-connection.connect((err) => {
-  if (err) {
-    console.error('DB 연결 실패:', err);
-    return;
-  }
-  console.log('DB 연결 성공');
-});
+client.connect()
+  .then(() => console.log('✅ Supabase 연결 성공'))
+  .catch(err => console.error('❌ 연결 실패', err));
 
-module.exports = connection;
+module.exports = client;
