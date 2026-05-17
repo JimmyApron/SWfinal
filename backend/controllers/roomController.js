@@ -1,11 +1,22 @@
 function createRoom(req, res) {
-  const { roomName } = req.body;
+  const { roomName, description } = req.body;
 
-  console.log(roomName);
+  if (!roomName) {
+    return res.status(400).json({
+      message: "방 이름은 필수입니다.",
+    });
+  }
 
-  res.json({
+  const newRoom = {
+    id: Date.now(),
+    roomName: roomName,
+    description: description || "",
+    inviteCode: Math.random().toString(36).substring(2, 8),
+  };
+
+  return res.status(201).json({
     message: "방 생성 완료",
-    roomName,
+    room: newRoom,
   });
 }
 
