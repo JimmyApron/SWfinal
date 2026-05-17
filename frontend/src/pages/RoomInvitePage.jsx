@@ -12,7 +12,7 @@ function RoomInvitePage() {
     }
 
     try {
-      const result = await joinRoomByInviteCode(inviteCode);
+      const result = await joinRoomByInviteCode(inviteCode,"test-user-1"); //USERiD 없어서
 
       setJoinedRoom(result.room);
 

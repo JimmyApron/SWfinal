@@ -16,6 +16,7 @@ function RoomCreatePage() {
       const result = await createRoom({
         roomName,
         description,
+        userId: "test-user-1"
       });
 
       setCreatedRoom(result.room);
@@ -64,9 +65,9 @@ function RoomCreatePage() {
       {createdRoom && (
         <div>
           <h2>생성된 방</h2>
-          <p>방 이름: {createdRoom.roomName}</p>
+          <p>방 이름: {createdRoom.roomname}</p>
           <p>설명: {createdRoom.description}</p>
-          <p>초대코드: {createdRoom.inviteCode}</p>
+          <p>초대코드: {createdRoom.invitecode}</p>
 
           <button onClick={handleCopyInviteCode}>
             초대코드 복사하기

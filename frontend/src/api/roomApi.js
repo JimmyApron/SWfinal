@@ -16,7 +16,7 @@ export async function createRoom(roomData) {
   return result;
 }
 
-export async function joinRoomByInviteCode(inviteCode) {
+export async function joinRoomByInviteCode(inviteCode, userId) {
   const response = await fetch("http://localhost:3000/rooms/invite", {
     method: "POST",
     headers: {
@@ -24,6 +24,7 @@ export async function joinRoomByInviteCode(inviteCode) {
     },
     body: JSON.stringify({
       inviteCode,
+      userId,
     }),
   });
 

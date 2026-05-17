@@ -7,6 +7,6 @@ const {
 } = require("../controllers/roomController");
 
 router.post("/", createRoom);
-router.post("/join", joinRoom);
+router.post("/invite", joinRoom);
 
 module.exports = router;
