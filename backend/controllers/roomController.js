@@ -1,4 +1,11 @@
-function createRoom(req, res) {
+// controllers/roomController.js
+const supabase = require("../supabaseClient");
+
+function generateInviteCode() {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+async function createRoom(req, res) {
   const { roomName, description } = req.body;
 
   if (!roomName) {
@@ -8,15 +15,27 @@ function createRoom(req, res) {
   }
 
   const newRoom = {
-    id: Date.now(),
-    roomName: roomName,
+    roomName,
     description: description || "",
-    inviteCode: Math.random().toString(36).substring(2, 8),
+    inviteCode: generateInviteCode(),
   };
+
+  const { data, error } = await supabase
+    .from("rooms")
+    .insert([newRoom])
+    .select()
+    .single();
+
+  if (error) {
+    return res.status(500).json({
+      message: "방 생성 실패",
+      error: error.message,
+    });
+  }
 
   return res.status(201).json({
     message: "방 생성 완료",
-    room: newRoom,
+    room: data,
   });
 }
 
