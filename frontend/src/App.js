@@ -7,7 +7,8 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<RoomCreatePage />} />
+        <Route path="/" element={<RoomInvitePage />} />
+        <Route path="/room-create" element={<RoomCreatePage />} />
         <Route path="/room-invite" element={<RoomInvitePage />} />
       </Routes>
     </BrowserRouter>
