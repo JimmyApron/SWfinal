@@ -1,23 +1,18 @@
-import { supabase } from './supabaseClient'
-
-// 랜덤 초대코드 생성 함수
-function generateInviteCode() {
-  return Math.random().toString(36).substring(2, 8).toUpperCase()
-}
-
 export async function createRoom(roomData) {
-  const { data, error } = await supabase
-    .from('rooms')
-    .insert([{
-      roomName: roomData.roomName,
-      description: roomData.description,
-      inviteCode: generateInviteCode()  // 자동생성!
-    }])
-    .select()
-    .single()
+  const response = await fetch("http://localhost:3000/rooms", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(roomData),
+  });
 
-  if (error) throw new Error("방 생성 실패")
+  const result = await response.json();
 
-  return { room: data }
+  if (!response.ok) {
+    console.error("방 생성 실패 상세:", result);
+    throw new Error(result.message || "방 생성 실패");
+  }
+
+  return result;
 }
-//supabase에 rooms 테이블에 저장 

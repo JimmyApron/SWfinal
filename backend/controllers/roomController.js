@@ -1,12 +1,15 @@
 // controllers/roomController.js
 const supabase = require("../supabaseClient");
+//초대 코드 생성
 
 function generateInviteCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
 async function createRoom(req, res) {
-  const { roomName, description } = req.body;
+  console.log("POST /rooms 요청 들어옴");//
+  console.log("req.body:", req.body);//
+  const { roomName, description, userId } = req.body;
 
   if (!roomName) {
     return res.status(400).json({
@@ -15,9 +18,10 @@ async function createRoom(req, res) {
   }
 
   const newRoom = {
-    roomName,
+    roomname: roomName,
     description: description || "",
-    inviteCode: generateInviteCode(),
+    invitecode: generateInviteCode(),
+    createdby: userId || "guest",
   };
 
   const { data, error } = await supabase
@@ -30,6 +34,9 @@ async function createRoom(req, res) {
     return res.status(500).json({
       message: "방 생성 실패",
       error: error.message,
+      details: error.details,//
+      hint: error.hint,//
+      code: error.code,//
     });
   }
 
