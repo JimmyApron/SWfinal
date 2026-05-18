@@ -9,7 +9,7 @@ export async function createRoom(roomData) {
     roomname: roomData.roomName,
     description: roomData.description || "",
     invitecode: generateInviteCode(),
-    createdby: roomData.userId || "guest",
+    createdby: roomData.userId || "test-user-1",
   };
 
   const { data, error } = await supabase
@@ -28,6 +28,7 @@ export async function createRoom(roomData) {
     room: data,
   };
 }
+
 export async function joinRoomByInviteCode(inviteCode, userId) {
   const { data: room, error: roomError } = await supabase
     .from("rooms")
@@ -69,5 +70,3 @@ export async function joinRoomByInviteCode(inviteCode, userId) {
     room,
   };
 }
-
-
