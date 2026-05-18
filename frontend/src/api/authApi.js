@@ -168,3 +168,47 @@ export async function getCurrentUserApi() {
     profile,
   }
 }
+/**
+ * 7. [비회원 전용] 특정 방 내부의 닉네임 중복 확인 API
+ */
+export const checkRoomNicknameDuplicateApi = async (nickname, roomId) => {
+  try {
+    const { data, error } = await supabase
+      .from('room_guests')
+      .select('nickname')
+      .eq('room_id', roomId)
+      .eq('nickname', nickname)
+
+    if (error) throw error
+
+    return data.length > 0 // 중복이면 true, 사용 가능하면 false
+  } catch (error) {
+    console.error('방 비회원 닉네임 체크 중 오류 발생:', error.message)
+    throw error
+  }
+}
+
+/**
+ * 8. [비회원 전용] 비회원 방 입장 등록 API
+ */
+export const insertRoomGuestApi = async (nickname, roomId) => {
+  try {
+    const { data, error } = await supabase
+      .from('room_guests')
+      .insert([
+        {
+          room_id: roomId,
+          nickname: nickname,
+        },
+      ])
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return data // 생성된 비회원의 id, nickname, room_id, created_at이 반환됨
+  } catch (error) {
+    console.error('비회원 등록 중 오류 발생:', error.message)
+    throw error
+  }
+}
