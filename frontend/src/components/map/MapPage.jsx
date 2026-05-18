@@ -15,22 +15,24 @@ function MapPage() {
       const location = await getCurrentPosition();
 
       setCurrentLocation(location);
-      setMessage("현재 위치를 가져왔습니다.");
+      setMessage("현재 위치를 가져왔습니다. DB에 저장하는 중입니다.");
 
       try {
         await saveMyLocation({
+          userId: "test-user",
+          roomId: null,
           latitude: location.lat,
           longitude: location.lng,
           accuracy: location.accuracy,
         });
 
-        setMessage("현재 위치를 가져오고 서버에 저장했습니다.");
+        setMessage("현재 위치를 가져오고 DB에 저장했습니다.");
       } catch (error) {
-        console.error(error);
-        setMessage("현재 위치는 가져왔지만 서버 저장은 실패했습니다.");
+        console.error("Supabase 저장 오류:", error);
+        setMessage("현재 위치는 가져왔지만 DB 저장은 실패했습니다.");
       }
     } catch (error) {
-      console.error(error);
+      console.error("현재 위치 가져오기 오류:", error);
       setMessage("현재 위치를 가져오지 못했습니다.");
     }
   };

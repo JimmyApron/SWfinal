@@ -1,41 +1,50 @@
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:3000/api";
+import { supabase } from "./supabaseClient";
 
 export async function saveMyLocation(locationData) {
-  const response = await fetch(`${API_BASE_URL}/locations/me`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(locationData),
-  });
+    const { data, error } = await supabase
+        .from("user_locations")
+        .insert([
+            {
+                user_id: locationData.userId || "test-user",
+                latitude: locationData.latitude,
+                longitude: locationData.longitude,
+                accuracy: locationData.accuracy,
+            },
+        ])
+        .select();
 
-  if (!response.ok) {
-    throw new Error("내 위치 저장에 실패했습니다.");
-  }
+    if (error) {
+        throw error;
+    }
 
-  return response.json();
+    return data;
 }
 
-export async function getMyLocation() {
-  const response = await fetch(`${API_BASE_URL}/locations/me`, {
-    method: "GET",
-  });
+export async function getMyLocation(userId = "test-user") {
+    const { data, error } = await supabase
+        .from("user_locations")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1);
 
-  if (!response.ok) {
-    throw new Error("내 위치 조회에 실패했습니다.");
-  }
+    if (error) {
+        throw error;
+    }
 
-  return response.json();
+    return data?.[0] || null;
 }
 
 export async function getRoomMemberLocations(roomId) {
-  const response = await fetch(`${API_BASE_URL}/rooms/${roomId}/locations`, {
-    method: "GET",
-  });
+    const { data, error } = await supabase
+        .from("user_locations")
+        .select("*")
+        .eq("room_id", roomId)
+        .order("created_at", { ascending: false });
 
-  if (!response.ok) {
-    throw new Error("방 멤버 위치 조회에 실패했습니다.");
-  }
+    if (error) {
+        throw error;
+    }
 
-  return response.json();
+    return data;
 }
