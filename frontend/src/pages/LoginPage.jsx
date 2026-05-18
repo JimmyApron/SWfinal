@@ -1,50 +1,84 @@
-import React, { useState, useContext } from 'react';
-import { loginApi } from '../api/authApi';
-import { AuthContext } from '../context/AuthContext';
+import { useContext, useState } from 'react'
+import { loginApi } from '../api/authApi'
+import { AuthContext } from '../context/AuthContext'
 
-const LoginPage = () => {
-  const { user, login, logout } = useContext(AuthContext);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+function LoginPage() {
+  const { user, profile, login, logout } = useContext(AuthContext)
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    const data = await loginApi({ email, password });
-    
-    if (data.user) {
-      login(data.user); // Context Àü¿ª »óÅÂ ¹× ·ÎÄÃ ½ºÅä¸®Áö¿¡ À¯Àú ÀúÀå
-      alert(data.message);
-    } else {
-      alert(data.message || '·Î±×ÀÎ ½ÇÆĞ');
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [message, setMessage] = useState('')
+
+  const handleLogin = async (event) => {
+    event.preventDefault()
+
+    if (!email || !password) {
+      setMessage('ì´ë©”ì¼ê³¼ ë¹„ë°€ë²ˆí˜¸ë¥¼ ì…ë ¥í•´ì£¼ì„¸ìš”.')
+      return
     }
-  };
 
-  // ÀÌ¹Ì ·Î±×ÀÎµÈ »óÅÂ¶ó¸é À¯Àú Á¤º¸¿Í ·Î±×¾Æ¿ô ¹öÆ° Ç¥½Ã
-  if (user) {
-    return (
-      <div style={{ padding: '20px' }}>
-        <h2>È¯¿µÇÕ´Ï´Ù, {user.nickname}´Ô!</h2>
-        <p>ÀÌ¸ŞÀÏ: {user.email}</p>
-        <button onClick={logout}>·Î±×¾Æ¿ô</button>
-      </div>
-    );
+    try {
+      setMessage('ë¡œê·¸ì¸ ì¤‘ì…ë‹ˆë‹¤.')
+
+      const result = await loginApi({
+        email,
+        password,
+      })
+
+      login({
+        user: result.user,
+        profile: result.profile,
+      })
+
+      setMessage('ë¡œê·¸ì¸ì— ì„±ê³µí–ˆìŠµë‹ˆë‹¤.')
+    } catch (error) {
+      console.error('ë¡œê·¸ì¸ ì˜¤ë¥˜:', error)
+      setMessage(error.message || 'ë¡œê·¸ì¸ì— ì‹¤íŒ¨í–ˆìŠµë‹ˆë‹¤.')
+    }
   }
 
-  // ·Î±×ÀÎ Æû È­¸é
+  if (user) {
+    return (
+      <section>
+        <h2>ë¡œê·¸ì¸ ìƒíƒœ</h2>
+        <p>ì´ë©”ì¼: {user.email}</p>
+        <p>ë‹‰ë„¤ì„: {profile?.nickname}</p>
+        <button type="button" onClick={logout}>
+          ë¡œê·¸ì•„ì›ƒ
+        </button>
+      </section>
+    )
+  }
+
   return (
-    <div style={{ padding: '20px' }}>
-      <h2>·Î±×ÀÎ</h2>
+    <section>
+      <h2>ë¡œê·¸ì¸</h2>
+
       <form onSubmit={handleLogin}>
         <div>
-          <input type="email" placeholder="ÀÌ¸ŞÀÏ" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input
+            type="email"
+            placeholder="ì´ë©”ì¼"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
         </div>
+
         <div>
-          <input type="password" placeholder="ºñ¹Ğ¹øÈ£" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <input
+            type="password"
+            placeholder="ë¹„ë°€ë²ˆí˜¸"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
         </div>
-        <button type="submit">·Î±×ÀÎ</button>
+
+        <button type="submit">ë¡œê·¸ì¸</button>
       </form>
-    </div>
-  );
-};
+
+      {message && <p>{message}</p>}
+    </section>
+  )
+}
 
 export default LoginPage;

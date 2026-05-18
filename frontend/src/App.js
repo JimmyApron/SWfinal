@@ -1,35 +1,32 @@
-import logo from './logo.svg';
-import './App.css';
-import { supabase } from './api/supabaseClient'  // ← 추가
-import { useEffect } from 'react' 
+import './App.css'
+import { useState } from 'react'
+import { AuthProvider } from './context/AuthContext.jsx'
+import SignupPage from './pages/SignupPage.jsx'
+import LoginPage from './pages/LoginPage.jsx'
 
 function App() {
-  useEffect(() => {                               // ← 추가
-    const test = async () => {
-      const { data, error } = await supabase.from('test').select('*')
-      console.log('data:', data)
-      console.log('error:', error)
-    }
-    test()
-  }, [])
+  const [page, setPage] = useState('signup')
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
-  );
+    <AuthProvider>
+      <div className="App">
+        <h1>SWfinal Auth Test</h1>
+
+        <nav>
+          <button type="button" onClick={() => setPage('signup')}>
+            회원가입
+          </button>
+
+          <button type="button" onClick={() => setPage('login')}>
+            로그인
+          </button>
+        </nav>
+
+        {page === 'signup' && <SignupPage />}
+        {page === 'login' && <LoginPage />}
+      </div>
+    </AuthProvider>
+  )
 }
 
-export default App;
+export default App
