@@ -12,19 +12,36 @@ export async function createRoom(roomData) {
     createdby: roomData.userId || "test-user-1",
   };
 
-  const { data, error } = await supabase
+  const { data: room, error: roomError } = await supabase
     .from("rooms")
     .insert([newRoom])
     .select()
     .single();
 
-  if (error) {
-    console.error("방 생성 실패 상세:", error);
-    throw new Error(error.message || "방 생성 실패");
+  if (roomError) {
+    console.error("방 생성 실패 상세:", roomError);
+    throw new Error(roomError.message || "방 생성 실패");
+  }
+
+  const candidateRows = roomData.candidates.map((candidate) => ({
+    roomid: room.id,
+    date: candidate.date,
+    starttime: candidate.isAllDay ? null : candidate.startTime,
+    endtime: candidate.isAllDay ? null : candidate.endTime,
+    isallday: candidate.isAllDay,
+  }));
+
+  const { error: candidateError } = await supabase
+    .from("schedule_candidates")
+    .insert(candidateRows);
+
+  if (candidateError) {
+    console.error("후보 일정 저장 실패 상세:", candidateError);
+    throw new Error(candidateError.message || "후보 일정 저장 실패");
   }
 
   return {
     message: "방 생성 완료",
-    room: data,
+    room,
   };
 }
