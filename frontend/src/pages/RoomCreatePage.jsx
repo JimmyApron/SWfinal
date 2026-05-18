@@ -29,7 +29,7 @@ function RoomCreatePage() {
 
   const handleCopyInviteCode = async () => {
     try {
-      await navigator.clipboard.writeText(createdRoom.inviteCode);
+      await navigator.clipboard.writeText(createdRoom.invitecode);
       alert("초대코드가 복사되었습니다.");
     } catch (error) {
       alert("복사에 실패했습니다.");

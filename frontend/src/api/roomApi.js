@@ -1,18 +1,30 @@
+import { supabase } from "../lib/supabaseClient";
+
+function generateInviteCode() {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
 export async function createRoom(roomData) {
-  const response = await fetch("http://localhost:3000/rooms", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(roomData),
-  });
+  const newRoom = {
+    roomname: roomData.roomName,
+    description: roomData.description || "",
+    invitecode: generateInviteCode(),
+    createdby: roomData.userId || "test-user-1",
+  };
 
-  const result = await response.json();
+  const { data, error } = await supabase
+    .from("rooms")
+    .insert([newRoom])
+    .select()
+    .single();
 
-  if (!response.ok) {
-    console.error("방 생성 실패 상세:", result);
-    throw new Error(result.message || "방 생성 실패");
+  if (error) {
+    console.error("방 생성 실패 상세:", error);
+    throw new Error(error.message || "방 생성 실패");
   }
 
-  return result;
+  return {
+    message: "방 생성 완료",
+    room: data,
+  };
 }
