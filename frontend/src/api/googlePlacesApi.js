@@ -2,6 +2,7 @@ const CATEGORY_TYPE_MAP = {
   restaurant: ['restaurant'],
   cafe: ['cafe'],
   activity: ['tourist_attraction', 'amusement_park', 'movie_theater', 'bowling_alley'],
+  parking: ['parking'],
 }
 
 export async function searchNearbyPlaces({

@@ -24,6 +24,14 @@ function PlaceCategoryTabs({ selectedCategory, onChangeCategory }) {
       >
         놀거리
       </button>
+
+      <button
+        type="button"
+        onClick={() => onChangeCategory('parking')}
+        disabled={selectedCategory === 'parking'}
+      >
+        주차장
+      </button>
     </div>
   )
 }

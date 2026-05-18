@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 
-function GoogleMapView({ currentLocation, places = [], selectedPlace }) {
+function GoogleMapView({ currentLocation, places = [], selectedPlace, directionsResult }) {
   const mapRef = useRef(null)
   const mapObjectRef = useRef(null)
   const userMarkerRef = useRef(null)
   const placeMarkerRefs = useRef([])
   const selectedInfoWindowRef = useRef(null)
+  const directionsRendererRef = useRef(null)
 
   const [isMapReady, setIsMapReady] = useState(false)
   const [mapError, setMapError] = useState('')
@@ -136,6 +137,25 @@ function GoogleMapView({ currentLocation, places = [], selectedPlace }) {
     }
   }, [selectedPlace, isMapReady])
 
+  useEffect(() => {
+    if (!isMapReady || !mapObjectRef.current) {
+      return
+    }
+
+    if (!directionsRendererRef.current) {
+      directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
+        map: mapObjectRef.current,
+        suppressMarkers: false,
+      })
+    }
+
+    if (directionsResult) {
+      directionsRendererRef.current.setDirections(directionsResult)
+    } else {
+      directionsRendererRef.current.setDirections({ routes: [] })
+    }
+  }, [directionsResult, isMapReady])
+
   const openPlaceInfoWindow = (place, marker) => {
     if (selectedInfoWindowRef.current) {
       selectedInfoWindowRef.current.close()
@@ -202,7 +222,7 @@ function loadGoogleMapScript() {
     }
 
     const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,routes&loading=async`
     script.async = true
     script.defer = true
 
