@@ -1,5 +1,56 @@
 import { supabase } from './supabaseClient'
 
+/**
+ * 1. 이메일 중복 확인 API
+ * @param {string} email
+ * @returns {Promise<boolean>} 중복이면 true, 사용 가능하면 false
+ */
+export const checkEmailDuplicateApi = async (email) => {
+  try {
+    // Supabase SQL Editor에서 생성한 check_email_exists RPC 함수를 호출합니다.
+    const { data, error } = await supabase.rpc('check_email_exists', {
+      email_to_check: email,
+    })
+
+    if (error) {
+      throw error
+    }
+
+    return data // 존재하면 true, 없으면 false
+  } catch (error) {
+    console.error('이메일 중복 체크 중 오류 발생:', error.message)
+    throw error
+  }
+}
+
+/**
+ * 2. 닉네임 중복 확인 API
+ * @param {string} nickname
+ * @returns {Promise<boolean>} 중복이면 true, 사용 가능하면 false
+ */
+export const checkNicknameDuplicateApi = async (nickname) => {
+  try {
+    // public.profiles 테이블에서 해당 닉네임을 가진 로우를 조회합니다.
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('nickname')
+      .eq('nickname', nickname)
+
+    if (error) {
+      throw error
+    }
+
+    // 데이터가 존재하면(length > 0) 중복된 닉네임입니다.
+    return data.length > 0
+  } catch (error) {
+    console.error('닉네임 중복 체크 중 오류 발생:', error.message)
+    throw error
+  }
+}
+
+/**
+ * 3. 회원가입 API
+ */
 export async function signupApi({ email, password, nickname }) {
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
     email,
@@ -39,6 +90,9 @@ export async function signupApi({ email, password, nickname }) {
   }
 }
 
+/**
+ * 4. 로그인 API
+ */
 export async function loginApi({ email, password }) {
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
@@ -68,6 +122,9 @@ export async function loginApi({ email, password }) {
   }
 }
 
+/**
+ * 5. 로그아웃 API
+ */
 export async function logoutApi() {
   const { error } = await supabase.auth.signOut()
 
@@ -80,6 +137,9 @@ export async function logoutApi() {
   }
 }
 
+/**
+ * 6. 현재 로그인된 사용자 정보 가져오기 API
+ */
 export async function getCurrentUserApi() {
   const { data, error } = await supabase.auth.getUser()
 
