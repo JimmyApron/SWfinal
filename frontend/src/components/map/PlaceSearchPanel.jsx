@@ -9,7 +9,7 @@ function PlaceSearchPanel({ searchLocation, onSearchResult, onSelectPlace }) {
   const [radius, setRadius] = useState('1000')
   const [minRating, setMinRating] = useState('0')
   const [minReviewCount, setMinReviewCount] = useState('0')
-  const [maxPriceLevel, setMaxPriceLevel] = useState('all')
+  const [priceRangeFilter, setPriceRangeFilter] = useState('all')
   const [places, setPlaces] = useState([])
   const [message, setMessage] = useState('')
 
@@ -29,14 +29,14 @@ function PlaceSearchPanel({ searchLocation, onSearchResult, onSelectPlace }) {
         radius,
         minRating,
         minReviewCount,
-        maxPriceLevel,
+        priceRangeFilter,
       })
 
       setPlaces(result)
       onSearchResult(result)
 
       if (result.length === 0) {
-        setMessage('조건에 맞는 장소가 없습니다.')
+        setMessage('조건에 맞는 장소가 없습니다. 거리 반경을 넓히거나 필터를 낮춰보세요.')
       } else {
         setMessage(`검색 완료: ${result.length}개`)
       }
@@ -59,11 +59,11 @@ function PlaceSearchPanel({ searchLocation, onSearchResult, onSelectPlace }) {
         radius={radius}
         minRating={minRating}
         minReviewCount={minReviewCount}
-        maxPriceLevel={maxPriceLevel}
+        priceRangeFilter={priceRangeFilter}
         onChangeRadius={setRadius}
         onChangeMinRating={setMinRating}
         onChangeMinReviewCount={setMinReviewCount}
-        onChangeMaxPriceLevel={setMaxPriceLevel}
+        onChangePriceRangeFilter={setPriceRangeFilter}
       />
 
       <button type="button" onClick={handleSearchPlaces}>

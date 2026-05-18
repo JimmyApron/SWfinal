@@ -18,7 +18,7 @@ function PlaceList({ places, onSelectPlace }) {
               평점: {place.rating || '정보 없음'} / 리뷰 수: {place.reviewCount || 0}
             </p>
 
-            <p>가격대: {formatPriceLevel(place.priceLevel)}</p>
+            <p>가격대: {formatPriceRange(place.priceRange)}</p>
 
             <button type="button" onClick={() => onSelectPlace(place)}>
               지도에서 보기
@@ -38,17 +38,45 @@ function PlaceList({ places, onSelectPlace }) {
   )
 }
 
-function formatPriceLevel(priceLevel) {
-  const priceMap = {
-    PRICE_LEVEL_FREE: '무료',
-    PRICE_LEVEL_INEXPENSIVE: '저렴',
-    PRICE_LEVEL_MODERATE: '보통',
-    PRICE_LEVEL_EXPENSIVE: '비쌈',
-    PRICE_LEVEL_VERY_EXPENSIVE: '매우 비쌈',
-    PRICE_LEVEL_UNSPECIFIED: '정보 없음',
+function formatPriceRange(priceRange) {
+  if (!priceRange) {
+    return '가격 정보 없음'
   }
 
-  return priceMap[priceLevel] || '정보 없음'
+  const startPrice = priceRange.startPrice
+  const endPrice = priceRange.endPrice
+
+  if (!startPrice && !endPrice) {
+    return '가격 정보 없음'
+  }
+
+  if (startPrice && endPrice) {
+    const start = formatMoney(startPrice)
+    const end = formatMoney(endPrice)
+
+    return `${start} ~ ${end}`
+  }
+
+  if (startPrice && !endPrice) {
+    return `${formatMoney(startPrice)} 이상`
+  }
+
+  if (!startPrice && endPrice) {
+    return `${formatMoney(endPrice)} 이하`
+  }
+
+  return '가격 정보 없음'
+}
+
+function formatMoney(money) {
+  const currencyCode = money.currencyCode || 'KRW'
+  const units = Number(money.units || 0).toLocaleString()
+
+  if (currencyCode === 'KRW') {
+    return `₩${units}`
+  }
+
+  return `${currencyCode} ${units}`
 }
 
 export default PlaceList

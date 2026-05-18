@@ -11,7 +11,7 @@ export async function searchNearbyPlaces({
   radius = 1000,
   minRating = 0,
   minReviewCount = 0,
-  maxPriceLevel = 'all',
+  priceRangeFilter = 'all',
 }) {
   if (!window.google || !window.google.maps) {
     throw new Error('Google Maps가 아직 로드되지 않았습니다.')
@@ -30,7 +30,7 @@ export async function searchNearbyPlaces({
       'location',
       'rating',
       'userRatingCount',
-      'priceLevel',
+      'priceRange',
       'googleMapsURI',
     ],
     locationRestriction: {
@@ -66,7 +66,7 @@ export async function searchNearbyPlaces({
       lng: placeLng,
       rating: place.rating || 0,
       reviewCount: place.userRatingCount || 0,
-      priceLevel: place.priceLevel || 'PRICE_LEVEL_UNSPECIFIED',
+      priceRange: place.priceRange || null,
       googleMapsUri: place.googleMapsURI || '',
     }
   })
@@ -74,27 +74,91 @@ export async function searchNearbyPlaces({
   return formattedPlaces.filter((place) => {
     const passRating = Number(place.rating) >= Number(minRating)
     const passReviewCount = Number(place.reviewCount) >= Number(minReviewCount)
-    const passPrice = checkPriceLevel(place.priceLevel, maxPriceLevel)
+    const passPriceRange = checkPriceRange(place.priceRange, priceRangeFilter)
 
-    return passRating && passReviewCount && passPrice
+    return passRating && passReviewCount && passPriceRange
   })
 }
 
-function checkPriceLevel(priceLevel, maxPriceLevel) {
-  if (maxPriceLevel === 'all') {
+function checkPriceRange(priceRange, priceRangeFilter) {
+  if (priceRangeFilter === 'all') {
     return true
   }
 
-  const priceScoreMap = {
-    PRICE_LEVEL_FREE: 0,
-    PRICE_LEVEL_INEXPENSIVE: 1,
-    PRICE_LEVEL_MODERATE: 2,
-    PRICE_LEVEL_EXPENSIVE: 3,
-    PRICE_LEVEL_VERY_EXPENSIVE: 4,
-    PRICE_LEVEL_UNSPECIFIED: 999,
+  if (priceRangeFilter === 'unknown') {
+    return !priceRange
   }
 
-  const score = priceScoreMap[priceLevel] ?? 999
+  if (!priceRange) {
+    return false
+  }
 
-  return score <= Number(maxPriceLevel)
+  const startPrice = priceRange.startPrice
+  const endPrice = priceRange.endPrice
+
+  const startAmount = getMoneyUnits(startPrice)
+  const endAmount = getMoneyUnits(endPrice)
+
+  if (priceRangeFilter === 'under10000') {
+    return isPriceInRange(startAmount, endAmount, 1, 10000)
+  }
+
+  if (priceRangeFilter === 'under20000') {
+    return isPriceInRange(startAmount, endAmount, 10001, 20000)
+  }
+
+  if (priceRangeFilter === 'under30000') {
+    return isPriceInRange(startAmount, endAmount, 20001, 30000)
+  }
+
+  if (priceRangeFilter === 'over30000') {
+    return isPriceOver(startAmount, endAmount, 30000)
+  }
+
+  return true
+}
+
+function getMoneyUnits(money) {
+  if (!money || money.units === undefined || money.units === null) {
+    return null
+  }
+
+  return Number(money.units)
+}
+
+function isPriceInRange(startAmount, endAmount, min, max) {
+  if (startAmount === null && endAmount === null) {
+    return false
+  }
+
+  if (startAmount !== null && startAmount >= min && startAmount <= max) {
+    return true
+  }
+
+  if (endAmount !== null && endAmount >= min && endAmount <= max) {
+    return true
+  }
+
+  if (
+    startAmount !== null &&
+    endAmount !== null &&
+    startAmount <= min &&
+    endAmount >= max
+  ) {
+    return true
+  }
+
+  return false
+}
+
+function isPriceOver(startAmount, endAmount, 기준금액) {
+  if (startAmount !== null && startAmount >= 기준금액) {
+    return true
+  }
+
+  if (endAmount !== null && endAmount >= 기준금액) {
+    return true
+  }
+
+  return false
 }

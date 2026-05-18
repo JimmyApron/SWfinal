@@ -2,11 +2,11 @@ function PlaceFilter({
   radius,
   minRating,
   minReviewCount,
-  maxPriceLevel,
+  priceRangeFilter,
   onChangeRadius,
   onChangeMinRating,
   onChangeMinReviewCount,
-  onChangeMaxPriceLevel,
+  onChangePriceRangeFilter,
 }) {
   return (
     <div>
@@ -57,14 +57,15 @@ function PlaceFilter({
         <label>
           가격대:{' '}
           <select
-            value={maxPriceLevel}
-            onChange={(event) => onChangeMaxPriceLevel(event.target.value)}
+            value={priceRangeFilter}
+            onChange={(event) => onChangePriceRangeFilter(event.target.value)}
           >
             <option value="all">상관없음</option>
-            <option value="1">저렴 이하</option>
-            <option value="2">보통 이하</option>
-            <option value="3">비싼 곳까지</option>
-            <option value="4">전체 가격대</option>
+            <option value="unknown">가격 정보 없음</option>
+            <option value="under10000">1만원 이내</option>
+            <option value="under20000">2만원 이내</option>
+            <option value="under30000">3만원 이내</option>
+            <option value="over30000">3만원 이상</option>
           </select>
         </label>
       </div>
