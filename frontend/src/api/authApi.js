@@ -1,13 +1,13 @@
-import { supabase } from '../lib/supabaseClient'
+import { supabase } from './supabaseClient'
 
 /**
- * 1. ÀÌ¸ŞÀÏ Áßº¹ È®ÀÎ API
+ * 1. ï¿½Ì¸ï¿½ï¿½ï¿½ ï¿½ßºï¿½ È®ï¿½ï¿½ API
  * @param {string} email
- * @returns {Promise<boolean>} Áßº¹ÀÌ¸é true, »ç¿ë °¡´ÉÇÏ¸é false
+ * @returns {Promise<boolean>} ï¿½ßºï¿½ï¿½Ì¸ï¿½ true, ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï¸ï¿½ false
  */
 export const checkEmailDuplicateApi = async (email) => {
   try {
-    // Supabase SQL Editor¿¡¼­ »ı¼ºÇÑ check_email_exists RPC ÇÔ¼ö¸¦ È£ÃâÇÕ´Ï´Ù.
+    // Supabase SQL Editorï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ check_email_exists RPC ï¿½Ô¼ï¿½ï¿½ï¿½ È£ï¿½ï¿½ï¿½Õ´Ï´ï¿½.
     const { data, error } = await supabase.rpc('check_email_exists', {
       email_to_check: email,
     })
@@ -16,21 +16,21 @@ export const checkEmailDuplicateApi = async (email) => {
       throw error
     }
 
-    return data // Á¸ÀçÇÏ¸é true, ¾øÀ¸¸é false
+    return data // ï¿½ï¿½ï¿½ï¿½ï¿½Ï¸ï¿½ true, ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ false
   } catch (error) {
-    console.error('ÀÌ¸ŞÀÏ Áßº¹ Ã¼Å© Áß ¿À·ù ¹ß»ı:', error.message)
+    console.error('ï¿½Ì¸ï¿½ï¿½ï¿½ ï¿½ßºï¿½ Ã¼Å© ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ß»ï¿½:', error.message)
     throw error
   }
 }
 
 /**
- * 2. ´Ğ³×ÀÓ Áßº¹ È®ÀÎ API
+ * 2. ï¿½Ğ³ï¿½ï¿½ï¿½ ï¿½ßºï¿½ È®ï¿½ï¿½ API
  * @param {string} nickname
- * @returns {Promise<boolean>} Áßº¹ÀÌ¸é true, »ç¿ë °¡´ÉÇÏ¸é false
+ * @returns {Promise<boolean>} ï¿½ßºï¿½ï¿½Ì¸ï¿½ true, ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï¸ï¿½ false
  */
 export const checkNicknameDuplicateApi = async (nickname) => {
   try {
-    // public.profiles Å×ÀÌºí¿¡¼­ ÇØ´ç ´Ğ³×ÀÓÀ» °¡Áø ·Î¿ì¸¦ Á¶È¸ÇÕ´Ï´Ù.
+    // public.profiles ï¿½ï¿½ï¿½Ìºï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ø´ï¿½ ï¿½Ğ³ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Î¿ì¸¦ ï¿½ï¿½È¸ï¿½Õ´Ï´ï¿½.
     const { data, error } = await supabase
       .from('profiles')
       .select('nickname')
@@ -40,16 +40,16 @@ export const checkNicknameDuplicateApi = async (nickname) => {
       throw error
     }
 
-    // µ¥ÀÌÅÍ°¡ Á¸ÀçÇÏ¸é(length > 0) Áßº¹µÈ ´Ğ³×ÀÓÀÔ´Ï´Ù.
+    // ï¿½ï¿½ï¿½ï¿½ï¿½Í°ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï¸ï¿½(length > 0) ï¿½ßºï¿½ï¿½ï¿½ ï¿½Ğ³ï¿½ï¿½ï¿½ï¿½Ô´Ï´ï¿½.
     return data.length > 0
   } catch (error) {
-    console.error('´Ğ³×ÀÓ Áßº¹ Ã¼Å© Áß ¿À·ù ¹ß»ı:', error.message)
+    console.error('ï¿½Ğ³ï¿½ï¿½ï¿½ ï¿½ßºï¿½ Ã¼Å© ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ß»ï¿½:', error.message)
     throw error
   }
 }
 
 /**
- * 3. È¸¿ø°¡ÀÔ API
+ * 3. È¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ API
  */
 export async function signupApi({ email, password, nickname }) {
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
@@ -64,7 +64,7 @@ export async function signupApi({ email, password, nickname }) {
   const user = signUpData.user
 
   if (!user) {
-    throw new Error('È¸¿ø°¡ÀÔ ÈÄ »ç¿ëÀÚ Á¤º¸¸¦ °¡Á®¿ÀÁö ¸øÇß½À´Ï´Ù.')
+    throw new Error('È¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ß½ï¿½ï¿½Ï´ï¿½.')
   }
 
   const { data: profileData, error: profileError } = await supabase
@@ -86,12 +86,12 @@ export async function signupApi({ email, password, nickname }) {
   return {
     user,
     profile: profileData,
-    message: 'È¸¿ø°¡ÀÔÀÌ ¿Ï·áµÇ¾ú½À´Ï´Ù.',
+    message: 'È¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ï·ï¿½Ç¾ï¿½ï¿½ï¿½ï¿½Ï´ï¿½.',
   }
 }
 
 /**
- * 4. ·Î±×ÀÎ API
+ * 4. ï¿½Î±ï¿½ï¿½ï¿½ API
  */
 export async function loginApi({ email, password }) {
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -118,12 +118,12 @@ export async function loginApi({ email, password }) {
   return {
     user,
     profile,
-    message: '·Î±×ÀÎ¿¡ ¼º°øÇß½À´Ï´Ù.',
+    message: 'ï¿½Î±ï¿½ï¿½Î¿ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ß½ï¿½ï¿½Ï´ï¿½.',
   }
 }
 
 /**
- * 5. ·Î±×¾Æ¿ô API
+ * 5. ï¿½Î±×¾Æ¿ï¿½ API
  */
 export async function logoutApi() {
   const { error } = await supabase.auth.signOut()
@@ -133,12 +133,12 @@ export async function logoutApi() {
   }
 
   return {
-    message: '·Î±×¾Æ¿ôµÇ¾ú½À´Ï´Ù.',
+    message: 'ï¿½Î±×¾Æ¿ï¿½ï¿½Ç¾ï¿½ï¿½ï¿½ï¿½Ï´ï¿½.',
   }
 }
 
 /**
- * 6. ÇöÀç ·Î±×ÀÎµÈ »ç¿ëÀÚ Á¤º¸ °¡Á®¿À±â API
+ * 6. ï¿½ï¿½ï¿½ï¿½ ï¿½Î±ï¿½ï¿½Îµï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ API
  */
 export async function getCurrentUserApi() {
   const { data, error } = await supabase.auth.getUser()
@@ -170,39 +170,72 @@ export async function getCurrentUserApi() {
 }
 
 /**
- * 7. [ºñÈ¸¿ø Àü¿ë] Æ¯Á¤ ¹æ ³»ºÎÀÇ ´Ğ³×ÀÓ Áßº¹ È®ÀÎ API
- * @param {string} nickname - °Ë»çÇÒ ÀÓ½Ã ´Ğ³×ÀÓ
- * @param {string} roomId - ´ë¹®¿¡¼­ ÀÔ·Â¹ŞÀº ¹æ ÃÊ´ëÄÚµå
+ * 7. [ë¹„íšŒì› ì „ìš©] ìˆ˜ì •ëœ int8 êµ¬ì¡° ë°˜ì˜ â¡ï¸ íŠ¹ì • ë°© ë‚´ë¶€ì˜ ë‹‰ë„¤ì„ ì¤‘ë³µ í™•ì¸ API
+ * @param {string} nickname - ê²€ì‚¬í•  ì„ì‹œ ë‹‰ë„¤ì„
+ * @param {string} inviteCode - ëŒ€ë¬¸ì—ì„œ ë„˜ì–´ì˜¨ ë¬¸ìì—´ ë°© ì´ˆëŒ€ì½”ë“œ (ì˜ˆ: ROOM123)
  */
-export const checkRoomNicknameDuplicateApi = async (nickname, roomId) => {
+export const checkRoomNicknameDuplicateApi = async (nickname, inviteCode) => {
   try {
-    const { data, error } = await supabase
+    // 1. ì´ˆëŒ€ì½”ë“œë¡œ ë¨¼ì € rooms í…Œì´ë¸”ì—ì„œ ì§„ì§œ ìˆ«ì ê³ ìœ  ë²ˆí˜¸(id)ë¥¼ ì•Œì•„ëƒ…ë‹ˆë‹¤.
+    const { data: room, error: roomError } = await supabase
+      .from('rooms')
+      .select('id')
+      .eq('invitecode', inviteCode.trim())
+      .maybeSingle()
+
+    if (roomError || !room) {
+      throw new Error('ì¡´ì¬í•˜ì§€ ì•ŠëŠ” ì´ˆëŒ€ì½”ë“œì…ë‹ˆë‹¤.')
+    }
+
+    // 2. [ìˆ˜ì • ì™„ë£Œ] ì•Œì•„ë‚¸ ì§„ì§œ ë°© ìˆ«ì id(int8)ë¥¼ ê°€ì§€ê³  room_guests í…Œì´ë¸”ì„ ì°Œë¦…ë‹ˆë‹¤!
+    const { data: guestData, error: guestError } = await supabase
       .from('room_guests')
       .select('nickname')
-      .eq('room_id', roomId)
-      .eq('nickname', nickname.trim()) // °ø¹éÀ¸·Î ÀÎÇÑ ¸ÅÄª ¹æÁö
+      .eq('room_id', room.id) // ğŸ’¡ ì´ì œ ì½”ë“œê°€ ì•„ë‹ˆë¼ ì§„ì§œ ìˆ«ì ID ë§¤í•‘!
+      .eq('nickname', nickname.trim())
 
-    if (error) throw error
+    if (guestError) throw guestError
 
-    return data.length > 0 // ÇØ´ç ¹æ¿¡ ÀÌ¹Ì °°Àº ´Ğ³×ÀÓÀÌ ÀÖ´Ù¸é true ¹İÈ¯
+    // 3. ê¸°ì¡´ ë°© íšŒì›ë“¤ê³¼ë„ ì•ˆ ê²¹ì¹˜ê²Œ room_membersë„ ê°™ì´ ëŒ€ì¡°í•´ ì¤ë‹ˆë‹¤.
+    const { data: memberData, error: memberError } = await supabase
+      .from('room_members')
+      .select('nickname')
+      .eq('roomid', room.id)
+      .eq('nickname', nickname.trim())
+
+    if (memberError) throw memberError
+
+    return guestData.length > 0 || memberData.length > 0
   } catch (error) {
-    console.error('¹æ ºñÈ¸¿ø ´Ğ³×ÀÓ Ã¼Å© Áß ¿À·ù ¹ß»ı:', error.message)
+    console.error('ë°© ë¹„íšŒì› ë‹‰ë„¤ì„ ì²´í¬ ì¤‘ ì˜¤ë¥˜ ë°œìƒ:', error.message)
     throw error
   }
 }
 
 /**
- * 8. [ºñÈ¸¿ø Àü¿ë] ºñÈ¸¿ø ¹æ ÀÔÀå µî·Ï API
- * @param {string} nickname - Áßº¹È®ÀÎÀ» Åë°úÇÑ ÀÓ½Ã ´Ğ³×ÀÓ
- * @param {string} roomId - ´ë¹®¿¡¼­ ÀÔ·Â¹ŞÀº ¹æ ÃÊ´ëÄÚµå
+ * 8. [ë¹„íšŒì› ì „ìš©] ìˆ˜ì •ëœ int8 êµ¬ì¡° ë°˜ì˜ â¡ï¸ ë¹„íšŒì› ë°© ì…ì¥ ë“±ë¡ API
+ * @param {string} nickname - ì¤‘ë³µí™•ì¸ì„ ë§ˆì¹œ ì„ì‹œ ë‹‰ë„¤ì„
+ * @param {string} inviteCode - ëŒ€ë¬¸ì—ì„œ ì „ë‹¬ë°›ì€ ë¬¸ìì—´ ë°© ì´ˆëŒ€ì½”ë“œ
  */
-export const insertRoomGuestApi = async (nickname, roomId) => {
+export const insertRoomGuestApi = async (nickname, inviteCode) => {
   try {
+    // 1. ì´ˆëŒ€ì½”ë“œë¡œ ì§„ì§œ ë°© ìˆ«ì idë¥¼ ì¡°íšŒí•´ì˜µë‹ˆë‹¤.
+    const { data: room, error: roomError } = await supabase
+      .from('rooms')
+      .select('id')
+      .eq('invitecode', inviteCode.trim())
+      .maybeSingle()
+
+    if (roomError || !room) {
+      throw new Error('ë°©ì„ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.')
+    }
+
+    // 2. [ìˆ˜ì • ì™„ë£Œ] room_guests.room_idì— ì§„ì§œ ìˆ«ì ê³ ìœ  idë¥¼ ì¾… ë°•ì•„ì¤ë‹ˆë‹¤!
     const { data, error } = await supabase
       .from('room_guests')
       .insert([
         {
-          room_id: roomId,
+          room_id: room.id, // ğŸ’¡ ë¬¸ìì—´ ëŒ€ì‹  ì§„ì§œ ìˆ«ì ê³ ìœ  ID(int8)ê°€ ì™„ë²½í•˜ê²Œ ì €ì¥ë©ë‹ˆë‹¤!
           nickname: nickname.trim(),
         },
       ])
@@ -210,29 +243,103 @@ export const insertRoomGuestApi = async (nickname, roomId) => {
       .single()
 
     if (error) throw error
-
-    return data // ¿Ïº®ÇÏ°Ô °»½ÅµÈ ºñÈ¸¿ø Object(id, room_id, nickname, created_at) ¹İÈ¯
+    return data
   } catch (error) {
-    console.error('ºñÈ¸¿ø µî·Ï Áß ¿À·ù ¹ß»ı:', error.message)
+    console.error('ë¹„íšŒì› ìµœì¢… ë“±ë¡ ì¤‘ ì˜¤ë¥˜ ë°œìƒ:', error.message)
     throw error
   }
 }
 
 /**
- * 9. [ºñÈ¸¿ø Àü¿ë] Æ¯Á¤ ¹æ¿¡ ¼ÓÇÑ ¸ğµç ºñÈ¸¿ø(°Ô½ºÆ®) ¸ñ·Ï °¡Á®¿À±â API
- * @param {string} roomId - ¹æ ÃÊ´ëÄÚµå
+ * 9. [ë¹„íšŒì› ì°½ ì „ìš©] ì´ˆëŒ€ì½”ë“œë¡œ í•´ë‹¹ ë°©ì˜ ì§„ì§œ íšŒì›(room_members) ëª©ë¡ ê°€ì ¸ì˜¤ê¸° API
+ * @param {string} inviteCode - ë¶€ëª¨ê°€ ë„˜ê²¨ì¤€ ë¬¸ìì—´ ë°© ì´ˆëŒ€ì½”ë“œ
  */
-export const getRoomGuestsApi = async (roomId) => {
+export const getRoomMembersByInviteCodeApi = async (inviteCode) => {
   try {
+    // 1. ì´ˆëŒ€ì½”ë“œë¡œ rooms í…Œì´ë¸”ì—ì„œ ì§„ì§œ ìˆ«ì 'id' ì¡°íšŒ
+    const { data: room, error: roomError } = await supabase
+      .from('rooms')
+      .select('id')
+      .eq('invitecode', inviteCode)
+      .maybeSingle()
+
+    if (roomError || !room) return []
+
+    // 2. [ì§„ì§œ DB êµ¬ì¡° ì—°ë™] rooms.id(ìˆ«ì)ì™€ room_members.roomid(ìˆ«ì) ë§¤í•‘!
     const { data, error } = await supabase
-      .from('room_guests')
+      .from('room_members')
       .select('nickname')
-      .eq('room_id', roomId)
+      .eq('roomid', room.id)
 
     if (error) throw error
-    return data // [{nickname: 'À¯Àú1'}, {nickname: 'À¯Àú2'}] ÇüÅÂ·Î ¹İÈ¯µÊ
+    return data || []
   } catch (error) {
-    console.error('¹æ °Ô½ºÆ® ¸ñ·Ï Á¶È¸ Áß ¿À·ù ¹ß»ı:', error.message)
+    console.error('ë°© íšŒì› ëª©ë¡ ì¡°íšŒ ì¤‘ ì˜¤ë¥˜ ë°œìƒ:', error.message)
+    throw error
+  }
+}
+/**
+ * 10. [íšŒì› ì „ìš©] ë¡œê·¸ì¸ ì„±ê³µ í›„ room_members í…Œì´ë¸”ì— ë°© ì°¸ê°€ ë“±ë¡í•˜ëŠ” API (ì›ë˜ ë‹‰ë„¤ì„ ìë™ ì—°ë™ ë²„ì „)
+ * @param {string} inviteCode - ëŒ€ë¬¸ì—ì„œ ì…ë ¥í•œ ë°© ì´ˆëŒ€ì½”ë“œ
+ * @param {string} userId - ë¡œê·¸ì¸ ì„±ê³µí•œ ìœ ì €ì˜ ê³ ìœ  UUID (user.id)
+ */
+export const joinRoomMemberApi = async (inviteCode, userId) => {
+  try {
+    // 1. ì´ˆëŒ€ì½”ë“œë¡œ rooms í…Œì´ë¸”ì—ì„œ ë°©ì˜ ì§„ì§œ ìˆ«ì 'id'ë¥¼ ì•Œì•„ëƒ…ë‹ˆë‹¤.
+    const { data: room, error: roomError } = await supabase
+      .from('rooms')
+      .select('id')
+      .eq('invitecode', inviteCode)
+      .maybeSingle()
+
+    if (roomError || !room) {
+      throw new Error('ì´ˆëŒ€ì½”ë“œì— í•´ë‹¹í•˜ëŠ” ë°©ì„ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.')
+    }
+
+    // 2. ì´ë¯¸ í•´ë‹¹ ë°©ì— ê°€ì…ëœ ìœ ì €ì¸ì§€ ë¨¼ì € ê²€ì‚¬í•©ë‹ˆë‹¤ (ì¤‘ë³µ ê°€ì… ë°©ì§€)
+    const { data: existingMember, error: checkError } = await supabase
+      .from('room_members')
+      .select('*')
+      .eq('roomid', room.id)
+      .eq('userid', userId)
+      .maybeSingle()
+
+    if (checkError) throw checkError
+    if (existingMember) {
+      // ì´ë¯¸ ì°¸ê°€í•´ ìˆë‹¤ë©´ ì—ëŸ¬ë¥¼ ë‚´ì§€ ì•Šê³  ê¸°ì¡´ ë°© ì •ë³´ë§Œ ìŠ¤ë¬´ìŠ¤í•˜ê²Œ ë°˜í™˜í•©ë‹ˆë‹¤.
+      return { message: 'ì´ë¯¸ ì°¸ê°€í•œ ë°©ì…ë‹ˆë‹¤.', room }
+    }
+
+    // 3. ğŸ’¡ [ì€í˜œë‹˜ ìš”êµ¬ì‚¬í•­ ë°˜ì˜ í•µì‹¬ ì¶”ê°€!]
+    // public.profiles í…Œì´ë¸”ì—ì„œ ì´ íšŒì›ì˜ ì§„ì§œ íšŒì›ê°€ì… ë‹¹ì‹œ ë‹‰ë„¤ì„ì„ ì¡°íšŒí•´ì˜µë‹ˆë‹¤.
+    const { data: userProfile, error: profileError } = await supabase
+      .from('profiles')
+      .select('nickname')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (profileError) throw profileError
+    
+    // í˜¹ì‹œë¼ë„ í”„ë¡œí•„ ë‹‰ë„¤ì„ì´ ì—†ìœ¼ë©´ 'íšŒì›' í˜¹ì€ ê¸°ë³¸ê°’ìœ¼ë¡œ ë°©ì–´í•´ ì¤ë‹ˆë‹¤.
+    const userNickname = userProfile?.nickname || 'ê¸°ì¡´íšŒì›'
+
+    // 4. ğŸ’¡ ê°€ì´ë“œ ê·œì¹™ ì—…ê·¸ë ˆì´ë“œ ì¸ì„œíŠ¸ ì‹¤í–‰!
+    // ì´ì œ nickname ìë¦¬ì— null ëŒ€ì‹  ë°©ê¸ˆ ì°¾ì•„ì˜¨ íšŒì›ì˜ ì§„ì§œ ë‹‰ë„¤ì„(userNickname)ì„ ê½‚ì•„ì¤ë‹ˆë‹¤!
+    const { error: memberError } = await supabase
+      .from('room_members')
+      .insert([
+        {
+          roomid: room.id,
+          userid: userId,
+          nickname: userNickname, // â¡ï¸ nullì—ì„œ íšŒì›ì˜ ì‹¤ì œ ë‹‰ë„¤ì„ìœ¼ë¡œ ë³€ê²½!
+        },
+      ])
+
+    if (memberError) throw memberError
+
+    return { message: 'ë°© ì°¸ê°€ ë° íšŒì› ë‹‰ë„¤ì„ ì—°ë™ ì™„ë£Œ', room, nickname: userNickname }
+  } catch (error) {
+    console.error('íšŒì› ë°© ì°¸ê°€ ë° ë‹‰ë„¤ì„ ì—°ë™ ì‹¤íŒ¨ ìƒì„¸:', error.message)
     throw error
   }
 }
