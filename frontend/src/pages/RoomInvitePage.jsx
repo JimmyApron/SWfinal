@@ -3,6 +3,7 @@ import { joinRoomByInviteCode } from "../api/roomApi";
 
 function RoomInvitePage() {
   const [inviteCode, setInviteCode] = useState("");
+  const [nickname, setNickname] = useState("");
   const [joinedRoom, setJoinedRoom] = useState(null);
 
   const handleJoinRoom = async () => {
@@ -11,8 +12,13 @@ function RoomInvitePage() {
       return;
     }
 
+    if (nickname.trim() === "") {
+      alert("닉네임을 입력하세요.");
+      return;
+    }
+
     try {
-      const result = await joinRoomByInviteCode(inviteCode,"test-user-1"); //USERiD 없어서
+      const result = await joinRoomByInviteCode(inviteCode, null, nickname); 
 
       setJoinedRoom(result.room);
 
@@ -38,6 +44,13 @@ function RoomInvitePage() {
         onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
       />
 
+      <input 
+        type="text"
+        placeholder="닉네임 입력"
+        value={nickname}
+        onChange={(e) => setNickname(e.target.value)}
+      />
+
       <button onClick={handleJoinRoom}>
         방 입장하기
       </button>
@@ -46,9 +59,8 @@ function RoomInvitePage() {
         <div>
           <h2>입장한 방</h2>
 
-          <p>방 이름: {joinedRoom.roomName}</p>
-          <p>설명: {joinedRoom.description}</p>
-          <p>초대코드: {joinedRoom.inviteCode}</p>
+          <p>방 이름: {joinedRoom.roomname}</p>
+          <p>초대코드: {joinedRoom.invitecode}</p>
 
           <button onClick={handleGoRoom}>
             방으로 바로가기

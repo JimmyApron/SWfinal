@@ -29,7 +29,7 @@ export async function createRoom(roomData) {
   };
 }
 
-export async function joinRoomByInviteCode(inviteCode, userId) {
+export async function joinRoomByInviteCode(inviteCode, userId, nickname) {
   const { data: room, error: roomError } = await supabase
     .from("rooms")
     .select("*")
@@ -40,15 +40,36 @@ export async function joinRoomByInviteCode(inviteCode, userId) {
     throw new Error("초대코드에 해당하는 방을 찾을 수 없습니다.");
   }
 
-  const { data: existingMember } = await supabase
-    .from("room_members")
-    .select("*")
-    .eq("roomid", room.id)
-    .eq("userid", userId)
-    .maybeSingle();
+  // 비회원일 때만 닉네임 중복 검사
+  if (!userId) {
+    if (!nickname || nickname.trim() === "") {
+      throw new Error("닉네임을 입력하세요.");
+    }
 
-  if (existingMember) {
-    throw new Error("이미 참가한 방입니다.");
+    const { data: existingNickname } = await supabase
+      .from("room_members")
+      .select("*")
+      .eq("roomid", room.id)
+      .eq("nickname", nickname)
+      .maybeSingle();
+
+    if (existingNickname) {
+      throw new Error("이미 사용 중인 닉네임입니다.");
+    }
+  }
+
+  // 회원일 때만 이미 참가한 회원인지 검사
+  if (userId) {
+    const { data: existingMember } = await supabase
+      .from("room_members")
+      .select("*")
+      .eq("roomid", room.id)
+      .eq("userid", userId)
+      .maybeSingle();
+
+    if (existingMember) {
+      throw new Error("이미 참가한 방입니다.");
+    }
   }
 
   const { error: memberError } = await supabase
@@ -56,7 +77,8 @@ export async function joinRoomByInviteCode(inviteCode, userId) {
     .insert([
       {
         roomid: room.id,
-        userid: userId,
+        userid: userId || null,
+        nickname: userId ? null : nickname,
       },
     ]);
 
