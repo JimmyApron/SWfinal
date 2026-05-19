@@ -1,3 +1,61 @@
+const CATEGORY_TYPE_MAP = {
+  restaurant: 'FD6',
+  cafe: 'CE7',
+  activity: 'CT1',
+  parking: 'PK6',
+}
+
+export async function searchNearbyPlaces({
+  lat,
+  lng,
+  category = 'restaurant',
+  radius = 1000,
+}) {
+  await loadKakaoMapScript()
+
+  const categoryCode = CATEGORY_TYPE_MAP[category] || 'FD6'
+  const placesService = new window.kakao.maps.services.Places()
+  const location = new window.kakao.maps.LatLng(Number(lat), Number(lng))
+
+  return new Promise((resolve, reject) => {
+    placesService.categorySearch(
+      categoryCode,
+      (data, status) => {
+        if (status === window.kakao.maps.services.Status.OK) {
+          const formattedPlaces = data.map((place) => ({
+            id: place.id,
+            name: place.place_name || '이름 없음',
+            address:
+              place.road_address_name ||
+              place.address_name ||
+              '주소 정보 없음',
+            lat: Number(place.y),
+            lng: Number(place.x),
+            phone: place.phone || '',
+            distance: place.distance ? Number(place.distance) : null,
+            kakaoMapUrl: place.place_url || '',
+          }))
+
+          resolve(formattedPlaces)
+          return
+        }
+
+        if (status === window.kakao.maps.services.Status.ZERO_RESULT) {
+          resolve([])
+          return
+        }
+
+        reject(new Error('카카오 장소 검색에 실패했습니다.'))
+      },
+      {
+        location,
+        radius: Number(radius),
+        sort: window.kakao.maps.services.SortBy.DISTANCE,
+      }
+    )
+  })
+}
+
 function loadKakaoMapScript() {
   return new Promise((resolve, reject) => {
     if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
@@ -5,44 +63,6 @@ function loadKakaoMapScript() {
       return
     }
 
-    const apiKey = process.env.REACT_APP_KAKAO_JAVASCRIPT_KEY
-
-    if (!apiKey) {
-      reject(new Error('REACT_APP_KAKAO_JAVASCRIPT_KEY가 없습니다.'))
-      return
-    }
-
-    const existingScript = document.getElementById('kakao-map-sdk')
-
-    if (existingScript) {
-      existingScript.onload = () => {
-        resolve()
-      }
-
-      existingScript.onerror = () => {
-        reject(new Error('카카오맵 SDK 로드 실패'))
-      }
-
-      return
-    }
-
-    const script = document.createElement('script')
-    script.id = 'kakao-map-sdk'
-    script.type = 'text/javascript'
-    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${apiKey}&libraries=services`
-
-    script.onload = () => {
-      if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
-        resolve()
-      } else {
-        reject(new Error('카카오맵 services 객체가 생성되지 않았습니다.'))
-      }
-    }
-
-    script.onerror = () => {
-      reject(new Error('카카오맵 SDK script 로드 실패'))
-    }
-
-    document.head.appendChild(script)
+    reject(new Error('index.html에 카카오맵 services 라이브러리가 로드되지 않았습니다.'))
   })
 }
