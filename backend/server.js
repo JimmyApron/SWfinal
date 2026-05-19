@@ -1,8 +1,10 @@
 const express = require("express");
 const cors = require("cors");
+const kakaoRouteRouter = require('./routes/kakaoRoute')
 
 const app = express();
 
+app.use('/api/kakao', kakaoRouteRouter)
 app.use(cors());
 app.use(express.json());
 
