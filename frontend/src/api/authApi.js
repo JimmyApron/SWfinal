@@ -168,8 +168,11 @@ export async function getCurrentUserApi() {
     profile,
   }
 }
+
 /**
  * 7. [비회원 전용] 특정 방 내부의 닉네임 중복 확인 API
+ * @param {string} nickname - 검사할 임시 닉네임
+ * @param {string} roomId - 대문에서 입력받은 방 초대코드
  */
 export const checkRoomNicknameDuplicateApi = async (nickname, roomId) => {
   try {
@@ -177,11 +180,11 @@ export const checkRoomNicknameDuplicateApi = async (nickname, roomId) => {
       .from('room_guests')
       .select('nickname')
       .eq('room_id', roomId)
-      .eq('nickname', nickname)
+      .eq('nickname', nickname.trim()) // 공백으로 인한 매칭 방지
 
     if (error) throw error
 
-    return data.length > 0 // 중복이면 true, 사용 가능하면 false
+    return data.length > 0 // 해당 방에 이미 같은 닉네임이 있다면 true 반환
   } catch (error) {
     console.error('방 비회원 닉네임 체크 중 오류 발생:', error.message)
     throw error
@@ -190,6 +193,8 @@ export const checkRoomNicknameDuplicateApi = async (nickname, roomId) => {
 
 /**
  * 8. [비회원 전용] 비회원 방 입장 등록 API
+ * @param {string} nickname - 중복확인을 통과한 임시 닉네임
+ * @param {string} roomId - 대문에서 입력받은 방 초대코드
  */
 export const insertRoomGuestApi = async (nickname, roomId) => {
   try {
@@ -198,7 +203,7 @@ export const insertRoomGuestApi = async (nickname, roomId) => {
       .insert([
         {
           room_id: roomId,
-          nickname: nickname,
+          nickname: nickname.trim(),
         },
       ])
       .select()
@@ -206,9 +211,28 @@ export const insertRoomGuestApi = async (nickname, roomId) => {
 
     if (error) throw error
 
-    return data // 생성된 비회원의 id, nickname, room_id, created_at이 반환됨
+    return data // 완벽하게 갱신된 비회원 Object(id, room_id, nickname, created_at) 반환
   } catch (error) {
     console.error('비회원 등록 중 오류 발생:', error.message)
+    throw error
+  }
+}
+
+/**
+ * 9. [비회원 전용] 특정 방에 속한 모든 비회원(게스트) 목록 가져오기 API
+ * @param {string} roomId - 방 초대코드
+ */
+export const getRoomGuestsApi = async (roomId) => {
+  try {
+    const { data, error } = await supabase
+      .from('room_guests')
+      .select('nickname')
+      .eq('room_id', roomId)
+
+    if (error) throw error
+    return data // [{nickname: '유저1'}, {nickname: '유저2'}] 형태로 반환됨
+  } catch (error) {
+    console.error('방 게스트 목록 조회 중 오류 발생:', error.message)
     throw error
   }
 }
