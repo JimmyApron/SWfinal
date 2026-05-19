@@ -70,10 +70,11 @@ function RoomCreatePage() {
         alert("로그인이 필요합니다.");
         return;
       }
-      
+
       const result = await createRoom({
         roomName,
         userId: user.id,
+        nickname: user.user_metadata.nickname,
         candidates,
       });
 

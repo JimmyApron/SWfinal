@@ -8,7 +8,7 @@ export async function createRoom(roomData) {
   const newRoom = {
     roomname: roomData.roomName,
     invitecode: generateInviteCode(),
-    createdby: roomData.userId || "test-user-1",
+    createdby: roomData.userId,
   };
 
   const { data: room, error: roomError } = await supabase
@@ -20,6 +20,22 @@ export async function createRoom(roomData) {
   if (roomError) {
     console.error("방 생성 실패 상세:", roomError);
     throw new Error(roomError.message || "방 생성 실패");
+  }
+
+  const { error: memberError } = await supabase
+  .from("room_members")
+  .insert([
+    {
+      roomid: room.id,
+      userid: roomData.userId,
+      nickname: roomData.nickname,
+    },
+  ]);
+
+  if (memberError) {
+    console.error("방장 멤버 등록 실패:", memberError);
+    throw new Error(memberError.message || "방장 멤버 등록 실패");  
+
   }
 
   const candidateRows = roomData.candidates.map((candidate) => ({
@@ -78,6 +94,7 @@ export async function joinRoomByInviteCode(inviteCode, userId, nickname) {
       {
         roomid: room.id,
         userid: userId,
+        nickname: nickname,
       },
     ]);
 
