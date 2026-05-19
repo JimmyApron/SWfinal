@@ -1,11 +1,13 @@
 import { useNavigate } from "react-router-dom";
-
+import RoomListPage from "../room/RoomListPage";
 function HomePage() {
   const navigate = useNavigate();
 
   return (
     <div>
       <h1>홈</h1>
+
+      <RoomListPage />
 
       <button onClick={() => navigate("/rooms/create")}>
         방 만들기

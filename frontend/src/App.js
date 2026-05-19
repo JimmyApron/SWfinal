@@ -22,7 +22,6 @@ function App() {
         <Route path="/guest" element={<GuestLoginPage />} />
         <Route path="/home" element={<HomePage />} />
 
-
         <Route path="/rooms/create" element={<RoomCreatePage />} />
         <Route path="/rooms/invite" element={<RoomInvitePage />} />
         <Route path="/rooms/:roomId" element={<RoomDetailPage />} />

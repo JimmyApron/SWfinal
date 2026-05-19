@@ -23,19 +23,18 @@ export async function createRoom(roomData) {
   }
 
   const { error: memberError } = await supabase
-  .from("room_members")
-  .insert([
-    {
-      roomid: room.id,
-      userid: roomData.userId,
-      nickname: roomData.nickname,
-    },
-  ]);
+    .from("room_members")
+    .insert([
+      {
+        roomid: room.id,
+        userid: roomData.userId,
+        nickname: roomData.nickname,
+      },
+    ]);
 
   if (memberError) {
     console.error("방장 멤버 등록 실패:", memberError);
-    throw new Error(memberError.message || "방장 멤버 등록 실패");  
-
+    throw new Error(memberError.message || "방장 멤버 등록 실패");
   }
 
   const candidateRows = roomData.candidates.map((candidate) => ({
@@ -62,21 +61,18 @@ export async function createRoom(roomData) {
 }
 
 export async function joinRoomByInviteCode(inviteCode, userId, nickname) {
-  const cleanInviteCode = inviteCode.trim().toUpperCase();//초대코드 대소문자 정리
+  const cleanInviteCode = inviteCode.trim().toUpperCase();
 
-  console.log("받은 inviteCode:", inviteCode);
-  
   const { data: room, error: roomError } = await supabase
     .from("rooms")
     .select("*")
-    .eq("invitecode", inviteCode)
+    .eq("invitecode", cleanInviteCode)
     .single();
 
   if (roomError || !room) {
     throw new Error("초대코드에 해당하는 방을 찾을 수 없습니다.");
   }
 
-  //이미 참가한 방인지 검사
   const { data: existingMember } = await supabase
     .from("room_members")
     .select("*")
@@ -106,5 +102,24 @@ export async function joinRoomByInviteCode(inviteCode, userId, nickname) {
   return {
     message: "방 참가 완료",
     room,
+  };
+}
+
+export async function getRooms() {
+  const { data, error } = await supabase
+    .from("rooms")
+    .select(`
+      *,
+      room_members(count)
+    `)
+    .order("createdat", { ascending: false });
+
+  if (error) {
+    console.error(error);
+    throw new Error("방 목록 조회 실패");
+  }
+
+  return {
+    rooms: data,
   };
 }
