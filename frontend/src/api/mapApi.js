@@ -5,7 +5,8 @@ export async function saveMyLocation(locationData) {
         .from("user_locations")
         .insert([
             {
-                user_id: locationData.userId || "test-user",
+                userid: locationData.userId || "test-user",
+                roomid: locationData.roomId || null,
                 latitude: locationData.latitude,
                 longitude: locationData.longitude,
                 accuracy: locationData.accuracy,
@@ -24,8 +25,8 @@ export async function getMyLocation(userId = "test-user") {
     const { data, error } = await supabase
         .from("user_locations")
         .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
+        .eq("userid", userId)
+        .order("createdat", { ascending: false })
         .limit(1);
 
     if (error) {
@@ -39,8 +40,8 @@ export async function getRoomMemberLocations(roomId) {
     const { data, error } = await supabase
         .from("user_locations")
         .select("*")
-        .eq("room_id", roomId)
-        .order("created_at", { ascending: false });
+        .eq("roomid", roomId)
+        .order("createdat", { ascending: false });
 
     if (error) {
         throw error;
