@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { joinRoomByInviteCode } from "../api/roomApi";
+import { supabase } from "../lib/supabaseClient";
 
 function RoomInvitePage() {
   const [inviteCode, setInviteCode] = useState("");
-  const [nickname, setNickname] = useState("");
   const [joinedRoom, setJoinedRoom] = useState(null);
 
   const handleJoinRoom = async () => {
@@ -12,13 +12,21 @@ function RoomInvitePage() {
       return;
     }
 
-    if (nickname.trim() === "") {
-      alert("닉네임을 입력하세요.");
-      return;
-    }
-
     try {
-      const result = await joinRoomByInviteCode(inviteCode, null, nickname); 
+      // 현재 로그인한 사용자 가져오기
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        alert("로그인이 필요합니다.");
+        return;
+      }
+
+      const result = await joinRoomByInviteCode(
+        inviteCode,
+        user.id
+      );
 
       setJoinedRoom(result.room);
 
@@ -42,13 +50,6 @@ function RoomInvitePage() {
         placeholder="초대코드 입력"
         value={inviteCode}
         onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-      />
-
-      <input 
-        type="text"
-        placeholder="닉네임 입력"
-        value={nickname}
-        onChange={(e) => setNickname(e.target.value)}
       />
 
       <button onClick={handleJoinRoom}>
