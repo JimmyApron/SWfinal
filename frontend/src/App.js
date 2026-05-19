@@ -18,8 +18,7 @@ function App() {
     setCurrentRoomId(roomId) // 부모 창고에 저장하고
     setPage(targetPage)      // 화면도 동시에 변경!
   }
-  
-  
+
   return (
     <AuthProvider>
       <div className="App">
