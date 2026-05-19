@@ -30,8 +30,8 @@ function MapPage() {
 
       try {
         await saveMyLocation({
-          userId: 'test-user',
-          roomId: null,
+          userId: currentUserId,
+          roomId: currentRoomId,
           latitude: location.lat,
           longitude: location.lng,
           accuracy: location.accuracy,

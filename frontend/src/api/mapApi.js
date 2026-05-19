@@ -3,15 +3,19 @@ import { supabase } from "./supabaseClient";
 export async function saveMyLocation(locationData) {
     const { data, error } = await supabase
         .from("user_locations")
-        .insert([
+        .upsert(
             {
-                userid: locationData.userId || "test-user",
-                roomid: locationData.roomId || null,
+                userid: locationData.userId,
+                roomid: locationData.roomId,
                 latitude: locationData.latitude,
                 longitude: locationData.longitude,
                 accuracy: locationData.accuracy,
+                createdat: new Date().toISOString(),
             },
-        ])
+            {
+                onConflict: "userid,roomid",
+            }
+        )
         .select();
 
     if (error) {
@@ -21,7 +25,11 @@ export async function saveMyLocation(locationData) {
     return data;
 }
 
-export async function getMyLocation(userId = "test-user") {
+export async function getMyLocation(userId) {
+    if (!userId) {
+        throw new Error("userId가 필요합니다.");
+    }
+
     const { data, error } = await supabase
         .from("user_locations")
         .select("*")
@@ -37,9 +45,20 @@ export async function getMyLocation(userId = "test-user") {
 }
 
 export async function getRoomMemberLocations(roomId) {
+    if (!roomId) {
+        throw new Error("roomId가 필요합니다.");
+    }
+
     const { data, error } = await supabase
         .from("user_locations")
-        .select("*")
+        .select(`
+            *,
+            profiles (
+                id,
+                nickname,
+                profile_image_url
+            )
+        `)
         .eq("roomid", roomId)
         .order("createdat", { ascending: false });
 
