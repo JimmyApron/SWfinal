@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient'
+import { supabase } from '../lib/supabaseClient'
 
 /**
  * 1. 이메일 중복 확인 API

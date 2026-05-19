@@ -46,6 +46,10 @@ export async function createRoom(roomData) {
 }
 
 export async function joinRoomByInviteCode(inviteCode, userId, nickname) {
+  const cleanInviteCode = inviteCode.trim().toUpperCase();//초대코드 대소문자 정리
+
+  console.log("받은 inviteCode:", inviteCode);
+  
   const { data: room, error: roomError } = await supabase
     .from("rooms")
     .select("*")

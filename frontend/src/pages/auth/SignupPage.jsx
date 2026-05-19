@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { signupApi, checkEmailDuplicateApi, checkNicknameDuplicateApi } from '../api/authApi'
+import { signupApi, checkEmailDuplicateApi, checkNicknameDuplicateApi } from '../../api/authApi'
 import { FaEye, FaEyeSlash } from 'react-icons/fa'
 
 function SignupPage() {

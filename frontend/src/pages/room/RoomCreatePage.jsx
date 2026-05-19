@@ -1,34 +1,18 @@
 import { useState } from "react";
-import { createRoom } from "../api/roomApi";
+import { createRoom } from "../../api/roomApi";
 import DatePicker from "react-multi-date-picker";
-import { supabase } from "../lib/supabaseClient";
+import { supabase } from "../../lib/supabaseClient";
+import { useNavigate } from "react-router-dom";
 
 function RoomCreatePage() {
-  const [roomName, setRoomName] = useState("");
-  const [createdRoom, setCreatedRoom] = useState(null);
+  const navigate = useNavigate();
 
+  const [roomName, setRoomName] = useState("");
   const [candidateDates, setCandidateDates] = useState([]);
   const [candidateStartTime, setCandidateStartTime] = useState("");
   const [candidateEndTime, setCandidateEndTime] = useState("");
   const [isAllDay, setIsAllDay] = useState(false);
   const [candidates, setCandidates] = useState([]);
-
-  //방생성 테스트용 테스트 로그인
-  const handleTestLogin = async () => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: "테스트계정이메일",
-      password: "테스트계정비밀번호",
-    });
-
-    if (error) {
-      console.error(error);
-      alert("테스트 로그인 실패");
-      return;
-    }
-
-    console.log("로그인 성공:", data.user);
-    alert("테스트 로그인 성공");
-  };
 
   const handleAddCandidate = () => {
     if (candidateDates.length === 0) {
@@ -93,31 +77,16 @@ function RoomCreatePage() {
         candidates,
       });
 
-      setCreatedRoom(result.room);
       alert("방이 생성되었습니다.");
+      navigate(`/rooms/${result.room.id}`);
     } catch (error) {
       alert("방 생성 실패");
       console.error(error);
     }
   };
 
-  const handleCopyInviteCode = async () => {
-    try {
-      await navigator.clipboard.writeText(createdRoom.invitecode);
-      alert("초대코드가 복사되었습니다.");
-    } catch (error) {
-      alert("복사에 실패했습니다.");
-      console.error(error);
-    }
-  };
-
-  const handleGoRoom = () => {
-    alert("방 상세 페이지는 다음 브랜치에서 구현 예정입니다.");
-  };
-
   return (
     <div>
-      <button onClick={handleTestLogin}>테스트 로그인</button>
       <h1>방 생성</h1>
 
       <input
@@ -176,18 +145,6 @@ function RoomCreatePage() {
       ))}
 
       <button onClick={handleCreateRoom}>방 만들기</button>
-
-      {createdRoom && (
-        <div>
-          <h2>생성된 방</h2>
-          <p>방 이름: {createdRoom.roomname}</p>
-          <p>초대코드: {createdRoom.invitecode}</p>
-
-          <button onClick={handleCopyInviteCode}>초대코드 복사하기</button>
-
-          <button onClick={handleGoRoom}>생성된 방으로 바로가기</button>
-        </div>
-      )}
     </div>
   );
 }

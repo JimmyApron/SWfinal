@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { checkRoomNicknameDuplicateApi, insertRoomGuestApi, getRoomGuestsApi } from '../api/authApi'
+import { checkRoomNicknameDuplicateApi, insertRoomGuestApi, getRoomGuestsApi } from '../../api/authApi'
 
 function GuestLoginPage({ roomId, setPage }) {
   // 초기값들을 명확하고 안전하게 바인딩

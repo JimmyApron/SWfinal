@@ -1,31 +1,53 @@
 import { useState } from 'react'
-import { loginApi, checkRoomNicknameDuplicateApi } from '../api/authApi'
+import { loginApi, checkRoomNicknameDuplicateApi } from '../../api/authApi'
 import { FaEye, FaEyeSlash } from 'react-icons/fa'
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { joinRoomByInviteCode } from "../../api/roomApi";
+import { supabase } from "../../lib/supabaseClient";
 
 function LoginPage() {
+
+
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  //아래는 url에서 읽어오는 값
+  const inviteCodeParam = searchParams.get("inviteCode")?.trim().toUpperCase();//초대코드 대소문자변환
+ 
+  console.log("URL에서 읽은 inviteCode:", inviteCodeParam); 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-
+  
   // 💡 [비회원 기능용 추가 상태값들]
   const [isGuestMode, setIsGuestMode] = useState(false) // 비회원 입력창 전환 스위치
   const [guestNickname, setGuestNickname] = useState('') // 비회원 닉네임
-  const [inviteCode, setInviteCode] = useState('') // 들어가려는 방 초대코드
+  const [inviteCode, setInviteCode] = useState('') // 들어가려는 방 초대코드 사용자 input 값
   const [isRoomNicknameChecked, setIsRoomNicknameChecked] = useState(false) // 방 닉네임 중복체크 여부
 
   // 회원 로그인 핸들러
   const handleLogin = async (event) => {
+
     event.preventDefault()
     if (!email || !password) {
       setMessage('이메일과 비밀번호를 모두 입력해주세요.')
       return
     }
     try {
-      setMessage('로그인 중입니다...')
-      const result = await loginApi({ email, password })
-      setMessage('로그인에 성공했습니다!')
-      // TODO: 가입 회원 홈 화면으로 이동 로직 (예: navigate('/home'))
+      setMessage('로그인 중입니다...');
+
+      await loginApi({ email, password });
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (inviteCodeParam && user) {
+        const result = await joinRoomByInviteCode(inviteCodeParam, user.id);
+        navigate(`/rooms/${result.room.id}`);
+      } else {
+        navigate('/home');
+      }  
     } catch (error) {
       console.error('로그인 오류:', error)
       setMessage(error.message || '로그인에 실패했습니다. 정보를 확인해주세요.')

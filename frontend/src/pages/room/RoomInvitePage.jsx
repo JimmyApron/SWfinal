@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { joinRoomByInviteCode } from "../api/roomApi";
-import { supabase } from "../lib/supabaseClient";
+import { joinRoomByInviteCode } from "../../api/roomApi";
+import { supabase } from "../../lib/supabaseClient";
 
 function RoomInvitePage() {
   const [inviteCode, setInviteCode] = useState("");
