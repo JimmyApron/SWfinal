@@ -14,6 +14,15 @@ function PlaceList({ places, onSelectPlace }) {
 
             <p>{place.address}</p>
 
+            {place.rating !== null && place.rating !== undefined && (
+              <p>
+                ⭐ {Number(place.rating).toFixed(1)} / 5.0
+                {place.reviewCount !== null && place.reviewCount !== undefined && (
+                  <span> ({place.reviewCount})</span>
+                )}
+              </p>
+            )}
+
             {place.phone && <p>전화번호: {place.phone}</p>}
 
             {place.distance !== null && place.distance !== undefined && (

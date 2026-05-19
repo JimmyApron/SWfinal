@@ -3,6 +3,7 @@ import { searchNearbyPlaces } from '../../api/kakaoPlacesApi'
 import PlaceCategoryTabs from './PlaceCategoryTabs'
 import PlaceFilter from './PlaceFilter'
 import PlaceList from './PlaceList'
+import { attachGoogleRatings } from '../../api/googlePlacesApi'
 
 function PlaceSearchPanel({ searchLocation, onSearchResult, onSelectPlace }) {
   const [selectedCategory, setSelectedCategory] = useState('restaurant')
@@ -20,9 +21,9 @@ function PlaceSearchPanel({ searchLocation, onSearchResult, onSelectPlace }) {
     }
 
     try {
-      setMessage('주변 장소를 검색하는 중입니다.')
+      setMessage('주변 장소를 검색하고 평점 정보를 불러오는 중입니다.')
 
-      const result = await searchNearbyPlaces({
+      const kakaoPlaces = await searchNearbyPlaces({
         lat: searchLocation.lat,
         lng: searchLocation.lng,
         category: selectedCategory,
@@ -31,6 +32,8 @@ function PlaceSearchPanel({ searchLocation, onSearchResult, onSelectPlace }) {
         minReviewCount,
         priceRangeFilter,
       })
+
+      const result = await attachGoogleRatings(kakaoPlaces)
 
       setPlaces(result)
       onSearchResult(result)
