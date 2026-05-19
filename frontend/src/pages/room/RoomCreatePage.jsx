@@ -20,26 +20,29 @@ function RoomCreatePage() {
       return;
     }
 
-    if (!isAllDay && (candidateStartTime === "" || candidateEndTime === "")) {
-      alert("시작 시간과 종료 시간을 입력하세요.");
-      return;
+    if (!isAllDay) {
+      if (candidateStartTime === "" || candidateEndTime === "") {
+        alert("시작 시간과 종료 시간을 입력하세요.");
+        return;
+      }
+
+      if (candidateStartTime >= candidateEndTime) {
+        alert("시작 시간은 종료 시간보다 빨라야 합니다.");
+        return;
+      }
     }
 
     const newCandidates = candidateDates.map((date) => {
       const formattedDate =
-        typeof date === "string"
-          ? date
-          : date.format("YYYY-MM-DD");
+        typeof date === "string" ? date : date.format("YYYY-MM-DD");
 
       return {
         date: formattedDate,
-        startTime: candidateStartTime,
-        endTime: candidateEndTime,
+        startTime: isAllDay ? null : candidateStartTime,
+        endTime: isAllDay ? null : candidateEndTime,
         isAllDay,
       };
     });
-
-    console.log("추가되는 후보:", newCandidates);
 
     setCandidates([...candidates, ...newCandidates]);
 
@@ -65,7 +68,7 @@ function RoomCreatePage() {
         data: { user },
         error,
       } = await supabase.auth.getUser();
-      
+
       if (error || !user) {
         alert("로그인이 필요합니다.");
         return;
@@ -120,12 +123,14 @@ function RoomCreatePage() {
         <div>
           <input
             type="time"
+            step="1800"
             value={candidateStartTime}
             onChange={(e) => setCandidateStartTime(e.target.value)}
           />
 
           <input
             type="time"
+            step="1800"
             value={candidateEndTime}
             onChange={(e) => setCandidateEndTime(e.target.value)}
           />
@@ -151,4 +156,3 @@ function RoomCreatePage() {
 }
 
 export default RoomCreatePage;
-
