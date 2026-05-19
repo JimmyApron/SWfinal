@@ -7,7 +7,6 @@ function generateInviteCode() {
 export async function createRoom(roomData) {
   const newRoom = {
     roomname: roomData.roomName,
-    description: roomData.description || "",
     invitecode: generateInviteCode(),
     createdby: roomData.userId || "test-user-1",
   };
