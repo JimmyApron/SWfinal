@@ -1,7 +1,7 @@
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000'
 
 export async function getGooglePlaceRating(place) {
-  const response = await fetch(`${API_BASE_URL}/api/google/place-rating`, {
+  const response = await fetch(`${API_BASE_URL}/google/place-rating`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

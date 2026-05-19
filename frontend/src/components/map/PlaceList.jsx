@@ -23,8 +23,6 @@ function PlaceList({ places, onSelectPlace }) {
               </p>
             )}
 
-            {place.phone && <p>전화번호: {place.phone}</p>}
-
             {place.distance !== null && place.distance !== undefined && (
               <p>현재 위치에서 거리: {formatDistance(place.distance)}</p>
             )}

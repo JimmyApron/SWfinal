@@ -1,16 +1,15 @@
 import { useState } from 'react'
 import { searchNearbyPlaces } from '../../api/kakaoPlacesApi'
+import { attachGoogleRatings } from '../../api/googlePlacesApi'
 import PlaceCategoryTabs from './PlaceCategoryTabs'
 import PlaceFilter from './PlaceFilter'
 import PlaceList from './PlaceList'
-import { attachGoogleRatings } from '../../api/googlePlacesApi'
 
 function PlaceSearchPanel({ searchLocation, onSearchResult, onSelectPlace }) {
   const [selectedCategory, setSelectedCategory] = useState('restaurant')
   const [radius, setRadius] = useState('1000')
-  const [minRating, setMinRating] = useState('0')
-  const [minReviewCount, setMinReviewCount] = useState('0')
-  const [priceRangeFilter, setPriceRangeFilter] = useState('all')
+  const [ratingFilter, setRatingFilter] = useState('all')
+  const [reviewCountFilter, setReviewCountFilter] = useState('all')
   const [places, setPlaces] = useState([])
   const [message, setMessage] = useState('')
 
@@ -21,27 +20,46 @@ function PlaceSearchPanel({ searchLocation, onSearchResult, onSelectPlace }) {
     }
 
     try {
-      setMessage('주변 장소를 검색하고 평점 정보를 불러오는 중입니다.')
+      setMessage('카카오맵 기준으로 장소를 검색하고, 구글맵 평점 정보를 불러오는 중입니다.')
 
       const kakaoPlaces = await searchNearbyPlaces({
         lat: searchLocation.lat,
         lng: searchLocation.lng,
         category: selectedCategory,
         radius,
-        minRating,
-        minReviewCount,
-        priceRangeFilter,
       })
 
-      const result = await attachGoogleRatings(kakaoPlaces)
+      const placesWithGoogleRatings = await attachGoogleRatings(kakaoPlaces)
 
-      setPlaces(result)
-      onSearchResult(result)
+      const filteredPlaces = placesWithGoogleRatings.filter((place) => {
+        const rating = Number(place.rating)
+        const reviewCount = Number(place.reviewCount)
 
-      if (result.length === 0) {
-        setMessage('조건에 맞는 장소가 없습니다. 거리 반경을 넓혀보세요.')
+        let passRating = true
+        let passReviewCount = true
+
+        if (ratingFilter === 'under3.5') {
+          passRating = !Number.isNaN(rating) && rating < 3.5
+        } else if (ratingFilter !== 'all') {
+          passRating = !Number.isNaN(rating) && rating >= Number(ratingFilter)
+        }
+
+        if (reviewCountFilter === 'under10') {
+          passReviewCount = !Number.isNaN(reviewCount) && reviewCount < 10
+        } else if (reviewCountFilter !== 'all') {
+          passReviewCount = !Number.isNaN(reviewCount) && reviewCount >= Number(reviewCountFilter)
+        }
+
+        return passRating && passReviewCount
+      })
+
+      setPlaces(filteredPlaces)
+      onSearchResult(filteredPlaces)
+
+      if (filteredPlaces.length === 0) {
+        setMessage('조건에 맞는 장소가 없습니다. 거리 반경을 넓히거나 별점/리뷰 조건을 바꿔보세요.')
       } else {
-        setMessage(`검색 완료: ${result.length}개`)
+        setMessage(`검색 완료: ${filteredPlaces.length}개`)
       }
     } catch (error) {
       console.error('장소 검색 오류:', error)
@@ -60,18 +78,15 @@ function PlaceSearchPanel({ searchLocation, onSearchResult, onSelectPlace }) {
 
       <PlaceFilter
         radius={radius}
-        minRating={minRating}
-        minReviewCount={minReviewCount}
-        priceRangeFilter={priceRangeFilter}
+        ratingFilter={ratingFilter}
+        reviewCountFilter={reviewCountFilter}
         onChangeRadius={setRadius}
-        onChangeMinRating={setMinRating}
-        onChangeMinReviewCount={setMinReviewCount}
-        onChangePriceRangeFilter={setPriceRangeFilter}
+        onChangeRatingFilter={setRatingFilter}
+        onChangeReviewCountFilter={setReviewCountFilter}
       />
 
       <p style={{ fontSize: '13px', color: '#666' }}>
-        카카오맵 기본 장소 검색은 평점, 리뷰 수, 가격대 정보를 직접 제공하지 않습니다.
-        현재 검색은 카테고리와 반경 기준으로 동작합니다.
+        거리 반경은 카카오맵 장소 검색 기준이고, 별점과 리뷰 수는 구글맵 기준입니다.
       </p>
 
       <button type="button" onClick={handleSearchPlaces}>
