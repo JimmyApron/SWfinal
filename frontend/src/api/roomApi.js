@@ -98,6 +98,17 @@ export async function joinRoomByInviteCode(inviteCode, userId, nickname) {
     console.error(memberError);
     throw new Error("방 참가 실패");
   }
+  // 마지막 활동 시간 갱신
+  const { error: activityError } = await supabase
+    .from("rooms")
+    .update({
+      lastactivityat: new Date().toISOString(),
+    })
+    .eq("id", room.id);
+
+  if (activityError) {
+    console.error("마지막 활동 시간 갱신 실패:", activityError);
+  }
 
   return {
     message: "방 참가 완료",
@@ -105,21 +116,30 @@ export async function joinRoomByInviteCode(inviteCode, userId, nickname) {
   };
 }
 
-export async function getRooms() {
+export async function getRooms(userId) {
   const { data, error } = await supabase
-    .from("rooms")
+    .from("room_members")
     .select(`
-      *,
-      room_members(count)
+      rooms (
+        *,
+        room_members(count)
+        )
     `)
-    .order("createdat", { ascending: false });
+    .eq("userid",userId);
 
   if (error) {
     console.error(error);
     throw new Error("방 목록 조회 실패");
   }
 
+  const rooms = data
+    .map((item) => item.rooms)
+    .sort(
+      (a, b) => 
+        new Date(b.lastactivityat) - new Date(a.lastactivityat)
+    );
+
   return {
-    rooms: data,
+    rooms,
   };
 }
