@@ -1,12 +1,23 @@
 import { useEffect, useState } from "react";
 import { getRooms } from "../../api/roomApi";
+import { supabase } from "../../lib/supabaseClient";
 
 function RoomListPage() {
   const [rooms, setRooms] = useState([]);
 
   const handleGetRooms = async () => {
     try {
-      const result = await getRooms();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setRooms([]);
+        return;
+      }
+
+      const result = await getRooms(user.id);
+
       setRooms(result.rooms);
     } catch (error) {
       console.error(error);
