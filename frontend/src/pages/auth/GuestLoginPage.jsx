@@ -1,33 +1,35 @@
 import { useState, useEffect } from 'react'
-import { checkRoomNicknameDuplicateApi, insertRoomGuestApi, getRoomGuestsApi } from '../../api/authApi'
+import { checkRoomNicknameDuplicateApi, insertRoomGuestApi, getRoomMembersByInviteCodeApi } from '../api/authApi' // 💡 임포트 함수 변경!
 
 function GuestLoginPage({ roomId, setPage }) {
   // 초기값들을 명확하고 안전하게 바인딩
   const [nickname, setNickname] = useState('')
   const [message, setMessage] = useState('')
   const [isAvailable, setIsAvailable] = useState(false)
-  const [existingGuests, setExistingGuests] = useState([])
+  
+  // 💡 [개념 전환] 이제 비회원 찌꺼기가 아니라 진짜 회원(room_members) 리스트를 담습니다.
+  const [existingMembers, setExistingMembers] = useState([])
 
-  // 현재 방에 있는 기존 유저 리스트 가져오기
-  const fetchExistingGuests = async () => {
+  // 💡 [진짜 DB 구조 연동] 현재 방에 있는 기존 진짜 회원(room_members) 리스트 가져오기
+  const fetchExistingMembers = async () => {
     if (!roomId) return
     try {
-      const data = await getRoomGuestsApi(roomId)
+      // 부모가 넘겨준 문자열 roomId(초대코드)를 들고 가서 room_members 테이블을 긁어옵니다.
+      const data = await getRoomMembersByInviteCodeApi(roomId)
       // data가 정상적인 배열일 때만 넣고, 아니면 무조건 빈 배열 처리
-      setExistingGuests(Array.isArray(data) ? data : [])
+      setExistingMembers(Array.isArray(data) ? data : [])
     } catch (error) {
-      console.error('목록 로드 실패:', error)
-      setExistingGuests([])
+      console.error('회원 목록 로드 실패:', error)
+      setExistingMembers([])
     }
   }
 
   useEffect(() => {
-    fetchExistingGuests()
+    fetchExistingMembers()
   }, [roomId])
 
-  // 1. 닉네임 중복 체크 (event 객체를 받아오도록 명확히 수정!)
+  // 1. 닉네임 중복 체크
   const handleCheckDuplicate = async (e) => {
-    // 💡 [핵심 안전장치] 버튼 클릭 이벤트가 상위 폼이나 브라우저를 새로고침하는 것을 원천 차단합니다.
     if (e && e.preventDefault) e.preventDefault()
     
     if (!nickname.trim()) {
@@ -64,7 +66,10 @@ function GuestLoginPage({ roomId, setPage }) {
       setMessage(`🎉 [게스트] ${guestData.nickname}님 환영합니다!`)
       setNickname('')
       setIsAvailable(false)
-      fetchExistingGuests() // 목록 새로고침
+      
+      // 💡 입장 성공 후 목록을 리프레시해 줍니다. 
+      // (만약 비회원도 room_members에 넣는 구조라면 명단에 바로 반영될 것이고, room_guests 분리 구조라면 방 내부 대시보드로 이동시키면 됩니다!)
+      fetchExistingMembers() 
     } catch (error) {
       console.error(error)
       setMessage('입장에 실패했습니다.')
@@ -93,7 +98,6 @@ function GuestLoginPage({ roomId, setPage }) {
           style={{ padding: '8px', width: '60%', marginRight: '10px' }}
         />
         
-        {/* 💡 onClick 이벤트에 e를 명확히 던져줍니다 */}
         <button type="button" onClick={(e) => handleCheckDuplicate(e)}>
           중복 확인
         </button>
@@ -123,16 +127,16 @@ function GuestLoginPage({ roomId, setPage }) {
 
       <hr />
 
-      {/* 4. 대조 및 눈으로 확인용 실시간 리스트 구역 */}
+      {/* 4. 💡 [은혜님 요청사항 완벽 반영] 대조 및 눈으로 확인용 실시간 리스트 구역 */}
       <div style={{ textAlign: 'left', background: '#f5f5f5', padding: '10px' }}>
-        <h4>📊 현재 이 방에 먼저 들어와 있는 사람들 목록:</h4>
-        {/* 💡 혹시 모를 에러를 막기 위해 배열 체크 가드를 한 번 더 칩니다 */}
-        {Array.isArray(existingGuests) && existingGuests.length === 0 ? (
-          <p style={{ color: '#888' }}>현재 아무도 없습니다! 첫 진입 테스트가 가능합니다.</p>
+        <h4>📊 현재 이 방에 들어와 있는 회원 목록 (`room_members`):</h4>
+        
+        {Array.isArray(existingMembers) && existingMembers.length === 0 ? (
+          <p style={{ color: '#888' }}>현재 방에 참여 중인 회원이 없습니다.</p>
         ) : (
           <ul>
-            {Array.isArray(existingGuests) && existingGuests.map((guest, index) => (
-              <li key={index}>👤 {guest?.nickname || '이름 없음'}</li>
+            {Array.isArray(existingMembers) && existingMembers.map((member, index) => (
+              <li key={index}>👤 {member?.nickname || '이름 없는 회원'}</li>
             ))}
           </ul>
         )}
