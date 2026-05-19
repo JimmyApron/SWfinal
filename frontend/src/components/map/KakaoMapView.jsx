@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 
-function KakaoMapView({ currentLocation, places = [], selectedPlace, routePath = [] }) {
+function KakaoMapView({
+  currentLocation,
+  places = [],
+  selectedPlace,
+  routePath = [],
+}) {
   const mapRef = useRef(null)
   const mapObjectRef = useRef(null)
   const userMarkerRef = useRef(null)
@@ -11,46 +16,6 @@ function KakaoMapView({ currentLocation, places = [], selectedPlace, routePath =
   const [isMapReady, setIsMapReady] = useState(false)
   const [mapError, setMapError] = useState('')
 
-  useEffect(() => {
-  if (!isMapReady || !mapObjectRef.current) {
-    return
-  }
-
-  if (routePolylineRef.current) {
-    routePolylineRef.current.setMap(null)
-    routePolylineRef.current = null
-  }
-
-  if (!routePath || routePath.length === 0) {
-    return
-  }
-
-  const linePath = routePath.map((point) => {
-    return new window.kakao.maps.LatLng(
-      Number(point.lat),
-      Number(point.lng)
-    )
-  })
-
-  routePolylineRef.current = new window.kakao.maps.Polyline({
-    path: linePath,
-    strokeWeight: 5,
-    strokeColor: '#FF0000',
-    strokeOpacity: 0.8,
-    strokeStyle: 'solid',
-  })
-
-  routePolylineRef.current.setMap(mapObjectRef.current)
-
-  const bounds = new window.kakao.maps.LatLngBounds()
-
-  linePath.forEach((position) => {
-    bounds.extend(position)
-  })
-
-  mapObjectRef.current.setBounds(bounds)
-}, [routePath, isMapReady])
-  
   useEffect(() => {
     loadKakaoMapScript()
       .then(() => {
@@ -67,14 +32,14 @@ function KakaoMapView({ currentLocation, places = [], selectedPlace, routePath =
       return
     }
 
-    const defaultLocation = new window.kakao.maps.LatLng(35.1796, 129.0756)
+    const container = mapRef.current
 
-    const mapOptions = {
-      center: defaultLocation,
+    const options = {
+      center: new window.kakao.maps.LatLng(35.1796, 129.0756),
       level: 4,
     }
 
-    mapObjectRef.current = new window.kakao.maps.Map(mapRef.current, mapOptions)
+    mapObjectRef.current = new window.kakao.maps.Map(container, options)
   }, [isMapReady])
 
   useEffect(() => {
@@ -184,6 +149,43 @@ function KakaoMapView({ currentLocation, places = [], selectedPlace, routePath =
     }
   }, [selectedPlace, isMapReady])
 
+  useEffect(() => {
+    if (!isMapReady || !mapObjectRef.current) {
+      return
+    }
+
+    if (routePolylineRef.current) {
+      routePolylineRef.current.setMap(null)
+      routePolylineRef.current = null
+    }
+
+    if (!routePath || routePath.length === 0) {
+      return
+    }
+
+    const linePath = routePath.map((point) => {
+      return new window.kakao.maps.LatLng(Number(point.lat), Number(point.lng))
+    })
+
+    routePolylineRef.current = new window.kakao.maps.Polyline({
+      path: linePath,
+      strokeWeight: 5,
+      strokeColor: '#FF0000',
+      strokeOpacity: 0.8,
+      strokeStyle: 'solid',
+    })
+
+    routePolylineRef.current.setMap(mapObjectRef.current)
+
+    const bounds = new window.kakao.maps.LatLngBounds()
+
+    linePath.forEach((position) => {
+      bounds.extend(position)
+    })
+
+    mapObjectRef.current.setBounds(bounds)
+  }, [routePath, isMapReady])
+
   const openPlaceInfoWindow = (place, marker) => {
     if (selectedInfoWindowRef.current) {
       selectedInfoWindowRef.current.close()
@@ -196,7 +198,7 @@ function KakaoMapView({ currentLocation, places = [], selectedPlace, routePath =
           <p style="margin:4px 0;">${place.address || '주소 정보 없음'}</p>
           ${
             place.kakaoMapUrl
-              ? `<a href="${place.kakaoMapUrl}" target="_blank" rel="noreferrer">카카오맵에서 보기</a>`
+              ? `<a href="${place.kakaoMapUrl}" target="_blank">카카오맵에서 보기</a>`
               : ''
           }
         </div>
@@ -229,44 +231,47 @@ function KakaoMapView({ currentLocation, places = [], selectedPlace, routePath =
 function loadKakaoMapScript() {
   return new Promise((resolve, reject) => {
     if (window.kakao && window.kakao.maps) {
-      window.kakao.maps.load(() => {
-        resolve()
-      })
+      resolve()
       return
     }
 
     const apiKey = process.env.REACT_APP_KAKAO_JAVASCRIPT_KEY
 
     if (!apiKey) {
-      reject(new Error('.env 파일에 REACT_APP_KAKAO_JAVASCRIPT_KEY가 없습니다.'))
+      reject(new Error('REACT_APP_KAKAO_JAVASCRIPT_KEY가 없습니다.'))
       return
     }
 
-    const existingScript = document.querySelector(
-      'script[src*="dapi.kakao.com/v2/maps/sdk.js"]'
-    )
+    const existingScript = document.getElementById('kakao-map-sdk')
 
     if (existingScript) {
-      existingScript.addEventListener('load', () => {
-        window.kakao.maps.load(() => {
-          resolve()
-        })
-      })
-      existingScript.addEventListener('error', reject)
+      existingScript.onload = () => {
+        resolve()
+      }
+
+      existingScript.onerror = () => {
+        reject(new Error('카카오맵 SDK 로드 실패'))
+      }
+
       return
     }
 
     const script = document.createElement('script')
-    script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${apiKey}&autoload=false&libraries=services`
-    script.async = true
+    script.id = 'kakao-map-sdk'
+    script.type = 'text/javascript'
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${apiKey}&libraries=services`
 
     script.onload = () => {
-      window.kakao.maps.load(() => {
+      if (window.kakao && window.kakao.maps) {
         resolve()
-      })
+      } else {
+        reject(new Error('카카오맵 객체가 생성되지 않았습니다.'))
+      }
     }
 
-    script.onerror = reject
+    script.onerror = () => {
+      reject(new Error('카카오맵 SDK script 로드 실패'))
+    }
 
     document.head.appendChild(script)
   })

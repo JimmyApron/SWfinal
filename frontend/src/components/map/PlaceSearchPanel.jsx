@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { searchNearbyPlaces } from '../../api/googlePlacesApi'
+import { searchNearbyPlaces } from '../../api/kakaoPlacesApi'
 import PlaceCategoryTabs from './PlaceCategoryTabs'
 import PlaceFilter from './PlaceFilter'
 import PlaceList from './PlaceList'
@@ -36,7 +36,7 @@ function PlaceSearchPanel({ searchLocation, onSearchResult, onSelectPlace }) {
       onSearchResult(result)
 
       if (result.length === 0) {
-        setMessage('조건에 맞는 장소가 없습니다. 거리 반경을 넓히거나 필터를 낮춰보세요.')
+        setMessage('조건에 맞는 장소가 없습니다. 거리 반경을 넓혀보세요.')
       } else {
         setMessage(`검색 완료: ${result.length}개`)
       }
@@ -65,6 +65,11 @@ function PlaceSearchPanel({ searchLocation, onSearchResult, onSelectPlace }) {
         onChangeMinReviewCount={setMinReviewCount}
         onChangePriceRangeFilter={setPriceRangeFilter}
       />
+
+      <p style={{ fontSize: '13px', color: '#666' }}>
+        카카오맵 기본 장소 검색은 평점, 리뷰 수, 가격대 정보를 직접 제공하지 않습니다.
+        현재 검색은 카테고리와 반경 기준으로 동작합니다.
+      </p>
 
       <button type="button" onClick={handleSearchPlaces}>
         주변 장소 검색
