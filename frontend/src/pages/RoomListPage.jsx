@@ -27,7 +27,7 @@ function RoomListPage() {
         <ul>
           {rooms.map((room) => (
             <li key={room.id}>
-              {room.roomName}
+              {room.roomname} {room.room_members?.[0]?.count || 0}명
             </li>
           ))}
         </ul>
