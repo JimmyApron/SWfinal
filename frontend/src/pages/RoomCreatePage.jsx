@@ -13,6 +13,23 @@ function RoomCreatePage() {
   const [isAllDay, setIsAllDay] = useState(false);
   const [candidates, setCandidates] = useState([]);
 
+  //방생성 테스트용 테스트 로그인
+  const handleTestLogin = async () => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: "테스트계정이메일",
+      password: "테스트계정비밀번호",
+    });
+
+    if (error) {
+      console.error(error);
+      alert("테스트 로그인 실패");
+      return;
+    }
+
+    console.log("로그인 성공:", data.user);
+    alert("테스트 로그인 성공");
+  };
+
   const handleAddCandidate = () => {
     if (candidateDates.length === 0) {
       alert("후보 날짜를 1개 이상 선택하세요.");
@@ -100,6 +117,7 @@ function RoomCreatePage() {
 
   return (
     <div>
+      <button onClick={handleTestLogin}>테스트 로그인</button>
       <h1>방 생성</h1>
 
       <input
