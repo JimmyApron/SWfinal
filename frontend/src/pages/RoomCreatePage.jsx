@@ -181,7 +181,6 @@ function RoomCreatePage() {
         <div>
           <h2>생성된 방</h2>
           <p>방 이름: {createdRoom.roomname}</p>
-          <p>설명: {createdRoom.description}</p>
           <p>초대코드: {createdRoom.invitecode}</p>
 
           <button onClick={handleCopyInviteCode}>초대코드 복사하기</button>
