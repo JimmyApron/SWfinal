@@ -1,13 +1,25 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useParams } from 'react-router-dom'
+
 import KakaoMapView from './KakaoMapView'
 import CurrentLocationButton from './CurrentLocationButton'
 import PlaceSearchPanel from './PlaceSearchPanel'
 import RoutePanel from './RoutePanel'
+
+import { supabase } from '../../api/supabaseClient'
 import { getCurrentPosition } from '../../services/geolocationService'
-import { saveMyLocation } from '../../api/mapApi'
+import { saveMyLocation, getRoomMemberLocations } from '../../api/mapApi'
 
 function MapPage() {
+  const { roomId } = useParams()
+
+  const currentRoomId = Number(roomId)
+
+  const [currentUserId, setCurrentUserId] = useState(null)
+
   const [currentLocation, setCurrentLocation] = useState(null)
+  const [memberLocations, setMemberLocations] = useState([])
+
   const [places, setPlaces] = useState([])
   const [selectedPlace, setSelectedPlace] = useState(null)
   const [destination, setDestination] = useState(null)
@@ -19,8 +31,57 @@ function MapPage() {
 
   const [message, setMessage] = useState('')
 
+  useEffect(() => {
+    const loadUser = async () => {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser()
+
+      if (error) {
+        console.error('사용자 정보 조회 오류:', error)
+        setMessage('사용자 정보를 가져오지 못했습니다.')
+        return
+      }
+
+      if (!user) {
+        setMessage('로그인이 필요합니다.')
+        return
+      }
+
+      setCurrentUserId(user.id)
+    }
+
+    loadUser()
+  }, [])
+
+  useEffect(() => {
+    const loadMemberLocations = async () => {
+      if (!currentRoomId) return
+
+      try {
+        const locations = await getRoomMemberLocations(currentRoomId)
+        setMemberLocations(locations)
+      } catch (error) {
+        console.error('멤버 위치 조회 오류:', error)
+      }
+    }
+
+    loadMemberLocations()
+  }, [currentRoomId])
+
   const handleCurrentLocation = async () => {
     try {
+      if (!currentUserId) {
+        setMessage('사용자 정보를 불러오는 중입니다.')
+        return
+      }
+
+      if (!currentRoomId) {
+        setMessage('방 정보를 찾을 수 없습니다.')
+        return
+      }
+
       setMessage('현재 위치를 가져오는 중입니다.')
 
       const location = await getCurrentPosition()
@@ -28,23 +89,21 @@ function MapPage() {
       setCurrentLocation(location)
       setMessage('현재 위치를 가져왔습니다. DB에 저장하는 중입니다.')
 
-      try {
-        await saveMyLocation({
-          userId: currentUserId,
-          roomId: currentRoomId,
-          latitude: location.lat,
-          longitude: location.lng,
-          accuracy: location.accuracy,
-        })
+      await saveMyLocation({
+        userId: currentUserId,
+        roomId: currentRoomId,
+        latitude: location.lat,
+        longitude: location.lng,
+        accuracy: location.accuracy,
+      })
 
-        setMessage('현재 위치를 가져오고 DB에 저장했습니다.')
-      } catch (error) {
-        console.error('Supabase 저장 오류:', error)
-        setMessage('현재 위치는 가져왔지만 DB 저장은 실패했습니다.')
-      }
+      const locations = await getRoomMemberLocations(currentRoomId)
+      setMemberLocations(locations)
+
+      setMessage('현재 위치를 가져오고 DB에 저장했습니다.')
     } catch (error) {
-      console.error('현재 위치 가져오기 오류:', error)
-      setMessage('현재 위치를 가져오지 못했습니다.')
+      console.error('현재 위치 저장 오류:', error)
+      setMessage('현재 위치를 가져오거나 DB에 저장하는 중 오류가 발생했습니다.')
     }
   }
 
@@ -143,8 +202,26 @@ function MapPage() {
         </div>
       )}
 
+      {memberLocations.length > 0 && (
+        <div className="location-box">
+          <h3>방 멤버 위치</h3>
+
+          {memberLocations.map((location) => (
+            <div key={location.id}>
+              <p>
+                닉네임:{' '}
+                {location.profiles?.nickname || '닉네임 없음'}
+              </p>
+              <p>위도: {location.latitude}</p>
+              <p>경도: {location.longitude}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
       <KakaoMapView
         currentLocation={currentLocation}
+        memberLocations={memberLocations}
         places={places}
         selectedPlace={selectedPlace}
         routePath={routePath}

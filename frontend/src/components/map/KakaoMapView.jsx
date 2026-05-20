@@ -2,14 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 
 function KakaoMapView({
   currentLocation,
+  memberLocations = [],
   places = [],
   selectedPlace,
   routePath = [],
 }) {
   const mapRef = useRef(null)
   const mapObjectRef = useRef(null)
+
   const userMarkerRef = useRef(null)
+  const memberMarkerRefs = useRef([])
   const placeMarkerRefs = useRef([])
+
   const selectedInfoWindowRef = useRef(null)
   const routePolylineRef = useRef(null)
 
@@ -42,6 +46,7 @@ function KakaoMapView({
     mapObjectRef.current = new window.kakao.maps.Map(container, options)
   }, [isMapReady])
 
+  // 내 위치 마커
   useEffect(() => {
     if (!isMapReady || !mapObjectRef.current || !currentLocation) {
       return
@@ -77,6 +82,61 @@ function KakaoMapView({
     })
   }, [currentLocation, isMapReady])
 
+  // 방 멤버 위치 마커
+  useEffect(() => {
+    if (!isMapReady || !mapObjectRef.current) {
+      return
+    }
+
+    memberMarkerRefs.current.forEach((marker) => marker.setMap(null))
+    memberMarkerRefs.current = []
+
+    if (!memberLocations || memberLocations.length === 0) {
+      return
+    }
+
+    memberLocations.forEach((memberLocation) => {
+      if (!memberLocation.latitude || !memberLocation.longitude) {
+        return
+      }
+
+      const nickname =
+        memberLocation.profiles?.nickname || '멤버'
+
+      const position = new window.kakao.maps.LatLng(
+        Number(memberLocation.latitude),
+        Number(memberLocation.longitude)
+      )
+
+      const marker = new window.kakao.maps.Marker({
+        position,
+        map: mapObjectRef.current,
+        title: nickname,
+      })
+
+      const infoWindow = new window.kakao.maps.InfoWindow({
+        content: `
+          <div style="padding:10px; font-size:13px; line-height:1.5;">
+            <strong>${nickname}</strong>
+            <p style="margin:4px 0;">현재 위치</p>
+            <p style="margin:4px 0;">정확도: ${
+              memberLocation.accuracy
+                ? `${Math.round(memberLocation.accuracy)}m`
+                : '정보 없음'
+            }</p>
+          </div>
+        `,
+      })
+
+      window.kakao.maps.event.addListener(marker, 'click', () => {
+        infoWindow.open(mapObjectRef.current, marker)
+      })
+
+      memberMarkerRefs.current.push(marker)
+    })
+  }, [memberLocations, isMapReady])
+
+  // 장소 마커
   useEffect(() => {
     if (!isMapReady || !mapObjectRef.current) {
       return
@@ -109,6 +169,7 @@ function KakaoMapView({
     })
   }, [places, isMapReady])
 
+  // 선택한 장소로 지도 이동
   useEffect(() => {
     if (!isMapReady || !mapObjectRef.current || !selectedPlace) {
       return
@@ -149,6 +210,7 @@ function KakaoMapView({
     }
   }, [selectedPlace, isMapReady])
 
+  // 경로 선 표시
   useEffect(() => {
     if (!isMapReady || !mapObjectRef.current) {
       return
