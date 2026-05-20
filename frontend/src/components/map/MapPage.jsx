@@ -31,7 +31,6 @@ function MapPage() {
     loadMemberLocations()
   }, [])
 
-  // DB에 저장된 멤버 위치를 주기적으로 다시 불러오기
   useEffect(() => {
     if (!currentRoomId) return
 
@@ -159,7 +158,6 @@ function MapPage() {
             : null,
         })
 
-        // 자동차는 기존 카카오 경로 API의 path 사용
         if (mode === 'car') {
           const pathResult = await getCarRoutePath({
             origin,
@@ -176,7 +174,6 @@ function MapPage() {
           }
         }
 
-        // 대중교통은 Google Directions의 overview_polyline을 디코딩해서 사용
         if (mode === 'transit' && timeResult.encodedPolyline) {
           const decodedPath = decodePolyline(timeResult.encodedPolyline)
 
@@ -223,16 +220,15 @@ function MapPage() {
     return response.json()
   }
 
-  // 유명 중간장소 후보 중 하나를 확정하는 함수
   const handleSelectMiddlePlace = async (place) => {
     setMiddlePlace(place)
     setSelectedPlace(place)
     setDestination(place)
 
-    // 추천 후보 5개 대신 확정된 중간장소 1개만 지도에 표시
+    // 핵심 1: 추천 후보 마커 제거하고 확정된 중간장소 1개만 지도에 표시
     setPlaces([place])
 
-    // 이전 경로선 초기화 후 새로 계산
+    // 핵심 2: 이전 경로선 초기화 후 확정 장소 기준 경로 다시 계산
     setMemberRouteResults(place.travelResults || [])
     setMemberRoutePaths([])
 
@@ -241,7 +237,6 @@ function MapPage() {
     await calculateAllMemberRoutesToMiddlePlace(place)
   }
 
-  // 확정된 중간장소 주변 음식점/카페/놀거리 중 하나를 선택하는 함수
   const handleSelectPlace = (place) => {
     setSelectedPlace(place)
     setDestination(place)
@@ -332,11 +327,13 @@ function MapPage() {
         memberRoutePaths={memberRoutePaths}
       />
 
-      <FamousMiddlePlacePanel
-        memberLocations={memberLocations}
-        onRecommendPlaces={setPlaces}
-        onSelectMiddlePlace={handleSelectMiddlePlace}
-      />
+      {!middlePlace && (
+        <FamousMiddlePlacePanel
+          memberLocations={memberLocations}
+          onRecommendPlaces={setPlaces}
+          onSelectMiddlePlace={handleSelectMiddlePlace}
+        />
+      )}
 
       {middlePlace ? (
         <PlaceSearchPanel
@@ -346,9 +343,9 @@ function MapPage() {
         />
       ) : (
         <section>
-          <h2>주변 장소 추천</h2>
+          <h2>확정된 중간장소 주변 추천</h2>
           <p>
-            먼저 위에서 유명 중간장소를 추천받고, 그중 하나를 중간장소로 확정해주세요.
+            먼저 유명 중간장소를 추천받고, 그중 하나를 중간장소로 확정해주세요.
             중간장소가 확정되면 그 주변의 음식점, 카페, 놀거리 장소를 검색할 수 있습니다.
           </p>
         </section>
