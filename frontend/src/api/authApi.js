@@ -1,4 +1,5 @@
-import { supabase } from './supabaseClient'
+
+import { supabase } from '../lib/supabaseClient'
 
 /**
  * 1. �̸��� �ߺ� Ȯ�� API

@@ -1,34 +1,80 @@
 import { useState, useEffect } from 'react'
-import { checkRoomNicknameDuplicateApi, insertRoomGuestApi, getRoomMembersByInviteCodeApi } from '../api/authApi' // 💡 임포트 함수 변경!
+import { checkRoomNicknameDuplicateApi, insertRoomGuestApi, getRoomMembersByInviteCodeApi } from '../../api/authApi' 
+import { supabase } from '../../lib/supabaseClient' // 👈 방 존재 여부 체크를 위해 직접 수혈
+import { useNavigate } from 'react-router-dom' // 👈 라우터 이동용 장착
 
-function GuestLoginPage({ roomId, setPage }) {
-  // 초기값들을 명확하고 안전하게 바인딩
+function GuestLoginPage() {
+  const navigate = useNavigate()
+  
+  // 💡 [핵심 개편] 이제 부모 프롭스 대신, 컴포넌트 내부에서 초대코드를 직접 관리합니다!
+  const [inviteCode, setInviteCode] = useState('') 
+  const [isRoomVerified, setIsRoomVerified] = useState(false) // 방 검증 통과 여부
+  
   const [nickname, setNickname] = useState('')
   const [message, setMessage] = useState('')
-  const [isAvailable, setIsAvailable] = useState(false)
+  const [isAvailable, setIsAvailable] = useState(false) // 닉네임 중복체크 완료 여부
   
-  // 💡 [개념 전환] 이제 비회원 찌꺼기가 아니라 진짜 회원(room_members) 리스트를 담습니다.
   const [existingMembers, setExistingMembers] = useState([])
 
-  // 💡 [진짜 DB 구조 연동] 현재 방에 있는 기존 진짜 회원(room_members) 리스트 가져오기
-  const fetchExistingMembers = async () => {
-    if (!roomId) return
+// 1. 초대코드 방 존재 여부 체크 및 [회원 + 비회원] 명단 전체 불러오기
+  const handleVerifyRoom = async (e) => {
+    if (e && e.preventDefault) e.preventDefault()
+    
+    if (!inviteCode.trim()) {
+      setMessage('⚠️ 초대코드를 입력해 주세요.')
+      return
+    }
+
     try {
-      // 부모가 넘겨준 문자열 roomId(초대코드)를 들고 가서 room_members 테이블을 긁어옵니다.
-      const data = await getRoomMembersByInviteCodeApi(roomId)
-      // data가 정상적인 배열일 때만 넣고, 아니면 무조건 빈 배열 처리
-      setExistingMembers(Array.isArray(data) ? data : [])
+      setMessage('방 유효성 검사 중...');
+      
+      // [1] 먼저 rooms 테이블에서 진짜 방 정보와 고유 숫자 고유번호(id)를 낚아챕니다.
+      const { data: roomData, error: roomError } = await supabase
+        .from('rooms')
+        .select('id, invitecode')
+        .eq('invitecode', inviteCode.trim())
+        .maybeSingle()
+
+      if (roomError) throw roomError
+
+      if (!roomData) {
+        setIsRoomVerified(false)
+        setExistingMembers([])
+        setMessage('❌ 존재하지 않는 초대코드입니다. 다시 확인해 주세요.')
+        return
+      }
+
+      // [2] 방이 존재한다면, 기존 가입 회원 목록(room_members)을 가져옵니다.
+      const memberList = await getRoomMembersByInviteCodeApi(inviteCode.trim())
+      const formattedMembers = Array.isArray(memberList) 
+        ? memberList.map(m => ({ nickname: m.nickname, type: '회원' })) 
+        : []
+
+      // [3] 💡 [추가] 이제 개편된 int8 타입의 room_guests 테이블에서 현재 방 고유번호(room_id)를 가진 비회원 목록도 긁어옵니다!
+      const { data: guestList, error: guestError } = await supabase
+        .from('room_guests')
+        .select('nickname')
+        .eq('room_id', roomData.id) // ⬅️ 외래키로 물리적 연결된 진짜 숫자 id로 조회!
+
+      const formattedGuests = Array.isArray(guestList)
+        ? guestList.map(g => ({ nickname: g.nickname, type: '비회원' }))
+        : []
+
+      // [4] 💡 회원 배열과 비회원 배열을 하나로 깔끔하게 묶어줍니다 (Concat)
+      const allParticipants = [...formattedMembers, ...formattedGuests]
+      setExistingMembers(allParticipants)
+      
+      setIsRoomVerified(true)
+      setMessage('✅ 유효한 방 확인 완료! 전체 참여자 명단을 대조하여 닉네임을 검증합니다.')
+
     } catch (error) {
-      console.error('회원 목록 로드 실패:', error)
-      setExistingMembers([])
+      console.error('방 검증 또는 통합 명단 로드 실패:', error)
+      setMessage('서버 통신 중 오류가 발생했습니다.')
+      setIsRoomVerified(false)
     }
   }
 
-  useEffect(() => {
-    fetchExistingMembers()
-  }, [roomId])
-
-  // 1. 닉네임 중복 체크
+  // 2. 닉네임 중복 체크 (기존 회원 목록 대조 포함)
   const handleCheckDuplicate = async (e) => {
     if (e && e.preventDefault) e.preventDefault()
     
@@ -39,7 +85,8 @@ function GuestLoginPage({ roomId, setPage }) {
 
     try {
       setMessage('방 안의 다른 닉네임들과 대조 중...')
-      const isDuplicate = await checkRoomNicknameDuplicateApi(nickname, roomId)
+      // API 내부적으로 room_guests와 room_members 양방향 철벽 수색 수행
+      const isDuplicate = await checkRoomNicknameDuplicateApi(nickname.trim(), inviteCode.trim())
 
       if (isDuplicate) {
         setIsAvailable(false)
@@ -50,106 +97,129 @@ function GuestLoginPage({ roomId, setPage }) {
       }
     } catch (error) {
       console.error(error)
-      setMessage('오류가 발생했습니다.')
+      setMessage('닉네임 체크 중 오류가 발생했습니다.')
     }
   }
 
-  // 2. 최종 방 입장 제출
+  // 3. 최종 방 입장 제출 및 대시보드 리다이렉트
   const handleEnterRoom = async (e) => {
     if (e && e.preventDefault) e.preventDefault()
-    if (!isAvailable) return
+    if (!isAvailable || !isRoomVerified) return
 
     try {
       setMessage('비회원으로 방에 입장하는 중...')
-      const guestData = await insertRoomGuestApi(nickname, roomId)
+      const guestData = await insertRoomGuestApi(nickname.trim(), inviteCode.trim())
       
-      setMessage(`🎉 [게스트] ${guestData.nickname}님 환영합니다!`)
-      setNickname('')
-      setIsAvailable(false)
+      setMessage(`🎉 [게스트] ${guestData.nickname}님 환영합니다! 방 내부로 진입합니다.`)
       
-      // 💡 입장 성공 후 목록을 리프레시해 줍니다. 
-      // (만약 비회원도 room_members에 넣는 구조라면 명단에 바로 반영될 것이고, room_guests 분리 구조라면 방 내부 대시보드로 이동시키면 됩니다!)
-      fetchExistingMembers() 
+      // 가이드라인 2번 미션 반영: 세션/로컬스토리지에 식별자 저장
+      localStorage.setItem('guest_nickname', guestData.nickname)
+      localStorage.setItem('current_room_code', inviteCode.trim())
+
+      // 💡 진짜 방 내부 대시보드 또는 상세페이지 경로로 리다이렉트 연동!
+      setTimeout(() => {
+        navigate(`/rooms/${inviteCode.trim()}`) 
+      }, 1200)
+
     } catch (error) {
       console.error(error)
-      setMessage('입장에 실패했습니다.')
+      setMessage('방 입장에 실패했습니다. 관리자에게 문의하세요.')
     }
   }
 
   return (
-    <div style={{ padding: '20px', border: '1px solid #ccc', margin: '20px auto', maxWidth: '400px', textAlign: 'center' }}>
+    <section>
       
-      {/* 1. 상단 타이틀 구역 */}
       <h2>👥 비회원(게스트) 입장 창</h2>
-      <p>진입 대기 중인 방 코드: <b style={{ color: 'blue' }}>{roomId || '선택된 방 없음'}</b></p>
+      <p>로그인 없이 초대코드를 이용해 방에 임시로 진입합니다.</p>
       
       <hr />
 
-      {/* 2. 닉네임 텍스트 박스 & 중복확인 버튼 구역 */}
-      <div style={{ marginTop: '20px', marginBottom: '20px' }}>
-        <input
-          type="text"
-          placeholder="사용할 임시 닉네임"
-          value={nickname}
-          onChange={(e) => {
-            setNickname(e.target.value)
-            setIsAvailable(false)
-          }}
-          style={{ padding: '8px', width: '60%', marginRight: '10px' }}
-        />
-        
-        <button type="button" onClick={(e) => handleCheckDuplicate(e)}>
-          중복 확인
-        </button>
+      {/* ─── 1구역: 초대코드 선입력 및 방 검증 구역 ─── */}
+      <div>
+        <h3>1단계: 초대코드 입력</h3>
+        <form onSubmit={handleVerifyRoom}>
+          <input
+            type="text"
+            placeholder="초대코드를 입력하세요 (예: ROOM123)"
+            value={inviteCode}
+            disabled={isRoomVerified} // 검증 성공 시 입력창 잠금
+            onChange={(e) => setInviteCode(e.target.value)}
+          />
+          {!isRoomVerified && (
+            <button type="submit">
+              방 확인하기
+            </button>
+          )}
+        </form>
       </div>
 
-      {/* 안내 메시지 출력 */}
-      {message && <p style={{ color: 'blue', fontWeight: 'bold' }}>{message}</p>}
+      {/* ─── 2구역: 닉네임 작성 및 중복 체크 (방 검증이 끝나야만 활성화) ─── */}
+      {isRoomVerified && (
+        <div style={{ marginTop: '20px' }}>
+          <h3>2단계: 닉네임 설정</h3>
+          <form onSubmit={handleCheckDuplicate}>
+            <input
+              type="text"
+              placeholder="사용할 임시 닉네임"
+              value={nickname}
+              onChange={(e) => {
+                setNickname(e.target.value)
+                setIsAvailable(false) // 타이핑을 다시 하면 중복체크 풀림
+              }}
+            />
+            <button type="submit">
+              중복 확인
+            </button>
+          </form>
+        </div>
+      )}
 
-      {/* 3. 최종 입장 버튼 */}
-      <div style={{ marginBottom: '20px' }}>
-        <button
-          type="button"
-          disabled={!isAvailable}
-          onClick={(e) => handleEnterRoom(e)}
-          style={{ 
-            width: '100%', 
-            padding: '10px', 
-            backgroundColor: isAvailable ? 'green' : '#ccc', 
-            color: '#fff',
-            border: 'none',
-            cursor: isAvailable ? 'pointer' : 'not-allowed'
-          }}
-        >
-          이 방으로 최종 들어가기
-        </button>
-      </div>
+      {/* 알림 안내 메시지 통합 출력 */}
+      {message && <p style={{ fontWeight: 'bold', margin: '15px 0' }}>{message}</p>}
+
+      {/* ─── 3구역: 최종 입장 버튼 구역 ─── */}
+      {isRoomVerified && (
+        <div>
+          <button
+            type="button"
+            disabled={!isAvailable}
+            onClick={handleEnterRoom}
+          >
+            이 방으로 최종 들어가기
+          </button>
+        </div>
+      )}
 
       <hr />
 
-      {/* 4. 💡 [은혜님 요청사항 완벽 반영] 대조 및 눈으로 확인용 실시간 리스트 구역 */}
-      <div style={{ textAlign: 'left', background: '#f5f5f5', padding: '10px' }}>
-        <h4>📊 현재 이 방에 들어와 있는 회원 목록 (`room_members`):</h4>
-        
-        {Array.isArray(existingMembers) && existingMembers.length === 0 ? (
-          <p style={{ color: '#888' }}>현재 방에 참여 중인 회원이 없습니다.</p>
-        ) : (
-          <ul>
-            {Array.isArray(existingMembers) && existingMembers.map((member, index) => (
-              <li key={index}>👤 {member?.nickname || '이름 없는 회원'}</li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* 돌아가기 */}
-      <div style={{ marginTop: '20px' }}>
-        <button type="button" onClick={() => setPage('invite')} style={{ cursor: 'pointer' }}>
+     {/* ─── 4구역: 실시간 기존 회원 리스트 시각화 구역 (방 확인 완료 시 노출) ─── */}
+      {isRoomVerified && (
+        <div>
+          <h4>📊 현재 이 방에 참여 중인 명단 (전체 대조군):</h4>
+          {existingMembers.length === 0 ? (
+            <p>현재 방에 참여 중인 유저가 없습니다.</p>
+          ) : (
+            <ul>
+              {existingMembers.map((member, index) => (
+                <li key={index}>
+                  {member.type === '회원' ? '👤 [회원] ' : '👥 [게스트] '} 
+                  {member?.nickname || '이름 없는 참가자'}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      
+      {/* 처음으로 돌아가기 */}
+      <div style={{ marginTop: '30px' }}>
+        <button type="button" onClick={() => navigate('/')}>
           처음 화면으로 돌아가기
         </button>
       </div>
 
-    </div>
+    </section>
   )
 }
 

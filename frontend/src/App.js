@@ -15,13 +15,16 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* 첫 대문 화면 */}
         <Route path="/" element={<InviteCodePage />} />
 
+        {/* 인증 및 진입 파이프라인 */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/guest" element={<GuestLoginPage />} />
         <Route path="/home" element={<HomePage />} />
 
+        {/* 방 관련 기능 */}
         <Route path="/rooms/create" element={<RoomCreatePage />} />
         <Route path="/rooms/invite" element={<RoomInvitePage />} />
         <Route path="/rooms/:roomId" element={<RoomDetailPage />} />
