@@ -147,10 +147,28 @@ async function getGoogleRoute(origin, destination, travelMode) {
     throw new Error(`Google ${mode} 경로를 찾지 못했습니다.`)
   }
 
-  return {
-    duration: leg.duration?.value,
-    distance: leg.distance?.value,
-  }
+    return {
+        duration: leg.duration?.value,
+        distance: leg.distance?.value,
+        encodedPolyline: route.overview_polyline?.points || null,
+        steps: leg.steps?.map((step) => ({
+            travelMode: step.travel_mode,
+            instruction: step.html_instructions,
+            duration: step.duration?.value,
+            distance: step.distance?.value,
+            encodedPolyline: step.polyline?.points || null,
+            transitDetails: step.transit_details
+            ? {
+                lineName: step.transit_details.line?.name,
+                lineShortName: step.transit_details.line?.short_name,
+                vehicleType: step.transit_details.line?.vehicle?.type,
+                departureStop: step.transit_details.departure_stop?.name,
+                arrivalStop: step.transit_details.arrival_stop?.name,
+                numStops: step.transit_details.num_stops,
+                }
+            : null,
+        })) || [],
+    }
 }
 
 function parseDurationToSeconds(durationText) {

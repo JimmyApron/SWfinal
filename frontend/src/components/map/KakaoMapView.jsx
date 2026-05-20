@@ -6,6 +6,7 @@ function KakaoMapView({
   places = [],
   selectedPlace,
   routePath = [],
+  memberRoutePaths = [],
 }) {
   const mapRef = useRef(null)
   const mapObjectRef = useRef(null)
@@ -16,6 +17,7 @@ function KakaoMapView({
 
   const selectedInfoWindowRef = useRef(null)
   const routePolylineRef = useRef(null)
+  const memberRoutePolylineRefs = useRef([])
 
   const [isMapReady, setIsMapReady] = useState(false)
   const [mapError, setMapError] = useState('')
@@ -46,7 +48,7 @@ function KakaoMapView({
     mapObjectRef.current = new window.kakao.maps.Map(container, options)
   }, [isMapReady])
 
-  // 내 위치 마커
+  // 내 브라우저 현재 위치 마커
   useEffect(() => {
     if (!isMapReady || !mapObjectRef.current || !currentLocation) {
       return
@@ -56,8 +58,6 @@ function KakaoMapView({
       Number(currentLocation.lat),
       Number(currentLocation.lng)
     )
-
-    mapObjectRef.current.setCenter(location)
 
     if (userMarkerRef.current) {
       userMarkerRef.current.setMap(null)
@@ -82,7 +82,7 @@ function KakaoMapView({
     })
   }, [currentLocation, isMapReady])
 
-  // 방 멤버 위치 마커 + 멤버 위치 기준 지도 범위 이동
+  // 방 멤버 위치 마커
   useEffect(() => {
     if (!isMapReady || !mapObjectRef.current) {
       return
@@ -146,10 +146,14 @@ function KakaoMapView({
       mapObjectRef.current.setLevel(5)
     }
 
-    if (validLocationCount >= 2) {
+    if (
+      validLocationCount >= 2 &&
+      places.length === 0 &&
+      memberRoutePaths.length === 0
+    ) {
       mapObjectRef.current.setBounds(bounds)
     }
-  }, [memberLocations, isMapReady])
+  }, [memberLocations, places.length, memberRoutePaths.length, isMapReady])
 
   // 장소 마커
   useEffect(() => {
@@ -160,6 +164,13 @@ function KakaoMapView({
     placeMarkerRefs.current.forEach((marker) => marker.setMap(null))
     placeMarkerRefs.current = []
 
+    if (!places || places.length === 0) {
+      return
+    }
+
+    const bounds = new window.kakao.maps.LatLngBounds()
+    let validPlaceCount = 0
+
     places.forEach((place) => {
       if (!place.lat || !place.lng) {
         return
@@ -169,6 +180,9 @@ function KakaoMapView({
         Number(place.lat),
         Number(place.lng)
       )
+
+      bounds.extend(position)
+      validPlaceCount += 1
 
       const marker = new window.kakao.maps.Marker({
         position,
@@ -182,9 +196,23 @@ function KakaoMapView({
 
       placeMarkerRefs.current.push(marker)
     })
-  }, [places, isMapReady])
 
-  // 선택한 장소로 지도 이동
+    if (validPlaceCount === 1 && memberRoutePaths.length === 0) {
+      mapObjectRef.current.setCenter(
+        new window.kakao.maps.LatLng(
+          Number(places[0].lat),
+          Number(places[0].lng)
+        )
+      )
+      mapObjectRef.current.setLevel(4)
+    }
+
+    if (validPlaceCount >= 2 && memberRoutePaths.length === 0) {
+      mapObjectRef.current.setBounds(bounds)
+    }
+  }, [places, memberRoutePaths.length, isMapReady])
+
+  // 선택한 장소 인포윈도우
   useEffect(() => {
     if (!isMapReady || !mapObjectRef.current || !selectedPlace) {
       return
@@ -199,9 +227,6 @@ function KakaoMapView({
       Number(selectedPlace.lat),
       Number(selectedPlace.lng)
     )
-
-    mapObjectRef.current.setCenter(selectedLocation)
-    mapObjectRef.current.setLevel(3)
 
     const matchedMarker = placeMarkerRefs.current.find((marker) => {
       const markerPosition = marker.getPosition()
@@ -225,7 +250,7 @@ function KakaoMapView({
     }
   }, [selectedPlace, isMapReady])
 
-  // 경로 선 표시
+  // 기존 단일 경로 선 표시
   useEffect(() => {
     if (!isMapReady || !mapObjectRef.current) {
       return
@@ -262,6 +287,77 @@ function KakaoMapView({
 
     mapObjectRef.current.setBounds(bounds)
   }, [routePath, isMapReady])
+
+  // 멤버별 경로선 표시
+  useEffect(() => {
+    if (!isMapReady || !mapObjectRef.current) {
+      return
+    }
+
+    memberRoutePolylineRefs.current.forEach((polyline) => {
+      polyline.setMap(null)
+    })
+    memberRoutePolylineRefs.current = []
+
+    if (!memberRoutePaths || memberRoutePaths.length === 0) {
+      return
+    }
+
+    const bounds = new window.kakao.maps.LatLngBounds()
+    let validRouteCount = 0
+
+    memberRoutePaths.forEach((route) => {
+      if (!route.path || route.path.length === 0) {
+        return
+      }
+
+      const linePath = route.path.map((point) => {
+        return new window.kakao.maps.LatLng(
+          Number(point.lat),
+          Number(point.lng)
+        )
+      })
+
+      linePath.forEach((position) => {
+        bounds.extend(position)
+      })
+
+      validRouteCount += 1
+
+      const polyline = new window.kakao.maps.Polyline({
+        path: linePath,
+        strokeWeight: route.mode === 'transit' ? 4 : 5,
+        strokeOpacity: route.mode === 'transit' ? 0.65 : 0.85,
+        strokeStyle: route.mode === 'transit' ? 'shortdash' : 'solid',
+      })
+
+      polyline.setMap(mapObjectRef.current)
+      memberRoutePolylineRefs.current.push(polyline)
+    })
+
+    places.forEach((place) => {
+      if (place.lat && place.lng) {
+        bounds.extend(
+          new window.kakao.maps.LatLng(Number(place.lat), Number(place.lng))
+        )
+      }
+    })
+
+    memberLocations.forEach((member) => {
+      if (member.latitude && member.longitude) {
+        bounds.extend(
+          new window.kakao.maps.LatLng(
+            Number(member.latitude),
+            Number(member.longitude)
+          )
+        )
+      }
+    })
+
+    if (validRouteCount > 0) {
+      mapObjectRef.current.setBounds(bounds)
+    }
+  }, [memberRoutePaths, memberLocations, places, isMapReady])
 
   const openPlaceInfoWindow = (place, marker) => {
     if (selectedInfoWindowRef.current) {

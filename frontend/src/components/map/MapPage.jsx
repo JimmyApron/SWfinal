@@ -3,11 +3,12 @@ import { useEffect, useState } from 'react'
 import KakaoMapView from './KakaoMapView'
 import CurrentLocationButton from './CurrentLocationButton'
 import PlaceSearchPanel from './PlaceSearchPanel'
-import RoutePanel from './RoutePanel'
 import FamousMiddlePlacePanel from './FamousMiddlePlacePanel'
 
 import { getCurrentPosition } from '../../services/geolocationService'
 import { saveMyLocation, getRoomMemberLocations } from '../../api/mapApi'
+import { getRouteTime } from '../../api/routeTimeApi'
+import { decodePolyline } from '../../utils/decodePolyline'
 
 function MapPage() {
   const currentRoomId = 7
@@ -21,36 +22,46 @@ function MapPage() {
   const [destination, setDestination] = useState(null)
 
   const [middlePlace, setMiddlePlace] = useState(null)
-
-  const [routeInfo, setRouteInfo] = useState(null)
-  const [routeSteps, setRouteSteps] = useState([])
-  const [routeMessage, setRouteMessage] = useState('')
-  const [routePath, setRoutePath] = useState([])
+  const [memberRouteResults, setMemberRouteResults] = useState([])
+  const [memberRoutePaths, setMemberRoutePaths] = useState([])
 
   const [message, setMessage] = useState('')
 
   useEffect(() => {
-    const loadMemberLocations = async () => {
-      if (!currentRoomId) return
-
-      try {
-        const locations = await getRoomMemberLocations(currentRoomId)
-        setMemberLocations(locations)
-        setMessage('DB에 저장된 멤버 위치를 불러왔습니다.')
-      } catch (error) {
-        console.error('멤버 위치 조회 오류:', error)
-        setMessage('멤버 위치를 불러오지 못했습니다.')
-      }
-    }
-
     loadMemberLocations()
   }, [])
 
-  const resetRoute = () => {
-    setRouteInfo(null)
-    setRouteSteps([])
-    setRoutePath([])
-    setRouteMessage('')
+  // DB에 저장된 멤버 위치를 주기적으로 다시 불러오기
+  useEffect(() => {
+    if (!currentRoomId) return
+
+    const intervalId = setInterval(async () => {
+      try {
+        const locations = await getRoomMemberLocations(currentRoomId)
+        setMemberLocations(locations)
+      } catch (error) {
+        console.error('실시간 멤버 위치 갱신 오류:', error)
+      }
+    }, 5000)
+
+    return () => {
+      clearInterval(intervalId)
+    }
+  }, [])
+
+  const loadMemberLocations = async () => {
+    if (!currentRoomId) return []
+
+    try {
+      const locations = await getRoomMemberLocations(currentRoomId)
+      setMemberLocations(locations)
+      setMessage('DB에 저장된 멤버 위치를 불러왔습니다.')
+      return locations
+    } catch (error) {
+      console.error('멤버 위치 조회 오류:', error)
+      setMessage('멤버 위치를 불러오지 못했습니다.')
+      return []
+    }
   }
 
   const handleCurrentLocation = async () => {
@@ -90,92 +101,160 @@ function MapPage() {
     }
   }
 
-  // 유명 중간장소 후보 중 하나를 확정하는 함수
-  const handleSelectMiddlePlace = (place) => {
-    setMiddlePlace(place)
-    setSelectedPlace(place)
-    setDestination(place)
-
-    resetRoute()
-
-    setMessage(`${place.name}을 중간장소로 확정했습니다. 이제 주변 장소를 검색할 수 있습니다.`)
-  }
-
-  // 주변 음식점/카페/놀거리 중 하나를 목적지로 선택하는 함수
-  const handleSelectPlace = (place) => {
-    setSelectedPlace(place)
-    setDestination(place)
-
-    resetRoute()
-
-    setMessage(`${place.name}을 목적지로 설정했습니다.`)
-  }
-
-  const handleSearchRoute = async () => {
-    if (!currentLocation) {
-      setRouteMessage('먼저 현재 위치를 가져와주세요.')
+  const calculateAllMemberRoutesToMiddlePlace = async (place) => {
+    if (!place) {
+      setMessage('중간장소 정보가 없습니다.')
       return
     }
 
-    if (!destination) {
-      setRouteMessage('먼저 목적지를 선택해주세요.')
-      return
-    }
+    const latestLocations = await loadMemberLocations()
 
-    if (!destination.lat || !destination.lng) {
-      setRouteMessage('목적지 좌표가 없습니다. 다른 장소를 선택해주세요.')
+    if (!latestLocations || latestLocations.length === 0) {
+      setMessage('멤버 위치 정보가 없습니다.')
       return
     }
 
     try {
-      setRouteMessage('경로를 검색하는 중입니다.')
-      setRouteInfo(null)
-      setRouteSteps([])
-      setRoutePath([])
+      setMessage('모든 멤버의 경로와 이동시간을 계산하는 중입니다.')
 
-      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL
+      const routeResults = []
+      const routePaths = []
 
-      const response = await fetch(`${apiBaseUrl}/kakao/route`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          origin: {
-            lat: currentLocation.lat,
-            lng: currentLocation.lng,
-          },
-          destination: {
-            lat: destination.lat,
-            lng: destination.lng,
-          },
-        }),
-      })
+      for (const member of latestLocations) {
+        if (!member.latitude || !member.longitude) {
+          continue
+        }
 
-      if (!response.ok) {
-        throw new Error('경로 검색 API 요청 실패')
+        const previousResult = place.travelResults?.find(
+          (result) => result.userid === member.userid
+        )
+
+        const mode = previousResult?.mode || 'transit'
+
+        const origin = {
+          lat: Number(member.latitude),
+          lng: Number(member.longitude),
+        }
+
+        const destinationPoint = {
+          lat: Number(place.lat),
+          lng: Number(place.lng),
+        }
+
+        const timeResult = await getRouteTime({
+          origin,
+          destination: destinationPoint,
+          mode,
+        })
+
+        routeResults.push({
+          userid: member.userid,
+          nickname: member.profiles?.nickname || '멤버',
+          mode,
+          duration: timeResult.duration,
+          distance: timeResult.distance,
+          durationMinutes: Math.round(timeResult.duration / 60),
+          distanceKm: timeResult.distance
+            ? (timeResult.distance / 1000).toFixed(1)
+            : null,
+        })
+
+        // 자동차는 기존 카카오 경로 API의 path 사용
+        if (mode === 'car') {
+          const pathResult = await getCarRoutePath({
+            origin,
+            destination: destinationPoint,
+          })
+
+          if (pathResult?.path?.length > 0) {
+            routePaths.push({
+              userid: member.userid,
+              nickname: member.profiles?.nickname || '멤버',
+              mode,
+              path: pathResult.path,
+            })
+          }
+        }
+
+        // 대중교통은 Google Directions의 overview_polyline을 디코딩해서 사용
+        if (mode === 'transit' && timeResult.encodedPolyline) {
+          const decodedPath = decodePolyline(timeResult.encodedPolyline)
+
+          if (decodedPath.length > 0) {
+            routePaths.push({
+              userid: member.userid,
+              nickname: member.profiles?.nickname || '멤버',
+              mode,
+              path: decodedPath,
+            })
+          }
+        }
       }
 
-      const data = await response.json()
+      setMemberRouteResults(routeResults)
+      setMemberRoutePaths(routePaths)
 
-      if (!data.path || data.path.length === 0) {
-        setRouteMessage('경로 좌표를 찾지 못했습니다.')
-        return
-      }
-
-      setRoutePath(data.path)
-
-      setRouteInfo({
-        distance: data.distance,
-        duration: data.duration,
-      })
-
-      setRouteSteps(data.steps || [])
-      setRouteMessage('경로 검색이 완료되었습니다.')
+      setMessage('중간장소까지 모든 멤버의 이동시간과 경로를 계산했습니다.')
     } catch (error) {
-      console.error('경로 검색 오류:', error)
-      setRouteMessage('경로 검색 중 오류가 발생했습니다.')
+      console.error('멤버별 경로 계산 오류:', error)
+      setMessage(error.message || '멤버별 경로 계산 중 오류가 발생했습니다.')
     }
+  }
+
+  const getCarRoutePath = async ({ origin, destination }) => {
+    const apiBaseUrl = process.env.REACT_APP_API_BASE_URL
+
+    const response = await fetch(`${apiBaseUrl}/kakao/route`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        origin,
+        destination,
+      }),
+    })
+
+    if (!response.ok) {
+      console.warn('자동차 경로선 API 요청 실패')
+      return null
+    }
+
+    return response.json()
+  }
+
+  // 유명 중간장소 후보 중 하나를 확정하는 함수
+  const handleSelectMiddlePlace = async (place) => {
+    setMiddlePlace(place)
+    setSelectedPlace(place)
+    setDestination(place)
+
+    // 추천 후보 5개 대신 확정된 중간장소 1개만 지도에 표시
+    setPlaces([place])
+
+    // 이전 경로선 초기화 후 새로 계산
+    setMemberRouteResults(place.travelResults || [])
+    setMemberRoutePaths([])
+
+    setMessage(`${place.name}을 중간장소로 확정했습니다. 멤버별 경로를 계산합니다.`)
+
+    await calculateAllMemberRoutesToMiddlePlace(place)
+  }
+
+  // 확정된 중간장소 주변 음식점/카페/놀거리 중 하나를 선택하는 함수
+  const handleSelectPlace = (place) => {
+    setSelectedPlace(place)
+    setDestination(place)
+    setMessage(`${place.name}을 목적지로 설정했습니다.`)
+  }
+
+  const handleRefreshMemberRoutes = async () => {
+    if (!middlePlace) {
+      setMessage('먼저 중간장소를 확정해주세요.')
+      return
+    }
+
+    await calculateAllMemberRoutesToMiddlePlace(middlePlace)
   }
 
   return (
@@ -188,7 +267,7 @@ function MapPage() {
 
       {currentLocation && (
         <div className="location-box">
-          <h3>내 현재 위치</h3>
+          <h3>내 브라우저 현재 위치</h3>
           <p>위도: {currentLocation.lat}</p>
           <p>경도: {currentLocation.lng}</p>
           <p>정확도: {Math.round(currentLocation.accuracy)}m</p>
@@ -197,7 +276,7 @@ function MapPage() {
 
       {memberLocations.length > 0 && (
         <div className="location-box">
-          <h3>DB에 저장된 멤버 위치</h3>
+          <h3>DB에 저장된 멤버 현재 위치</h3>
 
           {memberLocations.map((location) => (
             <div key={location.id}>
@@ -221,12 +300,36 @@ function MapPage() {
         </div>
       )}
 
+      {memberRouteResults.length > 0 && (
+        <div className="location-box">
+          <h3>중간장소까지 멤버별 이동시간</h3>
+
+          <button type="button" onClick={handleRefreshMemberRoutes}>
+            멤버 위치 기준으로 다시 계산
+          </button>
+
+          {memberRouteResults.map((result) => (
+            <div key={result.userid}>
+              <p>
+                {result.nickname} / {getModeLabel(result.mode)} /{' '}
+                {result.durationMinutes}분
+                {result.distanceKm ? ` / ${result.distanceKm}km` : ''}
+              </p>
+            </div>
+          ))}
+
+          <p style={{ fontSize: '13px', color: '#666' }}>
+            자동차는 카카오 경로 API, 대중교통은 Google Directions 경로 데이터를 이용해 지도에 표시합니다.
+          </p>
+        </div>
+      )}
+
       <KakaoMapView
         currentLocation={currentLocation}
         memberLocations={memberLocations}
         places={places}
         selectedPlace={selectedPlace}
-        routePath={routePath}
+        memberRoutePaths={memberRoutePaths}
       />
 
       <FamousMiddlePlacePanel
@@ -250,17 +353,14 @@ function MapPage() {
           </p>
         </section>
       )}
-
-      <RoutePanel
-        currentLocation={currentLocation}
-        destination={destination}
-        routeInfo={routeInfo}
-        routeSteps={routeSteps}
-        routeMessage={routeMessage}
-        onSearchRoute={handleSearchRoute}
-      />
     </section>
   )
+}
+
+function getModeLabel(mode) {
+  if (mode === 'car') return '자동차'
+  if (mode === 'transit') return '대중교통'
+  return mode
 }
 
 export default MapPage
