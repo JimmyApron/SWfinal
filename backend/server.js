@@ -3,7 +3,8 @@ require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
 const kakaoRouteRouter = require('./routes/kakaoRoute')
-const googlePlaceRouter = require("./routes/googlePlace");
+const googlePlaceRouter = require("./routes/googlePlace")
+const routeTimeRouter = require('./routes/routeTime')
 
 const app = express()
 
@@ -11,7 +12,8 @@ app.use(cors())
 app.use(express.json())
 
 app.use('/api/kakao', kakaoRouteRouter)
-app.use("/api/google", googlePlaceRouter);
+app.use("/api/google", googlePlaceRouter)
+app.use('/api/route', routeTimeRouter)
 
 let myLocation = null
 

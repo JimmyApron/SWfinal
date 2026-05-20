@@ -15,12 +15,12 @@ function PlaceSearchPanel({ searchLocation, onSearchResult, onSelectPlace }) {
 
   const handleSearchPlaces = async () => {
     if (!searchLocation) {
-      setMessage('먼저 현재 위치를 가져와주세요.')
+      setMessage('먼저 중간장소를 확정해주세요.')
       return
     }
 
     try {
-      setMessage('카카오맵 기준으로 장소를 검색하고, 구글맵 평점 정보를 불러오는 중입니다.')
+      setMessage('확정된 중간장소 주변에서 장소를 검색하고, 구글맵 평점 정보를 불러오는 중입니다.')
 
       const kakaoPlaces = await searchNearbyPlaces({
         lat: searchLocation.lat,
@@ -67,9 +67,25 @@ function PlaceSearchPanel({ searchLocation, onSearchResult, onSelectPlace }) {
     }
   }
 
+  if (!searchLocation) {
+    return (
+      <section>
+        <h2>주변 장소 추천</h2>
+        <p>
+          먼저 유명 중간장소를 추천받고, 그중 하나를 중간장소로 확정해주세요.
+          중간장소가 확정되면 그 주변의 음식점, 카페, 놀거리를 검색할 수 있습니다.
+        </p>
+      </section>
+    )
+  }
+
   return (
     <section>
-      <h2>주변 장소 추천</h2>
+      <h2>확정된 중간장소 주변 추천</h2>
+
+      <p>
+        기준 위치: {searchLocation.name || '확정된 중간장소'}
+      </p>
 
       <PlaceCategoryTabs
         selectedCategory={selectedCategory}
@@ -90,7 +106,7 @@ function PlaceSearchPanel({ searchLocation, onSearchResult, onSelectPlace }) {
       </p>
 
       <button type="button" onClick={handleSearchPlaces}>
-        주변 장소 검색
+        중간장소 주변 검색
       </button>
 
       {message && <p>{message}</p>}

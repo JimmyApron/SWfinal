@@ -4,6 +4,7 @@ import KakaoMapView from './KakaoMapView'
 import CurrentLocationButton from './CurrentLocationButton'
 import PlaceSearchPanel from './PlaceSearchPanel'
 import RoutePanel from './RoutePanel'
+import FamousMiddlePlacePanel from './FamousMiddlePlacePanel'
 
 import { getCurrentPosition } from '../../services/geolocationService'
 import { saveMyLocation, getRoomMemberLocations } from '../../api/mapApi'
@@ -18,6 +19,8 @@ function MapPage() {
   const [places, setPlaces] = useState([])
   const [selectedPlace, setSelectedPlace] = useState(null)
   const [destination, setDestination] = useState(null)
+
+  const [middlePlace, setMiddlePlace] = useState(null)
 
   const [routeInfo, setRouteInfo] = useState(null)
   const [routeSteps, setRouteSteps] = useState([])
@@ -42,6 +45,13 @@ function MapPage() {
 
     loadMemberLocations()
   }, [])
+
+  const resetRoute = () => {
+    setRouteInfo(null)
+    setRouteSteps([])
+    setRoutePath([])
+    setRouteMessage('')
+  }
 
   const handleCurrentLocation = async () => {
     try {
@@ -80,14 +90,23 @@ function MapPage() {
     }
   }
 
+  // 유명 중간장소 후보 중 하나를 확정하는 함수
+  const handleSelectMiddlePlace = (place) => {
+    setMiddlePlace(place)
+    setSelectedPlace(place)
+    setDestination(place)
+
+    resetRoute()
+
+    setMessage(`${place.name}을 중간장소로 확정했습니다. 이제 주변 장소를 검색할 수 있습니다.`)
+  }
+
+  // 주변 음식점/카페/놀거리 중 하나를 목적지로 선택하는 함수
   const handleSelectPlace = (place) => {
     setSelectedPlace(place)
     setDestination(place)
 
-    setRouteInfo(null)
-    setRouteSteps([])
-    setRoutePath([])
-    setRouteMessage('')
+    resetRoute()
 
     setMessage(`${place.name}을 목적지로 설정했습니다.`)
   }
@@ -99,7 +118,7 @@ function MapPage() {
     }
 
     if (!destination) {
-      setRouteMessage('먼저 추천 장소 목록에서 목적지를 선택해주세요.')
+      setRouteMessage('먼저 목적지를 선택해주세요.')
       return
     }
 
@@ -169,7 +188,7 @@ function MapPage() {
 
       {currentLocation && (
         <div className="location-box">
-          <p>내 현재 위치</p>
+          <h3>내 현재 위치</h3>
           <p>위도: {currentLocation.lat}</p>
           <p>경도: {currentLocation.lng}</p>
           <p>정확도: {Math.round(currentLocation.accuracy)}m</p>
@@ -192,6 +211,16 @@ function MapPage() {
         </div>
       )}
 
+      {middlePlace && (
+        <div className="location-box">
+          <h3>확정된 중간장소</h3>
+          <p>장소명: {middlePlace.name}</p>
+          <p>주소: {middlePlace.address || '주소 정보 없음'}</p>
+          <p>위도: {middlePlace.lat}</p>
+          <p>경도: {middlePlace.lng}</p>
+        </div>
+      )}
+
       <KakaoMapView
         currentLocation={currentLocation}
         memberLocations={memberLocations}
@@ -200,11 +229,27 @@ function MapPage() {
         routePath={routePath}
       />
 
-      <PlaceSearchPanel
-        searchLocation={currentLocation}
-        onSearchResult={setPlaces}
-        onSelectPlace={handleSelectPlace}
+      <FamousMiddlePlacePanel
+        memberLocations={memberLocations}
+        onRecommendPlaces={setPlaces}
+        onSelectMiddlePlace={handleSelectMiddlePlace}
       />
+
+      {middlePlace ? (
+        <PlaceSearchPanel
+          searchLocation={middlePlace}
+          onSearchResult={setPlaces}
+          onSelectPlace={handleSelectPlace}
+        />
+      ) : (
+        <section>
+          <h2>주변 장소 추천</h2>
+          <p>
+            먼저 위에서 유명 중간장소를 추천받고, 그중 하나를 중간장소로 확정해주세요.
+            중간장소가 확정되면 그 주변의 음식점, 카페, 놀거리 장소를 검색할 수 있습니다.
+          </p>
+        </section>
+      )}
 
       <RoutePanel
         currentLocation={currentLocation}
