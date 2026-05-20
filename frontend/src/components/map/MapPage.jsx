@@ -11,9 +11,11 @@ import { getCurrentPosition } from '../../services/geolocationService'
 import { saveMyLocation, getRoomMemberLocations } from '../../api/mapApi'
 
 function MapPage() {
-  const { roomId } = useParams()
+  // const { roomId } = useParams() // 원본 코드
+  // const currentRoomId = Number(roomId) // 원본 코드
 
-  const currentRoomId = Number(roomId)
+  const currentRoomId = 7 // 테스트용 데이터
+  const currentUserId = '38e90772-f0a2-4762-810c-44b7c55848eb' // 테스트용 데이터
 
   const [currentUserId, setCurrentUserId] = useState(null)
 
@@ -64,6 +66,7 @@ function MapPage() {
         setMemberLocations(locations)
       } catch (error) {
         console.error('멤버 위치 조회 오류:', error)
+        setMessage('멤버 위치를 불러오지 못했습니다.')
       }
     }
 
