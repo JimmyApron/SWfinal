@@ -75,7 +75,7 @@ function RoomDetailPage() {
       <hr />
 
       {tab === "schedule" && <ScheduleTab roomId={roomId} />}
-      {tab === "location" && <div>위치 기능 들어올 자리</div>}
+      {tab === "location" && <MapPage roomId={roomId} />}
       {tab === "vote" && <div>투표 기능 들어올 자리</div>}
       {tab === "chat" && <div>채팅 기능 들어올 자리</div>}
     </div>
