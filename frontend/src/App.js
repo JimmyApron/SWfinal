@@ -11,6 +11,8 @@ import RoomCreatePage from "./pages/room/RoomCreatePage";
 import RoomInvitePage from "./pages/room/RoomInvitePage";
 import RoomDetailPage from "./pages/room/RoomDetailPage";
 
+import MapPage from "./components/map/MapPage";
+
 function App() {
   return (
     <BrowserRouter>
@@ -28,6 +30,8 @@ function App() {
         <Route path="/rooms/create" element={<RoomCreatePage />} />
         <Route path="/rooms/invite" element={<RoomInvitePage />} />
         <Route path="/rooms/:roomId" element={<RoomDetailPage />} />
+
+        <Route path="/rooms/:roomId/map" element={<MapPage />} />
       </Routes>
     </BrowserRouter>
   );
