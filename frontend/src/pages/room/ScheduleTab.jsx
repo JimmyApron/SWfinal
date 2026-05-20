@@ -501,12 +501,22 @@ const handleDeleteCandidate = async (candidateId) => {
           (item) => item.userid === member.userid
         );
 
+        const isMe = member.userid === currentUser?.id;
+
         return (
           <div key={member.id} style={{ display: "flex", gap: "10px" }}>
             <span>👤</span>
             <span>{member.nickname || "닉네임 없음"}</span>
-            <span>{isRegistered ? "등록 완료" : "일정 등록 안 함"}</span>
-            {!isRegistered && <button>일정 등록 요청</button>}
+            <span>
+              {isRegistered 
+                ? "등록 완료" 
+                : isMe
+                ? "내 일정 미등록"
+                : "일정 등록 안 함"}
+            </span>
+            {!isRegistered && !isMe && (
+              <button>일정 등록 요청</button>
+            )}
           </div>
         );
       })}

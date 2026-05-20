@@ -94,11 +94,22 @@ function RoomCreatePage() {
         alert("로그인이 필요합니다.");
         return;
       }
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("nickname")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error("프로필 조회 실패:", profileError);
+        alert("프로필 정보를 불러오지 못했습니다.");
+        return;
+      }
 
       const result = await createRoom({
         roomName,
         userId: user.id,
-        nickname: user.user_metadata.nickname,
+        nickname: profileData?.nickname || "이름없는회원",
         candidates,
       });
 
