@@ -55,6 +55,16 @@ function RoomCreatePage() {
       };
     });
 
+    const existingDates = candidates.map((candidate) => candidate.date);
+
+    const duplicatedDate = newCandidates.find((candidate) =>
+      existingDates.includes(candidate.date)
+    );
+    if (duplicatedDate) {
+      alert(`${duplicatedDate.date} 날짜는 이미 추가된 후보입니다.`);
+      return;
+    }
+
     setCandidates([...candidates, ...newCandidates]);
 
     setCandidateDates([]);

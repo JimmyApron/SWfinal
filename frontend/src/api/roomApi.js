@@ -143,3 +143,33 @@ export async function getRooms(userId) {
     rooms,
   };
 }
+
+export async function getRoomDetail(roomId) {
+  const { data, error } = await supabase
+    .from("rooms")
+    .select(`
+      *,
+      room_members(count)
+    `)
+    .eq("id", roomId)
+    .single();
+
+  if (error) {
+    console.error(error);
+    throw new Error("방 상세 조회 실패");
+  }
+
+  return data;
+}
+export async function updateRoomLastActivity(roomId) {
+  const { error } = await supabase
+    .from("rooms")
+    .update({
+      lastactivityat: new Date().toISOString(),
+    })
+    .eq("id", Number(roomId));
+
+  if (error) {
+    console.error("방 활동 시간 갱신 실패:", error);
+  }
+}
