@@ -22,16 +22,20 @@ router.post('/time', async (req, res) => {
       return res.json(result)
     }
 
-    if (mode === 'walk') {
-      const result = await getGoogleRoute(origin, destination, 'WALK')
-      return res.json(result)
-    }
-
     return res.status(400).json({
-      message: '지원하지 않는 이동수단입니다.',
+      message: '지원하지 않는 이동수단입니다. 자동차 또는 대중교통만 선택할 수 있습니다.',
     })
   } catch (error) {
     console.error('이동시간 계산 오류:', error)
+
+    if (error.code === 'ROUTE_NOT_FOUND') {
+      return res.status(404).json({
+        message: error.message,
+        code: 'ROUTE_NOT_FOUND',
+        availableTravelModes: error.availableTravelModes || [],
+      })
+    }
+
     return res.status(500).json({
       message: error.message || '이동시간 계산 중 오류가 발생했습니다.',
     })
@@ -88,57 +92,64 @@ async function getGoogleRoute(origin, destination, travelMode) {
     throw new Error('GOOGLE_MAPS_API_KEY가 설정되지 않았습니다.')
   }
 
-  const requestBody = {
-    origin: {
-      location: {
-        latLng: {
-          latitude: Number(origin.lat),
-          longitude: Number(origin.lng),
-        },
-      },
-    },
-    destination: {
-      location: {
-        latLng: {
-          latitude: Number(destination.lat),
-          longitude: Number(destination.lng),
-        },
-      },
-    },
-    travelMode,
-    languageCode: 'ko',
-    units: 'METRIC',
+  const googleModeMap = {
+    TRANSIT: 'transit',
   }
 
-  const response = await fetch(
-    'https://routes.googleapis.com/directions/v2:computeRoutes',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': googleApiKey,
-        'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters',
-      },
-      body: JSON.stringify(requestBody),
-    }
-  )
+  const mode = googleModeMap[travelMode]
 
+  if (!mode) {
+    throw new Error(`지원하지 않는 Google 이동수단입니다: ${travelMode}`)
+  }
+
+  const originText = `${origin.lat},${origin.lng}`
+  const destinationText = `${destination.lat},${destination.lng}`
+
+  const params = new URLSearchParams({
+    origin: originText,
+    destination: destinationText,
+    mode,
+    language: 'ko',
+    key: googleApiKey,
+  })
+
+  if (mode === 'transit') {
+    params.set('departure_time', 'now')
+  }
+
+  const url = `https://maps.googleapis.com/maps/api/directions/json?${params.toString()}`
+
+  const response = await fetch(url)
   const data = await response.json()
 
+  console.log('Google Directions 응답:', JSON.stringify({
+    mode,
+    status: data.status,
+    error_message: data.error_message,
+    routesLength: data.routes?.length || 0,
+    available_travel_modes: data.available_travel_modes,
+  }, null, 2))
+
   if (!response.ok) {
-    console.error('Google Routes 오류:', data)
-    throw new Error('Google Routes 경로 계산에 실패했습니다.')
+    throw new Error('Google Directions API 요청에 실패했습니다.')
+  }
+
+  if (data.status !== 'OK') {
+    throw new Error(
+      `Google ${mode} 경로 계산 실패: ${data.status}${data.error_message ? ` - ${data.error_message}` : ''}`
+    )
   }
 
   const route = data.routes?.[0]
+  const leg = route?.legs?.[0]
 
-  if (!route) {
-    throw new Error('Google 경로를 찾지 못했습니다.')
+  if (!leg) {
+    throw new Error(`Google ${mode} 경로를 찾지 못했습니다.`)
   }
 
   return {
-    duration: parseDurationToSeconds(route.duration),
-    distance: route.distanceMeters,
+    duration: leg.duration?.value,
+    distance: leg.distance?.value,
   }
 }
 

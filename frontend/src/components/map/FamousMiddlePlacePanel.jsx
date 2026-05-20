@@ -67,7 +67,6 @@ function FamousMiddlePlacePanel({
           >
             <option value="car">자동차</option>
             <option value="transit">대중교통</option>
-            <option value="walk">도보</option>
           </select>
         </div>
       ))}
@@ -116,7 +115,6 @@ function FamousMiddlePlacePanel({
 function getModeLabel(mode) {
   if (mode === 'car') return '자동차'
   if (mode === 'transit') return '대중교통'
-  if (mode === 'walk') return '도보'
   return mode
 }
 
