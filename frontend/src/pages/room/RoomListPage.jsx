@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { getRooms } from "../../api/roomApi";
 import { supabase } from "../../lib/supabaseClient";
+import { useNavigate } from "react-router-dom";
 
 function RoomListPage() {
+  const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
 
   const handleGetRooms = async () => {
@@ -37,7 +39,10 @@ function RoomListPage() {
       ) : (
         <ul>
           {rooms.map((room) => (
-            <li key={room.id}>
+            <li 
+              key={room.id}
+              onClick={() => navigate(`/rooms/${room.id}`)}
+            >
               {room.roomname} {room.room_members?.[0]?.count || 0}명
             </li>
           ))}

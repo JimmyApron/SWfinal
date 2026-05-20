@@ -14,6 +14,17 @@ function RoomCreatePage() {
   const [isAllDay, setIsAllDay] = useState(false);
   const [candidates, setCandidates] = useState([]);
 
+  const timeOptions = [];
+
+  for (let hour = 0; hour < 24; hour++) {
+    for (let minute of [0, 30]) {
+      const h = String(hour).padStart(2, "0");
+      const m = String(minute).padStart(2, "0");
+      timeOptions.push(`${h}:${m}`);
+    }
+  }
+
+
   const handleAddCandidate = () => {
     if (candidateDates.length === 0) {
       alert("후보 날짜를 1개 이상 선택하세요.");
@@ -107,6 +118,7 @@ function RoomCreatePage() {
         value={candidateDates}
         onChange={setCandidateDates}
         format="YYYY-MM-DD"
+        minDate={new Date()}
         placeholder="후보 날짜 여러 개 선택"
       />
 
@@ -121,19 +133,31 @@ function RoomCreatePage() {
 
       {!isAllDay && (
         <div>
-          <input
-            type="time"
-            step="1800"
+          <select 
+            size={1}
             value={candidateStartTime}
             onChange={(e) => setCandidateStartTime(e.target.value)}
-          />
+          >
+            <option value="">시작 시간</option>
+            {timeOptions.map((time) => (
+              <option key={time} value={time}>
+                {time}
+              </option>
+            ))}
+          </select>
 
-          <input
-            type="time"
-            step="1800"
+          <select
+            size={1}
             value={candidateEndTime}
             onChange={(e) => setCandidateEndTime(e.target.value)}
-          />
+          >
+            <option value="">종료 시간</option>
+            {timeOptions.map((time) => (
+              <option key={time} value={time}>
+                {time}
+              </option>
+            ))}
+          </select>
         </div>
       )}
 
