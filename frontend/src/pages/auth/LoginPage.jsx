@@ -19,9 +19,11 @@ function LoginPage() {
 
     try {
       setMessage('로그인 인증 중입니다...')
+  
       
       // 1. 순수한 Supabase Auth 로그인 수행 (초대코드 비교 전면 철거!)
       const result = await loginApi({ email, password })
+
       const loggedInUserId = result.user?.id
 
       // 2. 가이드라인 미션 반영: 로컬스토리지에 유저 식별자 굽기

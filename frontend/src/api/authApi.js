@@ -1,14 +1,13 @@
-
 import { supabase } from '../lib/supabaseClient'
 
 /**
- * 1. �̸��� �ߺ� Ȯ�� API
+ * 1. 이메일 중복 확인 API
  * @param {string} email
- * @returns {Promise<boolean>} �ߺ��̸� true, ��� �����ϸ� false
+ * @returns {Promise<boolean>} 중복이면 true, 사용 가능하면 false
  */
 export const checkEmailDuplicateApi = async (email) => {
   try {
-    // Supabase SQL Editor���� ������ check_email_exists RPC �Լ��� ȣ���մϴ�.
+    // Supabase SQL Editor에서 생성한 check_email_exists RPC 함수를 호출합니다.
     const { data, error } = await supabase.rpc('check_email_exists', {
       email_to_check: email,
     })
@@ -17,21 +16,21 @@ export const checkEmailDuplicateApi = async (email) => {
       throw error
     }
 
-    return data // �����ϸ� true, ������ false
+    return data // 존재하면 true, 없으면 false
   } catch (error) {
-    console.error('�̸��� �ߺ� üũ �� ���� �߻�:', error.message)
+    console.error('이메일 중복 체크 중 오류 발생:', error.message)
     throw error
   }
 }
 
 /**
- * 2. �г��� �ߺ� Ȯ�� API
+ * 2. 닉네임 중복 확인 API
  * @param {string} nickname
- * @returns {Promise<boolean>} �ߺ��̸� true, ��� �����ϸ� false
+ * @returns {Promise<boolean>} 중복이면 true, 사용 가능하면 false
  */
 export const checkNicknameDuplicateApi = async (nickname) => {
   try {
-    // public.profiles ���̺����� �ش� �г����� ���� �ο츦 ��ȸ�մϴ�.
+    // public.profiles 테이블에서 해당 닉네임이 존재 하는지 조회합니다.
     const { data, error } = await supabase
       .from('profiles')
       .select('nickname')
@@ -41,16 +40,16 @@ export const checkNicknameDuplicateApi = async (nickname) => {
       throw error
     }
 
-    // �����Ͱ� �����ϸ�(length > 0) �ߺ��� �г����Դϴ�.
+    // 데이터가 존재하면(length > 0) 중복된 닉네임입니다.
     return data.length > 0
   } catch (error) {
-    console.error('�г��� �ߺ� üũ �� ���� �߻�:', error.message)
+    console.error('닉네임 중복 체크 중 오류 발생:', error.message)
     throw error
   }
 }
 
 /**
- * 3. ȸ������ API
+ * 3. 회원가입 API
  */
 export async function signupApi({ email, password, nickname }) {
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
@@ -65,7 +64,7 @@ export async function signupApi({ email, password, nickname }) {
   const user = signUpData.user
 
   if (!user) {
-    throw new Error('ȸ������ �� ����� ������ �������� ���߽��ϴ�.')
+    throw new Error('회원가입 중 사용자 정보를 가져오지 못했습니다.')
   }
 
   const { data: profileData, error: profileError } = await supabase
@@ -87,12 +86,12 @@ export async function signupApi({ email, password, nickname }) {
   return {
     user,
     profile: profileData,
-    message: 'ȸ�������� �Ϸ�Ǿ����ϴ�.',
+    message: '회원가입이 완료되었습니다.',
   }
 }
 
 /**
- * 4. �α��� API
+ * 4. 로그인 API
  */
 export async function loginApi({ email, password }) {
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -119,12 +118,12 @@ export async function loginApi({ email, password }) {
   return {
     user,
     profile,
-    message: '�α��ο� �����߽��ϴ�.',
+    message: '로그인에 성공했습니다.',
   }
 }
 
 /**
- * 5. �α׾ƿ� API
+ * 5. 로그아웃 API
  */
 export async function logoutApi() {
   const { error } = await supabase.auth.signOut()
@@ -134,12 +133,12 @@ export async function logoutApi() {
   }
 
   return {
-    message: '�α׾ƿ��Ǿ����ϴ�.',
+    message: '로그아웃되었습니다.',
   }
 }
 
 /**
- * 6. ���� �α��ε� ����� ���� �������� API
+ * 6. 현재 로그인된 사용자 정보 가져오기 API
  */
 export async function getCurrentUserApi() {
   const { data, error } = await supabase.auth.getUser()
@@ -171,52 +170,61 @@ export async function getCurrentUserApi() {
 }
 
 /**
- * 7. [비회원 전용] 수정된 int8 구조 반영 ➡️ 특정 방 내부의 닉네임 중복 확인 API
+ * 7. [비회원 전용] 특정 방 내부의 닉네임 중복 확인 API (roomid 통합 버전)
  * @param {string} nickname - 검사할 임시 닉네임
- * @param {string} inviteCode - 대문에서 넘어온 문자열 방 초대코드 (예: ROOM123)
+ * @param {string} inviteCode - 문자열 방 초대코드 (예: ROOM123)
  */
 export const checkRoomNicknameDuplicateApi = async (nickname, inviteCode) => {
   try {
-    // 1. 초대코드로 먼저 rooms 테이블에서 진짜 숫자 고유 번호(id)를 알아냅니다.
-    const { data: room, error: roomError } = await supabase
+    // 1. 먼저 초대코드를 들고 가서 진짜 방의 숫자 고유 ID(id)를 알아내야 합니다.
+    const { data: roomData, error: roomError } = await supabase
       .from('rooms')
       .select('id')
-      .eq('invitecode', inviteCode.trim())
+      .eq('invitecode', inviteCode)
       .maybeSingle()
 
-    if (roomError || !room) {
-      throw new Error('존재하지 않는 초대코드입니다.')
-    }
+    if (roomError) throw roomError
+    if (!roomData) throw new Error('존재하지 않는 방입니다.')
 
-    // 2. [수정 완료] 알아낸 진짜 방 숫자 id(int8)를 가지고 room_guests 테이블을 찌릅니다!
-    const { data: guestData, error: guestError } = await supabase
-      .from('room_guests')
-      .select('nickname')
-      .eq('room_id', room.id) // 💡 이제 코드가 아니라 진짜 숫자 ID 매핑!
-      .eq('nickname', nickname.trim())
+    const currentRoomRealId = roomData.id
 
-    if (guestError) throw guestError
-
-    // 3. 기존 방 회원들과도 안 겹치게 room_members도 같이 대조해 줍니다.
+    // 2. [회원 테이블 검사] 컬럼명을 roomid로 정확하게 조준!
     const { data: memberData, error: memberError } = await supabase
       .from('room_members')
       .select('nickname')
-      .eq('roomid', room.id)
-      .eq('nickname', nickname.trim())
+      .eq('roomid', currentRoomRealId)
+      .eq('nickname', nickname)
+      .maybeSingle()
 
     if (memberError) throw memberError
 
-    return guestData.length > 0 || memberData.length > 0
+    // 3. [비회원 테이블 검사] 💡 은혜님 요청대로 room_id에서 roomid로 완벽 매핑 교체!
+    const { data: guestData, error: guestError } = await supabase
+      .from('room_guests')
+      .select('nickname')
+      .eq('roomid', currentRoomRealId) // 👈 언더바 삭제 완료!
+      .eq('nickname', nickname)
+      .maybeSingle()
+
+    if (guestError) throw guestError
+
+    // 4. 둘 중 한 곳에라도 똑같은 닉네임이 존재한다면 true(중복됨) 반환!
+    if (memberData || guestData) {
+      return true 
+    }
+
+    return false // 중복 없음 (사용 가능)
+
   } catch (error) {
-    console.error('방 비회원 닉네임 체크 중 오류 발생:', error.message)
+    console.error('닉네임 중복 체크 API 오류:', error)
     throw error
   }
 }
 
 /**
- * 8. [비회원 전용] 수정된 int8 구조 반영 ➡️ 비회원 방 입장 등록 API
+ * 8. [비회원 전용] 비회원 방 입장 등록 API (roomid 통합 버전)
  * @param {string} nickname - 중복확인을 마친 임시 닉네임
- * @param {string} inviteCode - 대문에서 전달받은 문자열 방 초대코드
+ * @param {string} inviteCode - 방 초대코드
  */
 export const insertRoomGuestApi = async (nickname, inviteCode) => {
   try {
@@ -231,12 +239,12 @@ export const insertRoomGuestApi = async (nickname, inviteCode) => {
       throw new Error('방을 찾을 수 없습니다.')
     }
 
-    // 2. [수정 완료] room_guests.room_id에 진짜 숫자 고유 id를 쾅 박아줍니다!
+    // 2. [버그 방지 완벽 교체] 💡 room_id 컬럼명을 은혜님의 DB 구조에 맞춰 roomid로 수정!
     const { data, error } = await supabase
       .from('room_guests')
       .insert([
         {
-          room_id: room.id, // 💡 문자열 대신 진짜 숫자 고유 ID(int8)가 완벽하게 저장됩니다!
+          roomid: room.id, // 👈 언더바를 제거하여 진짜 roomid(int8) 컬럼에 꽂아줍니다!
           nickname: nickname.trim(),
         },
       ])
@@ -253,7 +261,7 @@ export const insertRoomGuestApi = async (nickname, inviteCode) => {
 
 /**
  * 9. [비회원 창 전용] 초대코드로 해당 방의 진짜 회원(room_members) 목록 가져오기 API
- * @param {string} inviteCode - 부모가 넘겨준 문자열 방 초대코드
+ * @param {string} inviteCode - 방 초대코드
  */
 export const getRoomMembersByInviteCodeApi = async (inviteCode) => {
   try {
@@ -266,7 +274,7 @@ export const getRoomMembersByInviteCodeApi = async (inviteCode) => {
 
     if (roomError || !room) return []
 
-    // 2. [진짜 DB 구조 연동] rooms.id(숫자)와 room_members.roomid(숫자) 매핑!
+    // 2. rooms.id(숫자)와 room_members.roomid(숫자) 매핑
     const { data, error } = await supabase
       .from('room_members')
       .select('nickname')
@@ -279,9 +287,10 @@ export const getRoomMembersByInviteCodeApi = async (inviteCode) => {
     throw error
   }
 }
+
 /**
- * 10. [회원 전용] 로그인 성공 후 room_members 테이블에 방 참가 등록하는 API (원래 닉네임 자동 연동 버전)
- * @param {string} inviteCode - 대문에서 입력한 방 초대코드
+ * 10. [회원 전용] 로그인 성공 후 room_members 테이블에 방 참가 등록하는 API
+ * @param {string} inviteCode - 방 초대코드
  * @param {string} userId - 로그인 성공한 유저의 고유 UUID (user.id)
  */
 export const joinRoomMemberApi = async (inviteCode, userId) => {
@@ -307,12 +316,10 @@ export const joinRoomMemberApi = async (inviteCode, userId) => {
 
     if (checkError) throw checkError
     if (existingMember) {
-      // 이미 참가해 있다면 에러를 내지 않고 기존 방 정보만 스무스하게 반환합니다.
       return { message: '이미 참가한 방입니다.', room }
     }
 
-    // 3. 💡 [은혜님 요구사항 반영 핵심 추가!]
-    // public.profiles 테이블에서 이 회원의 진짜 회원가입 당시 닉네임을 조회해옵니다.
+    // 3. public.profiles 테이블에서 이 회원의 진짜 닉네임을 조회해옵니다.
     const { data: userProfile, error: profileError } = await supabase
       .from('profiles')
       .select('nickname')
@@ -321,18 +328,16 @@ export const joinRoomMemberApi = async (inviteCode, userId) => {
 
     if (profileError) throw profileError
     
-    // 혹시라도 프로필 닉네임이 없으면 '회원' 혹은 기본값으로 방어해 줍니다.
     const userNickname = userProfile?.nickname || '기존회원'
 
-    // 4. 💡 가이드 규칙 업그레이드 인서트 실행!
-    // 이제 nickname 자리에 null 대신 방금 찾아온 회원의 진짜 닉네임(userNickname)을 꽂아줍니다!
+    // 4. 가입 인서트 실행 (여기서도 roomid가 안전하게 유지됩니다)
     const { error: memberError } = await supabase
       .from('room_members')
       .insert([
         {
           roomid: room.id,
           userid: userId,
-          nickname: userNickname, // ➡️ null에서 회원의 실제 닉네임으로 변경!
+          nickname: userNickname,
         },
       ])
 
