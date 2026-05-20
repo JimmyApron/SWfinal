@@ -82,7 +82,7 @@ function KakaoMapView({
     })
   }, [currentLocation, isMapReady])
 
-  // 방 멤버 위치 마커
+  // 방 멤버 위치 마커 + 멤버 위치 기준 지도 범위 이동
   useEffect(() => {
     if (!isMapReady || !mapObjectRef.current) {
       return
@@ -95,18 +95,23 @@ function KakaoMapView({
       return
     }
 
+    const bounds = new window.kakao.maps.LatLngBounds()
+    let validLocationCount = 0
+
     memberLocations.forEach((memberLocation) => {
       if (!memberLocation.latitude || !memberLocation.longitude) {
         return
       }
 
-      const nickname =
-        memberLocation.profiles?.nickname || '멤버'
+      const nickname = memberLocation.profiles?.nickname || '멤버'
 
       const position = new window.kakao.maps.LatLng(
         Number(memberLocation.latitude),
         Number(memberLocation.longitude)
       )
+
+      bounds.extend(position)
+      validLocationCount += 1
 
       const marker = new window.kakao.maps.Marker({
         position,
@@ -134,6 +139,16 @@ function KakaoMapView({
 
       memberMarkerRefs.current.push(marker)
     })
+
+    if (validLocationCount === 1) {
+      const position = memberMarkerRefs.current[0].getPosition()
+      mapObjectRef.current.setCenter(position)
+      mapObjectRef.current.setLevel(5)
+    }
+
+    if (validLocationCount >= 2) {
+      mapObjectRef.current.setBounds(bounds)
+    }
   }, [memberLocations, isMapReady])
 
   // 장소 마커

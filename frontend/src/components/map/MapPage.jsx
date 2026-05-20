@@ -1,23 +1,16 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
 
 import KakaoMapView from './KakaoMapView'
 import CurrentLocationButton from './CurrentLocationButton'
 import PlaceSearchPanel from './PlaceSearchPanel'
 import RoutePanel from './RoutePanel'
 
-import { supabase } from '../../api/supabaseClient'
 import { getCurrentPosition } from '../../services/geolocationService'
 import { saveMyLocation, getRoomMemberLocations } from '../../api/mapApi'
 
 function MapPage() {
-  // const { roomId } = useParams() // 원본 코드
-  // const currentRoomId = Number(roomId) // 원본 코드
-
-  const currentRoomId = 7 // 테스트용 데이터
-  const currentUserId = '38e90772-f0a2-4762-810c-44b7c55848eb' // 테스트용 데이터
-
-  const [currentUserId, setCurrentUserId] = useState(null)
+  const currentRoomId = 7
+  const currentUserId = '38e90772-f0a2-4762-810c-44b7c55848eb'
 
   const [currentLocation, setCurrentLocation] = useState(null)
   const [memberLocations, setMemberLocations] = useState([])
@@ -34,36 +27,13 @@ function MapPage() {
   const [message, setMessage] = useState('')
 
   useEffect(() => {
-    const loadUser = async () => {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser()
-
-      if (error) {
-        console.error('사용자 정보 조회 오류:', error)
-        setMessage('사용자 정보를 가져오지 못했습니다.')
-        return
-      }
-
-      if (!user) {
-        setMessage('로그인이 필요합니다.')
-        return
-      }
-
-      setCurrentUserId(user.id)
-    }
-
-    loadUser()
-  }, [])
-
-  useEffect(() => {
     const loadMemberLocations = async () => {
       if (!currentRoomId) return
 
       try {
         const locations = await getRoomMemberLocations(currentRoomId)
         setMemberLocations(locations)
+        setMessage('DB에 저장된 멤버 위치를 불러왔습니다.')
       } catch (error) {
         console.error('멤버 위치 조회 오류:', error)
         setMessage('멤버 위치를 불러오지 못했습니다.')
@@ -71,12 +41,12 @@ function MapPage() {
     }
 
     loadMemberLocations()
-  }, [currentRoomId])
+  }, [])
 
   const handleCurrentLocation = async () => {
     try {
       if (!currentUserId) {
-        setMessage('사용자 정보를 불러오는 중입니다.')
+        setMessage('사용자 정보를 찾을 수 없습니다.')
         return
       }
 
@@ -199,6 +169,7 @@ function MapPage() {
 
       {currentLocation && (
         <div className="location-box">
+          <p>내 현재 위치</p>
           <p>위도: {currentLocation.lat}</p>
           <p>경도: {currentLocation.lng}</p>
           <p>정확도: {Math.round(currentLocation.accuracy)}m</p>
@@ -207,13 +178,12 @@ function MapPage() {
 
       {memberLocations.length > 0 && (
         <div className="location-box">
-          <h3>방 멤버 위치</h3>
+          <h3>DB에 저장된 멤버 위치</h3>
 
           {memberLocations.map((location) => (
             <div key={location.id}>
               <p>
-                닉네임:{' '}
-                {location.profiles?.nickname || '닉네임 없음'}
+                닉네임: {location.profiles?.nickname || '닉네임 없음'}
               </p>
               <p>위도: {location.latitude}</p>
               <p>경도: {location.longitude}</p>
