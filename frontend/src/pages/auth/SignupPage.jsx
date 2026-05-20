@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { signupApi, checkEmailDuplicateApi, checkNicknameDuplicateApi } from '../../api/authApi'
 import { FaEye, FaEyeSlash } from 'react-icons/fa'
-import { useNavigate } from 'react-router-dom' // 👈 자동 라우팅을 위해 추가
+import { useNavigate } from 'react-router-dom'
 
 function SignupPage() {
-  const navigate = useNavigate() // 👈 내비게이터 장착
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [nickname, setNickname] = useState('')
   const [password, setPassword] = useState('')
@@ -35,7 +35,7 @@ function SignupPage() {
     }
   }
 
-  // 이메일 중복 확인 핸들러
+  // 이메일 중복 확인 핸들러 (순수 DB 조회)
   const handleEmailCheck = async (event) => {
     event.preventDefault()
     if (!email) {
@@ -50,7 +50,7 @@ function SignupPage() {
 
     try {
       setMessage('이메일 중복 확인 중입니다...')
-      const isDuplicate = await checkEmailDuplicateApi(email)
+      const isDuplicate = await checkEmailDuplicateApi(email.trim())
       
       if (isDuplicate) {
         setIsEmailChecked(false)
@@ -75,7 +75,7 @@ function SignupPage() {
 
     try {
       setMessage('닉네임 중복 확인 중입니다...')
-      const isDuplicate = await checkNicknameDuplicateApi(nickname)
+      const isDuplicate = await checkNicknameDuplicateApi(nickname.trim())
 
       if (isDuplicate) {
         setIsNicknameChecked(false)
@@ -90,6 +90,7 @@ function SignupPage() {
     }
   }
 
+  // 회원가입 최종 제출 핸들러 (즉시 가입 처리 완료)
   const handleSignup = async (event) => {
     event.preventDefault()
 
@@ -124,17 +125,16 @@ function SignupPage() {
     }
 
     try {
-      setMessage('회원가입 중입니다.')
+      setMessage('회원가입 중입니다...')
 
       await signupApi({
-        email,
-        nickname,
-        password,
+        email: email.trim(),
+        nickname: nickname.trim(),
+        password: password,
       })
 
-      setMessage('🎉 회원가입이 완료되었습니다! 잠시 후 로그인 화면으로 이동합니다.')
+      setMessage('🎉 회원가입이 완벽하게 완료되었습니다! 즉시 로그인이 가능합니다.')
       
-      // 💡 1.5초 후 로그인 페이지로 자동 전환
       setTimeout(() => {
         navigate('/login')
       }, 1500)
@@ -147,7 +147,7 @@ function SignupPage() {
 
   return (
     <section>
-      <h2>회원가입</h2>
+      <h2>회원가입 (인증메일 OFF 버전)</h2>
 
       <form onSubmit={handleSignup}>
         <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
@@ -212,7 +212,7 @@ function SignupPage() {
           disabled={!isEmailChecked || !isNicknameChecked}
           style={{ width: '100%', padding: '8px', cursor: isEmailChecked && isNicknameChecked ? 'pointer' : 'not-allowed' }}
         >
-          회원가입
+          회원가입 완료하기
         </button>
       </form>
 
@@ -221,4 +221,4 @@ function SignupPage() {
   )
 }
 
-export default SignupPage;
+export default SignupPage
