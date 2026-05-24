@@ -11,6 +11,9 @@ import RoomCreatePage from "./pages/room/RoomCreatePage";
 import RoomInvitePage from "./pages/room/RoomInvitePage";
 import RoomDetailPage from "./pages/room/RoomDetailPage";
 
+import SettingsPage from "./pages/settings/SettingsPage";
+import SettingEditPage from "./pages/settings/SettingEditPage";
+
 function App() {
   return (
     <BrowserRouter>
@@ -28,6 +31,10 @@ function App() {
         <Route path="/rooms/create" element={<RoomCreatePage />} />
         <Route path="/rooms/invite" element={<RoomInvitePage />} />
         <Route path="/rooms/:roomId" element={<RoomDetailPage />} />
+
+
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings/edit" element={<SettingEditPage />} />
       </Routes>
     </BrowserRouter>
   );
