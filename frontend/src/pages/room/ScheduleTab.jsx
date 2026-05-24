@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   getScheduleCandidates,
   getRoomMembers,
@@ -12,6 +13,7 @@ import {
 import { supabase } from "../../lib/supabaseClient";
 
 function ScheduleTab({ roomId }) {
+  const navigate = useNavigate();
   const [candidates, setCandidates] = useState([]);
   const [members, setMembers] = useState([]);
   const [availabilities, setAvailabilities] = useState([]);
@@ -255,6 +257,14 @@ const handleDeleteCandidate = async (candidateId) => {
     alert("후보 일정 삭제 실패");
   }
 };
+
+  const handleShowAvailableResult = () => {
+    navigate(`/rooms/${roomId}/available-result`, {
+      state: {
+        availabilities: availabilities,
+      },
+    });
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -520,6 +530,8 @@ const handleDeleteCandidate = async (candidateId) => {
           </div>
         );
       })}
+
+      <button onClick={handleShowAvailableResult}>가능한 시간 보기</button>
     </div>
   );
 }

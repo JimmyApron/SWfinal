@@ -10,8 +10,14 @@ import HomePage from "./pages/home/HomePage";
 import RoomCreatePage from "./pages/room/RoomCreatePage";
 import RoomInvitePage from "./pages/room/RoomInvitePage";
 import RoomDetailPage from "./pages/room/RoomDetailPage";
+import ScheduleTab from "./pages/room/ScheduleTab";
+import LocationTab from "./pages/Location/LocationTab";
+import ChatTab from "./pages/Chat/ChatTab";
 
-import MapPage from "./components/map/MapPage";
+import AvailableResultPage from "./pages/room/AvailableResultPage";
+import VoteCreatePage from "./pages/vote/VoteCreatePage";
+import VoteListPage from "./pages/vote/VoteListPage";
+import VoteDetailPage from "./pages/vote/VoteDetailPage";
 
 function App() {
   return (
@@ -31,7 +37,15 @@ function App() {
         <Route path="/rooms/invite" element={<RoomInvitePage />} />
         <Route path="/rooms/:roomId" element={<RoomDetailPage />} />
 
-        <Route path="/rooms/:roomId/map" element={<MapPage />} />
+        <Route path="/rooms/:roomid/schedule" element={<ScheduleTab />} />
+        <Route path="/rooms/:roomid/location" element={<LocationTab />} />
+        <Route path="/rooms/:roomid/votes" element={<VoteListPage />} />
+        <Route path="/rooms/:roomid/chat" element={<ChatTab />} />
+
+        <Route path="/rooms/:roomid/available-result" element={<AvailableResultPage />} />
+        <Route path="/rooms/:roomid/vote-create" element={<VoteCreatePage />} />
+        <Route path="/rooms/:roomid/votes/:voteid" element={<VoteDetailPage />} />
+
       </Routes>
     </BrowserRouter>
   );

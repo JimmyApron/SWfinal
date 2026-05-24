@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import ScheduleTab from "./ScheduleTab";
+import VoteListPage from "../vote/VoteListPage";
 
 function RoomDetailPage() {
   const navigate = useNavigate();
   const { roomId } = useParams();
+  const location = useLocation();
 
   const [room, setRoom] = useState(null);
-  const [tab, setTab] = useState("schedule");
+  const [tab, setTab] = useState(location.state?.selectedTab || "schedule");
 
   useEffect(() => {
     const fetchRoom = async () => {
@@ -75,9 +77,9 @@ function RoomDetailPage() {
       <hr />
 
       {tab === "schedule" && <ScheduleTab roomId={roomId} />}
-      {tab === "location" && <MapPage roomId={roomId} />}
-      {tab === "vote" && <div>투표 기능 들어올 자리</div>}
-      {tab === "chat" && <div>채팅 기능 들어올 자리</div>}
+      {tab === "location" && <div>위치 기능 준비 중</div>}
+      {tab === "vote" && <VoteListPage roomid={roomId} />}
+      {tab === "chat" && <div>채팅 기능 준비 중</div>}
     </div>
   );
 }
