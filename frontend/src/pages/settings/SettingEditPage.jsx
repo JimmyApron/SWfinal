@@ -22,10 +22,10 @@ function SettingEditPage() {
   const [currentPassword, setCurrentPassword] = useState('') 
   const [newPassword, setNewPassword] = useState('')
 
-  // 😢 회원 탈퇴 전용 독립 State 💥
-  const [showDeleteForm, setShowDeleteForm] = useState(false) // 탈퇴 폼 열림/닫힘 상태
-  const [deletePassword, setDeletePassword] = useState('')     // 탈퇴 확인용 비밀번호 입력값
-  const [deleteConfirmText, setDeleteConfirmText] = useState('') // "탈퇴하기" 확인 텍스트 입력값
+  // 😢 회원 탈퇴 전용 독립 State
+  const [showDeleteForm, setShowDeleteForm] = useState(false) 
+  const [deletePassword, setDeletePassword] = useState('')     
+  const [deleteConfirmText, setDeleteConfirmText] = useState('') 
 
   // ⏳ 실시간 타이머용 State 및 Ref
   const [countdown, setCountdown] = useState(0)
@@ -175,7 +175,7 @@ function SettingEditPage() {
     }
   }
 
-  // 😢 화면단 비밀번호 입력 + 2중 가드 탈퇴 최종 승인 핸들러 (수정 완료 💥)
+  // 😢 회원 탈퇴 최종 승인 핸들러
   const handleConfirmDeleteAccount = async (e) => {
     e.preventDefault()
 
@@ -193,13 +193,11 @@ function SettingEditPage() {
 
     try {
       setMessage('비밀번호 검증 및 회원 탈퇴 요청 중...')
-      
-      // API에 유저 ID와 입력받은 확인용 비밀번호를 같이 실어서 보냅니다!
       const res = await deleteUserAccountApi(userId, deletePassword)
       
       if (res.success) {
         alert('👋 회원 탈퇴가 성공적으로 완료되었습니다. 그동안 이용해 주셔서 감사합니다.')
-        window.location.href = '/' // 완전히 세션을 파괴하고 첫 화면으로 리프레시 이동
+        window.location.href = '/' 
       }
     } catch (error) {
       if (error.message.includes('password') || error.message.includes('Invalid')) {
@@ -232,7 +230,7 @@ function SettingEditPage() {
           accept="image/*"
           onChange={handleAvatarChange}
           disabled={isUploading}
-          style={{ display: 'none' }}
+          className="hidden-file-input"
         />
       </div>
 
@@ -267,11 +265,11 @@ function SettingEditPage() {
         <label>비밀번호 변경</label>
         
         <form onSubmit={handleUpdatePasswordDirect}>
-          <p className="password-notice-text" style={{ marginBottom: '10px' }}>
+          <p className="password-notice-text">
             현재 비밀번호를 입력하고 새 비밀번호로 수정합니다.
           </p>
           
-          <div className="password-input-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
+          <div className="password-input-wrapper">
             <input 
               type="password" 
               placeholder="현재 비밀번호 입력"
@@ -287,14 +285,14 @@ function SettingEditPage() {
           </div>
           
           <div className="input-with-button">
-            <button type="submit" style={{ width: '100%' }}>비밀번호 저장</button>
+            <button type="submit">비밀번호 저장</button>
           </div>
         </form>
       </div>
 
       {/* 🔔 알림 메시지 구역 */}
       {countdown > 0 ? (
-        <p className="status-message" style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+        <p className="status-message-timer">
           ⏳ 보안상의 이유로 {countdown}초 후에 다시 요청할 수 있습니다.
         </p>
       ) : (
@@ -302,68 +300,61 @@ function SettingEditPage() {
       )}
 
       {/* ⬅️ 하단 버튼 레이아웃 구역 */}
-      <div className="bottom-button-group" style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
-        <button onClick={() => navigate('/settings')} className="back-button" style={{ flex: 1 }}>
+      <div className="bottom-button-group">
+        <button onClick={() => navigate('/settings')} className="back-button">
            이전으로 돌아가기
         </button>
-        <button onClick={() => navigate('/home')} className="home-button" style={{ flex: 1, backgroundColor: '#4caf50', color: '#fff' }}>
+        <button onClick={() => navigate('/home')} className="home-button">
            🏠 홈화면으로 이동
         </button>
       </div>
 
       {/* 😢 5. 보안 업그레이드형 회원 탈퇴 컴포넌트 양식 */}
-      <div className="delete-account-section" style={{ marginTop: '50px', textAlign: 'center', borderTop: '1px dashed #eee', paddingTop: '20px' }}>
+      <div className="delete-account-section">
         
         {!showDeleteForm ? (
-          // 기본 숨김 링크 상태
           <button 
             type="button"
             onClick={() => setShowDeleteForm(true)} 
-            style={{ background: 'none', border: 'none', color: '#bbb', fontSize: '12px', textDecoration: 'underline', cursor: 'pointer' }}
+            className="delete-link-btn"
           >
             회원 탈퇴하기 😢
           </button>
         ) : (
-          // 링크를 누르면 열리는 보안 탈퇴 폼 UI 💥
-          <form onSubmit={handleConfirmDeleteAccount} style={{ textAlign: 'left', maxWidth: '100%', padding: '15px', backgroundColor: '#fafafa', borderRadius: '6px', border: '1px solid #ebd2d2' }}>
-            <h4 style={{ margin: '0 0 8px 0', color: '#e53935', fontSize: '14px' }}>🚨 회원 탈퇴 확인</h4>
-            <p style={{ fontSize: '12px', color: '#666', margin: '0 0 12px 0', lineHeight: '1.4' }}>
+          <form onSubmit={handleConfirmDeleteAccount} className="delete-confirm-form">
+            <h4>🚨 회원 탈퇴 확인</h4>
+            <p className="delete-notice-text">
               탈퇴 시 프로필 정보 및 모든 쇼핑몰 데이터가 영구히 삭제됩니다. <br />
               보안을 위해 현재 비밀번호와 확정 문구를 정확히 작성해 주세요.
             </p>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
+            <div className="delete-input-group">
               <input 
                 type="password"
                 placeholder="현재 비밀번호 확인"
                 value={deletePassword}
                 onChange={(e) => setDeletePassword(e.target.value)}
-                style={{ padding: '8px', fontSize: '13px', border: '1px solid #ccc', borderRadius: '4px' }}
               />
               <input 
                 type="text"
                 placeholder='아래 빈칸에 "탈퇴하기" 라고 입력'
                 value={deleteConfirmText}
                 onChange={(e) => setDeleteConfirmText(e.target.value)}
-                style={{ padding: '8px', fontSize: '13px', border: '1px solid #ccc', borderRadius: '4px' }}
               />
             </div>
 
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button 
-                type="submit"
-                style={{ flex: 1, backgroundColor: '#e53935', color: '#fff', padding: '8px', border: 'none', borderRadius: '4px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
-              >
+            <div className="delete-action-buttons">
+              <button type="submit" className="delete-submit-btn">
                 진짜 탈퇴하기
               </button>
               <button 
-                type="button"
+                type="button" 
                 onClick={() => {
                   setShowDeleteForm(false)
                   setDeletePassword('')
                   setDeleteConfirmText('')
                 }}
-                style={{ flex: 1, backgroundColor: '#eceff1', color: '#37474f', padding: '8px', border: 'none', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}
+                className="delete-cancel-btn"
               >
                 탈퇴 취소
               </button>

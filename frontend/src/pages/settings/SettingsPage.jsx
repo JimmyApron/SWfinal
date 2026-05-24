@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { logoutApi } from '../../api/authApi' 
-import { getCurrentUserApi } from '../../api/authApi' // 👈 기존에 만들어둔 조회 API
+import { getCurrentUserApi } from '../../api/authApi' 
 
 function SettingsPage() { 
   const navigate = useNavigate()
   const [userProfile, setUserProfile] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
 
-// 🚪 로그아웃 처리 핸들러 (응답 대기 없는 초고속 버전 💥)
+  // 🚪 로그아웃 처리 핸들러 (응답 대기 없는 초고속 버전 💥)
   const handleLogout = async () => {
     if (!window.confirm('정말 로그아웃 하시겠습니까? 🥺')) return
 
@@ -85,22 +85,20 @@ function SettingsPage() {
         <p className="info-value">{userProfile?.email || '이메일 정보 없음'}</p>
       </div>
 
-      {/* 🚀 4. 수정하기 버튼 및 포탈 구역 */}
-      <div className="setting-actions" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {/* 🚀 4. 수정하기 버튼 및 포탈 구역 (인라인 style 싹 다 박멸! 🧼) */}
+      <div className="setting-actions">
         <button 
-          onClick={() => navigate('/settings/edit')} // 👈 진짜 수정이 가능한 다음 페이지로 이동!
+          onClick={() => navigate('/settings/edit')} 
           className="edit-navigation-button"
-          style={{ width: '100%', padding: '10px' }}
         >
           내 정보 수정하기 ⚙️
         </button>
         
-        {/* 하단 홈 / 로그아웃 나란히 배치 */}
-        <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+        {/* 하단 홈 / 로그아웃 버튼 레이아웃 */}
+        <div className="bottom-actions-wrapper">
           <button 
             onClick={() => navigate('/home')} 
             className="home-button" 
-            style={{ flex: 1, backgroundColor: '#4caf50', color: '#fff', padding: '10px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
           >
             🏠 홈화면으로 이동
           </button>
@@ -108,7 +106,6 @@ function SettingsPage() {
           <button 
             onClick={handleLogout} 
             className="logout-btn"
-            style={{ flex: 1, backgroundColor: '#f44336', color: '#fff', padding: '10px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
           >
             🚪 로그아웃
           </button>
