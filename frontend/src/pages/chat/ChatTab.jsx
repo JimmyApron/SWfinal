@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
+import { createRoomNotifications } from "../../api/notificationApi";
 import "./ChatTab.css";
+
 
 function ChatTab({ roomId }) {
   const [messages, setMessages] = useState([]);
@@ -108,9 +110,22 @@ function ChatTab({ roomId }) {
     const { error } = await supabase.from("room_messages").insert([newMessage]);
 
     if (error) {
-      console.error("메시지 전송 실패:", error);
-      alert("메시지 전송에 실패했습니다.");
-      return;
+    console.error("메시지 전송 실패:", error);
+    alert("메시지 전송에 실패했습니다.");
+    return;
+    }
+
+    try {
+    await createRoomNotifications({
+        roomId,
+        senderId: currentUser.id,
+        type: "chat",
+        title: "새 채팅이 도착했습니다",
+        message: `${currentProfile.nickname || "익명"}님이 메시지를 보냈습니다.`,
+        link: `/rooms/${roomId}?tab=chat`,
+    });
+    } catch (notificationError) {
+    console.error("채팅 알림 생성 실패:", notificationError);
     }
 
     setContent("");

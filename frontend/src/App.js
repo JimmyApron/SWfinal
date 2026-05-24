@@ -11,7 +11,7 @@ import RoomCreatePage from "./pages/room/RoomCreatePage";
 import RoomInvitePage from "./pages/room/RoomInvitePage";
 import RoomDetailPage from "./pages/room/RoomDetailPage";
 
-import CalendarPage from "./pages/calender/CalendarPage";
+import CalendarPage from "./pages/calendar/CalendarPage";
 import NotificationPage from "./pages/notification/NotificationPage";
 import SettingsPage from "./pages/settings/SettingsPage";
 

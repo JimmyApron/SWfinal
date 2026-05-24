@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import ScheduleTab from "./ScheduleTab";
 import MapPage from "../../components/map/MapPage";
@@ -8,9 +8,23 @@ import ChatTab from "../chat/ChatTab";
 function RoomDetailPage() {
   const navigate = useNavigate();
   const { roomId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [room, setRoom] = useState(null);
-  const [tab, setTab] = useState("schedule");
+  const [tab, setTab] = useState(searchParams.get("tab") || "schedule");
+
+  useEffect(() => {
+    const queryTab = searchParams.get("tab");
+
+    if (
+      queryTab === "schedule" ||
+      queryTab === "location" ||
+      queryTab === "vote" ||
+      queryTab === "chat"
+    ) {
+      setTab(queryTab);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const fetchRoom = async () => {
@@ -33,6 +47,11 @@ function RoomDetailPage() {
 
     fetchRoom();
   }, [roomId]);
+
+  const handleChangeTab = (nextTab) => {
+    setTab(nextTab);
+    setSearchParams({ tab: nextTab });
+  };
 
   const handleCopyInviteCode = async () => {
     if (!room) return;
@@ -68,18 +87,20 @@ function RoomDetailPage() {
       </div>
 
       <div>
-        <button onClick={() => setTab("schedule")}>일정</button>
-        <button onClick={() => setTab("location")}>위치</button>
-        <button onClick={() => setTab("vote")}>투표</button>
-        <button onClick={() => setTab("chat")}>채팅</button>
+        <button onClick={() => handleChangeTab("schedule")}>일정</button>
+        <button onClick={() => handleChangeTab("location")}>위치</button>
+        <button onClick={() => handleChangeTab("vote")}>투표</button>
+        <button onClick={() => handleChangeTab("chat")}>채팅</button>
       </div>
 
       <hr />
 
-      {tab === "schedule" && <ScheduleTab roomId={roomId} />}
-      {tab === "location" && <MapPage roomId={roomId} />}
-      {tab === "vote" && <div>투표 기능 들어올 자리</div>}
-      {tab === "chat" && <ChatTab roomId={roomId} />}
+      <div>
+        {tab === "schedule" && <ScheduleTab roomId={roomId} />}
+        {tab === "location" && <MapPage roomId={roomId} />}
+        {tab === "vote" && <div>투표 기능 들어올 자리</div>}
+        {tab === "chat" && <ChatTab roomId={roomId} />}
+      </div>
     </div>
   );
 }
