@@ -150,6 +150,7 @@ function GuestLoginPage() {
       
       localStorage.setItem('guest_id', guestData.id) 
       localStorage.setItem('current_room_code', inviteCode.trim())
+      localStorage.setItem('guest_nickname', nickname.trim());
 
       setTimeout(() => {
         navigate(`/rooms/${inviteCode.trim()}`) 

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import ScheduleTab from "./ScheduleTab";
 import MapPage from "../../components/map/MapPage";
+import ChatTab from "../chat/ChatTab";
 
 function RoomDetailPage() {
   const navigate = useNavigate();
@@ -78,7 +79,7 @@ function RoomDetailPage() {
       {tab === "schedule" && <ScheduleTab roomId={roomId} />}
       {tab === "location" && <MapPage roomId={roomId} />}
       {tab === "vote" && <div>투표 기능 들어올 자리</div>}
-      {tab === "chat" && <div>채팅 기능 들어올 자리</div>}
+      {tab === "chat" && <ChatTab roomId={roomId} />}
     </div>
   );
 }
