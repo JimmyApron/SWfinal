@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import ScheduleTab from "./ScheduleTab";
+import MapPage from "../../components/map/MapPage";
 
 function RoomDetailPage() {
   const navigate = useNavigate();
