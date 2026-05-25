@@ -1,19 +1,25 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
+import ScheduleTab from "./ScheduleTab";
+import VoteListPage from "../vote/VoteListPage";
 
 function RoomDetailPage() {
   const navigate = useNavigate();
   const { roomId } = useParams();
+  const location = useLocation();
 
   const [room, setRoom] = useState(null);
-  const [tab, setTab] = useState("schedule");
+  const [tab, setTab] = useState(location.state?.selectedTab || "schedule");
 
   useEffect(() => {
     const fetchRoom = async () => {
       const { data, error } = await supabase
         .from("rooms")
-        .select("*")
+        .select(`
+          *,
+          room_members(count)
+        `)
         .eq("id", roomId)
         .single();
 
@@ -40,18 +46,26 @@ function RoomDetailPage() {
     }
   };
 
+  if (!room) {
+    return <div>로딩 중...</div>;
+  }
+
   return (
     <div>
-      <button onClick={() => navigate("/home")}>← 홈으로</button>
+      <header>
+        <button onClick={() => navigate("/home")}>←</button>
 
-      <h1>방 상세 페이지</h1>
+        <span>{room.roomname}</span>
 
-      {room && (
-        <div>
-          <p>초대코드: {room.invitecode}</p>
-          <button onClick={handleCopyInviteCode}>초대코드 복사하기</button>
-        </div>
-      )}
+        <span>{room.room_members?.[0]?.count || 0}명</span>
+
+        <button>⚙</button>
+      </header>
+
+      <div>
+        <p>초대코드: {room.invitecode}</p>
+        <button onClick={handleCopyInviteCode}>초대코드 복사하기</button>
+      </div>
 
       <div>
         <button onClick={() => setTab("schedule")}>일정</button>
@@ -62,10 +76,10 @@ function RoomDetailPage() {
 
       <hr />
 
-      {tab === "schedule" && <div>일정 기능 들어올 자리</div>}
-      {tab === "location" && <div>위치 기능 들어올 자리</div>}
-      {tab === "vote" && <div>투표 기능 들어올 자리</div>}
-      {tab === "chat" && <div>채팅 기능 들어올 자리</div>}
+      {tab === "schedule" && <ScheduleTab roomId={roomId} />}
+      {tab === "location" && <div>위치 기능 준비 중</div>}
+      {tab === "vote" && <VoteListPage roomid={roomId} />}
+      {tab === "chat" && <div>채팅 기능 준비 중</div>}
     </div>
   );
 }

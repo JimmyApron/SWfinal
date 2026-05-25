@@ -10,6 +10,14 @@ import HomePage from "./pages/home/HomePage";
 import RoomCreatePage from "./pages/room/RoomCreatePage";
 import RoomInvitePage from "./pages/room/RoomInvitePage";
 import RoomDetailPage from "./pages/room/RoomDetailPage";
+import ScheduleTab from "./pages/room/ScheduleTab";
+import LocationTab from "./pages/Location/LocationTab";
+import ChatTab from "./pages/Chat/ChatTab";
+
+import AvailableResultPage from "./pages/room/AvailableResultPage";
+import VoteCreatePage from "./pages/vote/VoteCreatePage";
+import VoteListPage from "./pages/vote/VoteListPage";
+import VoteDetailPage from "./pages/vote/VoteDetailPage";
 
 import SettingsPage from "./pages/settings/SettingsPage";
 import SettingEditPage from "./pages/settings/SettingEditPage";
@@ -31,8 +39,18 @@ function App() {
         <Route path="/rooms/create" element={<RoomCreatePage />} />
         <Route path="/rooms/invite" element={<RoomInvitePage />} />
         <Route path="/rooms/:roomId" element={<RoomDetailPage />} />
+        {/* 스케쥴 기능 */}
+        <Route path="/rooms/:roomid/schedule" element={<ScheduleTab />} />
+        <Route path="/rooms/:roomid/location" element={<LocationTab />} />
+        <Route path="/rooms/:roomid/votes" element={<VoteListPage />} />
+        <Route path="/rooms/:roomid/chat" element={<ChatTab />} />
+
+        <Route path="/rooms/:roomid/available-result" element={<AvailableResultPage />} />
+        <Route path="/rooms/:roomid/vote-create" element={<VoteCreatePage />} />
+        <Route path="/rooms/:roomid/votes/:voteid" element={<VoteDetailPage />} />
 
 
+        { /*설정 관련 기능 */}
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/settings/edit" element={<SettingEditPage />} />
       </Routes>

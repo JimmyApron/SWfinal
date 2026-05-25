@@ -14,32 +14,56 @@ function RoomCreatePage() {
   const [isAllDay, setIsAllDay] = useState(false);
   const [candidates, setCandidates] = useState([]);
 
+  const timeOptions = [];
+
+  for (let hour = 0; hour < 24; hour++) {
+    for (let minute of [0, 30]) {
+      const h = String(hour).padStart(2, "0");
+      const m = String(minute).padStart(2, "0");
+      timeOptions.push(`${h}:${m}`);
+    }
+  }
+
+
   const handleAddCandidate = () => {
     if (candidateDates.length === 0) {
       alert("후보 날짜를 1개 이상 선택하세요.");
       return;
     }
 
-    if (!isAllDay && (candidateStartTime === "" || candidateEndTime === "")) {
-      alert("시작 시간과 종료 시간을 입력하세요.");
-      return;
+    if (!isAllDay) {
+      if (candidateStartTime === "" || candidateEndTime === "") {
+        alert("시작 시간과 종료 시간을 입력하세요.");
+        return;
+      }
+
+      if (candidateStartTime >= candidateEndTime) {
+        alert("시작 시간은 종료 시간보다 빨라야 합니다.");
+        return;
+      }
     }
 
     const newCandidates = candidateDates.map((date) => {
       const formattedDate =
-        typeof date === "string"
-          ? date
-          : date.format("YYYY-MM-DD");
+        typeof date === "string" ? date : date.format("YYYY-MM-DD");
 
       return {
         date: formattedDate,
-        startTime: candidateStartTime,
-        endTime: candidateEndTime,
+        startTime: isAllDay ? null : candidateStartTime,
+        endTime: isAllDay ? null : candidateEndTime,
         isAllDay,
       };
     });
 
-    console.log("추가되는 후보:", newCandidates);
+    const existingDates = candidates.map((candidate) => candidate.date);
+
+    const duplicatedDate = newCandidates.find((candidate) =>
+      existingDates.includes(candidate.date)
+    );
+    if (duplicatedDate) {
+      alert(`${duplicatedDate.date} 날짜는 이미 추가된 후보입니다.`);
+      return;
+    }
 
     setCandidates([...candidates, ...newCandidates]);
 
@@ -65,16 +89,27 @@ function RoomCreatePage() {
         data: { user },
         error,
       } = await supabase.auth.getUser();
-      
+
       if (error || !user) {
         alert("로그인이 필요합니다.");
+        return;
+      }
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("nickname")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error("프로필 조회 실패:", profileError);
+        alert("프로필 정보를 불러오지 못했습니다.");
         return;
       }
 
       const result = await createRoom({
         roomName,
         userId: user.id,
-        nickname: user.user_metadata.nickname,
+        nickname: profileData?.nickname || "이름없는회원",
         candidates,
       });
 
@@ -104,6 +139,7 @@ function RoomCreatePage() {
         value={candidateDates}
         onChange={setCandidateDates}
         format="YYYY-MM-DD"
+        minDate={new Date()}
         placeholder="후보 날짜 여러 개 선택"
       />
 
@@ -118,17 +154,31 @@ function RoomCreatePage() {
 
       {!isAllDay && (
         <div>
-          <input
-            type="time"
+          <select 
+            size={1}
             value={candidateStartTime}
             onChange={(e) => setCandidateStartTime(e.target.value)}
-          />
+          >
+            <option value="">시작 시간</option>
+            {timeOptions.map((time) => (
+              <option key={time} value={time}>
+                {time}
+              </option>
+            ))}
+          </select>
 
-          <input
-            type="time"
+          <select
+            size={1}
             value={candidateEndTime}
             onChange={(e) => setCandidateEndTime(e.target.value)}
-          />
+          >
+            <option value="">종료 시간</option>
+            {timeOptions.map((time) => (
+              <option key={time} value={time}>
+                {time}
+              </option>
+            ))}
+          </select>
         </div>
       )}
 
@@ -151,4 +201,3 @@ function RoomCreatePage() {
 }
 
 export default RoomCreatePage;
-
