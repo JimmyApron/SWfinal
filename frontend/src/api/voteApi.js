@@ -143,7 +143,7 @@ export async function deleteVote(voteid) {
   }
 }
 
-export async function confirmVote(voteid, option, roomid, votetype) {
+export async function confirmVote(voteid, option, roomid, votetype, title) {
   const { error: updateError } = await supabase
     .from("votes")
     .update({ confirmedoptionid: option.id })
@@ -156,6 +156,7 @@ export async function confirmVote(voteid, option, roomid, votetype) {
     const { error } = await supabase.from("confirmed_schedules").insert([{
       roomid,
       voteid,
+      title: title || null,
       date: option.optiondate,
       starttime: option.starttime || null,
       endtime: option.endtime || null,
@@ -188,10 +189,10 @@ export async function addVoteOption(voteid, optiontext) {
   return data;
 }
 
-export async function updateVote(voteid, { title, endtime, endtimeenabled, reminderenabled }) {
+export async function updateVote(voteid, { title, endtime, endtimeenabled, reminderenabled, ismultiple, isanonymous, allowaddoption }) {
   const { error } = await supabase
     .from("votes")
-    .update({ title, endtime: endtimeenabled ? endtime : null, endtimeenabled, reminderenabled })
+    .update({ title, endtime: endtimeenabled ? endtime : null, endtimeenabled, reminderenabled, ismultiple, isanonymous, allowaddoption })
     .eq("id", voteid);
 
   if (error) {

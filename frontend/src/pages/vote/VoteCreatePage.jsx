@@ -14,11 +14,26 @@ function VoteCreatePage() {
   const returnTab = location.state?.returnTab || "vote";
 
   const [currentUser, setCurrentUser] = useState(null);
+  const [nickname, setNickname] = useState("");
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    const fetchUser = async () => {
+      console.log("fetchUser 시작");
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log("user:", user);
+      if (!user) return;
       setCurrentUser(user);
-    });
+
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("nickname")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (profileError) console.error("프로필 조회 실패:", profileError);
+      console.log("profile:", profile);
+      setNickname(profile?.nickname || user.email);
+    };
+    fetchUser();
   }, []);
 
   const [title, setTitle] = useState("");
@@ -108,7 +123,7 @@ function VoteCreatePage() {
         return option.optiontext.trim() !== "";
       }
 
-      return option.optiondate !== "" && option.starttime !== "" && option.endtime !== "";
+      return option.optiondate !== "" && option.starttime !== "";
     });
 
     if (validOptions.length === 0) {
@@ -121,7 +136,7 @@ function VoteCreatePage() {
         roomid: Number(roomid),
         title,
         userid: currentUser?.id,
-        nickname: currentUser?.user_metadata?.nickname || currentUser?.email,
+        nickname,
         options: validOptions,
         ismultiple,
         isanonymous,
@@ -290,24 +305,28 @@ function VoteCreatePage() {
                   <input
                     type="date"
                     value={option.optiondate}
-                    onChange={(e) =>
-                      handleChangeOption(index, "optiondate", e.target.value)
-                    }
+                    onChange={(e) => handleChangeOption(index, "optiondate", e.target.value)}
                   />
-                  <input
-                    type="time"
-                    value={option.starttime}
-                    onChange={(e) =>
-                      handleChangeOption(index, "starttime", e.target.value)
-                    }
-                  />
-                  <input
-                    type="time"
-                    value={option.endtime}
-                    onChange={(e) =>
-                      handleChangeOption(index, "endtime", e.target.value)
-                    }
-                  />
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "12px", color: "#888", whiteSpace: "nowrap" }}>시작</span>
+                    <input
+                      type="time"
+                      value={option.starttime}
+                      onChange={(e) => handleChangeOption(index, "starttime", e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "12px", color: "#888", whiteSpace: "nowrap" }}>종료</span>
+                    <input
+                      type="time"
+                      value={option.endtime}
+                      onChange={(e) => handleChangeOption(index, "endtime", e.target.value)}
+                      style={{ flex: 1 }}
+                      placeholder="미정"
+                    />
+                  </div>
+                  <p style={{ margin: 0, fontSize: "11px", color: "#bbb" }}>종료시간은 선택사항입니다</p>
                 </div>
               )}
             </div>
