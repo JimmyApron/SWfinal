@@ -1,5 +1,5 @@
 import "./App.css";
-import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import InviteCodePage from "./pages/auth/InviteCodePage";
 import LoginPage from "./pages/auth/LoginPage";
@@ -10,25 +10,6 @@ import HomePage from "./pages/home/HomePage";
 import RoomCreatePage from "./pages/room/RoomCreatePage";
 import RoomInvitePage from "./pages/room/RoomInvitePage";
 import RoomDetailPage from "./pages/room/RoomDetailPage";
-
-import CalendarPage from "./pages/calendar/CalendarPage";
-import NotificationPage from "./pages/notification/NotificationPage";
-import SettingsPage from "./pages/settings/SettingsPage";
-
-import MapPage from "./components/map/MapPage";
-import BottomNav from "./components/BottomNav";
-
-function MainLayout() {
-  return (
-    <div className="app-layout">
-      <main className="app-main">
-        <Outlet />
-      </main>
-
-      <BottomNav />
-    </div>
-  );
-}
 import ScheduleTab from "./pages/room/ScheduleTab";
 import LocationTab from "./pages/Location/LocationTab";
 import ChatTab from "./pages/Chat/ChatTab";
@@ -45,25 +26,15 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* 로그인 전 / 진입 전 화면: 하단바 없음 */}
+        {/* 첫 대문 화면 */}
         <Route path="/" element={<InviteCodePage />} />
+
+        {/* 인증 및 진입 파이프라인 */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/guest" element={<GuestLoginPage />} />
+        <Route path="/home" element={<HomePage />} />
 
-        {/* 로그인 후 / 비회원 입장 후 화면: 하단바 있음 */}
-        <Route element={<MainLayout />}>
-          <Route path="/home" element={<HomePage />} />
-
-          <Route path="/rooms/create" element={<RoomCreatePage />} />
-          <Route path="/rooms/invite" element={<RoomInvitePage />} />
-          <Route path="/rooms/:roomId" element={<RoomDetailPage />} />
-          <Route path="/rooms/:roomId/map" element={<MapPage />} />
-
-          <Route path="/calendar" element={<CalendarPage />} />
-          <Route path="/notifications" element={<NotificationPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-        </Route>
         {/* 방 관련 기능 */}
         <Route path="/rooms/create" element={<RoomCreatePage />} />
         <Route path="/rooms/invite" element={<RoomInvitePage />} />

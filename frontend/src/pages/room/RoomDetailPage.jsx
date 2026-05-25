@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import ScheduleTab from "./ScheduleTab";
 import MapPage from "../../components/map/MapPage";
-import ChatTab from "../chat/ChatTab";
+import ChatTab from "../Chat/ChatTab";
 
 function RoomDetailPage() {
   const navigate = useNavigate();
