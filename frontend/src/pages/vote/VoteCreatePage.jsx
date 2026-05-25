@@ -9,8 +9,15 @@ function VoteCreatePage() {
   const location = useLocation();
 
   const selectedSchedules = location.state?.selectedSchedules || [];
+  const selectedPlaces = location.state?.selectedPlaces || [];
+
   const initialVoteType = location.state?.voteType || "text";
-  const initialVotePurpose = location.state?.voteType === "date" ? "schedule" : "general";
+
+  const initialVotePurpose =
+    location.state?.votePurpose ||
+    location.state?.votetype ||
+    (location.state?.voteType === "date" ? "schedule" : "general");
+
   const returnTab = location.state?.returnTab || "vote";
 
   const [currentUser, setCurrentUser] = useState(null);
@@ -21,9 +28,26 @@ function VoteCreatePage() {
     });
   }, []);
 
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(location.state?.title || "");
 
   const [options, setOptions] = useState(() => {
+    if (selectedPlaces.length > 0) {
+      return selectedPlaces.map((place) => ({
+        optiontype: "place",
+        optiontext: place.name || "",
+        optiondate: "",
+        starttime: "",
+        endtime: "",
+        availablecount: 0,
+
+        placename: place.name || "",
+        placeaddress: place.address || "",
+        placelat: place.lat ?? "",
+        placelng: place.lng ?? "",
+        kakaomapurl: place.kakaoMapUrl || place.kakaomapurl || "",
+      }));
+    }
+
     if (selectedSchedules.length > 0) {
       return selectedSchedules.map((schedule) => ({
         optiontype: "date",
@@ -32,33 +56,24 @@ function VoteCreatePage() {
         starttime: schedule.starttime,
         endtime: schedule.endtime,
         availablecount: schedule.availableCount || 0,
+
+        placename: "",
+        placeaddress: "",
+        placelat: "",
+        placelng: "",
+        kakaomapurl: "",
       }));
     }
 
-    return [
-      {
-        optiontype: initialVoteType,
-        optiontext: "",
-        optiondate: "",
-        starttime: "",
-        endtime: "",
-        availablecount: 0,
-      },
-    ];
+    return [makeEmptyOption(initialVoteType)];
   });
 
   const currentOptionType = options[0]?.optiontype || "text";
 
-  const [votetype, setVotetype] = useState(initialVotePurpose);
+  const [votetype, setVotetype] = useState(
+    selectedPlaces.length > 0 ? "location" : initialVotePurpose
+  );
 
-  const handleVotetypeChange = (newType) => {
-    setVotetype(newType);
-    if (newType === "schedule") {
-      setOptions((prev) => prev.map((o) => ({ ...o, optiontype: "date", optiontext: "" })));
-    } else if (newType === "location" || newType === "general") {
-      setOptions((prev) => prev.map((o) => ({ ...o, optiontype: "text", optiondate: "", starttime: "", endtime: "" })));
-    }
-  };
   const [ismultiple, setIsmultiple] = useState(false);
   const [isanonymous, setIsanonymous] = useState(false);
   const [allowaddoption, setAllowaddoption] = useState(false);
@@ -66,26 +81,68 @@ function VoteCreatePage() {
   const [endtime, setEndtime] = useState("");
   const [reminderenabled, setReminderenabled] = useState(false);
 
+  const handleVotetypeChange = (newType) => {
+    setVotetype(newType);
+
+    if (newType === "schedule") {
+      setOptions((prev) =>
+        prev.map((option) => ({
+          ...makeEmptyOption("date"),
+          optiontype: "date",
+          optiondate: option.optiondate || "",
+          starttime: option.starttime || "",
+          endtime: option.endtime || "",
+          availablecount: option.availablecount || 0,
+        }))
+      );
+      return;
+    }
+
+    if (newType === "location") {
+      setOptions((prev) =>
+        prev.map((option) => ({
+          ...makeEmptyOption("place"),
+          optiontype: "place",
+          optiontext: option.placename || option.optiontext || "",
+          placename: option.placename || option.optiontext || "",
+          placeaddress: option.placeaddress || "",
+          placelat: option.placelat || "",
+          placelng: option.placelng || "",
+          kakaomapurl: option.kakaomapurl || "",
+        }))
+      );
+      return;
+    }
+
+    setOptions((prev) =>
+      prev.map((option) => ({
+        ...makeEmptyOption("text"),
+        optiontype: "text",
+        optiontext: option.optiontext || option.placename || "",
+      }))
+    );
+  };
+
   const handleChangeOption = (index, field, value) => {
     const newOptions = [...options];
+
     newOptions[index][field] = value;
+
+    if (field === "placename") {
+      newOptions[index].optiontext = value;
+    }
+
+    if (field === "optiontext" && newOptions[index].optiontype === "place") {
+      newOptions[index].placename = value;
+    }
+
     setOptions(newOptions);
   };
 
   const handleAddOption = () => {
     const currentType = options[0]?.optiontype || "text";
 
-    setOptions([
-      ...options,
-      {
-        optiontype: currentType,
-        optiontext: "",
-        optiondate: "",
-        starttime: "",
-        endtime: "",
-        availablecount: 0,
-      },
-    ]);
+    setOptions([...options, makeEmptyOption(currentType)]);
   };
 
   const handleDeleteOption = (index) => {
@@ -95,6 +152,11 @@ function VoteCreatePage() {
   const handleSubmit = async () => {
     if (!currentUser) {
       alert("로그인이 필요합니다.");
+      return;
+    }
+
+    if (!roomid) {
+      alert("방 정보를 찾을 수 없습니다.");
       return;
     }
 
@@ -108,7 +170,19 @@ function VoteCreatePage() {
         return option.optiontext.trim() !== "";
       }
 
-      return option.optiondate !== "" && option.starttime !== "" && option.endtime !== "";
+      if (option.optiontype === "place") {
+        return (
+          String(option.placename || option.optiontext || "").trim() !== "" &&
+          option.placelat !== "" &&
+          option.placelng !== ""
+        );
+      }
+
+      return (
+        option.optiondate !== "" &&
+        option.starttime !== "" &&
+        option.endtime !== ""
+      );
     });
 
     if (validOptions.length === 0) {
@@ -181,6 +255,7 @@ function VoteCreatePage() {
             fontSize: "18px",
             border: "1px solid #ddd",
             marginBottom: "16px",
+            boxSizing: "border-box",
           }}
         />
 
@@ -188,7 +263,7 @@ function VoteCreatePage() {
           {[
             { value: "general", label: "일반 투표" },
             { value: "schedule", label: "일정 확정" },
-            { value: "location", label: "위치 확정" },
+            { value: "location", label: "중간장소 확정" },
           ].map((type) => (
             <button
               key={type.value}
@@ -196,8 +271,12 @@ function VoteCreatePage() {
               style={{
                 padding: "8px 16px",
                 borderRadius: "24px",
-                border: votetype === type.value ? "2px solid #7c79ff" : "1px solid #ddd",
-                backgroundColor: votetype === type.value ? "#f0f0ff" : "#fff",
+                border:
+                  votetype === type.value
+                    ? "2px solid #7c79ff"
+                    : "1px solid #ddd",
+                backgroundColor:
+                  votetype === type.value ? "#f0f0ff" : "#fff",
                 color: votetype === type.value ? "#7c79ff" : "#333",
                 fontWeight: votetype === type.value ? "bold" : "normal",
                 cursor: "pointer",
@@ -209,55 +288,70 @@ function VoteCreatePage() {
         </div>
 
         {votetype === "general" && (
-        <div style={{ display: "flex", gap: "10px", marginBottom: "16px" }}>
-          <button
-            onClick={() => {
-              const updated = options.map((option) => ({
-                ...option,
-                optiontype: "text",
-                optiontext: option.optiontext || "",
-                optiondate: "",
-                starttime: "",
-                endtime: "",
-              }));
+          <div style={{ display: "flex", gap: "10px", marginBottom: "16px" }}>
+            <button
+              onClick={() => {
+                const updated = options.map((option) => ({
+                  ...makeEmptyOption("text"),
+                  optiontype: "text",
+                  optiontext: option.optiontext || option.placename || "",
+                }));
 
-              setOptions(updated);
-            }}
+                setOptions(updated);
+              }}
+              style={{
+                padding: "10px 22px",
+                borderRadius: "24px",
+                border:
+                  currentOptionType === "text"
+                    ? "2px solid #333"
+                    : "1px solid #ddd",
+              }}
+            >
+              텍스트
+            </button>
+
+            <button
+              onClick={() => {
+                const updated = options.map((option) => ({
+                  ...makeEmptyOption("date"),
+                  optiontype: "date",
+                  optiontext: "",
+                  optiondate: option.optiondate || "",
+                  starttime: option.starttime || "",
+                  endtime: option.endtime || "",
+                }));
+
+                setOptions(updated);
+              }}
+              style={{
+                padding: "10px 22px",
+                borderRadius: "24px",
+                border:
+                  currentOptionType === "date"
+                    ? "2px solid #333"
+                    : "1px solid #ddd",
+              }}
+            >
+              날짜
+            </button>
+          </div>
+        )}
+
+        {selectedPlaces.length > 0 && votetype === "location" && (
+          <p
             style={{
-              padding: "10px 22px",
-              borderRadius: "24px",
-              border: currentOptionType === "text"
-                ? "2px solid #333"
-                : "1px solid #ddd",
+              padding: "10px",
+              border: "1px solid #eee",
+              borderRadius: "8px",
+              backgroundColor: "#fafafa",
+              fontSize: "14px",
+              color: "#555",
+              marginBottom: "16px",
             }}
           >
-            텍스트
-          </button>
-
-          <button
-            onClick={() => {
-              const updated = options.map((option) => ({
-                ...option,
-                optiontype: "date",
-                optiontext: "",
-                optiondate: option.optiondate || "",
-                starttime: option.starttime || "",
-                endtime: option.endtime || "",
-              }));
-
-              setOptions(updated);
-            }}
-            style={{
-              padding: "10px 22px",
-              borderRadius: "24px",
-              border: currentOptionType === "date"
-                ? "2px solid #333"
-                : "1px solid #ddd",
-            }}
-          >
-            날짜
-          </button>
-        </div>
+            위치 탭에서 선택한 중간장소 후보들이 투표 항목으로 추가되었습니다.
+          </p>
         )}
 
         {options.map((option, index) => (
@@ -266,12 +360,12 @@ function VoteCreatePage() {
             style={{
               display: "flex",
               gap: "8px",
-              alignItems: "center",
+              alignItems: "flex-start",
               marginBottom: "10px",
             }}
           >
             <div style={{ flex: 1 }}>
-              {option.optiontype === "text" ? (
+              {option.optiontype === "text" && (
                 <input
                   value={option.optiontext}
                   onChange={(e) =>
@@ -283,10 +377,19 @@ function VoteCreatePage() {
                     height: "48px",
                     padding: "0 12px",
                     border: "1px solid #ddd",
+                    boxSizing: "border-box",
                   }}
                 />
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              )}
+
+              {option.optiontype === "date" && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px",
+                  }}
+                >
                   <input
                     type="date"
                     value={option.optiondate}
@@ -307,6 +410,71 @@ function VoteCreatePage() {
                     onChange={(e) =>
                       handleChangeOption(index, "endtime", e.target.value)
                     }
+                  />
+                </div>
+              )}
+
+              {option.optiontype === "place" && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px",
+                    padding: "10px",
+                    border: "1px solid #eee",
+                    borderRadius: "8px",
+                    backgroundColor: "#fafafa",
+                  }}
+                >
+                  <input
+                    value={option.placename}
+                    onChange={(e) =>
+                      handleChangeOption(index, "placename", e.target.value)
+                    }
+                    placeholder="장소명"
+                    style={inputStyle}
+                  />
+
+                  <input
+                    value={option.placeaddress}
+                    onChange={(e) =>
+                      handleChangeOption(
+                        index,
+                        "placeaddress",
+                        e.target.value
+                      )
+                    }
+                    placeholder="주소"
+                    style={inputStyle}
+                  />
+
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <input
+                      value={option.placelat}
+                      onChange={(e) =>
+                        handleChangeOption(index, "placelat", e.target.value)
+                      }
+                      placeholder="위도"
+                      style={inputStyle}
+                    />
+
+                    <input
+                      value={option.placelng}
+                      onChange={(e) =>
+                        handleChangeOption(index, "placelng", e.target.value)
+                      }
+                      placeholder="경도"
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <input
+                    value={option.kakaomapurl}
+                    onChange={(e) =>
+                      handleChangeOption(index, "kakaomapurl", e.target.value)
+                    }
+                    placeholder="카카오맵 URL 선택 입력"
+                    style={inputStyle}
                   />
                 </div>
               )}
@@ -405,5 +573,31 @@ function VoteCreatePage() {
     </div>
   );
 }
+
+function makeEmptyOption(optiontype) {
+  return {
+    optiontype,
+    optiontext: "",
+    optiondate: "",
+    starttime: "",
+    endtime: "",
+    availablecount: 0,
+
+    placename: "",
+    placeaddress: "",
+    placelat: "",
+    placelng: "",
+    kakaomapurl: "",
+  };
+}
+
+const inputStyle = {
+  width: "100%",
+  height: "42px",
+  padding: "0 12px",
+  border: "1px solid #ddd",
+  borderRadius: "6px",
+  boxSizing: "border-box",
+};
 
 export default VoteCreatePage;

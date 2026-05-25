@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import KakaoMapView from './KakaoMapView'
 import CurrentLocationButton from './CurrentLocationButton'
@@ -19,6 +20,7 @@ import {
 } from '../../api/mapApi'
 
 function MapPage({ roomId }) {
+  const navigate = useNavigate()
   const currentRoomId = Number(roomId)
 
   const [currentUserId, setCurrentUserId] = useState(null)
@@ -335,6 +337,42 @@ function MapPage({ roomId }) {
     }
   }
 
+  const handleCreateMiddlePlaceVote = (selectedPlaces) => {
+    if (!currentRoomId) {
+      setMessage('방 정보를 찾을 수 없어서 중간장소 투표를 만들 수 없습니다.')
+      return
+    }
+
+    if (!selectedPlaces || selectedPlaces.length === 0) {
+      setMessage('투표로 만들 중간장소 후보를 1개 이상 선택해주세요.')
+      return
+    }
+
+    const votePlaces = selectedPlaces.map((place) => ({
+      id: place.id || null,
+      name: place.name || '이름 없는 장소',
+      address: place.address || '',
+      category: place.category || '',
+      lat: place.lat,
+      lng: place.lng,
+      kakaomapurl: place.kakaomapurl || place.kakaoMapUrl || null,
+      kakaoMapUrl: place.kakaoMapUrl || place.kakaomapurl || null,
+      timeGap: place.timeGap || 0,
+      travelResults: place.travelResults || [],
+    }))
+
+    navigate(`/rooms/${currentRoomId}/vote-create`, {
+      state: {
+        voteType: 'place',
+        votePurpose: 'location',
+        votetype: 'location',
+        selectedPlaces: votePlaces,
+        title: '중간장소 투표',
+        returnTab: 'location',
+      },
+    })
+  }
+
   const handleCancelMiddlePlace = async () => {
     if (!middlePlace) {
       setMessage('취소할 중간장소가 없습니다.')
@@ -463,6 +501,7 @@ function MapPage({ roomId }) {
           memberLocations={memberLocations}
           onRecommendPlaces={setPlaces}
           onSelectMiddlePlace={handleSelectMiddlePlace}
+          onCreateMiddlePlaceVote={handleCreateMiddlePlaceVote}
         />
       )}
 

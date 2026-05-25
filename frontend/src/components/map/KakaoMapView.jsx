@@ -7,6 +7,8 @@ function KakaoMapView({
   selectedPlace,
   routePath = [],
   memberRoutePaths = [],
+  onMapClick,
+  pickedPlace,
 }) {
   const mapRef = useRef(null)
   const mapObjectRef = useRef(null)
@@ -14,6 +16,7 @@ function KakaoMapView({
   const userMarkerRef = useRef(null)
   const memberMarkerRefs = useRef([])
   const placeMarkerRefs = useRef([])
+  const pickedMarkerRef = useRef(null)
 
   const selectedInfoWindowRef = useRef(null)
   const routePolylineRef = useRef(null)
@@ -47,6 +50,79 @@ function KakaoMapView({
 
     mapObjectRef.current = new window.kakao.maps.Map(container, options)
   }, [isMapReady])
+
+  // 지도 클릭으로 위치 선택
+  useEffect(() => {
+    if (!isMapReady || !mapObjectRef.current || !onMapClick) {
+      return
+    }
+
+    const clickHandler = (mouseEvent) => {
+      const latlng = mouseEvent.latLng
+
+      onMapClick({
+        lat: latlng.getLat(),
+        lng: latlng.getLng(),
+      })
+    }
+
+    window.kakao.maps.event.addListener(
+      mapObjectRef.current,
+      'click',
+      clickHandler
+    )
+
+    return () => {
+      window.kakao.maps.event.removeListener(
+        mapObjectRef.current,
+        'click',
+        clickHandler
+      )
+    }
+  }, [isMapReady, onMapClick])
+
+  // 지도 클릭으로 선택한 위치 마커
+  useEffect(() => {
+    if (!isMapReady || !mapObjectRef.current) {
+      return
+    }
+
+    if (pickedMarkerRef.current) {
+      pickedMarkerRef.current.setMap(null)
+      pickedMarkerRef.current = null
+    }
+
+    if (!pickedPlace || !pickedPlace.lat || !pickedPlace.lng) {
+      return
+    }
+
+    const position = new window.kakao.maps.LatLng(
+      Number(pickedPlace.lat),
+      Number(pickedPlace.lng)
+    )
+
+    pickedMarkerRef.current = new window.kakao.maps.Marker({
+      position,
+      map: mapObjectRef.current,
+      title: pickedPlace.name || '선택한 위치',
+    })
+
+    const infoWindow = new window.kakao.maps.InfoWindow({
+      content: `
+        <div style="padding:8px; font-size:13px; line-height:1.5;">
+          <strong>${pickedPlace.name || '선택한 위치'}</strong>
+          <p style="margin:4px 0;">위도: ${Number(pickedPlace.lat).toFixed(6)}</p>
+          <p style="margin:4px 0;">경도: ${Number(pickedPlace.lng).toFixed(6)}</p>
+        </div>
+      `,
+    })
+
+    window.kakao.maps.event.addListener(pickedMarkerRef.current, 'click', () => {
+      infoWindow.open(mapObjectRef.current, pickedMarkerRef.current)
+    })
+
+    mapObjectRef.current.setCenter(position)
+  }, [pickedPlace, isMapReady])
 
   // 내 브라우저 현재 위치 마커
   useEffect(() => {
