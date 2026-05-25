@@ -78,3 +78,12 @@
   border: 1px solid black;
   border-radius: 8px;
 }
+
+.app-layout {
+  min-height: 100vh;
+  background-color: #fff;
+}
+
+.app-main {
+  padding-bottom: 80px;
+}

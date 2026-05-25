@@ -6,10 +6,17 @@ import PlaceSearchPanel from './PlaceSearchPanel'
 import FamousMiddlePlacePanel from './FamousMiddlePlacePanel'
 
 import { getCurrentPosition } from '../../services/geolocationService'
-import { saveMyLocation, getRoomMemberLocations } from '../../api/mapApi'
 import { getRouteTime } from '../../api/routeTimeApi'
 import { decodePolyline } from '../../utils/decodePolyline'
 import { supabase } from '../../lib/supabaseClient'
+import { createRoomNotifications } from '../../api/notificationApi'
+import {
+  saveMyLocation,
+  getRoomMemberLocations,
+  saveRoomMiddlePlace,
+  getRoomMiddlePlace,
+  deleteRoomMiddlePlace,
+} from '../../api/mapApi'
 
 function MapPage({ roomId }) {
   const currentRoomId = Number(roomId)
@@ -223,6 +230,36 @@ function MapPage({ roomId }) {
     }
   }
 
+  useEffect(() => {
+    if (!currentRoomId) return
+
+    const loadSavedMiddlePlace = async () => {
+      try {
+        const savedMiddlePlace = await getRoomMiddlePlace(currentRoomId)
+
+        if (!savedMiddlePlace) return
+
+        setMiddlePlace(savedMiddlePlace)
+        setSelectedPlace(savedMiddlePlace)
+        setDestination(savedMiddlePlace)
+
+        // DB에 이미 확정된 중간장소가 있으면 추천 후보 대신 확정 장소만 표시
+        setPlaces([savedMiddlePlace])
+
+        setMemberRouteResults([])
+        setMemberRoutePaths([])
+
+        setMessage(`${savedMiddlePlace.name}이 이미 중간장소로 확정되어 있습니다.`)
+
+        await calculateAllMemberRoutesToMiddlePlace(savedMiddlePlace)
+      } catch (error) {
+        console.error('확정 중간장소 조회 오류:', error)
+      }
+    }
+
+    loadSavedMiddlePlace()
+  }, [currentRoomId])
+
   const getCarRoutePath = async ({ origin, destination }) => {
     const apiBaseUrl = process.env.REACT_APP_API_BASE_URL
 
@@ -246,20 +283,84 @@ function MapPage({ roomId }) {
   }
 
   const handleSelectMiddlePlace = async (place) => {
-    setMiddlePlace(place)
-    setSelectedPlace(place)
-    setDestination(place)
+    try {
+      const savedMiddlePlace = await saveRoomMiddlePlace({
+        roomId: currentRoomId,
+        place,
+        confirmedBy: currentUserId,
+      })
 
-    // 추천 후보 마커 제거하고 확정된 중간장소 1개만 지도에 표시
-    setPlaces([place])
+      const confirmedPlace = {
+        ...place,
+        id: savedMiddlePlace.id,
+        name: savedMiddlePlace.name,
+        address: savedMiddlePlace.address,
+        lat: savedMiddlePlace.lat,
+        lng: savedMiddlePlace.lng,
+      }
 
-    // 이전 경로선 초기화 후 확정 장소 기준 경로 다시 계산
-    setMemberRouteResults(place.travelResults || [])
-    setMemberRoutePaths([])
+      setMiddlePlace(confirmedPlace)
+      setSelectedPlace(confirmedPlace)
+      setDestination(confirmedPlace)
 
-    setMessage(`${place.name}을 중간장소로 확정했습니다. 멤버별 경로를 계산합니다.`)
+      // 추천 후보 마커 제거하고 확정된 중간장소 1개만 지도에 표시
+      setPlaces([confirmedPlace])
 
-    await calculateAllMemberRoutesToMiddlePlace(place)
+      // 이전 경로선 초기화 후 확정 장소 기준 경로 다시 계산
+      setMemberRouteResults(confirmedPlace.travelResults || [])
+      setMemberRoutePaths([])
+
+      setMessage(`${confirmedPlace.name}을 중간장소로 확정했습니다. 멤버별 경로를 계산합니다.`)
+
+      try {
+        if (currentUserId && currentRoomId) {
+          await createRoomNotifications({
+            roomId: currentRoomId,
+            senderId: currentUserId,
+            type: 'middle_place_confirmed',
+            title: '중간장소가 확정되었습니다',
+            message: `${confirmedPlace.name}이 중간장소로 확정되었습니다.`,
+            link: `/rooms/${currentRoomId}?tab=location`,
+          })
+        }
+      } catch (error) {
+        console.error('중간장소 확정 알림 생성 실패:', error)
+      }
+
+      await calculateAllMemberRoutesToMiddlePlace(confirmedPlace)
+    } catch (error) {
+      console.error('중간장소 확정 저장 오류:', error)
+      setMessage('중간장소 확정 중 오류가 발생했습니다.')
+    }
+  }
+
+  const handleCancelMiddlePlace = async () => {
+    if (!middlePlace) {
+      setMessage('취소할 중간장소가 없습니다.')
+      return
+    }
+
+    const confirmCancel = window.confirm(
+      '확정된 중간장소를 취소할까요? 다시 중간장소를 추천받을 수 있습니다.'
+    )
+
+    if (!confirmCancel) return
+
+    try {
+      await deleteRoomMiddlePlace(currentRoomId)
+
+      setMiddlePlace(null)
+      setSelectedPlace(null)
+      setDestination(null)
+      setPlaces([])
+      setMemberRouteResults([])
+      setMemberRoutePaths([])
+
+      setMessage('중간장소 확정을 취소했습니다. 다시 중간장소를 추천받을 수 있습니다.')
+    } catch (error) {
+      console.error('중간장소 확정 취소 오류:', error)
+      setMessage('중간장소 확정 취소 중 오류가 발생했습니다.')
+    }
   }
 
   const handleSelectPlace = (place) => {
@@ -317,6 +418,10 @@ function MapPage({ roomId }) {
           <p>주소: {middlePlace.address || '주소 정보 없음'}</p>
           <p>위도: {middlePlace.lat}</p>
           <p>경도: {middlePlace.lng}</p>
+
+          <button type="button" onClick={handleCancelMiddlePlace}>
+            중간장소 확정 취소
+          </button>
         </div>
       )}
 

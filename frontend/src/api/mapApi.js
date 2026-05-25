@@ -85,5 +85,99 @@ export async function getRoomMemberLocations(roomId) {
     throw error
   }
 
-  return data
+  return data || []
+}
+
+export async function saveRoomMiddlePlace({
+  roomId,
+  place,
+  confirmedBy,
+}) {
+  if (!roomId) {
+    throw new Error('roomId가 필요합니다.')
+  }
+
+  if (!place) {
+    throw new Error('place 정보가 필요합니다.')
+  }
+
+  const { data, error } = await supabase
+    .from('room_middle_places')
+    .upsert(
+      {
+        roomid: Number(roomId),
+        name: place.name,
+        address: place.address || null,
+        lat: Number(place.lat),
+        lng: Number(place.lng),
+        confirmedby: confirmedBy || null,
+      },
+      {
+        onConflict: 'roomid',
+      }
+    )
+    .select()
+    .single()
+
+  if (error) {
+    console.error('중간장소 저장 실패:', error)
+    throw new Error('중간장소 저장 실패')
+  }
+
+  return {
+    id: data.id,
+    roomid: data.roomid,
+    name: data.name,
+    address: data.address,
+    lat: data.lat,
+    lng: data.lng,
+    confirmedby: data.confirmedby,
+    createdat: data.createdat,
+  }
+}
+
+export async function getRoomMiddlePlace(roomId) {
+  if (!roomId) {
+    throw new Error('roomId가 필요합니다.')
+  }
+
+  const { data, error } = await supabase
+    .from('room_middle_places')
+    .select('*')
+    .eq('roomid', Number(roomId))
+    .maybeSingle()
+
+  if (error) {
+    console.error('중간장소 조회 실패:', error)
+    throw new Error('중간장소 조회 실패')
+  }
+
+  if (!data) return null
+
+  return {
+    id: data.id,
+    roomid: data.roomid,
+    name: data.name,
+    address: data.address,
+    lat: data.lat,
+    lng: data.lng,
+    confirmedby: data.confirmedby,
+    createdat: data.createdat,
+  }
+}
+
+export async function deleteRoomMiddlePlace(roomId) {
+  if (!roomId) {
+    throw new Error('roomId가 필요합니다.')
+  }
+
+  const { error } = await supabase
+    .from('room_middle_places')
+    .delete()
+    .eq('roomid', Number(roomId))
+
+  if (error) {
+    console.error('중간장소 확정 취소 실패:', error)
+    throw new Error('중간장소 확정 취소 실패')
+  }
 }
