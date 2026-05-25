@@ -78,7 +78,7 @@ function AvailableResultPage() {
             <strong> {index + 1}순위</strong>
             <p>{time.date}</p>
             <p>
-              {time.starttime} ~ {time.endtime}
+              {time.starttime} ~ {time.endtime} ({Math.floor(time.duration / 60)}시간 {String(time.duration % 60).padStart(2, "0")}분)
             </p>
             <p>참여 가능 인원: {time.availableCount}명</p>
           </label>

@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabaseClient";
 import ScheduleTab from "./ScheduleTab";
 import MapPage from "../../components/map/MapPage";
 import ChatTab from "../Chat/ChatTab";
+import VoteListPage from "../vote/VoteListPage";
 
 function RoomDetailPage() {
   const navigate = useNavigate();
@@ -98,7 +99,7 @@ function RoomDetailPage() {
       <div>
         {tab === "schedule" && <ScheduleTab roomId={roomId} />}
         {tab === "location" && <MapPage roomId={roomId} />}
-        {tab === "vote" && <div>투표 기능 들어올 자리</div>}
+        {tab === "vote" && <VoteListPage roomid={roomId} />}
         {tab === "chat" && <ChatTab roomId={roomId} />}
       </div>
     </div>

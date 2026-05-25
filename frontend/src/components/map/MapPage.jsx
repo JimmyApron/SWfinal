@@ -61,6 +61,7 @@ function MapPage({ roomId }) {
     if (!currentRoomId) return
 
     loadMemberLocations()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRoomId])
 
   useEffect(() => {
@@ -241,7 +242,6 @@ function MapPage({ roomId }) {
 
         setMiddlePlace(savedMiddlePlace)
         setSelectedPlace(savedMiddlePlace)
-        setDestination(savedMiddlePlace)
 
         // DB에 이미 확정된 중간장소가 있으면 추천 후보 대신 확정 장소만 표시
         setPlaces([savedMiddlePlace])
@@ -258,6 +258,7 @@ function MapPage({ roomId }) {
     }
 
     loadSavedMiddlePlace()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRoomId])
 
   const getCarRoutePath = async ({ origin, destination }) => {

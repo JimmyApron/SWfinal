@@ -47,7 +47,7 @@ export const updateNicknameApi = async (newNickname, userId) => {
 export const updatePasswordApi = async (currentPassword, newPassword) => {
   try {
     // 💡 current_password를 같이 던져주면 Supabase가 알아서 현재 비밀번호를 매칭 검사합니다!
-    const { data, error } = await supabase.auth.updateUser({
+    const { error } = await supabase.auth.updateUser({
       current_password: currentPassword,
       password: newPassword
     })
@@ -96,7 +96,7 @@ export const updateEmailApi = async (newEmail, userId) => {
 export const deleteUserAccountApi = async () => {
   try {
     // 💡 Supabase에게 방금 만든 'fn_delete_user_self' 함수를 실행하라고 명령!
-    const { data, error } = await supabase.rpc('fn_delete_user_self')
+    const { error } = await supabase.rpc('fn_delete_user_self')
 
     if (error) throw error
 

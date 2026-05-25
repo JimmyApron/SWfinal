@@ -133,7 +133,7 @@ function VoteCreatePage() {
       });
 
       alert("투표가 생성되었습니다.");
-      navigate(`/rooms/${roomid}`, { state: { selectedTab: "vote" } });
+      navigate(`/rooms/${roomid}?tab=vote`);
     } catch (error) {
       console.error("투표 생성 실패:", error);
       alert(error.message || "투표 생성 실패");
@@ -153,7 +153,7 @@ function VoteCreatePage() {
         }}
       >
         <button
-          onClick={() => navigate(`/rooms/${roomid}`, { state: { selectedTab: returnTab } })}
+          onClick={() => navigate(`/rooms/${roomid}?tab=${returnTab}`)}
           style={{ border: "none", background: "none", fontSize: "24px" }}
         >
           ←
