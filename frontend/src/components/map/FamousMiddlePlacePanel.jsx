@@ -12,10 +12,23 @@ function FamousMiddlePlacePanel({
   const [selectedPlaceIds, setSelectedPlaceIds] = useState([])
   const [message, setMessage] = useState('')
 
-  const handleChangeMode = (userid, mode) => {
+  const getMemberKey = (member) => {
+    return member.userid || member.guestid || member.id
+  }
+
+  const getMemberNickname = (member) => {
+    return (
+      member.profiles?.nickname ||
+      member.room_guests?.nickname ||
+      member.nickname ||
+      '멤버'
+    )
+  }
+
+  const handleChangeMode = (memberKey, mode) => {
     setMemberTransportModes((prev) => ({
       ...prev,
-      [userid]: mode,
+      [memberKey]: mode,
     }))
   }
 
@@ -28,9 +41,20 @@ function FamousMiddlePlacePanel({
     try {
       setMessage('멤버별 이동수단 기준으로 유명 중간장소를 계산하는 중입니다.')
 
+      const fixedMemberTransportModes = {}
+
+      memberLocations.forEach((member) => {
+        const memberKey = getMemberKey(member)
+
+        if (!memberKey) return
+
+        fixedMemberTransportModes[memberKey] =
+          memberTransportModes[memberKey] || 'transit'
+      })
+
       const result = await recommendFamousMiddlePlaces({
         memberLocations,
-        memberTransportModes,
+        memberTransportModes: fixedMemberTransportModes,
       })
 
       setRecommendedPlaces(result)
@@ -88,21 +112,26 @@ function FamousMiddlePlacePanel({
         추천합니다.
       </p>
 
-      {memberLocations.map((member) => (
-        <div key={member.userid}>
-          <span>{member.profiles?.nickname || '멤버'}</span>
+      {memberLocations.map((member) => {
+        const memberKey = getMemberKey(member)
+        const nickname = getMemberNickname(member)
 
-          <select
-            value={memberTransportModes[member.userid] || 'transit'}
-            onChange={(event) => {
-              handleChangeMode(member.userid, event.target.value)
-            }}
-          >
-            <option value="car">자동차</option>
-            <option value="transit">대중교통</option>
-          </select>
-        </div>
-      ))}
+        return (
+          <div key={memberKey}>
+            <span>{nickname}</span>
+
+            <select
+              value={memberTransportModes[memberKey] || 'transit'}
+              onChange={(event) => {
+                handleChangeMode(memberKey, event.target.value)
+              }}
+            >
+              <option value="car">자동차</option>
+              <option value="transit">대중교통</option>
+            </select>
+          </div>
+        )
+      })}
 
       <button type="button" onClick={handleRecommend}>
         유명 중간장소 5개 추천
@@ -171,7 +200,7 @@ function FamousMiddlePlacePanel({
                 <p>이동시간 차이: {Math.round(place.timeGap / 60)}분</p>
 
                 {place.travelResults.map((result) => (
-                  <p key={result.userid}>
+                  <p key={result.userid || result.guestid || result.nickname}>
                     {result.nickname} / {getModeLabel(result.mode)} /{' '}
                     {result.durationMinutes}분
                   </p>

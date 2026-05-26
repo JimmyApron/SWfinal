@@ -153,7 +153,7 @@ function GuestLoginPage() {
       localStorage.setItem('guest_nickname', nickname.trim());
 
       setTimeout(() => {
-        navigate(`/rooms/${inviteCode.trim()}`) 
+        navigate(`/rooms/${guestData.roomid}`) 
       }, 1200)
     } catch (error) {
       setMessage('입장에 실패했습니다.')

@@ -36,20 +36,90 @@ function KakaoMapView({
       })
   }, [])
 
+  // 지도 생성
+  // 탭이 숨겨져 있을 때 지도 div 크기가 0으로 잡히는 문제를 막기 위해
+  // 컨테이너 크기가 잡힐 때까지 잠깐 재시도함
   useEffect(() => {
     if (!isMapReady || !mapRef.current || mapObjectRef.current) {
       return
     }
 
-    const container = mapRef.current
+    let retryCount = 0
+    let timerId = null
 
-    const options = {
-      center: new window.kakao.maps.LatLng(35.1796, 129.0756),
-      level: 4,
+    const createMapWhenVisible = () => {
+      const container = mapRef.current
+
+      if (!container) return
+
+      const width = container.offsetWidth
+      const height = container.offsetHeight
+
+      console.log('카카오맵 컨테이너 크기:', width, height)
+
+      if ((width === 0 || height === 0) && retryCount < 30) {
+        retryCount += 1
+        timerId = setTimeout(createMapWhenVisible, 100)
+        return
+      }
+
+      const options = {
+        center: new window.kakao.maps.LatLng(35.1796, 129.0756),
+        level: 4,
+      }
+
+      mapObjectRef.current = new window.kakao.maps.Map(container, options)
+
+      setTimeout(() => {
+        if (mapObjectRef.current) {
+          mapObjectRef.current.relayout()
+          mapObjectRef.current.setCenter(
+            new window.kakao.maps.LatLng(35.1796, 129.0756)
+          )
+        }
+      }, 300)
     }
 
-    mapObjectRef.current = new window.kakao.maps.Map(container, options)
+    createMapWhenVisible()
+
+    return () => {
+      if (timerId) {
+        clearTimeout(timerId)
+      }
+    }
   }, [isMapReady])
+
+  // 탭 전환/렌더링 타이밍 때문에 지도 화면이 빈칸으로 보이는 문제 보정
+  useEffect(() => {
+    if (!isMapReady || !mapObjectRef.current) return
+
+    const relayoutMap = () => {
+      setTimeout(() => {
+        if (mapObjectRef.current) {
+          console.log('카카오맵 relayout 실행')
+          mapObjectRef.current.relayout()
+        }
+      }, 200)
+    }
+
+    window.addEventListener('resize', relayoutMap)
+    document.addEventListener('visibilitychange', relayoutMap)
+
+    relayoutMap()
+
+    const intervalId = setInterval(relayoutMap, 500)
+
+    const stopTimer = setTimeout(() => {
+      clearInterval(intervalId)
+    }, 3000)
+
+    return () => {
+      window.removeEventListener('resize', relayoutMap)
+      document.removeEventListener('visibilitychange', relayoutMap)
+      clearInterval(intervalId)
+      clearTimeout(stopTimer)
+    }
+  }, [isMapReady, currentLocation, memberLocations, places, selectedPlace])
 
   // 지도 클릭으로 위치 선택
   useEffect(() => {
@@ -92,7 +162,7 @@ function KakaoMapView({
       pickedMarkerRef.current = null
     }
 
-    if (!pickedPlace || !pickedPlace.lat || !pickedPlace.lng) {
+    if (!isValidLatLng(pickedPlace?.lat, pickedPlace?.lng)) {
       return
     }
 
@@ -110,7 +180,7 @@ function KakaoMapView({
     const infoWindow = new window.kakao.maps.InfoWindow({
       content: `
         <div style="padding:8px; font-size:13px; line-height:1.5;">
-          <strong>${pickedPlace.name || '선택한 위치'}</strong>
+          <strong>${escapeHtml(pickedPlace.name || '선택한 위치')}</strong>
           <p style="margin:4px 0;">위도: ${Number(pickedPlace.lat).toFixed(6)}</p>
           <p style="margin:4px 0;">경도: ${Number(pickedPlace.lng).toFixed(6)}</p>
         </div>
@@ -122,11 +192,16 @@ function KakaoMapView({
     })
 
     mapObjectRef.current.setCenter(position)
+    mapObjectRef.current.relayout()
   }, [pickedPlace, isMapReady])
 
   // 내 브라우저 현재 위치 마커
   useEffect(() => {
     if (!isMapReady || !mapObjectRef.current || !currentLocation) {
+      return
+    }
+
+    if (!isValidLatLng(currentLocation.lat, currentLocation.lng)) {
       return
     }
 
@@ -156,6 +231,9 @@ function KakaoMapView({
     window.kakao.maps.event.addListener(userMarkerRef.current, 'click', () => {
       infoWindow.open(mapObjectRef.current, userMarkerRef.current)
     })
+
+    mapObjectRef.current.setCenter(location)
+    mapObjectRef.current.relayout()
   }, [currentLocation, isMapReady])
 
   // 방 멤버 위치 마커
@@ -175,11 +253,11 @@ function KakaoMapView({
     let validLocationCount = 0
 
     memberLocations.forEach((memberLocation) => {
-      if (!memberLocation.latitude || !memberLocation.longitude) {
+      if (!isValidLatLng(memberLocation.latitude, memberLocation.longitude)) {
         return
       }
 
-      const nickname = memberLocation.profiles?.nickname || '멤버'
+      const nickname = getMemberNickname(memberLocation)
 
       const position = new window.kakao.maps.LatLng(
         Number(memberLocation.latitude),
@@ -198,11 +276,11 @@ function KakaoMapView({
       const infoWindow = new window.kakao.maps.InfoWindow({
         content: `
           <div style="padding:10px; font-size:13px; line-height:1.5;">
-            <strong>${nickname}</strong>
+            <strong>${escapeHtml(nickname)}</strong>
             <p style="margin:4px 0;">현재 위치</p>
             <p style="margin:4px 0;">정확도: ${
               memberLocation.accuracy
-                ? `${Math.round(memberLocation.accuracy)}m`
+                ? `${Math.round(Number(memberLocation.accuracy))}m`
                 : '정보 없음'
             }</p>
           </div>
@@ -216,7 +294,7 @@ function KakaoMapView({
       memberMarkerRefs.current.push(marker)
     })
 
-    if (validLocationCount === 1) {
+    if (validLocationCount === 1 && memberMarkerRefs.current[0]) {
       const position = memberMarkerRefs.current[0].getPosition()
       mapObjectRef.current.setCenter(position)
       mapObjectRef.current.setLevel(5)
@@ -229,6 +307,8 @@ function KakaoMapView({
     ) {
       mapObjectRef.current.setBounds(bounds)
     }
+
+    mapObjectRef.current.relayout()
   }, [memberLocations, places.length, memberRoutePaths.length, isMapReady])
 
   // 장소 마커
@@ -246,10 +326,15 @@ function KakaoMapView({
 
     const bounds = new window.kakao.maps.LatLngBounds()
     let validPlaceCount = 0
+    let firstValidPlace = null
 
     places.forEach((place) => {
-      if (!place.lat || !place.lng) {
+      if (!isValidLatLng(place.lat, place.lng)) {
         return
+      }
+
+      if (!firstValidPlace) {
+        firstValidPlace = place
       }
 
       const position = new window.kakao.maps.LatLng(
@@ -263,7 +348,7 @@ function KakaoMapView({
       const marker = new window.kakao.maps.Marker({
         position,
         map: mapObjectRef.current,
-        title: place.name,
+        title: place.name || '장소',
       })
 
       window.kakao.maps.event.addListener(marker, 'click', () => {
@@ -273,11 +358,15 @@ function KakaoMapView({
       placeMarkerRefs.current.push(marker)
     })
 
-    if (validPlaceCount === 1 && memberRoutePaths.length === 0) {
+    if (
+      validPlaceCount === 1 &&
+      firstValidPlace &&
+      memberRoutePaths.length === 0
+    ) {
       mapObjectRef.current.setCenter(
         new window.kakao.maps.LatLng(
-          Number(places[0].lat),
-          Number(places[0].lng)
+          Number(firstValidPlace.lat),
+          Number(firstValidPlace.lng)
         )
       )
       mapObjectRef.current.setLevel(4)
@@ -286,6 +375,8 @@ function KakaoMapView({
     if (validPlaceCount >= 2 && memberRoutePaths.length === 0) {
       mapObjectRef.current.setBounds(bounds)
     }
+
+    mapObjectRef.current.relayout()
   }, [places, memberRoutePaths.length, isMapReady])
 
   // 선택한 장소 인포윈도우
@@ -294,7 +385,7 @@ function KakaoMapView({
       return
     }
 
-    if (!selectedPlace.lat || !selectedPlace.lng) {
+    if (!isValidLatLng(selectedPlace.lat, selectedPlace.lng)) {
       console.log('선택한 장소 좌표가 없습니다:', selectedPlace)
       return
     }
@@ -319,11 +410,14 @@ function KakaoMapView({
       const marker = new window.kakao.maps.Marker({
         position: selectedLocation,
         map: mapObjectRef.current,
-        title: selectedPlace.name,
+        title: selectedPlace.name || '장소',
       })
 
       openPlaceInfoWindow(selectedPlace, marker)
     }
+
+    mapObjectRef.current.setCenter(selectedLocation)
+    mapObjectRef.current.relayout()
   }, [selectedPlace, isMapReady])
 
   // 기존 단일 경로 선 표시
@@ -341,9 +435,15 @@ function KakaoMapView({
       return
     }
 
-    const linePath = routePath.map((point) => {
-      return new window.kakao.maps.LatLng(Number(point.lat), Number(point.lng))
-    })
+    const linePath = routePath
+      .filter((point) => isValidLatLng(point.lat, point.lng))
+      .map((point) => {
+        return new window.kakao.maps.LatLng(Number(point.lat), Number(point.lng))
+      })
+
+    if (linePath.length === 0) {
+      return
+    }
 
     routePolylineRef.current = new window.kakao.maps.Polyline({
       path: linePath,
@@ -362,6 +462,7 @@ function KakaoMapView({
     })
 
     mapObjectRef.current.setBounds(bounds)
+    mapObjectRef.current.relayout()
   }, [routePath, isMapReady])
 
   // 멤버별 경로선 표시
@@ -387,12 +488,18 @@ function KakaoMapView({
         return
       }
 
-      const linePath = route.path.map((point) => {
-        return new window.kakao.maps.LatLng(
-          Number(point.lat),
-          Number(point.lng)
-        )
-      })
+      const linePath = route.path
+        .filter((point) => isValidLatLng(point.lat, point.lng))
+        .map((point) => {
+          return new window.kakao.maps.LatLng(
+            Number(point.lat),
+            Number(point.lng)
+          )
+        })
+
+      if (linePath.length === 0) {
+        return
+      }
 
       linePath.forEach((position) => {
         bounds.extend(position)
@@ -400,19 +507,29 @@ function KakaoMapView({
 
       validRouteCount += 1
 
-      const polyline = new window.kakao.maps.Polyline({
+      const polylineOption = {
         path: linePath,
         strokeWeight: route.mode === 'transit' ? 4 : 5,
         strokeOpacity: route.mode === 'transit' ? 0.65 : 0.85,
         strokeStyle: route.mode === 'transit' ? 'shortdash' : 'solid',
-      })
+      }
+
+      if (route.mode === 'car') {
+        polylineOption.strokeColor = '#FF0000'
+      }
+
+      if (route.mode === 'transit') {
+        polylineOption.strokeColor = '#3366FF'
+      }
+
+      const polyline = new window.kakao.maps.Polyline(polylineOption)
 
       polyline.setMap(mapObjectRef.current)
       memberRoutePolylineRefs.current.push(polyline)
     })
 
     places.forEach((place) => {
-      if (place.lat && place.lng) {
+      if (isValidLatLng(place.lat, place.lng)) {
         bounds.extend(
           new window.kakao.maps.LatLng(Number(place.lat), Number(place.lng))
         )
@@ -420,7 +537,7 @@ function KakaoMapView({
     })
 
     memberLocations.forEach((member) => {
-      if (member.latitude && member.longitude) {
+      if (isValidLatLng(member.latitude, member.longitude)) {
         bounds.extend(
           new window.kakao.maps.LatLng(
             Number(member.latitude),
@@ -433,6 +550,8 @@ function KakaoMapView({
     if (validRouteCount > 0) {
       mapObjectRef.current.setBounds(bounds)
     }
+
+    mapObjectRef.current.relayout()
   }, [memberRoutePaths, memberLocations, places, isMapReady])
 
   const openPlaceInfoWindow = (place, marker) => {
@@ -440,14 +559,16 @@ function KakaoMapView({
       selectedInfoWindowRef.current.close()
     }
 
+    const kakaoMapUrl = place.kakaoMapUrl || place.kakaomapurl
+
     selectedInfoWindowRef.current = new window.kakao.maps.InfoWindow({
       content: `
         <div style="padding:10px; font-size:13px; line-height:1.5;">
-          <strong>${place.name || '장소명 없음'}</strong>
-          <p style="margin:4px 0;">${place.address || '주소 정보 없음'}</p>
+          <strong>${escapeHtml(place.name || '장소명 없음')}</strong>
+          <p style="margin:4px 0;">${escapeHtml(place.address || '주소 정보 없음')}</p>
           ${
-            place.kakaoMapUrl
-              ? `<a href="${place.kakaoMapUrl}" target="_blank">카카오맵에서 보기</a>`
+            kakaoMapUrl
+              ? `<a href="${escapeHtml(kakaoMapUrl)}" target="_blank" rel="noreferrer">카카오맵에서 보기</a>`
               : ''
           }
         </div>
@@ -462,7 +583,12 @@ function KakaoMapView({
   }
 
   return (
-    <div>
+    <div
+      style={{
+        width: '100%',
+        minHeight: '520px',
+      }}
+    >
       {!isMapReady && <p>지도 불러오는 중...</p>}
 
       <div
@@ -470,21 +596,65 @@ function KakaoMapView({
         style={{
           width: '100%',
           height: '500px',
+          minHeight: '500px',
+          display: 'block',
+          position: 'relative',
+          overflow: 'hidden',
           border: '1px solid black',
+          backgroundColor: '#f2f2f2',
         }}
       />
     </div>
   )
 }
 
+function getMemberNickname(memberLocation) {
+  return (
+    memberLocation.profiles?.nickname ||
+    memberLocation.room_guests?.nickname ||
+    memberLocation.nickname ||
+    '멤버'
+  )
+}
+
+function isValidLatLng(lat, lng) {
+  const numberLat = Number(lat)
+  const numberLng = Number(lng)
+
+  return (
+    Number.isFinite(numberLat) &&
+    Number.isFinite(numberLng) &&
+    numberLat >= -90 &&
+    numberLat <= 90 &&
+    numberLng >= -180 &&
+    numberLng <= 180
+  )
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
 function loadKakaoMapScript() {
   return new Promise((resolve, reject) => {
-    if (window.kakao && window.kakao.maps) {
-      resolve()
+    if (!window.kakao || !window.kakao.maps) {
+      reject(new Error('index.html에 카카오맵 SDK script가 로드되지 않았습니다.'))
       return
     }
 
-    reject(new Error('index.html에 카카오맵 SDK script가 로드되지 않았습니다.'))
+    if (window.kakao.maps.load) {
+      window.kakao.maps.load(() => {
+        resolve()
+      })
+      return
+    }
+
+    resolve()
   })
 }
 

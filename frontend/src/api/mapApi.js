@@ -14,7 +14,8 @@ export async function saveMyLocation(locationData) {
     .upsert(
       {
         userid: locationData.userId,
-        roomid: locationData.roomId,
+        guestid: null,
+        roomid: Number(locationData.roomId),
         latitude: locationData.latitude,
         longitude: locationData.longitude,
         accuracy: locationData.accuracy,
@@ -22,6 +23,40 @@ export async function saveMyLocation(locationData) {
       },
       {
         onConflict: 'userid,roomid',
+      }
+    )
+    .select()
+
+  if (error) {
+    throw error
+  }
+
+  return data
+}
+
+export async function saveMyGuestLocation(locationData) {
+  if (!locationData.guestId) {
+    throw new Error('guestId가 필요합니다.')
+  }
+
+  if (!locationData.roomId) {
+    throw new Error('roomId가 필요합니다.')
+  }
+
+  const { data, error } = await supabase
+    .from('user_locations')
+    .upsert(
+      {
+        userid: null,
+        guestid: locationData.guestId,
+        roomid: Number(locationData.roomId),
+        latitude: locationData.latitude,
+        longitude: locationData.longitude,
+        accuracy: locationData.accuracy,
+        createdat: new Date().toISOString(),
+      },
+      {
+        onConflict: 'guestid,roomid',
       }
     )
     .select()
@@ -46,14 +81,43 @@ export async function getMyLocation(userId, roomId) {
     .from('user_locations')
     .select(`
       *,
-      profiles (
+      profiles:userid (
         id,
         nickname,
         profile_image_url:profileimageurl
       )
     `)
     .eq('userid', userId)
-    .eq('roomid', roomId)
+    .eq('roomid', Number(roomId))
+    .maybeSingle()
+
+  if (error) {
+    throw error
+  }
+
+  return data
+}
+
+export async function getMyGuestLocation(guestId, roomId) {
+  if (!guestId) {
+    throw new Error('guestId가 필요합니다.')
+  }
+
+  if (!roomId) {
+    throw new Error('roomId가 필요합니다.')
+  }
+
+  const { data, error } = await supabase
+    .from('user_locations')
+    .select(`
+      *,
+      room_guests:guestid (
+        id,
+        nickname
+      )
+    `)
+    .eq('guestid', guestId)
+    .eq('roomid', Number(roomId))
     .maybeSingle()
 
   if (error) {
@@ -72,13 +136,17 @@ export async function getRoomMemberLocations(roomId) {
     .from('user_locations')
     .select(`
       *,
-      profiles (
+      profiles:userid (
         id,
         nickname,
         profile_image_url:profileimageurl
+      ),
+      room_guests:guestid (
+        id,
+        nickname
       )
     `)
-    .eq('roomid', roomId)
+    .eq('roomid', Number(roomId))
     .order('createdat', { ascending: false })
 
   if (error) {

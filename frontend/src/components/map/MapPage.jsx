@@ -13,6 +13,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { createRoomNotifications } from '../../api/notificationApi'
 import {
   saveMyLocation,
+  saveMyGuestLocation,
   getRoomMemberLocations,
   saveRoomMiddlePlace,
   getRoomMiddlePlace,
@@ -24,6 +25,7 @@ function MapPage({ roomId }) {
   const currentRoomId = Number(roomId)
 
   const [currentUserId, setCurrentUserId] = useState(null)
+  const [currentGuestId, setCurrentGuestId] = useState(null)
 
   const [currentLocation, setCurrentLocation] = useState(null)
   const [memberLocations, setMemberLocations] = useState([])
@@ -49,7 +51,8 @@ function MapPage({ roomId }) {
 
       if (error) {
         if (guestId) {
-          setCurrentUserId(guestId)
+          setCurrentUserId(null)
+          setCurrentGuestId(guestId)
           return
         }
 
@@ -60,11 +63,13 @@ function MapPage({ roomId }) {
 
       if (user) {
         setCurrentUserId(user.id)
+        setCurrentGuestId(null)
         return
       }
 
       if (guestId) {
-        setCurrentUserId(guestId)
+        setCurrentUserId(null)
+        setCurrentGuestId(guestId)
       }
     }
 
@@ -95,6 +100,19 @@ function MapPage({ roomId }) {
     }
   }, [currentRoomId])
 
+  const getMemberKey = (member) => {
+    return member.userid || member.guestid || member.id
+  }
+
+  const getMemberNickname = (member) => {
+    return (
+      member.profiles?.nickname ||
+      member.room_guests?.nickname ||
+      member.nickname ||
+      '비회원'
+    )
+  }
+
   const loadMemberLocations = async () => {
     if (!currentRoomId) return []
 
@@ -112,7 +130,7 @@ function MapPage({ roomId }) {
 
   const handleCurrentLocation = async () => {
     try {
-      if (!currentUserId) {
+      if (!currentUserId && !currentGuestId) {
         setMessage('사용자 정보를 찾을 수 없습니다. 로그인 상태를 확인해주세요.')
         return
       }
@@ -129,13 +147,23 @@ function MapPage({ roomId }) {
       setCurrentLocation(location)
       setMessage('현재 위치를 가져왔습니다. DB에 저장하는 중입니다.')
 
-      await saveMyLocation({
-        userId: currentUserId,
-        roomId: currentRoomId,
-        latitude: location.lat,
-        longitude: location.lng,
-        accuracy: location.accuracy,
-      })
+      if (currentGuestId) {
+        await saveMyGuestLocation({
+          guestId: currentGuestId,
+          roomId: currentRoomId,
+          latitude: location.lat,
+          longitude: location.lng,
+          accuracy: location.accuracy,
+        })
+      } else {
+        await saveMyLocation({
+          userId: currentUserId,
+          roomId: currentRoomId,
+          latitude: location.lat,
+          longitude: location.lng,
+          accuracy: location.accuracy,
+        })
+      }
 
       const locations = await getRoomMemberLocations(currentRoomId)
       setMemberLocations(locations)
@@ -160,20 +188,24 @@ function MapPage({ roomId }) {
       return
     }
 
-    try {
-      setMessage('모든 멤버의 경로와 이동시간을 계산하는 중입니다.')
+    setMessage('모든 멤버의 경로와 이동시간을 계산하는 중입니다.')
 
-      const routeResults = []
-      const routePaths = []
+    const routeResults = []
+    const routePaths = []
 
-      for (const member of latestLocations) {
+    for (const member of latestLocations) {
+      try {
         if (!member.latitude || !member.longitude) {
           continue
         }
 
-        const previousResult = place.travelResults?.find(
-          (result) => result.userid === member.userid
-        )
+        const memberKey = getMemberKey(member)
+        const nickname = getMemberNickname(member)
+
+        const previousResult = place.travelResults?.find((result) => {
+          const resultKey = result.userid || result.guestid || result.id
+          return resultKey === memberKey
+        })
 
         const mode = previousResult?.mode || 'transit'
 
@@ -195,7 +227,8 @@ function MapPage({ roomId }) {
 
         routeResults.push({
           userid: member.userid,
-          nickname: member.profiles?.nickname || '멤버',
+          guestid: member.guestid,
+          nickname,
           mode,
           duration: timeResult.duration,
           distance: timeResult.distance,
@@ -214,7 +247,8 @@ function MapPage({ roomId }) {
           if (pathResult?.path?.length > 0) {
             routePaths.push({
               userid: member.userid,
-              nickname: member.profiles?.nickname || '멤버',
+              guestid: member.guestid,
+              nickname,
               mode,
               path: pathResult.path,
             })
@@ -227,22 +261,41 @@ function MapPage({ roomId }) {
           if (decodedPath.length > 0) {
             routePaths.push({
               userid: member.userid,
-              nickname: member.profiles?.nickname || '멤버',
+              guestid: member.guestid,
+              nickname,
               mode,
               path: decodedPath,
             })
           }
         }
+      } catch (error) {
+        const nickname = getMemberNickname(member)
+
+        console.error(`${nickname} 경로 계산 오류:`, error)
+
+        routeResults.push({
+          userid: member.userid,
+          guestid: member.guestid,
+          nickname,
+          mode: 'transit',
+          duration: null,
+          distance: null,
+          durationMinutes: null,
+          distanceKm: null,
+          error: '경로 계산 실패',
+        })
       }
-
-      setMemberRouteResults(routeResults)
-      setMemberRoutePaths(routePaths)
-
-      setMessage('중간장소까지 모든 멤버의 이동시간과 경로를 계산했습니다.')
-    } catch (error) {
-      console.error('멤버별 경로 계산 오류:', error)
-      setMessage(error.message || '멤버별 경로 계산 중 오류가 발생했습니다.')
     }
+
+    setMemberRouteResults(routeResults)
+    setMemberRoutePaths(routePaths)
+
+    if (routeResults.some((result) => result.error)) {
+      setMessage('일부 멤버의 경로 계산에 실패했지만, 위치 정보는 표시합니다.')
+      return
+    }
+
+    setMessage('중간장소까지 모든 멤버의 이동시간과 경로를 계산했습니다.')
   }
 
   useEffect(() => {
@@ -302,7 +355,7 @@ function MapPage({ roomId }) {
       const savedMiddlePlace = await saveRoomMiddlePlace({
         roomId: currentRoomId,
         place,
-        confirmedBy: currentUserId,
+        confirmedBy: currentUserId || null,
       })
 
       const confirmedPlace = {
@@ -451,9 +504,9 @@ function MapPage({ roomId }) {
           <h3>DB에 저장된 멤버 현재 위치</h3>
 
           {memberLocations.map((location) => (
-            <div key={location.id}>
+            <div key={getMemberKey(location)}>
               <p>
-                닉네임: {location.profiles?.nickname || '닉네임 없음'}
+                닉네임: {getMemberNickname(location)}
               </p>
               <p>위도: {location.latitude}</p>
               <p>경도: {location.longitude}</p>
@@ -485,10 +538,12 @@ function MapPage({ roomId }) {
           </button>
 
           {memberRouteResults.map((result) => (
-            <div key={result.userid}>
+            <div key={result.userid || result.guestid}>
               <p>
                 {result.nickname} / {getModeLabel(result.mode)} /{' '}
-                {result.durationMinutes}분
+                {result.durationMinutes !== null
+                  ? `${result.durationMinutes}분`
+                  : '계산 실패'}
                 {result.distanceKm ? ` / ${result.distanceKm}km` : ''}
               </p>
             </div>
