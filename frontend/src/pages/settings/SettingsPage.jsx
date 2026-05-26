@@ -4,7 +4,15 @@ import { useGoogleLogin } from '@react-oauth/google'
 import { logoutApi } from '../../api/authApi'
 import { getCurrentUserApi } from '../../api/authApi'
 
-function SettingsPage() { 
+function Toggle({ value, onChange }) {
+  return (
+    <div onClick={onChange} style={{ width: '44px', height: '24px', borderRadius: '12px', cursor: 'pointer', backgroundColor: value ? '#7c79ff' : '#ccc', position: 'relative', transition: 'background-color 0.2s', flexShrink: 0 }}>
+      <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#fff', position: 'absolute', top: '2px', left: value ? '22px' : '2px', transition: 'left 0.2s' }} />
+    </div>
+  );
+}
+
+function SettingsPage() {
   const navigate = useNavigate()
   const [userProfile, setUserProfile] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -40,6 +48,7 @@ function SettingsPage() {
     localStorage.setItem('google_calendar_auto_sync', String(next));
     setGoogleAutoSync(next);
   }
+
 
   // 🚪 로그아웃 처리 핸들러 (응답 대기 없는 초고속 버전 💥)
   const handleLogout = async () => {
@@ -134,21 +143,7 @@ function SettingsPage() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: '14px', color: '#333' }}>확정 일정 자동 추가</span>
-              <div
-                onClick={handleAutoSyncToggle}
-                style={{
-                  width: '44px', height: '24px', borderRadius: '12px', cursor: 'pointer',
-                  backgroundColor: googleAutoSync ? '#4285F4' : '#ccc',
-                  position: 'relative', transition: 'background-color 0.2s',
-                }}
-              >
-                <div style={{
-                  width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#fff',
-                  position: 'absolute', top: '2px',
-                  left: googleAutoSync ? '22px' : '2px',
-                  transition: 'left 0.2s',
-                }} />
-              </div>
+              <Toggle value={googleAutoSync} onChange={handleAutoSyncToggle} />
             </div>
             <p style={{ fontSize: '11px', color: '#aaa', margin: '4px 0 0' }}>
               켜면 투표로 확정된 일정이 구글 캘린더에 자동으로 추가됩니다

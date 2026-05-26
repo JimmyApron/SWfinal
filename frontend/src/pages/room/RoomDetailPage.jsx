@@ -71,7 +71,7 @@ function RoomDetailPage() {
   }
 
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 64px)" }}>
       <header>
         <button onClick={() => navigate("/home")}>←</button>
 
@@ -94,9 +94,9 @@ function RoomDetailPage() {
         <button onClick={() => handleChangeTab("chat")}>채팅</button>
       </div>
 
-      <hr />
+      <hr style={{ margin: "0" }} />
 
-      <div>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: tab === "chat" ? "hidden" : "auto" }}>
         {tab === "schedule" && <ScheduleTab roomId={roomId} />}
         {tab === "location" && <MapPage roomId={roomId} />}
         {tab === "vote" && <VoteListPage roomid={roomId} />}
