@@ -2,6 +2,9 @@ export async function addEventToGoogleCalendar({ title, date, starttime, endtime
   const token = localStorage.getItem("google_calendar_token");
   const expiry = Number(localStorage.getItem("google_calendar_token_expiry") || 0);
   if (!token || Date.now() > expiry) {
+    localStorage.removeItem("google_calendar_token");
+    localStorage.removeItem("google_calendar_token_expiry");
+    localStorage.removeItem("google_calendar_auto_sync");
     throw new Error("구글 캘린더 토큰이 만료됐습니다. 설정에서 다시 연결해주세요.");
   }
 

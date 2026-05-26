@@ -41,27 +41,34 @@ export async function createRoomNotifications({
   title,
   message,
   link,
+  targetUserIds,
 }) {
-  const { data: members, error: memberError } = await supabase
+  let targetMembers = [];
+
+  if (targetUserIds && targetUserIds.length > 0 ) {
+    targetMembers = targetUserIds.map((userid) => ({userid}));
+  } else {
+    const { data: members, error: memberError } = await supabase
     .from("room_members")
     .select("userid")
     .eq("roomid", Number(roomId));
 
-  if (memberError) {
-    console.error("방 멤버 조회 실패:", memberError);
-    console.error(
-      "방 멤버 조회 실패 상세:",
-      JSON.stringify(memberError, null, 2)
+    if (memberError) {
+      console.error("방 멤버 조회 실패:", memberError);
+      console.error(
+        "방 멤버 조회 실패 상세:",
+        JSON.stringify(memberError, null, 2)
+      );
+      throw new Error("방 멤버 조회 실패");
+    }
+
+    console.log("알림 대상 조회 결과:", members);
+    console.log("알림 보낸 사람 senderId:", senderId);
+
+    targetMembers = (members || []).filter(
+      (member) => member.userid && member.userid !== senderId
     );
-    throw new Error("방 멤버 조회 실패");
   }
-
-  console.log("알림 대상 조회 결과:", members);
-  console.log("알림 보낸 사람 senderId:", senderId);
-
-  const targetMembers = (members || []).filter(
-    (member) => member.userid && member.userid !== senderId
-  );
 
   console.log("최종 알림 대상:", targetMembers);
 

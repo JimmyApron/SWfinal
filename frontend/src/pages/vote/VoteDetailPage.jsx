@@ -489,12 +489,16 @@ function VoteDetailPage() {
       );
 
       if (localStorage.getItem("google_calendar_auto_sync") === "true") {
-        await addEventToGoogleCalendar({
-          title: appointmentTitle.trim(),
-          date: pendingOption.optiondate,
-          starttime: pendingOption.starttime,
-          endtime: pendingOption.endtime,
-        });
+        try {
+          await addEventToGoogleCalendar({
+            title: appointmentTitle.trim(),
+            date: pendingOption.optiondate,
+            starttime: pendingOption.starttime,
+            endtime: pendingOption.endtime,
+          });
+        } catch (googleErr) {
+          alert("일정은 확정됐지만 구글 캘린더 추가에 실패했습니다.\n설정에서 다시 연결해주세요.\n\n(" + googleErr.message + ")");
+        }
       }
 
       await loadVote();

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { createVote } from "../../api/voteApi";
+import { sendVoteNotification } from "../notification/VoteNotification";
 
 function VoteCreatePage() {
   const { roomid } = useParams();
@@ -10,7 +11,6 @@ function VoteCreatePage() {
 
   const selectedSchedules = location.state?.selectedSchedules || [];
   const selectedPlaces = location.state?.selectedPlaces || [];
-
   const initialVoteType = location.state?.voteType || "text";
 
   const initialVotePurpose =
@@ -22,13 +22,16 @@ function VoteCreatePage() {
 
   const [currentUser, setCurrentUser] = useState(null);
   const [nickname, setNickname] = useState("");
+  const [roomName, setRoomName] = useState("");
 
   useEffect(() => {
     const fetchUser = async () => {
-      console.log("fetchUser 시작");
-      const { data: { user } } = await supabase.auth.getUser();
-      console.log("user:", user);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       if (!user) return;
+
       setCurrentUser(user);
 
       const { data: profile, error: profileError } = await supabase
@@ -36,12 +39,35 @@ function VoteCreatePage() {
         .select("nickname")
         .eq("id", user.id)
         .maybeSingle();
-      if (profileError) console.error("프로필 조회 실패:", profileError);
-      console.log("profile:", profile);
+
+      if (profileError) {
+        console.error("프로필 조회 실패:", profileError);
+      }
+
       setNickname(profile?.nickname || user.email);
     };
+
+    const fetchRoomName = async () => {
+      if (!roomid) return;
+
+      const { data, error } = await supabase
+        .from("rooms")
+        .select("roomname")
+        .eq("id", Number(roomid))
+        .single();
+
+      if (error) {
+        console.warn("방 이름 조회 실패:", error);
+        setRoomName("참여 중인 방");
+        return;
+      }
+
+      setRoomName(data?.roomname || "참여 중인 방");
+    };
+
     fetchUser();
-  }, []);
+    fetchRoomName();
+  }, [roomid]);
 
   const [title, setTitle] = useState(location.state?.title || "");
 
@@ -54,7 +80,6 @@ function VoteCreatePage() {
         starttime: "",
         endtime: "",
         availablecount: 0,
-
         placename: place.name || "",
         placeaddress: place.address || "",
         placelat: place.lat ?? "",
@@ -71,7 +96,6 @@ function VoteCreatePage() {
         starttime: schedule.starttime,
         endtime: schedule.endtime,
         availablecount: schedule.availableCount || 0,
-
         placename: "",
         placeaddress: "",
         placelat: "",
@@ -103,7 +127,6 @@ function VoteCreatePage() {
       setOptions((prev) =>
         prev.map((option) => ({
           ...makeEmptyOption("date"),
-          optiontype: "date",
           optiondate: option.optiondate || "",
           starttime: option.starttime || "",
           endtime: option.endtime || "",
@@ -117,7 +140,6 @@ function VoteCreatePage() {
       setOptions((prev) =>
         prev.map((option) => ({
           ...makeEmptyOption("place"),
-          optiontype: "place",
           optiontext: option.placename || option.optiontext || "",
           placename: option.placename || option.optiontext || "",
           placeaddress: option.placeaddress || "",
@@ -132,7 +154,6 @@ function VoteCreatePage() {
     setOptions((prev) =>
       prev.map((option) => ({
         ...makeEmptyOption("text"),
-        optiontype: "text",
         optiontext: option.optiontext || option.placename || "",
       }))
     );
@@ -156,7 +177,6 @@ function VoteCreatePage() {
 
   const handleAddOption = () => {
     const currentType = options[0]?.optiontype || "text";
-
     setOptions([...options, makeEmptyOption(currentType)]);
   };
 
@@ -205,28 +225,44 @@ function VoteCreatePage() {
       return;
     }
 
+    let createdVoteId = null;
+
     try {
-      await createVote({
+      const result = await createVote({
         roomid: Number(roomid),
         title,
-        userid: currentUser?.id,
+        userid: currentUser.id,
         nickname,
         options: validOptions,
         ismultiple,
         isanonymous,
         allowaddoption,
-        endtime,
+        endtime: endtimeenabled && endtime ? endtime : null,
         endtimeenabled,
         reminderenabled,
         votetype,
       });
 
-      alert("투표가 생성되었습니다.");
-      navigate(`/rooms/${roomid}?tab=vote`);
+      createdVoteId = result?.id || result?.data?.id || null;
     } catch (error) {
-      console.error("투표 생성 실패:", error);
+      console.error("투표 생성 자체 실패:", error);
       alert(error.message || "투표 생성 실패");
+      return;
     }
+
+    await sendVoteNotification({
+      roomid,
+      title,
+      createdVoteId,
+      currentUser,
+      roomName,
+      endtimeenabled,
+      reminderenabled,
+      endtime,
+    });
+
+    alert("투표가 성공적으로 생성되었습니다.");
+    navigate(`/rooms/${roomid}?tab=${returnTab}`);
   };
 
   return (
@@ -243,7 +279,12 @@ function VoteCreatePage() {
       >
         <button
           onClick={() => navigate(`/rooms/${roomid}?tab=${returnTab}`)}
-          style={{ border: "none", background: "none", fontSize: "24px" }}
+          style={{
+            border: "none",
+            background: "none",
+            fontSize: "24px",
+            cursor: "pointer",
+          }}
         >
           ←
         </button>
@@ -252,7 +293,13 @@ function VoteCreatePage() {
 
         <button
           onClick={handleSubmit}
-          style={{ border: "none", background: "none", fontSize: "16px" }}
+          style={{
+            border: "none",
+            background: "none",
+            fontSize: "16px",
+            cursor: "pointer",
+            fontWeight: "bold",
+          }}
         >
           완료
         </button>
@@ -282,6 +329,7 @@ function VoteCreatePage() {
           ].map((type) => (
             <button
               key={type.value}
+              type="button"
               onClick={() => handleVotetypeChange(type.value)}
               style={{
                 padding: "8px 16px",
@@ -290,8 +338,7 @@ function VoteCreatePage() {
                   votetype === type.value
                     ? "2px solid #7c79ff"
                     : "1px solid #ddd",
-                backgroundColor:
-                  votetype === type.value ? "#f0f0ff" : "#fff",
+                backgroundColor: votetype === type.value ? "#f0f0ff" : "#fff",
                 color: votetype === type.value ? "#7c79ff" : "#333",
                 fontWeight: votetype === type.value ? "bold" : "normal",
                 cursor: "pointer",
@@ -305,10 +352,10 @@ function VoteCreatePage() {
         {votetype === "general" && (
           <div style={{ display: "flex", gap: "10px", marginBottom: "16px" }}>
             <button
+              type="button"
               onClick={() => {
                 const updated = options.map((option) => ({
                   ...makeEmptyOption("text"),
-                  optiontype: "text",
                   optiontext: option.optiontext || option.placename || "",
                 }));
 
@@ -317,21 +364,22 @@ function VoteCreatePage() {
               style={{
                 padding: "10px 22px",
                 borderRadius: "24px",
+                cursor: "pointer",
                 border:
                   currentOptionType === "text"
                     ? "2px solid #333"
                     : "1px solid #ddd",
+                fontWeight: currentOptionType === "text" ? "bold" : "normal",
               }}
             >
               텍스트
             </button>
 
             <button
+              type="button"
               onClick={() => {
                 const updated = options.map((option) => ({
                   ...makeEmptyOption("date"),
-                  optiontype: "date",
-                  optiontext: "",
                   optiondate: option.optiondate || "",
                   starttime: option.starttime || "",
                   endtime: option.endtime || "",
@@ -342,10 +390,12 @@ function VoteCreatePage() {
               style={{
                 padding: "10px 22px",
                 borderRadius: "24px",
+                cursor: "pointer",
                 border:
                   currentOptionType === "date"
                     ? "2px solid #333"
                     : "1px solid #ddd",
+                fontWeight: currentOptionType === "date" ? "bold" : "normal",
               }}
             >
               날짜
@@ -387,49 +437,42 @@ function VoteCreatePage() {
                     handleChangeOption(index, "optiontext", e.target.value)
                   }
                   placeholder="텍스트 입력"
-                  style={{
-                    width: "100%",
-                    height: "48px",
-                    padding: "0 12px",
-                    border: "1px solid #ddd",
-                    boxSizing: "border-box",
-                  }}
+                  style={inputStyle}
                 />
               )}
 
               {option.optiontype === "date" && (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "6px",
-                  }}
-                >
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                   <input
                     type="date"
                     value={option.optiondate}
-                    onChange={(e) => handleChangeOption(index, "optiondate", e.target.value)}
+                    onChange={(e) =>
+                      handleChangeOption(index, "optiondate", e.target.value)
+                    }
+                    style={inputStyle}
                   />
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span style={{ fontSize: "12px", color: "#888", whiteSpace: "nowrap" }}>시작</span>
-                    <input
-                      type="time"
-                      value={option.starttime}
-                      onChange={(e) => handleChangeOption(index, "starttime", e.target.value)}
-                      style={{ flex: 1 }}
-                    />
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span style={{ fontSize: "12px", color: "#888", whiteSpace: "nowrap" }}>종료</span>
-                    <input
-                      type="time"
-                      value={option.endtime}
-                      onChange={(e) => handleChangeOption(index, "endtime", e.target.value)}
-                      style={{ flex: 1 }}
-                      placeholder="미정"
-                    />
-                  </div>
-                  <p style={{ margin: 0, fontSize: "11px", color: "#bbb" }}>종료시간은 선택사항입니다</p>
+
+                  <input
+                    type="time"
+                    value={option.starttime}
+                    onChange={(e) =>
+                      handleChangeOption(index, "starttime", e.target.value)
+                    }
+                    style={inputStyle}
+                  />
+
+                  <input
+                    type="time"
+                    value={option.endtime}
+                    onChange={(e) =>
+                      handleChangeOption(index, "endtime", e.target.value)
+                    }
+                    style={inputStyle}
+                  />
+
+                  <p style={{ margin: 0, fontSize: "11px", color: "#bbb" }}>
+                    종료시간은 선택사항입니다
+                  </p>
                 </div>
               )}
 
@@ -457,11 +500,7 @@ function VoteCreatePage() {
                   <input
                     value={option.placeaddress}
                     onChange={(e) =>
-                      handleChangeOption(
-                        index,
-                        "placeaddress",
-                        e.target.value
-                      )
+                      handleChangeOption(index, "placeaddress", e.target.value)
                     }
                     placeholder="주소"
                     style={inputStyle}
@@ -500,8 +539,15 @@ function VoteCreatePage() {
             </div>
 
             <button
+              type="button"
               onClick={() => handleDeleteOption(index)}
-              style={{ border: "none", background: "none", fontSize: "22px" }}
+              style={{
+                border: "none",
+                background: "none",
+                fontSize: "22px",
+                cursor: "pointer",
+                color: "#888",
+              }}
             >
               ×
             </button>
@@ -509,6 +555,7 @@ function VoteCreatePage() {
         ))}
 
         <button
+          type="button"
           onClick={handleAddOption}
           style={{
             width: "100%",
@@ -517,12 +564,13 @@ function VoteCreatePage() {
             border: "1px solid #ddd",
             backgroundColor: "#fff",
             marginBottom: "20px",
+            cursor: "pointer",
           }}
         >
           +
         </button>
 
-        <label>
+        <label style={labelStyle}>
           <input
             type="checkbox"
             checked={ismultiple}
@@ -531,9 +579,7 @@ function VoteCreatePage() {
           복수 선택
         </label>
 
-        <br />
-
-        <label>
+        <label style={labelStyle}>
           <input
             type="checkbox"
             checked={isanonymous}
@@ -542,9 +588,7 @@ function VoteCreatePage() {
           익명 투표
         </label>
 
-        <br />
-
-        <label>
+        <label style={{ ...labelStyle, marginBottom: "16px" }}>
           <input
             type="checkbox"
             checked={allowaddoption}
@@ -553,13 +597,25 @@ function VoteCreatePage() {
           선택항목 추가 허용
         </label>
 
-        <hr />
+        <hr
+          style={{
+            border: "none",
+            borderTop: "1px solid #eee",
+            margin: "16px 0",
+          }}
+        />
 
-        <label>
+        <label style={labelStyle}>
           <input
             type="checkbox"
             checked={endtimeenabled}
-            onChange={(e) => setEndtimeenabled(e.target.checked)}
+            onChange={(e) => {
+              setEndtimeenabled(e.target.checked);
+              if (!e.target.checked) {
+                setEndtime("");
+                setReminderenabled(false);
+              }
+            }}
           />
           투표 종료시간 설정
         </label>
@@ -568,26 +624,35 @@ function VoteCreatePage() {
           <input
             type="datetime-local"
             value={endtime}
-            onChange={(e) => setEndtime(e.target.value)}
-            style={{
-              display: "block",
-              marginTop: "10px",
-              width: "100%",
-              height: "42px",
+            onChange={(e) => {
+              setEndtime(e.target.value);
+              if (!e.target.value) setReminderenabled(false);
             }}
+            style={inputStyle}
           />
         )}
 
-        <br />
-
-        <label>
-          <input
-            type="checkbox"
-            checked={reminderenabled}
-            onChange={(e) => setReminderenabled(e.target.checked)}
-          />
-          종료 30분 전 알림
-        </label>
+        {(() => {
+          const disabled = !endtimeenabled || !endtime;
+          return (
+            <label
+              style={{
+                ...labelStyle,
+                marginTop: "12px",
+                opacity: disabled ? 0.4 : 1,
+                cursor: disabled ? "not-allowed" : "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={reminderenabled}
+                disabled={disabled}
+                onChange={(e) => setReminderenabled(e.target.checked)}
+              />
+              종료 30분 전 알림
+            </label>
+          );
+        })()}
       </div>
     </div>
   );
@@ -601,7 +666,6 @@ function makeEmptyOption(optiontype) {
     starttime: "",
     endtime: "",
     availablecount: 0,
-
     placename: "",
     placeaddress: "",
     placelat: "",
@@ -617,6 +681,14 @@ const inputStyle = {
   border: "1px solid #ddd",
   borderRadius: "6px",
   boxSizing: "border-box",
+};
+
+const labelStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  marginBottom: "8px",
+  cursor: "pointer",
 };
 
 export default VoteCreatePage;

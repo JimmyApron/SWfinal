@@ -210,7 +210,7 @@ function SettingEditPage() {
   }
 
   return (
-    <div className="edit-container">
+    <div className="setting-container" style={{ paddingBottom: "90px" }}>
       <h2>내 정보 수정 ⚙️</h2>
 
       {/* 📸 1. 프로필 사진 변경 섹션 */}

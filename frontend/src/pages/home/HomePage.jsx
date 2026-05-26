@@ -4,10 +4,19 @@ import { supabase } from "../../lib/supabaseClient";
 import { getMyConfirmedSchedules } from "../../api/scheduleApi";
 import RoomListPage from "../room/RoomListPage";
 
+function getTodayStr() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 function getTimeUntil(date, starttime) {
+  const today = getTodayStr();
+  if (date === today) return "오늘 약속입니다";
   const target = new Date(`${date}T${starttime || "00:00:00"}`);
   const diff = target - new Date();
-  if (diff <= 0) return "지난 일정입니다";
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
   const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
@@ -40,10 +49,10 @@ function HomePage() {
 
       <div style={{ marginBottom: "20px" }}>
         <h3 style={{ marginBottom: "8px" }}>확정된 일정</h3>
-        {confirmedSchedules.length === 0 ? (
+        {confirmedSchedules.filter((s) => s.date >= getTodayStr()).length === 0 ? (
           <p style={{ color: "#aaa", fontSize: "14px" }}>확정된 일정이 없습니다</p>
         ) : (
-          confirmedSchedules.map((s) => {
+          confirmedSchedules.filter((s) => s.date >= getTodayStr()).map((s) => {
             const dateLabel = s.isallday
               ? `${s.date} (하루종일)`
               : `${s.date} ${s.starttime ?? ""} ~${s.endtime ? ` ${s.endtime}` : ""}`;
@@ -60,7 +69,7 @@ function HomePage() {
                 <p style={{ margin: 0, fontSize: "13px", color: "#888" }}>{s.roomname}</p>
                 <p style={{ margin: "4px 0 0", fontWeight: "bold" }}>{s.title || dateLabel}</p>
                 <p style={{ margin: "2px 0 0", fontSize: "13px", color: "#666" }}>{dateLabel}</p>
-                <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#f90" }}>
+                <p style={{ margin: "4px 0 0", fontSize: "12px", color: s.date === getTodayStr() ? "#7c79ff" : "#f90", fontWeight: s.date === getTodayStr() ? "bold" : "normal" }}>
                   {getTimeUntil(s.date, s.starttime)}
                 </p>
                 {s.location

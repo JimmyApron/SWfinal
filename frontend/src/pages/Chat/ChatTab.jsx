@@ -126,14 +126,7 @@ function VoteMessageCard({ meta, navigate }) {
           📊 진행 중인 투표
         </div>
 
-        <div
-          style={{
-            fontWeight: "bold",
-            fontSize: "14px",
-            marginBottom: "8px",
-            lineHeight: 1.4,
-          }}
-        >
+        <div style={{ fontWeight: "bold", fontSize: "14px", marginBottom: "8px" }}>
           {meta.title}
         </div>
 
@@ -168,14 +161,7 @@ function VoteMessageCard({ meta, navigate }) {
         📊 종료된 투표
       </div>
 
-      <div
-        style={{
-          fontWeight: "bold",
-          fontSize: "14px",
-          marginBottom: "10px",
-          lineHeight: 1.4,
-        }}
-      >
+      <div style={{ fontWeight: "bold", fontSize: "14px", marginBottom: "10px" }}>
         {meta.title}
       </div>
 
@@ -247,7 +233,6 @@ function ChatTab({ roomId }) {
   const [content, setContent] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
   const [currentProfile, setCurrentProfile] = useState(null);
-
   const [showMediaOptions, setShowMediaOptions] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
@@ -275,7 +260,6 @@ function ChatTab({ roomId }) {
           nickname: localStorage.getItem("guest_nickname") || "게스트",
           profileimageurl: null,
         });
-
         return;
       }
 
@@ -355,7 +339,10 @@ function ChatTab({ roomId }) {
           filter: `roomid=eq.${roomId}`,
         },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new]);
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === payload.new.id)) return prev;
+            return [...prev, payload.new];
+          });
         }
       )
       .on(
@@ -403,10 +390,9 @@ function ChatTab({ roomId }) {
 
     try {
       const meta = JSON.parse(message.content);
-
       if (meta.__type === "vote") return false;
     } catch {
-      // 일반 텍스트 메시지면 그대로 진행
+      // 일반 텍스트 메시지
     }
 
     return Date.now() - new Date(message.createdat).getTime() < 10 * 60 * 1000;
@@ -426,56 +412,34 @@ function ChatTab({ roomId }) {
       return;
     }
 
-    setMessages((prev) =>
-      prev.map((message) =>
-        message.id === messageId
-          ? {
-              ...message,
-              content: JSON.stringify({ __type: "deleted" }),
-              imageurl: null,
-            }
-          : message
-      )
-    );
-
     setSelectedMsgId(null);
   };
 
-  const handleSheetPointerDown = (event) => {
-    dragStartY.current = event.clientY;
-    isDragging.current = true;
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
+  const sendChatNotification = async () => {
+    try {
+      const { data: activeMembers } = await supabase
+        .from("room_members")
+        .select("userid")
+        .eq("roomid", Number(roomId))
+        .eq("chatnotifenabled", true);
 
-  const handleSheetPointerMove = (event) => {
-    if (!isDragging.current) return;
+      const filteredMemberIds = activeMembers
+        ? activeMembers.map((m) => m.userid).filter((id) => id !== currentUser.id)
+        : [];
 
-    const delta = event.clientY - dragStartY.current;
-
-    if (delta > 0 && sheetRef.current) {
-      sheetRef.current.style.transition = "none";
-      sheetRef.current.style.transform = `translateY(${delta}px)`;
-    }
-  };
-
-  const handleSheetPointerUp = (event) => {
-    if (!isDragging.current) return;
-
-    isDragging.current = false;
-
-    const delta = event.clientY - dragStartY.current;
-    dragStartY.current = null;
-
-    if (delta > 80) {
-      if (sheetRef.current) {
-        sheetRef.current.style.transition = "transform 0.22s ease";
-        sheetRef.current.style.transform = "translateY(100%)";
+      if (filteredMemberIds.length > 0) {
+        await createRoomNotifications({
+          roomId,
+          senderId: currentUser.id,
+          type: "chat_new",
+          title: "새 채팅이 도착했습니다",
+          message: `${currentProfile.nickname || "익명"}님이 메시지를 보냈습니다.`,
+          link: `/rooms/${roomId}?tab=chat`,
+          targetUserIds: filteredMemberIds,
+        });
       }
-
-      setTimeout(() => setShowMediaOptions(false), 220);
-    } else if (sheetRef.current) {
-      sheetRef.current.style.transition = "transform 0.2s ease";
-      sheetRef.current.style.transform = "translateY(0)";
+    } catch (notificationError) {
+      console.error("채팅 알림 생성 실패:", notificationError);
     }
   };
 
@@ -502,18 +466,7 @@ function ChatTab({ roomId }) {
       return;
     }
 
-    try {
-      await createRoomNotifications({
-        roomId,
-        senderId: currentUser.id,
-        type: "chat",
-        title: "새 채팅이 도착했습니다",
-        message: `${currentProfile.nickname || "익명"}님이 메시지를 보냈습니다.`,
-        link: `/rooms/${roomId}?tab=chat`,
-      });
-    } catch (notificationError) {
-      console.error("채팅 알림 생성 실패:", notificationError);
-    }
+    await sendChatNotification();
   };
 
   const openCamera = async () => {
@@ -627,31 +580,13 @@ function ChatTab({ roomId }) {
                 margin: "16px 0 12px",
               }}
             >
-              <div
-                style={{
-                  flex: 1,
-                  height: "1px",
-                  backgroundColor: "#ccc",
-                }}
-              />
+              <div style={{ flex: 1, height: "1px", backgroundColor: "#ccc" }} />
 
-              <span
-                style={{
-                  fontSize: "12px",
-                  color: "#888",
-                  whiteSpace: "nowrap",
-                }}
-              >
+              <span style={{ fontSize: "12px", color: "#888" }}>
                 {formatDateSeparator(message.createdat)}
               </span>
 
-              <div
-                style={{
-                  flex: 1,
-                  height: "1px",
-                  backgroundColor: "#ccc",
-                }}
-              />
+              <div style={{ flex: 1, height: "1px", backgroundColor: "#ccc" }} />
             </div>
           );
 
@@ -746,7 +681,7 @@ function ChatTab({ roomId }) {
                               );
                             }
                           } catch {
-                            // 일반 텍스트 메시지면 그대로 출력
+                            // 일반 텍스트 메시지
                           }
 
                           return message.content;
@@ -786,11 +721,49 @@ function ChatTab({ roomId }) {
           >
             <div
               className="chat-sheet-handle"
-              onPointerDown={handleSheetPointerDown}
-              onPointerMove={handleSheetPointerMove}
-              onPointerUp={handleSheetPointerUp}
-              onPointerCancel={handleSheetPointerUp}
-              style={{ cursor: "grab", padding: "8px 0" }}
+              onMouseDown={(e) => {
+                dragStartY.current = e.clientY;
+                isDragging.current = true;
+                if (sheetRef.current) sheetRef.current.style.transition = "none";
+              }}
+              onMouseMove={(e) => {
+                if (!isDragging.current) return;
+                const delta = e.clientY - dragStartY.current;
+                if (delta > 0 && sheetRef.current) {
+                  sheetRef.current.style.transform = `translateY(${delta}px)`;
+                }
+              }}
+              onMouseUp={(e) => {
+                if (!isDragging.current) return;
+                isDragging.current = false;
+                const delta = e.clientY - dragStartY.current;
+                if (sheetRef.current) {
+                  if (delta > 80) {
+                    sheetRef.current.style.transition = "transform 0.2s";
+                    sheetRef.current.style.transform = "translateY(100%)";
+                    setTimeout(() => setShowMediaOptions(false), 200);
+                  } else {
+                    sheetRef.current.style.transition = "transform 0.2s";
+                    sheetRef.current.style.transform = "";
+                    setTimeout(() => {
+                      if (sheetRef.current) sheetRef.current.style.transition = "";
+                    }, 200);
+                  }
+                }
+                dragStartY.current = null;
+              }}
+              onMouseLeave={() => {
+                if (!isDragging.current) return;
+                isDragging.current = false;
+                if (sheetRef.current) {
+                  sheetRef.current.style.transition = "transform 0.2s";
+                  sheetRef.current.style.transform = "";
+                  setTimeout(() => {
+                    if (sheetRef.current) sheetRef.current.style.transition = "";
+                  }, 200);
+                }
+                dragStartY.current = null;
+              }}
             />
 
             <div className="chat-sheet-grid">
@@ -846,35 +819,8 @@ function ChatTab({ roomId }) {
           />
 
           <div style={{ display: "flex", gap: "16px", marginTop: "20px" }}>
-            <button
-              onClick={closeCamera}
-              style={{
-                padding: "12px 24px",
-                borderRadius: "10px",
-                border: "none",
-                backgroundColor: "#555",
-                color: "#fff",
-                fontSize: "15px",
-                cursor: "pointer",
-              }}
-            >
-              취소
-            </button>
-
-            <button
-              onClick={capturePhoto}
-              style={{
-                padding: "12px 32px",
-                borderRadius: "10px",
-                border: "none",
-                backgroundColor: "#7c79ff",
-                color: "#fff",
-                fontSize: "15px",
-                cursor: "pointer",
-              }}
-            >
-              📷 촬영
-            </button>
+            <button onClick={closeCamera}>취소</button>
+            <button onClick={capturePhoto}>📷 촬영</button>
           </div>
         </div>
       )}

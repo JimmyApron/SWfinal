@@ -1,6 +1,8 @@
 import "./App.css";
+import { useEffect, useRef } from "react";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { supabase } from "./lib/supabaseClient";
 
 import BottomNav from "./components/BottomNav";
 
@@ -35,7 +37,6 @@ const AUTH_PATHS = ["/", "/login", "/signup", "/guest"];
 
 function Layout({ children }) {
   const location = useLocation();
-
   const showNav = !AUTH_PATHS.includes(location.pathname);
 
   return (
@@ -43,16 +44,72 @@ function Layout({ children }) {
       <div className={showNav ? "app-content-with-bottom-nav" : ""}>
         {children}
       </div>
-
       {showNav && <BottomNav />}
     </>
   );
+}
+
+function NotificationListener() {
+  const location = useLocation();
+  const locationRef = useRef(location);
+
+  useEffect(() => {
+    locationRef.current = location;
+  }, [location]);
+
+  useEffect(() => {
+    let channel = null;
+
+    const setupRealtimeNotification = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const myUserId = user.id;
+        const uniqueChannelName = `realtime-notifications-${myUserId}-${Date.now()}`;
+
+        channel = supabase.channel(uniqueChannelName);
+
+        channel.on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "notifications",
+            filter: `receiverid=eq.${myUserId}`,
+          },
+          async (payload) => {
+            console.log("🔔 [실시간 새 알림 도착 완료]:", payload.new.message);
+          }
+        );
+
+        channel.subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            console.log(`📡 [실시간 알림 연결 성공] 채널명: ${uniqueChannelName}`);
+          }
+        });
+      } catch (err) {
+        console.error("실시간 알림 세팅 중 오류 발생:", err);
+      }
+    };
+
+    setupRealtimeNotification();
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, []);
+
+  return null;
 }
 
 function App() {
   return (
     <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
       <BrowserRouter>
+        <NotificationListener />
         <Layout>
           <Routes>
             {/* 첫 대문 화면 */}
