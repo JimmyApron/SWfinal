@@ -95,9 +95,9 @@ function SettingsPage() {
 
       {/* 📸 1. 프로필 사진 구역 */}
       <div className="profile-image-section">
-        {userProfile?.profile_image_url ? (
+        {userProfile?.profileimageurl ? (
           <img 
-            src={userProfile.profile_image_url} 
+            src={userProfile.profileimageurl} 
             alt="프로필 사진" 
             className="profile-avatar"
           />

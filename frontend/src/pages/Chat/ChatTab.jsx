@@ -21,7 +21,7 @@ function ChatTab({ roomId }) {
         setCurrentUser({ id: guestId || "guest" });
         setCurrentProfile({
           nickname: localStorage.getItem("guest_nickname") || "게스트",
-          profile_image_url: null,
+          profileimageurl: null,
         });
         return;
       }
@@ -30,7 +30,7 @@ function ChatTab({ roomId }) {
 
       const { data: profile, error } = await supabase
         .from("profiles")
-        .select("id, nickname, profile_image_url")
+        .select("id, nickname, profileimageurl")
         .eq("id", user.id)
         .maybeSingle();
 
@@ -103,7 +103,7 @@ function ChatTab({ roomId }) {
       roomid: Number(roomId),
       userid: currentUser.id === "guest" ? null : currentUser.id,
       nickname: currentProfile.nickname || "익명",
-      profile_image_url: currentProfile.profile_image_url || null,
+      profileimageurl: currentProfile.profileimageurl || null,
       content: content.trim(),
     };
 
@@ -146,7 +146,7 @@ function ChatTab({ roomId }) {
                 <img
                   className="chat-profile-image"
                   src={
-                    message.profile_image_url ||
+                    message.profileimageurl ||
                     "https://via.placeholder.com/40?text=?"
                   }
                   alt="프로필"

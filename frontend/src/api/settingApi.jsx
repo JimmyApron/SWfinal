@@ -109,7 +109,7 @@ export const deleteUserAccountApi = async () => {
 }
 
 /**
- * 5. 프로필 이미지 업로드 및 URL 업데이트 API (profile_image_url 반영 버전)
+ * 5. 프로필 이미지 업로드 및 URL 업데이트 API (profileimageurl 반영 버전)
  */
 export const uploadAvatarApi = async (file, userId) => {
   try {
@@ -132,7 +132,7 @@ export const uploadAvatarApi = async (file, userId) => {
 //  이렇게 수정! (data,와 .select().single() 제거해서 더 깔끔하게)
 const { error: profileError } = await supabase
   .from('profiles')
-  .update({ profile_image_url: publicUrl })
+  .update({ profileimageurl: publicUrl })
   .eq('id', userId)
 
     if (profileError) throw profileError

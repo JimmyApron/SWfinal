@@ -39,7 +39,7 @@ function SettingEditPage() {
         setUserId(data.user.id)
         setEmail(data.profile.email || '')
         setNickname(data.profile.nickname || '')
-        setProfileImageUrl(data.profile.profile_image_url || '')
+        setProfileImageUrl(data.profile.profileimageurl || '')
       } else {
         alert('로그인이 만료되었습니다.')
         navigate('/login')
