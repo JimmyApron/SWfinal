@@ -1,4 +1,5 @@
 import "./App.css";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import BottomNav from "./components/BottomNav";
 import InviteCodePage from "./pages/auth/InviteCodePage";
@@ -38,6 +39,7 @@ function Layout({ children }) {
 
 function App() {
   return (
+    <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
     <BrowserRouter>
       <Layout>
         <Routes>
@@ -63,6 +65,7 @@ function App() {
         </Routes>
       </Layout>
     </BrowserRouter>
+    </GoogleOAuthProvider>
   );
 }
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { getVoteDetail, deleteVote, updateVote, submitVote, closeVote, addVoteOption, confirmVote } from "../../api/voteApi";
+import { addEventToGoogleCalendar } from "../../api/googleCalendarApi";
 
 function VoteDetailPage() {
   const { roomid, voteid } = useParams();
@@ -158,6 +159,16 @@ function VoteDetailPage() {
     }
     try {
       await confirmVote(Number(voteid), pendingOption, Number(roomid), vote.votetype, appointmentTitle.trim());
+
+      if (localStorage.getItem("google_calendar_auto_sync") === "true") {
+        await addEventToGoogleCalendar({
+          title: appointmentTitle.trim(),
+          date: pendingOption.optiondate,
+          starttime: pendingOption.starttime,
+          endtime: pendingOption.endtime,
+        });
+      }
+
       await loadVote();
       setShowLocationModal(false);
       if (goToLocation) {

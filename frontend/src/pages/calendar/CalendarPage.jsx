@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { getMyConfirmedSchedules } from "../../api/scheduleApi";
 
@@ -18,12 +18,8 @@ async function fetchHolidays(year, month) {
   try {
     const res = await fetch(url);
     const json = await res.json();
-    console.log("공휴일 API 응답:", json);
     const raw = json?.response?.body?.items?.item;
-    if (!raw) {
-      holidayCache[cacheKey] = {};
-      return {};
-    }
+    if (!raw) { holidayCache[cacheKey] = {}; return {}; }
     const items = Array.isArray(raw) ? raw : [raw];
     const result = {};
     items.forEach((item) => {
@@ -33,10 +29,41 @@ async function fetchHolidays(year, month) {
     });
     holidayCache[cacheKey] = result;
     return result;
-  } catch (e) {
-    console.error("공휴일 API 오류:", e);
+  } catch {
     holidayCache[cacheKey] = {};
     return {};
+  }
+}
+
+async function fetchGoogleCalendarEvents(year, month) {
+  const token = localStorage.getItem("google_calendar_token");
+  const expiry = Number(localStorage.getItem("google_calendar_token_expiry") || 0);
+  if (!token || Date.now() > expiry) return [];
+
+  const timeMin = new Date(year, month, 1).toISOString();
+  const timeMax = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
+  const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime&maxResults=100`;
+
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) {
+      if (res.status === 401) {
+        localStorage.removeItem("google_calendar_token");
+        localStorage.removeItem("google_calendar_token_expiry");
+      }
+      return [];
+    }
+    const json = await res.json();
+    return (json.items || []).map((item) => ({
+      id: item.id,
+      title: item.summary || "(제목 없음)",
+      date: (item.start?.date || item.start?.dateTime || "").slice(0, 10),
+      starttime: item.start?.dateTime ? item.start.dateTime.slice(11, 16) : null,
+      endtime: item.end?.dateTime ? item.end.dateTime.slice(11, 16) : null,
+      isGoogle: true,
+    }));
+  } catch {
+    return [];
   }
 }
 
@@ -49,18 +76,17 @@ function CalendarPage() {
   const [showPicker, setShowPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(today.getFullYear());
   const [schedules, setSchedules] = useState([]);
+  const [googleEvents, setGoogleEvents] = useState([]);
   const [holidays, setHolidays] = useState({});
   const [selectedDay, setSelectedDay] = useState(null);
   const touchStartX = useRef(null);
 
   const { year, month } = current;
 
-  // 공휴일 로드
   useEffect(() => {
     fetchHolidays(year, month).then(setHolidays);
   }, [year, month]);
 
-  // 확정 일정 로드
   useEffect(() => {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -73,10 +99,20 @@ function CalendarPage() {
     load();
   }, []);
 
+  useEffect(() => {
+    fetchGoogleCalendarEvents(year, month).then(setGoogleEvents);
+  }, [year, month]);
+
   const scheduleMap = {};
   schedules.forEach((s) => {
     if (!scheduleMap[s.date]) scheduleMap[s.date] = [];
     scheduleMap[s.date].push(s);
+  });
+
+  const googleMap = {};
+  googleEvents.forEach((e) => {
+    if (!googleMap[e.date]) googleMap[e.date] = [];
+    googleMap[e.date].push(e);
   });
 
   const prevMonth = () => {
@@ -106,8 +142,11 @@ function CalendarPage() {
 
   const isToday = (d) => d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
 
-  const selectedSchedules = selectedDay ? (scheduleMap[dateKey(year, month, selectedDay)] || []) : [];
-  const selectedHoliday = selectedDay ? holidays[dateKey(year, month, selectedDay)] : null;
+  const selectedKey = selectedDay ? dateKey(year, month, selectedDay) : null;
+  const selectedSchedules = selectedKey ? (scheduleMap[selectedKey] || []) : [];
+  const selectedGoogleEvents = selectedKey ? (googleMap[selectedKey] || []) : [];
+  const selectedHoliday = selectedKey ? holidays[selectedKey] : null;
+  const hasSelectedContent = selectedHoliday || selectedSchedules.length > 0 || selectedGoogleEvents.length > 0;
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#fff", paddingBottom: "80px" }}>
@@ -147,6 +186,7 @@ function CalendarPage() {
           const key = d ? dateKey(year, month, d) : null;
           const holiday = key ? holidays[key] : null;
           const daySchedules = key ? (scheduleMap[key] || []) : [];
+          const dayGoogle = key ? (googleMap[key] || []) : [];
           const isSun = col === 0;
           const isSat = col === 6;
           const isSelected = selectedDay === d;
@@ -192,13 +232,14 @@ function CalendarPage() {
                       {holiday.name}
                     </p>
                   )}
-                  {daySchedules.length > 0 && (
-                    <div style={{ display: "flex", gap: "2px", marginTop: "2px", flexWrap: "wrap", justifyContent: "center" }}>
-                      {daySchedules.slice(0, 3).map((_, si) => (
-                        <div key={si} style={{ width: "5px", height: "5px", borderRadius: "50%", backgroundColor: "#7c79ff" }} />
-                      ))}
-                    </div>
-                  )}
+                  <div style={{ display: "flex", gap: "2px", marginTop: "2px", flexWrap: "wrap", justifyContent: "center" }}>
+                    {daySchedules.slice(0, 2).map((_, si) => (
+                      <div key={`s${si}`} style={{ width: "5px", height: "5px", borderRadius: "50%", backgroundColor: "#7c79ff" }} />
+                    ))}
+                    {dayGoogle.slice(0, 2).map((_, gi) => (
+                      <div key={`g${gi}`} style={{ width: "5px", height: "5px", borderRadius: "50%", backgroundColor: "#4285F4" }} />
+                    ))}
+                  </div>
                 </>
               )}
             </div>
@@ -206,8 +247,22 @@ function CalendarPage() {
         })}
       </div>
 
+      {/* Legend */}
+      {googleEvents.length > 0 && (
+        <div style={{ display: "flex", gap: "12px", padding: "4px 16px", justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "#888" }}>
+            <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "#7c79ff" }} />
+            확정 일정
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "#888" }}>
+            <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "#4285F4" }} />
+            구글 캘린더
+          </div>
+        </div>
+      )}
+
       {/* Selected day detail */}
-      {selectedDay && (selectedHoliday || selectedSchedules.length > 0) && (
+      {selectedDay && hasSelectedContent && (
         <div style={{ margin: "12px 16px", padding: "14px", backgroundColor: "#f9f9ff", borderRadius: "12px" }}>
           <p style={{ margin: "0 0 8px", fontWeight: "bold", fontSize: "14px", color: "#555" }}>
             {month + 1}월 {selectedDay}일
@@ -221,6 +276,11 @@ function CalendarPage() {
             <p key={s.id} style={{ margin: "4px 0 0", fontSize: "13px", color: "#7c79ff" }}>
               📌 {s.title || s.date} {s.starttime ? `${s.starttime} ~${s.endtime ? ` ${s.endtime}` : ""}` : "(하루종일)"}
               {s.roomname && <span style={{ color: "#aaa", fontSize: "12px" }}> · {s.roomname}</span>}
+            </p>
+          ))}
+          {selectedGoogleEvents.map((e) => (
+            <p key={e.id} style={{ margin: "4px 0 0", fontSize: "13px", color: "#4285F4" }}>
+              📅 {e.title} {e.starttime ? `${e.starttime} ~${e.endtime ? ` ${e.endtime}` : ""}` : "(하루종일)"}
             </p>
           ))}
         </div>
