@@ -1,8 +1,332 @@
+import { useState, useRef, useEffect } from "react";
+import { supabase } from "../../lib/supabaseClient";
+import { getMyConfirmedSchedules } from "../../api/scheduleApi";
+
+const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+const MONTHS = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
+
+const holidayCache = {};
+
+async function fetchHolidays(year, month) {
+  const cacheKey = `${year}-${month}`;
+  if (holidayCache[cacheKey]) return holidayCache[cacheKey];
+
+  const serviceKey = process.env.REACT_APP_HOLIDAY_API_KEY;
+  const mm = String(month + 1).padStart(2, "0");
+  const url = `https://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo?serviceKey=${serviceKey}&solYear=${year}&solMonth=${mm}&_type=json&numOfRows=20`;
+
+  try {
+    const res = await fetch(url);
+    const json = await res.json();
+    const raw = json?.response?.body?.items?.item;
+    if (!raw) { holidayCache[cacheKey] = {}; return {}; }
+    const items = Array.isArray(raw) ? raw : [raw];
+    const result = {};
+    items.forEach((item) => {
+      const d = String(item.locdate);
+      const dateStr = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+      result[dateStr] = { name: item.dateName, public: item.isHoliday === "Y" };
+    });
+    holidayCache[cacheKey] = result;
+    return result;
+  } catch {
+    holidayCache[cacheKey] = {};
+    return {};
+  }
+}
+
+async function fetchGoogleCalendarEvents(year, month) {
+  const token = localStorage.getItem("google_calendar_token");
+  const expiry = Number(localStorage.getItem("google_calendar_token_expiry") || 0);
+  if (!token || Date.now() > expiry) return [];
+
+  const timeMin = new Date(year, month, 1).toISOString();
+  const timeMax = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
+  const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime&maxResults=100`;
+
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) {
+      if (res.status === 401) {
+        localStorage.removeItem("google_calendar_token");
+        localStorage.removeItem("google_calendar_token_expiry");
+      }
+      return [];
+    }
+    const json = await res.json();
+    return (json.items || []).map((item) => ({
+      id: item.id,
+      title: item.summary || "(제목 없음)",
+      date: (item.start?.date || item.start?.dateTime || "").slice(0, 10),
+      starttime: item.start?.dateTime ? item.start.dateTime.slice(11, 16) : null,
+      endtime: item.end?.dateTime ? item.end.dateTime.slice(11, 16) : null,
+      isGoogle: true,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function pad(n) { return String(n).padStart(2, "0"); }
+function dateKey(year, month, day) { return `${year}-${pad(month + 1)}-${pad(day)}`; }
+
 function CalendarPage() {
+  const today = new Date();
+  const [current, setCurrent] = useState({ year: today.getFullYear(), month: today.getMonth() });
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerYear, setPickerYear] = useState(today.getFullYear());
+  const [schedules, setSchedules] = useState([]);
+  const [googleEvents, setGoogleEvents] = useState([]);
+  const [holidays, setHolidays] = useState({});
+  const [selectedDay, setSelectedDay] = useState(null);
+  const touchStartX = useRef(null);
+
+  const { year, month } = current;
+
+  useEffect(() => {
+    fetchHolidays(year, month).then(setHolidays);
+  }, [year, month]);
+
+  useEffect(() => {
+    const load = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      try {
+        const data = await getMyConfirmedSchedules(user.id);
+        setSchedules(data);
+      } catch {}
+    };
+    load();
+  }, []);
+
+  useEffect(() => {
+    fetchGoogleCalendarEvents(year, month).then(setGoogleEvents);
+  }, [year, month]);
+
+  const scheduleMap = {};
+  schedules.forEach((s) => {
+    if (!scheduleMap[s.date]) scheduleMap[s.date] = [];
+    scheduleMap[s.date].push(s);
+  });
+
+  const googleMap = {};
+  googleEvents.forEach((e) => {
+    if (!googleMap[e.date]) googleMap[e.date] = [];
+    googleMap[e.date].push(e);
+  });
+
+  const prevMonth = () => {
+    setSelectedDay(null);
+    setCurrent(({ year: y, month: m }) =>
+      m === 0 ? { year: y - 1, month: 11 } : { year: y, month: m - 1 }
+    );
+  };
+  const nextMonth = () => {
+    setSelectedDay(null);
+    setCurrent(({ year: y, month: m }) =>
+      m === 11 ? { year: y + 1, month: 0 } : { year: y, month: m + 1 }
+    );
+  };
+
+  const handleTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
+  const handleTouchEnd = (e) => {
+    if (touchStartX.current === null) return;
+    const diff = touchStartX.current - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) diff > 0 ? nextMonth() : prevMonth();
+    touchStartX.current = null;
+  };
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [...Array(firstDay).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+
+  const isToday = (d) => d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+
+  const selectedKey = selectedDay ? dateKey(year, month, selectedDay) : null;
+  const selectedSchedules = selectedKey ? (scheduleMap[selectedKey] || []) : [];
+  const selectedGoogleEvents = selectedKey ? (googleMap[selectedKey] || []) : [];
+  const selectedHoliday = selectedKey ? holidays[selectedKey] : null;
+  const hasSelectedContent = selectedHoliday || selectedSchedules.length > 0 || selectedGoogleEvents.length > 0;
+
   return (
-    <div style={{ padding: "20px" }}>
-      <h2>캘린더</h2>
-      <p>캘린더 페이지입니다.</p>
+    <div style={{ minHeight: "100vh", backgroundColor: "#fff", paddingBottom: "80px" }}>
+      {/* Header */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "16px 20px", borderBottom: "1px solid #eee",
+      }}>
+        <button onClick={prevMonth} style={{ border: "none", background: "none", fontSize: "24px", cursor: "pointer", color: "#555" }}>‹</button>
+        <button
+          onClick={() => { setPickerYear(year); setShowPicker(true); }}
+          style={{ border: "none", background: "none", fontSize: "18px", fontWeight: "bold", cursor: "pointer" }}
+        >
+          {year}년 {month + 1}월
+        </button>
+        <button onClick={nextMonth} style={{ border: "none", background: "none", fontSize: "24px", cursor: "pointer", color: "#555" }}>›</button>
+      </div>
+
+      {/* Weekday row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", padding: "8px 4px 4px" }}>
+        {WEEKDAYS.map((d, i) => (
+          <div key={d} style={{
+            textAlign: "center", fontSize: "12px", fontWeight: "bold",
+            color: i === 0 ? "#f44" : i === 6 ? "#7c79ff" : "#888",
+          }}>{d}</div>
+        ))}
+      </div>
+
+      {/* Days grid */}
+      <div
+        style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", padding: "0 2px" }}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        {cells.map((d, i) => {
+          const col = i % 7;
+          const key = d ? dateKey(year, month, d) : null;
+          const holiday = key ? holidays[key] : null;
+          const daySchedules = key ? (scheduleMap[key] || []) : [];
+          const dayGoogle = key ? (googleMap[key] || []) : [];
+          const isSun = col === 0;
+          const isSat = col === 6;
+          const isSelected = selectedDay === d;
+
+          const textColor = isToday(d)
+            ? "#fff"
+            : (holiday?.public || isSun) ? "#f44"
+            : isSat ? "#7c79ff"
+            : "#222";
+
+          return (
+            <div
+              key={i}
+              onClick={() => d && setSelectedDay(isSelected ? null : d)}
+              style={{
+                minHeight: "60px", padding: "4px 2px",
+                display: "flex", flexDirection: "column", alignItems: "center",
+                cursor: d ? "pointer" : "default",
+                backgroundColor: isSelected ? "#f0f0ff" : "transparent",
+                borderRadius: "8px",
+              }}
+            >
+              {d && (
+                <>
+                  <div style={{
+                    width: "28px", height: "28px",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    borderRadius: "50%",
+                    backgroundColor: isToday(d) ? "#7c79ff" : "transparent",
+                    color: textColor,
+                    fontSize: "13px",
+                    fontWeight: isToday(d) ? "bold" : "normal",
+                  }}>
+                    {d}
+                  </div>
+                  {holiday && (
+                    <p style={{
+                      margin: "1px 0 0", fontSize: "9px", lineHeight: 1.2,
+                      color: holiday.public ? "#f44" : "#f90",
+                      textAlign: "center", wordBreak: "keep-all",
+                      maxWidth: "100%", overflow: "hidden",
+                    }}>
+                      {holiday.name}
+                    </p>
+                  )}
+                  <div style={{ display: "flex", gap: "2px", marginTop: "2px", flexWrap: "wrap", justifyContent: "center" }}>
+                    {daySchedules.slice(0, 2).map((_, si) => (
+                      <div key={`s${si}`} style={{ width: "5px", height: "5px", borderRadius: "50%", backgroundColor: "#7c79ff" }} />
+                    ))}
+                    {dayGoogle.slice(0, 2).map((_, gi) => (
+                      <div key={`g${gi}`} style={{ width: "5px", height: "5px", borderRadius: "50%", backgroundColor: "#4285F4" }} />
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      {googleEvents.length > 0 && (
+        <div style={{ display: "flex", gap: "12px", padding: "4px 16px", justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "#888" }}>
+            <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "#7c79ff" }} />
+            확정 일정
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "#888" }}>
+            <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "#4285F4" }} />
+            구글 캘린더
+          </div>
+        </div>
+      )}
+
+      {/* Selected day detail */}
+      {selectedDay && hasSelectedContent && (
+        <div style={{ margin: "12px 16px", padding: "14px", backgroundColor: "#f9f9ff", borderRadius: "12px" }}>
+          <p style={{ margin: "0 0 8px", fontWeight: "bold", fontSize: "14px", color: "#555" }}>
+            {month + 1}월 {selectedDay}일
+          </p>
+          {selectedHoliday && (
+            <p style={{ margin: "0 0 6px", fontSize: "13px", color: selectedHoliday.public ? "#f44" : "#f90" }}>
+              {selectedHoliday.public ? "🎌" : "📅"} {selectedHoliday.name}
+            </p>
+          )}
+          {selectedSchedules.map((s) => (
+            <p key={s.id} style={{ margin: "4px 0 0", fontSize: "13px", color: "#7c79ff" }}>
+              📌 {s.title || s.date} {s.starttime ? `${s.starttime} ~${s.endtime ? ` ${s.endtime}` : ""}` : "(하루종일)"}
+              {s.roomname && <span style={{ color: "#aaa", fontSize: "12px" }}> · {s.roomname}</span>}
+            </p>
+          ))}
+          {selectedGoogleEvents.map((e) => (
+            <p key={e.id} style={{ margin: "4px 0 0", fontSize: "13px", color: "#4285F4" }}>
+              📅 {e.title} {e.starttime ? `${e.starttime} ~${e.endtime ? ` ${e.endtime}` : ""}` : "(하루종일)"}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {/* Year/Month picker modal */}
+      {showPicker && (
+        <div style={{
+          position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)",
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
+        }}>
+          <div style={{ backgroundColor: "#fff", borderRadius: "16px", padding: "24px", width: "300px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+              <button onClick={() => setPickerYear((y) => y - 1)} style={{ border: "none", background: "none", fontSize: "22px", cursor: "pointer" }}>‹</button>
+              <span style={{ fontSize: "18px", fontWeight: "bold" }}>{pickerYear}년</span>
+              <button onClick={() => setPickerYear((y) => y + 1)} style={{ border: "none", background: "none", fontSize: "22px", cursor: "pointer" }}>›</button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+              {MONTHS.map((label, i) => {
+                const selected = pickerYear === year && i === month;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => { setCurrent({ year: pickerYear, month: i }); setSelectedDay(null); setShowPicker(false); }}
+                    style={{
+                      padding: "10px 0", borderRadius: "10px", fontSize: "14px", cursor: "pointer",
+                      border: selected ? "2px solid #7c79ff" : "1px solid #eee",
+                      backgroundColor: selected ? "#f0f0ff" : "#fff",
+                      color: selected ? "#7c79ff" : "#333",
+                      fontWeight: selected ? "bold" : "normal",
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => setShowPicker(false)}
+              style={{ width: "100%", marginTop: "16px", padding: "12px", border: "none", borderRadius: "10px", backgroundColor: "#f5f5f5", fontSize: "15px", cursor: "pointer" }}
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

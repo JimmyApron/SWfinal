@@ -20,18 +20,19 @@ function normalizeCoordinate(primaryValue, fallbackValue) {
 
 /**
  * 투표 옵션 정리 함수
- * 일반 투표, 일정 투표, 중간장소 투표를 모두 처리함
+ * - 일반 투표
+ * - 일정 투표
+ * - 중간장소 투표
+ * 전부 여기서 같은 형태로 정리함
  */
 function normalizeVoteOption(option) {
+  const optiontype = option.optiontype || "text";
+
   return {
-    optiontype: option.optiontype || "text",
+    optiontype,
 
     // 일반 텍스트 / 장소명 공통 표시용
-    optiontext:
-      option.optiontext ||
-      option.placename ||
-      option.name ||
-      null,
+    optiontext: option.optiontext || option.placename || option.name || null,
 
     // 일정 투표용
     optiondate: option.optiondate || null,
@@ -40,24 +41,17 @@ function normalizeVoteOption(option) {
     availablecount: option.availablecount || 0,
 
     // 중간장소 투표용
-    placename:
-      option.placename ||
-      option.name ||
-      option.optiontext ||
-      null,
-    placeaddress:
-      option.placeaddress ||
-      option.address ||
-      null,
+    placename: option.placename || option.name || option.optiontext || null,
+    placeaddress: option.placeaddress || option.address || null,
     placelat: normalizeCoordinate(option.placelat, option.lat),
     placelng: normalizeCoordinate(option.placelng, option.lng),
-    kakaomapurl:
-      option.kakaomapurl ||
-      option.kakaoMapUrl ||
-      null,
+    kakaomapurl: option.kakaomapurl || option.kakaoMapUrl || null,
   };
 }
 
+/**
+ * 투표 생성
+ */
 export async function createVote({
   roomid,
   title,
@@ -119,6 +113,9 @@ export async function createVote({
   return vote;
 }
 
+/**
+ * 방의 투표 목록 불러오기
+ */
 export async function getVotes(roomid) {
   if (!roomid) {
     throw new Error("roomid가 없습니다. 투표 목록을 불러올 수 없습니다.");
@@ -148,6 +145,9 @@ export async function getVotes(roomid) {
   return data;
 }
 
+/**
+ * 투표 상세 불러오기
+ */
 export async function getVoteDetail(voteid) {
   const { data, error } = await supabase
     .from("votes")
@@ -167,6 +167,10 @@ export async function getVoteDetail(voteid) {
   return data;
 }
 
+/**
+ * 투표 제출
+ * 기존에 같은 사용자가 투표한 기록은 지우고 새로 저장함
+ */
 export async function submitVote(voteid, optionids, userid, nickname) {
   await supabase
     .from("voteresponses")
@@ -189,6 +193,9 @@ export async function submitVote(voteid, optionids, userid, nickname) {
   }
 }
 
+/**
+ * 투표 종료
+ */
 export async function closeVote(voteid) {
   const { error } = await supabase
     .from("votes")
@@ -201,6 +208,9 @@ export async function closeVote(voteid) {
   }
 }
 
+/**
+ * 투표 삭제
+ */
 export async function deleteVote(voteid) {
   const { error } = await supabase
     .from("votes")
@@ -216,16 +226,16 @@ export async function deleteVote(voteid) {
 /**
  * 일정 또는 중간장소 확정
  *
- * 중요:
- * - 투표가 종료되었다고 자동 확정되지 않음
- * - 사용자가 확정 버튼을 눌렀을 때만 실행됨
+ * VoteDetailPage에서 5번째 인자는 상황에 따라 다르게 들어올 수 있음.
+ * - schedule: appointmentTitle
+ * - location: currentUser?.id
  */
 export async function confirmVote(
   voteid,
   option,
   roomid,
   votetype,
-  confirmedBy = null
+  extraValue = null
 ) {
   const { error: updateError } = await supabase
     .from("votes")
@@ -238,23 +248,27 @@ export async function confirmVote(
   }
 
   if (votetype === "schedule") {
+    const appointmentTitle =
+      typeof extraValue === "string" && extraValue.trim() !== ""
+        ? extraValue.trim()
+        : null;
+
     await supabase
       .from("confirmed_schedules")
       .delete()
       .eq("voteid", Number(voteid));
 
-    const { error } = await supabase
-      .from("confirmed_schedules")
-      .insert([
-        {
-          roomid: Number(roomid),
-          voteid: Number(voteid),
-          date: option.optiondate,
-          starttime: option.starttime || null,
-          endtime: option.endtime || null,
-          isallday: !option.starttime,
-        },
-      ]);
+    const { error } = await supabase.from("confirmed_schedules").insert([
+      {
+        roomid: Number(roomid),
+        voteid: Number(voteid),
+        title: appointmentTitle,
+        date: option.optiondate,
+        starttime: option.starttime || null,
+        endtime: option.endtime || null,
+        isallday: !option.starttime,
+      },
+    ]);
 
     if (error) {
       console.error("일정 확정 저장 실패:", error);
@@ -265,10 +279,10 @@ export async function confirmVote(
   }
 
   if (votetype === "location") {
+    const confirmedBy = extraValue;
+
     const placeName =
-      option.placename ||
-      option.optiontext ||
-      "확정된 중간장소";
+      option.placename || option.optiontext || "확정된 중간장소";
 
     const placeAddress = option.placeaddress || null;
 
@@ -286,20 +300,20 @@ export async function confirmVote(
         ? Number(option.placelng)
         : null;
 
+    const kakaoMapUrl = option.kakaomapurl || option.kakaoMapUrl || null;
+
     await supabase
       .from("confirmed_locations")
       .delete()
       .eq("voteid", Number(voteid));
 
-    const { error } = await supabase
-      .from("confirmed_locations")
-      .insert([
-        {
-          roomid: Number(roomid),
-          voteid: Number(voteid),
-          placename: placeName,
-        },
-      ]);
+    const { error } = await supabase.from("confirmed_locations").insert([
+      {
+        roomid: Number(roomid),
+        voteid: Number(voteid),
+        placename: placeName,
+      },
+    ]);
 
     if (error) {
       console.error("중간장소 확정 저장 실패:", error);
@@ -308,7 +322,10 @@ export async function confirmVote(
 
     /**
      * 위치 탭에서 확정 중간장소로 다시 불러올 수 있도록 저장
-     * 이 테이블은 새로 만들어야 함.
+     *
+     * 주의:
+     * room_middle_places 테이블에 kakaomapurl 컬럼이 없다면
+     * 아래 upsert에서 에러가 날 수 있어서 kakaomapurl은 넣지 않음.
      */
     if (placeLat !== null && placeLng !== null) {
       const { error: middlePlaceError } = await supabase
@@ -330,13 +347,15 @@ export async function confirmVote(
         throw middlePlaceError;
       }
     }
+
+    return;
   }
 }
 
 /**
  * 투표 항목 추가
  * - 일반 투표: 문자열로 추가 가능
- * - 중간장소 투표: 객체로 좌표까지 추가 가능
+ * - 중간장소 투표: 객체로 좌표/주소/URL까지 추가 가능
  */
 export async function addVoteOption(voteid, option) {
   const optionData =
@@ -366,18 +385,49 @@ export async function addVoteOption(voteid, option) {
   return data;
 }
 
+/**
+ * 투표 기본 정보 수정
+ * - 제목
+ * - 종료시간
+ * - 알림
+ * - 복수선택
+ * - 익명투표
+ * - 항목추가허용
+ */
 export async function updateVote(
   voteid,
-  { title, endtime, endtimeenabled, reminderenabled }
+  {
+    title,
+    endtime,
+    endtimeenabled,
+    reminderenabled,
+    ismultiple,
+    isanonymous,
+    allowaddoption,
+  }
 ) {
+  const updateData = {
+    title,
+    endtime: endtimeenabled ? endtime : null,
+    endtimeenabled,
+    reminderenabled,
+  };
+
+  if (ismultiple !== undefined) {
+    updateData.ismultiple = ismultiple;
+  }
+
+  if (isanonymous !== undefined) {
+    updateData.isanonymous = isanonymous;
+  }
+
+  if (allowaddoption !== undefined) {
+    updateData.allowaddoption = allowaddoption;
+  }
+
   const { error } = await supabase
     .from("votes")
-    .update({
-      title,
-      endtime: endtimeenabled ? endtime : null,
-      endtimeenabled,
-      reminderenabled,
-    })
+    .update(updateData)
     .eq("id", Number(voteid));
 
   if (error) {
@@ -386,6 +436,9 @@ export async function updateVote(
   }
 }
 
+/**
+ * 중간장소 후보 수정
+ */
 export async function updateVoteOption(optionid, option) {
   const { data, error } = await supabase
     .from("voteoptions")

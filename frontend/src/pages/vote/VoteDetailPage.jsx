@@ -11,6 +11,7 @@ import {
   updateVoteOption,
   confirmVote,
 } from "../../api/voteApi";
+import { addEventToGoogleCalendar } from "../../api/googleCalendarApi";
 import KakaoMapView from "../../components/map/KakaoMapView";
 
 function VoteDetailPage() {
@@ -30,10 +31,13 @@ function VoteDetailPage() {
   const [editEndtime, setEditEndtime] = useState("");
   const [editEndtimeEnabled, setEditEndtimeEnabled] = useState(false);
   const [editReminderEnabled, setEditReminderEnabled] = useState(false);
+  const [editIsmultiple, setEditIsmultiple] = useState(false);
+  const [editIsanonymous, setEditIsanonymous] = useState(false);
+  const [editAllowaddoption, setEditAllowaddoption] = useState(false);
+
   const [editPlaceOptions, setEditPlaceOptions] = useState([]);
   const [editDeletedOptionIds, setEditDeletedOptionIds] = useState([]);
 
-  // 중간장소 투표 지도 기능용
   const [openedMapOptionIds, setOpenedMapOptionIds] = useState([]);
   const [newPlaceName, setNewPlaceName] = useState("");
   const [newPlaceAddress, setNewPlaceAddress] = useState("");
@@ -42,6 +46,10 @@ function VoteDetailPage() {
   const [newKakaoMapUrl, setNewKakaoMapUrl] = useState("");
   const [newPickedPlace, setNewPickedPlace] = useState(null);
   const [showPickMap, setShowPickMap] = useState(false);
+
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [pendingOption, setPendingOption] = useState(null);
+  const [appointmentTitle, setAppointmentTitle] = useState("");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user));
@@ -63,11 +71,17 @@ function VoteDetailPage() {
   const loadVote = async () => {
     try {
       const data = await getVoteDetail(Number(voteid));
+
       setVote(data);
+
       setEditTitle(data.title);
       setEditEndtime(data.endtime ? data.endtime.slice(0, 16) : "");
       setEditEndtimeEnabled(data.endtimeenabled || false);
       setEditReminderEnabled(data.reminderenabled || false);
+      setEditIsmultiple(data.ismultiple || false);
+      setEditIsanonymous(data.isanonymous || false);
+      setEditAllowaddoption(data.allowaddoption || false);
+
       setEditPlaceOptions(makeEditablePlaceOptions(data.voteoptions || []));
       setEditDeletedOptionIds([]);
     } catch (error) {
@@ -150,6 +164,9 @@ function VoteDetailPage() {
     setEditEndtime(vote.endtime ? vote.endtime.slice(0, 16) : "");
     setEditEndtimeEnabled(vote.endtimeenabled || false);
     setEditReminderEnabled(vote.reminderenabled || false);
+    setEditIsmultiple(vote.ismultiple || false);
+    setEditIsanonymous(vote.isanonymous || false);
+    setEditAllowaddoption(vote.allowaddoption || false);
     setEditPlaceOptions(makeEditablePlaceOptions(vote.voteoptions || []));
     setEditDeletedOptionIds([]);
     setIsEditMode(true);
@@ -160,6 +177,9 @@ function VoteDetailPage() {
     setEditEndtime(vote.endtime ? vote.endtime.slice(0, 16) : "");
     setEditEndtimeEnabled(vote.endtimeenabled || false);
     setEditReminderEnabled(vote.reminderenabled || false);
+    setEditIsmultiple(vote.ismultiple || false);
+    setEditIsanonymous(vote.isanonymous || false);
+    setEditAllowaddoption(vote.allowaddoption || false);
     setEditPlaceOptions(makeEditablePlaceOptions(vote.voteoptions || []));
     setEditDeletedOptionIds([]);
     setIsEditMode(false);
@@ -426,6 +446,13 @@ function VoteDetailPage() {
       return;
     }
 
+    if (vote.votetype === "schedule") {
+      setPendingOption(option);
+      setAppointmentTitle("");
+      setShowLocationModal(true);
+      return;
+    }
+
     try {
       await confirmVote(
         Number(voteid),
@@ -436,6 +463,51 @@ function VoteDetailPage() {
       );
 
       await loadVote();
+    } catch (error) {
+      alert("확정 실패: " + (error.message || JSON.stringify(error)));
+    }
+  };
+
+  const handleConfirmWithLocation = async (goToLocation) => {
+    if (!pendingOption) {
+      alert("확정할 일정을 찾을 수 없습니다.");
+      return;
+    }
+
+    if (!appointmentTitle.trim()) {
+      alert("약속 이름을 입력하세요.");
+      return;
+    }
+
+    try {
+      await confirmVote(
+        Number(voteid),
+        pendingOption,
+        Number(roomid),
+        vote.votetype,
+        appointmentTitle.trim()
+      );
+
+      if (localStorage.getItem("google_calendar_auto_sync") === "true") {
+        await addEventToGoogleCalendar({
+          title: appointmentTitle.trim(),
+          date: pendingOption.optiondate,
+          starttime: pendingOption.starttime,
+          endtime: pendingOption.endtime,
+        });
+      }
+
+      await loadVote();
+
+      setShowLocationModal(false);
+      setPendingOption(null);
+      setAppointmentTitle("");
+
+      if (goToLocation) {
+        navigate(`/rooms/${roomid}?tab=location`);
+      } else {
+        navigate("/home");
+      }
     } catch (error) {
       alert("확정 실패: " + (error.message || JSON.stringify(error)));
     }
@@ -468,7 +540,7 @@ function VoteDetailPage() {
 
     try {
       await deleteVote(Number(voteid));
-      navigate(`/rooms/${roomid}`, { state: { selectedTab: "vote" } });
+      navigate(`/rooms/${roomid}?tab=vote`);
     } catch (error) {
       alert("투표 삭제 실패");
     }
@@ -494,9 +566,12 @@ function VoteDetailPage() {
     try {
       await updateVote(Number(voteid), {
         title: editTitle,
-        endtime: editEndtime,
+        endtime: editEndtimeEnabled ? editEndtime : null,
         endtimeenabled: editEndtimeEnabled,
         reminderenabled: editReminderEnabled,
+        ismultiple: editIsmultiple,
+        isanonymous: editIsanonymous,
+        allowaddoption: editAllowaddoption,
       });
 
       if (isLocationVote) {
@@ -526,6 +601,126 @@ function VoteDetailPage() {
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#fff" }}>
+      {showLocationModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#fff",
+              borderRadius: "16px",
+              padding: "24px",
+              width: "300px",
+              position: "relative",
+            }}
+          >
+            <button
+              onClick={() => {
+                setShowLocationModal(false);
+                setPendingOption(null);
+                setAppointmentTitle("");
+              }}
+              style={{
+                position: "absolute",
+                top: "12px",
+                right: "12px",
+                border: "none",
+                background: "none",
+                fontSize: "18px",
+                color: "#aaa",
+                cursor: "pointer",
+                lineHeight: 1,
+              }}
+            >
+              ✕
+            </button>
+
+            <h3 style={{ marginBottom: "4px", textAlign: "center" }}>
+              일정이 확정되었습니다!
+            </h3>
+
+            <p
+              style={{
+                color: "#666",
+                fontSize: "13px",
+                textAlign: "center",
+                marginBottom: "16px",
+              }}
+            >
+              약속 이름을 입력해 주세요
+            </p>
+
+            <input
+              type="text"
+              placeholder="예: 팀 회식, 생일 파티..."
+              value={appointmentTitle}
+              onChange={(e) => setAppointmentTitle(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                fontSize: "14px",
+                border: "1px solid #ddd",
+                borderRadius: "10px",
+                boxSizing: "border-box",
+                marginBottom: "16px",
+              }}
+            />
+
+            <p
+              style={{
+                color: "#666",
+                fontSize: "13px",
+                textAlign: "center",
+                marginBottom: "12px",
+              }}
+            >
+              만날 위치를 지금 정하시겠어요?
+            </p>
+
+            <button
+              onClick={() => handleConfirmWithLocation(true)}
+              style={{
+                width: "100%",
+                padding: "12px",
+                marginBottom: "8px",
+                backgroundColor: "#7c79ff",
+                color: "#fff",
+                border: "none",
+                borderRadius: "10px",
+                fontSize: "15px",
+                cursor: "pointer",
+              }}
+            >
+              위치 지금 정하기
+            </button>
+
+            <button
+              onClick={() => handleConfirmWithLocation(false)}
+              style={{
+                width: "100%",
+                padding: "12px",
+                backgroundColor: "#f5f5f5",
+                color: "#333",
+                border: "none",
+                borderRadius: "10px",
+                fontSize: "15px",
+                cursor: "pointer",
+              }}
+            >
+              나중에 정하기
+            </button>
+          </div>
+        </div>
+      )}
+
       <div
         style={{
           height: "56px",
@@ -536,7 +731,6 @@ function VoteDetailPage() {
           borderBottom: "1px solid #eee",
         }}
       >
-        
         <button
           onClick={() => navigate(`/rooms/${roomid}?tab=vote`)}
           style={{ border: "none", background: "none", fontSize: "24px" }}
@@ -559,6 +753,7 @@ function VoteDetailPage() {
             >
               수정
             </button>
+
             <button
               onClick={handleDelete}
               style={{
@@ -584,6 +779,7 @@ function VoteDetailPage() {
             >
               저장
             </button>
+
             <button
               onClick={handleCancelEditMode}
               style={{
@@ -646,14 +842,7 @@ function VoteDetailPage() {
               }}
             />
 
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                marginTop: "12px",
-              }}
-            >
+            <label style={editCheckLabelStyle}>
               <input
                 type="checkbox"
                 checked={editEndtimeEnabled}
@@ -679,20 +868,40 @@ function VoteDetailPage() {
               />
             )}
 
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                marginTop: "12px",
-              }}
-            >
+            <label style={editCheckLabelStyle}>
               <input
                 type="checkbox"
                 checked={editReminderEnabled}
                 onChange={(e) => setEditReminderEnabled(e.target.checked)}
               />
               종료 30분 전 알림
+            </label>
+
+            <label style={editCheckLabelStyle}>
+              <input
+                type="checkbox"
+                checked={editIsmultiple}
+                onChange={(e) => setEditIsmultiple(e.target.checked)}
+              />
+              복수 선택 허용
+            </label>
+
+            <label style={editCheckLabelStyle}>
+              <input
+                type="checkbox"
+                checked={editIsanonymous}
+                onChange={(e) => setEditIsanonymous(e.target.checked)}
+              />
+              익명 투표
+            </label>
+
+            <label style={editCheckLabelStyle}>
+              <input
+                type="checkbox"
+                checked={editAllowaddoption}
+                onChange={(e) => setEditAllowaddoption(e.target.checked)}
+              />
+              항목 추가 허용
             </label>
 
             {isLocationVote && (
@@ -835,7 +1044,8 @@ function VoteDetailPage() {
                             marginTop: 0,
                           }}
                         >
-                          장소명은 필수입니다. 주소, 위도/경도, 카카오맵 URL 중 하나는 입력해야 합니다.
+                          장소명은 필수입니다. 주소, 위도/경도, 카카오맵 URL 중
+                          하나는 입력해야 합니다.
                         </p>
 
                         <button
@@ -895,6 +1105,7 @@ function VoteDetailPage() {
                             borderRadius: "8px",
                           }}
                         />
+
                         <button
                           onClick={handleAddOption}
                           style={{
@@ -982,7 +1193,7 @@ function VoteDetailPage() {
                                 whiteSpace: "nowrap",
                               }}
                             >
-                              확정
+                              확정됨
                             </span>
                           )}
                         </div>
@@ -997,7 +1208,8 @@ function VoteDetailPage() {
                         >
                           {isCreator && vote.votetype !== "general" && (
                             <button
-                              onClick={() => handleConfirm(option)}
+                              onClick={() => !isConfirmed && handleConfirm(option)}
+                              disabled={isConfirmed}
                               style={{
                                 fontSize: "12px",
                                 padding: "3px 10px",
@@ -1009,7 +1221,7 @@ function VoteDetailPage() {
                                   ? "#f0f0ff"
                                   : "#fff",
                                 color: isConfirmed ? "#7c79ff" : "#555",
-                                cursor: "pointer",
+                                cursor: isConfirmed ? "default" : "pointer",
                               }}
                             >
                               {isLocationVote
@@ -1162,6 +1374,7 @@ function VoteDetailPage() {
                     <span style={{ fontSize: "15px", fontWeight: "bold" }}>
                       총 참여 인원
                     </span>
+
                     <span style={{ color: "#7c79ff", fontWeight: "bold" }}>
                       {totalVoters}명
                     </span>
@@ -1220,8 +1433,8 @@ function EditPlaceOptionsPanel({
       <h4 style={{ marginTop: 0 }}>중간장소 후보 수정</h4>
 
       <p style={{ fontSize: "12px", color: "#888" }}>
-        장소명은 필수입니다. 주소, 위도/경도, 카카오맵 URL 중 하나는 입력해야 합니다.
-        위도와 경도는 둘 다 있거나 둘 다 없어야 합니다.
+        장소명은 필수입니다. 주소, 위도/경도, 카카오맵 URL 중 하나는 입력해야
+        합니다. 위도와 경도는 둘 다 있거나 둘 다 없어야 합니다.
       </p>
 
       {editPlaceOptions.map((option, index) => (
@@ -1368,7 +1581,8 @@ function PlaceMapPreview({ option }) {
           }}
         />
         <p style={{ fontSize: "12px", color: "#888", marginBottom: 0 }}>
-          URL 미리보기가 표시되지 않으면 카카오맵에서 페이지 내 표시를 제한한 경우입니다.
+          URL 미리보기가 표시되지 않으면 카카오맵에서 페이지 내 표시를 제한한
+          경우입니다.
         </p>
       </>
     );
@@ -1447,7 +1661,7 @@ function isPlaceOption(option) {
 
 function getOptionLabel(option) {
   if (option.optiontype === "date") {
-    return `${option.optiondate} ${option.starttime}~${option.endtime}`;
+    return `${option.optiondate} ${option.starttime}~${option.endtime || ""}`;
   }
 
   return option.placename || option.optiontext || "이름 없는 장소";
@@ -1457,7 +1671,8 @@ function renderOptionContent(option) {
   if (option.optiontype === "date") {
     return (
       <span>
-        {option.optiondate} / {option.starttime} ~ {option.endtime}
+        {option.optiondate} / {option.starttime}
+        {option.endtime ? ` ~ ${option.endtime}` : ""}
       </span>
     );
   }
@@ -1519,6 +1734,13 @@ const editInputStyle = {
   borderRadius: "8px",
   boxSizing: "border-box",
   marginBottom: "8px",
+};
+
+const editCheckLabelStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  marginTop: "12px",
 };
 
 const mapBoxStyle = {
