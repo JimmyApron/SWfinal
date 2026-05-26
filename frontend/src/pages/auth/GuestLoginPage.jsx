@@ -153,7 +153,7 @@ function GuestLoginPage() {
       localStorage.setItem('guest_nickname', nickname.trim());
 
       setTimeout(() => {
-        navigate(`/rooms/${inviteCode.trim()}`) 
+        navigate(`/rooms/${roomRealId}`)
       }, 1200)
     } catch (error) {
       setMessage('입장에 실패했습니다.')
@@ -175,7 +175,7 @@ function GuestLoginPage() {
             placeholder="초대코드를 입력하세요"
             value={inviteCode}
             disabled={isRoomVerified}
-            onChange={(e) => setInviteCode(e.target.value)}
+            onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
           />
           {!isRoomVerified && <button type="submit">방 확인하기</button>}
         </form>

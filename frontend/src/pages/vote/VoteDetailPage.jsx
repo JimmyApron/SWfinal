@@ -515,6 +515,36 @@ function VoteDetailPage() {
           </div>
         )}
 
+        <button
+          onClick={async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) { alert("로그인이 필요합니다."); return; }
+            const nickname = user?.user_metadata?.nickname || user?.email || "익명";
+            const { data: profile } = await supabase.from("profiles").select("nickname, profileimageurl").eq("id", user.id).maybeSingle();
+            const meta = JSON.stringify({
+              __type: "vote",
+              voteid: Number(voteid),
+              title: vote.title,
+              roomid: Number(roomid),
+              isclosed: vote.isclosed || false,
+              endtime: vote.endtime || null,
+              endtimeenabled: vote.endtimeenabled || false,
+            });
+            const { error } = await supabase.from("room_messages").insert([{
+              roomid: Number(roomid),
+              userid: user.id,
+              nickname: profile?.nickname || nickname,
+              profileimageurl: profile?.profileimageurl || null,
+              content: meta,
+            }]);
+            if (error) { alert("공유 실패: " + error.message); return; }
+            navigate(`/rooms/${roomid}?tab=chat`);
+          }}
+          style={{ width: "100%", marginTop: "12px", padding: "12px", border: "1px solid #7c79ff", borderRadius: "8px", backgroundColor: "#fff", color: "#7c79ff", fontSize: "15px", cursor: "pointer" }}
+        >
+          💬 채팅에 공유
+        </button>
+
         <div style={{ marginTop: "20px", paddingTop: "16px", borderTop: "1px solid #eee" }}>
           <div
             onClick={() => !vote.isanonymous && setShowParticipants(!showParticipants)}
