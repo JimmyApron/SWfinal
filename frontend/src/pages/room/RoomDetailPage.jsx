@@ -45,7 +45,6 @@ function RoomDetailPage() {
 
   // 📥 방 정보 및 전체 멤버(회원+게스트) 가져오기 + 내 알림 설정 데이터 연동
   const fetchRoomData = async () => {
-    // 1. 방 정보 및 회원 수 카운트
     const { data: roomData, error: roomError } = await supabase
       .from("rooms")
       .select(`*, room_members(count)`)
@@ -59,7 +58,6 @@ function RoomDetailPage() {
     setRoom(roomData);
     setNewRoomName(roomData.roomname);
 
-    // 2. room_members 외래키 연동을 통해 profiles 테이블의 profileimageurl 조인해서 땡겨오기
     const { data: memberData, error: memberError } = await supabase
       .from("room_members")
       .select(`
@@ -78,7 +76,6 @@ function RoomDetailPage() {
       console.error("회원 목록 조회 실패:", memberError);
     }
 
-    // 3. room_guests 테이블에서 비회원 게스트 닉네임 목록 땡겨오기
     const { data: guestData, error: guestError } = await supabase
       .from("room_guests")
       .select("id, nickname")
@@ -88,11 +85,9 @@ function RoomDetailPage() {
       setGuests(guestData || []);
     }
 
-    // 4. 🔔 내 알림 설정 데이터 연동 (회원 / 비회원 크로스 체크) ⭐
     const { data: { user } } = await supabase.auth.getUser();
 
     if (user && user.id) {
-      // 🟢 [회원] room_members에서 알림 정보 가져오기
       const { data: myMemberData, error: myMemberError } = await supabase
         .from("room_members")
         .select("schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled")
@@ -109,7 +104,6 @@ function RoomDetailPage() {
         });
       }
     } else {
-      // 🟡 [비회원] sessionStorage에 있는 닉네임으로 room_guests에서 알림 정보 가져오기
       const guestNickname = sessionStorage.getItem("guestNickname");
       if (guestNickname) {
         const { data: myGuestData, error: myGuestError } = await supabase
@@ -151,7 +145,6 @@ function RoomDetailPage() {
     }
   };
 
-  // ✏️ 1. 방 제목 변경 기능
   const handleUpdateRoomName = async () => {
     if (!newRoomName.trim()) return;
     const { error } = await supabase
@@ -169,14 +162,10 @@ function RoomDetailPage() {
     }
   };
 
-  // 🔔 2. 탭별 알림 세부 설정 토글 함수 (회원 + 비회원 동시 커버 버전!) ⭐
   const handleToggleNotification = async (tabName) => {
     const { data: { user } } = await supabase.auth.getUser();
-    
-    // 바뀔 새로운 상태 계산 (기존 상태 반대로 뒤집기)
     const nextValue = !notifSettings[tabName];
 
-    // DB 컬럼명 매핑 (언더바 없는 소문자 4종 세트)
     const dbColumnMap = {
       schedule: "schedulenotifenabled",
       location: "locationnotifenabled",
@@ -186,7 +175,6 @@ function RoomDetailPage() {
     const columnName = dbColumnMap[tabName];
 
     if (user && user.id) {
-      // 🟢 [회원] room_members 테이블 업데이트
       const { error } = await supabase
         .from("room_members")
         .update({ [columnName]: nextValue })
@@ -199,7 +187,6 @@ function RoomDetailPage() {
         return;
       }
     } else {
-      // 🟡 [비회원] room_guests 테이블 업데이트
       const guestNickname = sessionStorage.getItem("guestNickname");
       if (!guestNickname) {
         alert("게스트 정보를 확인할 수 없어 설정을 변경할 수 없습니다.");
@@ -219,14 +206,12 @@ function RoomDetailPage() {
       }
     }
 
-    // 🎯 DB에 정상적으로 저장이 성공 완료된 경우에만 리액트 화면 State 변경!
     setNotifSettings((prev) => ({
       ...prev,
       [tabName]: nextValue,
     }));
   };
 
-  // 🚪 3. 방 나가기 기능
   const handleLeaveRoom = async () => {
     if (!window.confirm("정말 이 방을 나가시겠습니까? 나가면 내역이 삭제됩니다.")) return;
 
@@ -274,7 +259,8 @@ function RoomDetailPage() {
   }
 
   return (
-    <div style={{ position: "relative", minHeight: "100vh", overflowX: "hidden" }}>
+    /* 🎯 [핵심 보정] 하단 바 네비게이션 가림 방지를 위해 전용 패딩하단 공간과 박스 사이징을 강제 부여합니다! */
+    <div style={{ position: "relative", minHeight: "100vh", paddingBottom: "90px", boxSizing: "border-box", overflowX: "hidden" }}>
       {/* 헤더 영역 */}
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px", backgroundColor: "#f5f5f5" }}>
         <button onClick={() => navigate("/home")}>←</button>
@@ -306,10 +292,11 @@ function RoomDetailPage() {
 
       {/* 우측 사이드바 드로어 UI */}
       {isSidebarOpen && (
+        /* 🛡️ 하단 네비게이션 바 위로 확실히 덮이도록 zIndex를 2000으로 조정해 안전 가드 */
         <div style={{
           position: "fixed", top: 0, right: 0, width: "270px", height: "100vh",
           backgroundColor: "white", boxShadow: "-2px 0 5px rgba(0,0,0,0.2)",
-          zIndex: 1000, padding: "20px", display: "flex", flexDirection: "column", justifyContent: "space-between",
+          zIndex: 2000, padding: "20px", display: "flex", flexDirection: "column", justifyContent: "space-between",
           boxSizing: "border-box"
         }}>
           <div>
@@ -317,7 +304,6 @@ function RoomDetailPage() {
             <h3 style={{ marginTop: 0 }}>방 설정</h3>
             <hr />
 
-            {/* 1️⃣ 방 제목 실시간 변경 */}
             <div style={{ marginBottom: "25px" }}>
               <h4 style={{ margin: "0 0 10px 0" }}>✏️ 방 제목 변경</h4>
               {isEditingTitle ? (
@@ -339,7 +325,6 @@ function RoomDetailPage() {
               )}
             </div>
 
-            {/* 2️⃣ 탭별 알림 세부 설정 (ON 단추 보라색 컬러 테마 매칭) */}
             <div style={{ marginBottom: "25px" }}>
               <h4 style={{ margin: "0 0 10px 0" }}>🔔 탭별 알림 온/오프</h4>
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -368,15 +353,11 @@ function RoomDetailPage() {
               </div>
             </div>
 
-            {/* 3️⃣ 참여자 명단 출력 */}
             <div style={{ marginBottom: "25px" }}>
               <h4 style={{ margin: "0 0 10px 0" }}>👥 참여자 명단 ({members.length + guests.length}명)</h4>
               <div style={{ maxHeight: "230px", overflowY: "auto", border: "1px solid #eee", padding: "10px", borderRadius: "5px", backgroundColor: "#fafafa" }}>
-                
-                {/* 🟢 회원 리스트 출력 */}
                 {members.map((m) => {
                   const imageUrl = m.profiles?.profileimageurl;
-
                   return (
                     <div key={m.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "6px 0", borderBottom: "1px solid #f0f0f0" }}>
                       {imageUrl ? (
@@ -396,7 +377,6 @@ function RoomDetailPage() {
                   );
                 })}
 
-                {/* 🟡 비회원 게스트 리스트 출력 */}
                 {guests.map((g) => (
                   <div key={g.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "6px 0", borderBottom: "1px solid #f0f0f0" }}>
                     <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "#ffeaa7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}>🐱</div>
@@ -414,7 +394,6 @@ function RoomDetailPage() {
             </div>
           </div>
 
-          {/* 4️⃣ 방 나가기 버튼 */}
           <div>
             <hr />
             <button 
