@@ -40,12 +40,19 @@ function MapPage({ roomId }) {
 
   useEffect(() => {
     const fetchUser = async () => {
+      const guestId = localStorage.getItem('guest_id')
+
       const {
         data: { user },
         error,
       } = await supabase.auth.getUser()
 
       if (error) {
+        if (guestId) {
+          setCurrentUserId(guestId)
+          return
+        }
+
         console.error('사용자 정보 조회 오류:', error)
         setMessage('사용자 정보를 불러오지 못했습니다.')
         return
@@ -53,6 +60,11 @@ function MapPage({ roomId }) {
 
       if (user) {
         setCurrentUserId(user.id)
+        return
+      }
+
+      if (guestId) {
+        setCurrentUserId(guestId)
       }
     }
 

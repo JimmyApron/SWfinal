@@ -49,7 +49,7 @@ export async function getMyLocation(userId, roomId) {
       profiles (
         id,
         nickname,
-        profile_image_url
+        profile_image_url:profileimageurl
       )
     `)
     .eq('userid', userId)
@@ -75,7 +75,7 @@ export async function getRoomMemberLocations(roomId) {
       profiles (
         id,
         nickname,
-        profile_image_url
+        profile_image_url:profileimageurl
       )
     `)
     .eq('roomid', roomId)

@@ -1,5 +1,23 @@
 import { supabase } from "../lib/supabaseClient";
 
+function hasValue(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim() !== "";
+  return value !== "";
+}
+
+function normalizeCoordinate(primaryValue, fallbackValue) {
+  if (hasValue(primaryValue)) {
+    return Number(primaryValue);
+  }
+
+  if (hasValue(fallbackValue)) {
+    return Number(fallbackValue);
+  }
+
+  return null;
+}
+
 /**
  * 투표 옵션 정리 함수
  * 일반 투표, 일정 투표, 중간장소 투표를 모두 처리함
@@ -31,18 +49,8 @@ function normalizeVoteOption(option) {
       option.placeaddress ||
       option.address ||
       null,
-    placelat:
-      option.placelat !== undefined && option.placelat !== ""
-        ? Number(option.placelat)
-        : option.lat !== undefined && option.lat !== ""
-        ? Number(option.lat)
-        : null,
-    placelng:
-      option.placelng !== undefined && option.placelng !== ""
-        ? Number(option.placelng)
-        : option.lng !== undefined && option.lng !== ""
-        ? Number(option.lng)
-        : null,
+    placelat: normalizeCoordinate(option.placelat, option.lat),
+    placelng: normalizeCoordinate(option.placelng, option.lng),
     kakaomapurl:
       option.kakaomapurl ||
       option.kakaoMapUrl ||
@@ -376,4 +384,20 @@ export async function updateVote(
     console.error("투표 수정 실패:", error);
     throw error;
   }
+}
+
+export async function updateVoteOption(optionid, option) {
+  const { data, error } = await supabase
+    .from("voteoptions")
+    .update(normalizeVoteOption(option))
+    .eq("id", Number(optionid))
+    .select()
+    .single();
+
+  if (error) {
+    console.error("투표 옵션 수정 실패:", error);
+    throw error;
+  }
+
+  return data;
 }

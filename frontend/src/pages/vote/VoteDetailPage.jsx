@@ -8,6 +8,7 @@ import {
   submitVote,
   closeVote,
   addVoteOption,
+  updateVoteOption,
   confirmVote,
 } from "../../api/voteApi";
 import KakaoMapView from "../../components/map/KakaoMapView";
@@ -29,16 +30,35 @@ function VoteDetailPage() {
   const [editEndtime, setEditEndtime] = useState("");
   const [editEndtimeEnabled, setEditEndtimeEnabled] = useState(false);
   const [editReminderEnabled, setEditReminderEnabled] = useState(false);
+  const [editPlaceOptions, setEditPlaceOptions] = useState([]);
+  const [editDeletedOptionIds, setEditDeletedOptionIds] = useState([]);
 
   // 중간장소 투표 지도 기능용
-  const [mapOption, setMapOption] = useState(null);
+  const [openedMapOptionIds, setOpenedMapOptionIds] = useState([]);
   const [newPlaceName, setNewPlaceName] = useState("");
+  const [newPlaceAddress, setNewPlaceAddress] = useState("");
+  const [newPlaceLat, setNewPlaceLat] = useState("");
+  const [newPlaceLng, setNewPlaceLng] = useState("");
+  const [newKakaoMapUrl, setNewKakaoMapUrl] = useState("");
   const [newPickedPlace, setNewPickedPlace] = useState(null);
   const [showPickMap, setShowPickMap] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user));
   }, []);
+
+  const makeEditablePlaceOptions = (options = []) =>
+    options.map((option) => ({
+      id: option.id,
+      optiontype: option.optiontype || "place",
+      optiontext: option.optiontext || "",
+      placename: option.placename || option.optiontext || "",
+      placeaddress: option.placeaddress || "",
+      placelat: option.placelat ?? "",
+      placelng: option.placelng ?? "",
+      kakaomapurl: option.kakaomapurl || option.kakaoMapUrl || "",
+      isNew: false,
+    }));
 
   const loadVote = async () => {
     try {
@@ -48,6 +68,8 @@ function VoteDetailPage() {
       setEditEndtime(data.endtime ? data.endtime.slice(0, 16) : "");
       setEditEndtimeEnabled(data.endtimeenabled || false);
       setEditReminderEnabled(data.reminderenabled || false);
+      setEditPlaceOptions(makeEditablePlaceOptions(data.voteoptions || []));
+      setEditDeletedOptionIds([]);
     } catch (error) {
       console.error("투표 상세 불러오기 실패:", error);
       alert("투표 상세 불러오기 실패");
@@ -123,29 +145,225 @@ function VoteDetailPage() {
     setSelectedOptions(vote.voteoptions.map((o) => o.id));
   };
 
+  const handleEnterEditMode = () => {
+    setEditTitle(vote.title);
+    setEditEndtime(vote.endtime ? vote.endtime.slice(0, 16) : "");
+    setEditEndtimeEnabled(vote.endtimeenabled || false);
+    setEditReminderEnabled(vote.reminderenabled || false);
+    setEditPlaceOptions(makeEditablePlaceOptions(vote.voteoptions || []));
+    setEditDeletedOptionIds([]);
+    setIsEditMode(true);
+  };
+
+  const handleCancelEditMode = () => {
+    setEditTitle(vote.title);
+    setEditEndtime(vote.endtime ? vote.endtime.slice(0, 16) : "");
+    setEditEndtimeEnabled(vote.endtimeenabled || false);
+    setEditReminderEnabled(vote.reminderenabled || false);
+    setEditPlaceOptions(makeEditablePlaceOptions(vote.voteoptions || []));
+    setEditDeletedOptionIds([]);
+    setIsEditMode(false);
+  };
+
+  const handleChangeEditPlaceOption = (index, field, value) => {
+    setEditPlaceOptions((prev) =>
+      prev.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              [field]: value,
+              ...(field === "placename" ? { optiontext: value } : {}),
+            }
+          : item
+      )
+    );
+  };
+
+  const handleAddEditPlaceOption = () => {
+    setEditPlaceOptions((prev) => [
+      ...prev,
+      {
+        id: null,
+        optiontype: "place",
+        optiontext: "",
+        placename: "",
+        placeaddress: "",
+        placelat: "",
+        placelng: "",
+        kakaomapurl: "",
+        isNew: true,
+      },
+    ]);
+  };
+
+  const handleRemoveEditPlaceOption = (index) => {
+    const targetOption = editPlaceOptions[index];
+
+    if (!targetOption) return;
+
+    const optionName =
+      targetOption.placename || targetOption.optiontext || "이 후보";
+
+    if (!targetOption.isNew) {
+      const ok = window.confirm(
+        `"${optionName}" 후보를 삭제할까요? 저장 버튼을 눌러야 실제로 반영됩니다.`
+      );
+
+      if (!ok) return;
+    }
+
+    if (targetOption.id) {
+      setEditDeletedOptionIds((prev) =>
+        prev.includes(targetOption.id) ? prev : [...prev, targetOption.id]
+      );
+
+      setOpenedMapOptionIds((prev) =>
+        prev.filter((id) => id !== targetOption.id)
+      );
+    }
+
+    setEditPlaceOptions((prev) =>
+      prev.filter((_, itemIndex) => itemIndex !== index)
+    );
+  };
+
+  const handleToggleMapOption = (option) => {
+    if (!hasAnyMapInfo(option)) {
+      alert("지도정보가 없습니다.");
+      return;
+    }
+
+    setOpenedMapOptionIds((prev) => {
+      if (prev.includes(option.id)) {
+        return prev.filter((id) => id !== option.id);
+      }
+
+      return [...prev, option.id];
+    });
+  };
+
+  const validatePlaceOptionForSave = (option) => {
+    if (!option.placename.trim()) {
+      return "중간장소 후보의 장소명을 모두 입력하세요.";
+    }
+
+    const hasLat = hasValue(option.placelat);
+    const hasLng = hasValue(option.placelng);
+
+    if ((hasLat && !hasLng) || (!hasLat && hasLng)) {
+      return "위도와 경도는 둘 다 입력해야 합니다.";
+    }
+
+    const latNumber = normalizeCoordinate(option.placelat);
+    const lngNumber = normalizeCoordinate(option.placelng);
+
+    if (
+      (hasLat && Number.isNaN(latNumber)) ||
+      (hasLng && Number.isNaN(lngNumber))
+    ) {
+      return "위도와 경도는 숫자로 입력해야 합니다.";
+    }
+
+    return null;
+  };
+
+  const toPlaceOptionPayload = (option) => {
+    const latValue = normalizeCoordinate(option.placelat);
+    const lngValue = normalizeCoordinate(option.placelng);
+
+    return {
+      optiontype: "place",
+      optiontext: option.placename.trim(),
+      placename: option.placename.trim(),
+      placeaddress: option.placeaddress.trim() || null,
+      placelat: latValue,
+      placelng: lngValue,
+      kakaomapurl: option.kakaomapurl.trim() || null,
+    };
+  };
+
+  const deleteVoteOptionFromDatabase = async (optionId) => {
+    const { error: responseDeleteError } = await supabase
+      .from("voteresponses")
+      .delete()
+      .eq("optionid", optionId);
+
+    if (responseDeleteError) {
+      console.error("삭제할 후보의 투표 응답 삭제 실패:", responseDeleteError);
+      throw responseDeleteError;
+    }
+
+    const { error: optionDeleteError } = await supabase
+      .from("voteoptions")
+      .delete()
+      .eq("id", optionId);
+
+    if (optionDeleteError) {
+      console.error("투표 후보 삭제 실패:", optionDeleteError);
+      throw optionDeleteError;
+    }
+  };
+
   const handleAddOption = async () => {
     try {
       let newOption;
 
       if (isLocationVote) {
-        if (!newPickedPlace?.lat || !newPickedPlace?.lng) {
-          alert("지도에서 추가할 위치를 먼저 클릭하세요.");
+        const placeName = newPlaceName.trim();
+
+        if (!placeName) {
+          alert("장소명을 입력하세요.");
           return;
         }
 
-        const placeName = newPlaceName.trim() || "지도에서 선택한 위치";
+        const inputLat = newPickedPlace?.lat ?? newPlaceLat.trim();
+        const inputLng = newPickedPlace?.lng ?? newPlaceLng.trim();
+
+        const hasLat = hasValue(inputLat);
+        const hasLng = hasValue(inputLng);
+
+        if ((hasLat && !hasLng) || (!hasLat && hasLng)) {
+          alert("위도와 경도는 둘 다 입력해야 합니다.");
+          return;
+        }
+
+        const latNumber = hasLat ? Number(inputLat) : null;
+        const lngNumber = hasLng ? Number(inputLng) : null;
+
+        if (
+          (hasLat && Number.isNaN(latNumber)) ||
+          (hasLng && Number.isNaN(lngNumber))
+        ) {
+          alert("위도와 경도는 숫자로 입력해야 합니다.");
+          return;
+        }
+
+        if (
+          !hasValue(newPlaceAddress) &&
+          !(hasLat && hasLng) &&
+          !hasValue(newKakaoMapUrl)
+        ) {
+          alert(
+            "지도정보가 없습니다. 주소, 위도/경도, 카카오맵 URL 중 하나는 입력해야 합니다."
+          );
+          return;
+        }
 
         newOption = await addVoteOption(Number(voteid), {
           optiontype: "place",
           optiontext: placeName,
           placename: placeName,
-          placeaddress: "직접 선택한 위치",
-          placelat: newPickedPlace.lat,
-          placelng: newPickedPlace.lng,
-          kakaomapurl: null,
+          placeaddress: newPlaceAddress.trim() || null,
+          placelat: latNumber,
+          placelng: lngNumber,
+          kakaomapurl: newKakaoMapUrl.trim() || null,
         });
 
         setNewPlaceName("");
+        setNewPlaceAddress("");
+        setNewPlaceLat("");
+        setNewPlaceLng("");
+        setNewKakaoMapUrl("");
         setNewPickedPlace(null);
         setShowPickMap(false);
       } else {
@@ -194,6 +412,11 @@ function VoteDetailPage() {
 
   const handleConfirm = async (option) => {
     const typeLabel = vote.votetype === "schedule" ? "일정" : "중간장소";
+
+    if (vote.votetype === "location" && !hasAnyMapInfo(option)) {
+      alert("위치정보를 등록해주세요.");
+      return;
+    }
 
     if (
       !window.confirm(
@@ -257,6 +480,17 @@ function VoteDetailPage() {
       return;
     }
 
+    if (isLocationVote) {
+      for (const option of editPlaceOptions) {
+        const errorMessage = validatePlaceOptionForSave(option);
+
+        if (errorMessage) {
+          alert(errorMessage);
+          return;
+        }
+      }
+    }
+
     try {
       await updateVote(Number(voteid), {
         title: editTitle,
@@ -265,17 +499,28 @@ function VoteDetailPage() {
         reminderenabled: editReminderEnabled,
       });
 
-      setVote((prev) => ({
-        ...prev,
-        title: editTitle,
-        endtime: editEndtimeEnabled ? editEndtime : null,
-        endtimeenabled: editEndtimeEnabled,
-        reminderenabled: editReminderEnabled,
-      }));
+      if (isLocationVote) {
+        for (const deletedOptionId of editDeletedOptionIds) {
+          await deleteVoteOptionFromDatabase(deletedOptionId);
+        }
 
+        for (const option of editPlaceOptions) {
+          const optionPayload = toPlaceOptionPayload(option);
+
+          if (option.id) {
+            await updateVoteOption(option.id, optionPayload);
+          } else {
+            await addVoteOption(Number(voteid), optionPayload);
+          }
+        }
+      }
+
+      await loadVote();
+      setEditDeletedOptionIds([]);
       setIsEditMode(false);
     } catch (error) {
-      alert("투표 수정 실패");
+      console.error("투표 수정 실패:", error);
+      alert("투표 수정 실패: " + (error.message || JSON.stringify(error)));
     }
   };
 
@@ -291,10 +536,9 @@ function VoteDetailPage() {
           borderBottom: "1px solid #eee",
         }}
       >
+        
         <button
-          onClick={() =>
-            navigate(`/rooms/${roomid}`, { state: { selectedTab: "vote" } })
-          }
+          onClick={() => navigate(`/rooms/${roomid}?tab=vote`)}
           style={{ border: "none", background: "none", fontSize: "24px" }}
         >
           ←
@@ -305,7 +549,7 @@ function VoteDetailPage() {
         {isCreator && !isEditMode ? (
           <div style={{ display: "flex", gap: "8px" }}>
             <button
-              onClick={() => setIsEditMode(true)}
+              onClick={handleEnterEditMode}
               style={{
                 border: "none",
                 background: "none",
@@ -341,7 +585,7 @@ function VoteDetailPage() {
               저장
             </button>
             <button
-              onClick={() => setIsEditMode(false)}
+              onClick={handleCancelEditMode}
               style={{
                 border: "none",
                 background: "none",
@@ -450,486 +694,506 @@ function VoteDetailPage() {
               />
               종료 30분 전 알림
             </label>
+
+            {isLocationVote && (
+              <EditPlaceOptionsPanel
+                editPlaceOptions={editPlaceOptions}
+                onChangeOption={handleChangeEditPlaceOption}
+                onAddOption={handleAddEditPlaceOption}
+                onRemoveOption={handleRemoveEditPlaceOption}
+              />
+            )}
           </div>
         ) : (
           <h2 style={{ margin: "8px 0" }}>{vote.title}</h2>
         )}
 
-        <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
-          {vote.ismultiple && (
-            <span style={badgeStyle}>복수선택</span>
-          )}
-          {vote.isanonymous && (
-            <span style={badgeStyle}>익명투표</span>
-          )}
-          {isLocationVote && (
-            <span style={badgeStyle}>중간장소 투표</span>
-          )}
-        </div>
-
-        {mapOption && (
-          <div
-            style={{
-              marginBottom: "16px",
-              padding: "12px",
-              border: "1px solid #ddd",
-              borderRadius: "8px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "8px",
-              }}
-            >
-              <strong>{getOptionLabel(mapOption)}</strong>
-
-              <button
-                onClick={() => setMapOption(null)}
-                style={{
-                  border: "none",
-                  background: "none",
-                  fontSize: "20px",
-                  cursor: "pointer",
-                }}
-              >
-                ×
-              </button>
+        {!isEditMode && (
+          <>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+              {vote.ismultiple && <span style={badgeStyle}>복수선택</span>}
+              {vote.isanonymous && <span style={badgeStyle}>익명투표</span>}
+              {isLocationVote && <span style={badgeStyle}>중간장소 투표</span>}
             </div>
 
-            <KakaoMapView
-              places={[optionToPlace(mapOption)]}
-              selectedPlace={optionToPlace(mapOption)}
-            />
-          </div>
-        )}
-
-        {showVotingUI ? (
-          <>
-            {vote.voteoptions?.map((option) => (
-              <label
-                key={option.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  padding: "12px",
-                  border: "1px solid #ddd",
-                  borderRadius: "8px",
-                  marginBottom: "10px",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type={vote.ismultiple ? "checkbox" : "radio"}
-                  checked={selectedOptions.includes(option.id)}
-                  onChange={() => handleSelectOption(option.id)}
-                />
-
-                <div style={{ flex: 1 }}>{renderOptionContent(option)}</div>
-
-                {isPlaceOption(option) && (
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setMapOption(option);
-                    }}
-                    style={smallButtonStyle}
-                  >
-                    지도보기
-                  </button>
-                )}
-              </label>
-            ))}
-
-            {vote.allowaddoption && (
+            {showVotingUI ? (
               <>
-                <button
-                  onClick={handleSelectAll}
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    marginBottom: "8px",
-                    border: "1px solid #ddd",
-                    borderRadius: "8px",
-                    backgroundColor: "#fff",
-                    cursor: "pointer",
-                  }}
-                >
-                  전체 선택
-                </button>
+                {vote.voteoptions?.map((option) => (
+                  <div key={option.id}>
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        padding: "12px",
+                        border: "1px solid #ddd",
+                        borderRadius: "8px",
+                        marginBottom: "10px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type={vote.ismultiple ? "checkbox" : "radio"}
+                        checked={selectedOptions.includes(option.id)}
+                        onChange={() => handleSelectOption(option.id)}
+                      />
 
-                {isLocationVote ? (
-                  <div
-                    style={{
-                      marginBottom: "16px",
-                      padding: "12px",
-                      border: "1px solid #eee",
-                      borderRadius: "8px",
-                    }}
-                  >
-                    <input
-                      value={newPlaceName}
-                      onChange={(e) => setNewPlaceName(e.target.value)}
-                      placeholder="추가할 장소명"
+                      <div style={{ flex: 1 }}>{renderOptionContent(option)}</div>
+
+                      {isPlaceOption(option) && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            handleToggleMapOption(option);
+                          }}
+                          style={smallButtonStyle}
+                        >
+                          {openedMapOptionIds.includes(option.id)
+                            ? "지도접기"
+                            : "지도보기"}
+                        </button>
+                      )}
+                    </label>
+
+                    {openedMapOptionIds.includes(option.id) && (
+                      <div style={mapBoxStyle}>
+                        <PlaceMapPreview option={option} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {vote.allowaddoption && (
+                  <>
+                    <button
+                      onClick={handleSelectAll}
                       style={{
                         width: "100%",
                         padding: "10px",
-                        border: "1px solid #ddd",
-                        borderRadius: "8px",
-                        boxSizing: "border-box",
                         marginBottom: "8px",
-                      }}
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() => setShowPickMap(!showPickMap)}
-                      style={{ ...smallButtonStyle, marginBottom: "8px" }}
-                    >
-                      {showPickMap ? "지도 접기" : "지도에서 위치 선택"}
-                    </button>
-
-                    {newPickedPlace && (
-                      <p style={{ fontSize: "13px", color: "#666" }}>
-                        선택 좌표: {Number(newPickedPlace.lat).toFixed(6)},{" "}
-                        {Number(newPickedPlace.lng).toFixed(6)}
-                      </p>
-                    )}
-
-                    {showPickMap && (
-                      <KakaoMapView
-                        onMapClick={setNewPickedPlace}
-                        pickedPlace={newPickedPlace}
-                        places={newPickedPlace ? [newPickedPlace] : []}
-                        selectedPlace={newPickedPlace}
-                      />
-                    )}
-
-                    <button
-                      onClick={handleAddOption}
-                      style={{
-                        width: "100%",
-                        padding: "10px 16px",
                         border: "1px solid #ddd",
                         borderRadius: "8px",
                         backgroundColor: "#fff",
                         cursor: "pointer",
                       }}
                     >
-                      지도 선택 항목 추가
+                      전체 선택
                     </button>
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "8px",
-                      marginBottom: "16px",
-                    }}
-                  >
-                    <input
-                      value={newOptionText}
-                      onChange={(e) => setNewOptionText(e.target.value)}
-                      placeholder="항목 추가"
+
+                    {isLocationVote ? (
+                      <div
+                        style={{
+                          marginBottom: "16px",
+                          padding: "12px",
+                          border: "1px solid #eee",
+                          borderRadius: "8px",
+                        }}
+                      >
+                        <input
+                          value={newPlaceName}
+                          onChange={(e) => setNewPlaceName(e.target.value)}
+                          placeholder="추가할 장소명"
+                          style={editInputStyle}
+                        />
+
+                        <input
+                          value={newPlaceAddress}
+                          onChange={(e) => setNewPlaceAddress(e.target.value)}
+                          placeholder="주소 선택 입력"
+                          style={editInputStyle}
+                        />
+
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <input
+                            value={newPlaceLat}
+                            onChange={(e) => setNewPlaceLat(e.target.value)}
+                            placeholder="위도 선택 입력"
+                            style={{ ...editInputStyle, flex: 1 }}
+                          />
+
+                          <input
+                            value={newPlaceLng}
+                            onChange={(e) => setNewPlaceLng(e.target.value)}
+                            placeholder="경도 선택 입력"
+                            style={{ ...editInputStyle, flex: 1 }}
+                          />
+                        </div>
+
+                        <input
+                          value={newKakaoMapUrl}
+                          onChange={(e) => setNewKakaoMapUrl(e.target.value)}
+                          placeholder="카카오맵 URL 선택 입력"
+                          style={editInputStyle}
+                        />
+
+                        <p
+                          style={{
+                            fontSize: "12px",
+                            color: "#888",
+                            marginTop: 0,
+                          }}
+                        >
+                          장소명은 필수입니다. 주소, 위도/경도, 카카오맵 URL 중 하나는 입력해야 합니다.
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowPickMap(!showPickMap)}
+                          style={{ ...smallButtonStyle, marginBottom: "8px" }}
+                        >
+                          {showPickMap ? "지도 접기" : "지도에서 위치 선택"}
+                        </button>
+
+                        {newPickedPlace && (
+                          <p style={{ fontSize: "13px", color: "#666" }}>
+                            선택 좌표: {Number(newPickedPlace.lat).toFixed(6)},{" "}
+                            {Number(newPickedPlace.lng).toFixed(6)}
+                          </p>
+                        )}
+
+                        {showPickMap && (
+                          <KakaoMapView
+                            onMapClick={setNewPickedPlace}
+                            pickedPlace={newPickedPlace}
+                            places={newPickedPlace ? [newPickedPlace] : []}
+                            selectedPlace={newPickedPlace}
+                          />
+                        )}
+
+                        <button
+                          onClick={handleAddOption}
+                          style={{
+                            width: "100%",
+                            padding: "10px 16px",
+                            border: "1px solid #ddd",
+                            borderRadius: "8px",
+                            backgroundColor: "#fff",
+                            cursor: "pointer",
+                          }}
+                        >
+                          지도 선택 항목 추가
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "8px",
+                          marginBottom: "16px",
+                        }}
+                      >
+                        <input
+                          value={newOptionText}
+                          onChange={(e) => setNewOptionText(e.target.value)}
+                          placeholder="항목 추가"
+                          style={{
+                            flex: 1,
+                            padding: "10px",
+                            border: "1px solid #ddd",
+                            borderRadius: "8px",
+                          }}
+                        />
+                        <button
+                          onClick={handleAddOption}
+                          style={{
+                            padding: "10px 16px",
+                            border: "1px solid #ddd",
+                            borderRadius: "8px",
+                            backgroundColor: "#fff",
+                          }}
+                        >
+                          추가
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <button
+                  onClick={handleSubmitVote}
+                  style={{
+                    width: "100%",
+                    padding: "14px",
+                    backgroundColor: "#7c79ff",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontSize: "16px",
+                    cursor: "pointer",
+                  }}
+                >
+                  투표하기
+                </button>
+              </>
+            ) : (
+              <>
+                {vote.voteoptions?.map((option) => {
+                  const count = getOptionCount(option.id);
+                  const percent = getOptionPercent(option.id);
+                  const voters = getOptionVoters(option.id);
+                  const isShowingVoters = showVotersForOption === option.id;
+                  const isConfirmed = vote.confirmedoptionid === option.id;
+
+                  return (
+                    <div key={option.id} style={{ marginBottom: "16px" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: "6px",
+                          gap: "8px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            flex: 1,
+                          }}
+                        >
+                          <div style={{ flex: 1 }}>
+                            {renderOptionContent(option)}
+                          </div>
+
+                          {isPlaceOption(option) && (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleMapOption(option)}
+                              style={smallButtonStyle}
+                            >
+                              {openedMapOptionIds.includes(option.id)
+                                ? "지도접기"
+                                : "지도보기"}
+                            </button>
+                          )}
+
+                          {isConfirmed && (
+                            <span
+                              style={{
+                                fontSize: "12px",
+                                padding: "2px 8px",
+                                backgroundColor: "#7c79ff",
+                                color: "#fff",
+                                borderRadius: "10px",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              확정
+                            </span>
+                          )}
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {isCreator && vote.votetype !== "general" && (
+                            <button
+                              onClick={() => handleConfirm(option)}
+                              style={{
+                                fontSize: "12px",
+                                padding: "3px 10px",
+                                border: isConfirmed
+                                  ? "1px solid #7c79ff"
+                                  : "1px solid #ddd",
+                                borderRadius: "12px",
+                                backgroundColor: isConfirmed
+                                  ? "#f0f0ff"
+                                  : "#fff",
+                                color: isConfirmed ? "#7c79ff" : "#555",
+                                cursor: "pointer",
+                              }}
+                            >
+                              {isLocationVote
+                                ? isConfirmed
+                                  ? "중간장소 확정됨"
+                                  : "중간장소 확정하기"
+                                : isConfirmed
+                                ? "확정됨"
+                                : "확정"}
+                            </button>
+                          )}
+
+                          <span
+                            onClick={() => {
+                              if (!vote.isanonymous) {
+                                setShowVotersForOption(
+                                  isShowingVoters ? null : option.id
+                                );
+                              }
+                            }}
+                            style={{
+                              color: "#7c79ff",
+                              fontWeight: "bold",
+                              cursor: vote.isanonymous ? "default" : "pointer",
+                            }}
+                          >
+                            {count}명 ({percent}%)
+                          </span>
+                        </div>
+                      </div>
+
+                      {openedMapOptionIds.includes(option.id) && (
+                        <div style={mapBoxStyle}>
+                          <PlaceMapPreview option={option} />
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          height: "10px",
+                          backgroundColor: "#eee",
+                          borderRadius: "5px",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${percent}%`,
+                            backgroundColor: "#7c79ff",
+                            borderRadius: "5px",
+                            transition: "width 0.4s",
+                          }}
+                        />
+                      </div>
+
+                      {!vote.isanonymous && isShowingVoters && (
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            padding: "8px",
+                            backgroundColor: "#f5f5ff",
+                            borderRadius: "8px",
+                            fontSize: "13px",
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: "6px",
+                          }}
+                        >
+                          {voters.length === 0 ? (
+                            <span style={{ color: "#aaa" }}>
+                              투표한 사람이 없습니다
+                            </span>
+                          ) : (
+                            voters.map((r) => (
+                              <span
+                                key={r.userid}
+                                style={{
+                                  padding: "2px 8px",
+                                  backgroundColor: "#e8e8ff",
+                                  borderRadius: "10px",
+                                }}
+                              >
+                                {r.nickname || r.userid}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                  {!isClosed && (
+                    <button
+                      onClick={handleReVote}
                       style={{
                         flex: 1,
-                        padding: "10px",
-                        border: "1px solid #ddd",
-                        borderRadius: "8px",
-                      }}
-                    />
-                    <button
-                      onClick={handleAddOption}
-                      style={{
-                        padding: "10px 16px",
-                        border: "1px solid #ddd",
+                        padding: "12px",
+                        border: "1px solid #7c79ff",
                         borderRadius: "8px",
                         backgroundColor: "#fff",
+                        color: "#7c79ff",
+                        fontSize: "15px",
+                        cursor: "pointer",
                       }}
                     >
-                      추가
+                      다시 투표하기
                     </button>
-                  </div>
-                )}
-              </>
-            )}
+                  )}
 
-            <button
-              onClick={handleSubmitVote}
-              style={{
-                width: "100%",
-                padding: "14px",
-                backgroundColor: "#7c79ff",
-                color: "#fff",
-                border: "none",
-                borderRadius: "8px",
-                fontSize: "16px",
-                cursor: "pointer",
-              }}
-            >
-              투표하기
-            </button>
-          </>
-        ) : (
-          <>
-            {vote.voteoptions?.map((option) => {
-              const count = getOptionCount(option.id);
-              const percent = getOptionPercent(option.id);
-              const voters = getOptionVoters(option.id);
-              const isShowingVoters = showVotersForOption === option.id;
-              const isConfirmed = vote.confirmedoptionid === option.id;
+                  {isCreator && !isClosed && (
+                    <button
+                      onClick={handleCloseVote}
+                      style={{
+                        flex: 1,
+                        padding: "12px",
+                        border: "1px solid #f44",
+                        borderRadius: "8px",
+                        backgroundColor: "#fff",
+                        color: "#f44",
+                        fontSize: "15px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      투표 종료
+                    </button>
+                  )}
+                </div>
 
-              return (
-                <div key={option.id} style={{ marginBottom: "16px" }}>
+                <div
+                  style={{
+                    marginTop: "20px",
+                    paddingTop: "16px",
+                    borderTop: "1px solid #eee",
+                  }}
+                >
                   <div
+                    onClick={() =>
+                      !vote.isanonymous && setShowParticipants(!showParticipants)
+                    }
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      marginBottom: "6px",
-                      gap: "8px",
+                      cursor: vote.isanonymous ? "default" : "pointer",
                     }}
                   >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        flex: 1,
-                      }}
-                    >
-                      <div style={{ flex: 1 }}>
-                        {renderOptionContent(option)}
-                      </div>
-
-                      {isPlaceOption(option) && (
-                        <button
-                          type="button"
-                          onClick={() => setMapOption(option)}
-                          style={smallButtonStyle}
-                        >
-                          지도보기
-                        </button>
-                      )}
-
-                      {isConfirmed && (
-                        <span
-                          style={{
-                            fontSize: "12px",
-                            padding: "2px 8px",
-                            backgroundColor: "#7c79ff",
-                            color: "#fff",
-                            borderRadius: "10px",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          확정
-                        </span>
-                      )}
-                    </div>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {isCreator && vote.votetype !== "general" && (
-                        <button
-                          onClick={() => handleConfirm(option)}
-                          style={{
-                            fontSize: "12px",
-                            padding: "3px 10px",
-                            border: isConfirmed
-                              ? "1px solid #7c79ff"
-                              : "1px solid #ddd",
-                            borderRadius: "12px",
-                            backgroundColor: isConfirmed ? "#f0f0ff" : "#fff",
-                            color: isConfirmed ? "#7c79ff" : "#555",
-                            cursor: "pointer",
-                          }}
-                        >
-                          {isLocationVote
-                            ? isConfirmed
-                              ? "중간장소 확정됨"
-                              : "중간장소 확정하기"
-                            : isConfirmed
-                            ? "확정됨"
-                            : "확정"}
-                        </button>
-                      )}
-
-                      <span
-                        onClick={() => {
-                          if (!vote.isanonymous) {
-                            setShowVotersForOption(
-                              isShowingVoters ? null : option.id
-                            );
-                          }
-                        }}
-                        style={{
-                          color: "#7c79ff",
-                          fontWeight: "bold",
-                          cursor: vote.isanonymous ? "default" : "pointer",
-                        }}
-                      >
-                        {count}명 ({percent}%)
-                      </span>
-                    </div>
+                    <span style={{ fontSize: "15px", fontWeight: "bold" }}>
+                      총 참여 인원
+                    </span>
+                    <span style={{ color: "#7c79ff", fontWeight: "bold" }}>
+                      {totalVoters}명
+                    </span>
                   </div>
 
-                  <div
-                    style={{
-                      height: "10px",
-                      backgroundColor: "#eee",
-                      borderRadius: "5px",
-                      overflow: "hidden",
-                    }}
-                  >
+                  {!vote.isanonymous && showParticipants && (
                     <div
                       style={{
-                        height: "100%",
-                        width: `${percent}%`,
-                        backgroundColor: "#7c79ff",
-                        borderRadius: "5px",
-                        transition: "width 0.4s",
-                      }}
-                    />
-                  </div>
-
-                  {!vote.isanonymous && isShowingVoters && (
-                    <div
-                      style={{
-                        marginTop: "8px",
-                        padding: "8px",
-                        backgroundColor: "#f5f5ff",
-                        borderRadius: "8px",
-                        fontSize: "13px",
+                        marginTop: "10px",
                         display: "flex",
                         flexWrap: "wrap",
-                        gap: "6px",
+                        gap: "8px",
                       }}
                     >
-                      {voters.length === 0 ? (
-                        <span style={{ color: "#aaa" }}>
-                          투표한 사람이 없습니다
+                      {allParticipants.map((p) => (
+                        <span
+                          key={p.userid}
+                          style={{
+                            padding: "4px 10px",
+                            backgroundColor: "#eee",
+                            borderRadius: "12px",
+                            fontSize: "13px",
+                          }}
+                        >
+                          {p.nickname}
                         </span>
-                      ) : (
-                        voters.map((r) => (
-                          <span
-                            key={r.userid}
-                            style={{
-                              padding: "2px 8px",
-                              backgroundColor: "#e8e8ff",
-                              borderRadius: "10px",
-                            }}
-                          >
-                            {r.nickname || r.userid}
-                          </span>
-                        ))
-                      )}
+                      ))}
                     </div>
                   )}
                 </div>
-              );
-            })}
-
-            <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
-              {!isClosed && (
-                <button
-                  onClick={handleReVote}
-                  style={{
-                    flex: 1,
-                    padding: "12px",
-                    border: "1px solid #7c79ff",
-                    borderRadius: "8px",
-                    backgroundColor: "#fff",
-                    color: "#7c79ff",
-                    fontSize: "15px",
-                    cursor: "pointer",
-                  }}
-                >
-                  다시 투표하기
-                </button>
-              )}
-
-              {isCreator && !isClosed && (
-                <button
-                  onClick={handleCloseVote}
-                  style={{
-                    flex: 1,
-                    padding: "12px",
-                    border: "1px solid #f44",
-                    borderRadius: "8px",
-                    backgroundColor: "#fff",
-                    color: "#f44",
-                    fontSize: "15px",
-                    cursor: "pointer",
-                  }}
-                >
-                  투표 종료
-                </button>
-              )}
-            </div>
-
-            <div
-              style={{
-                marginTop: "20px",
-                paddingTop: "16px",
-                borderTop: "1px solid #eee",
-              }}
-            >
-              <div
-                onClick={() =>
-                  !vote.isanonymous && setShowParticipants(!showParticipants)
-                }
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  cursor: vote.isanonymous ? "default" : "pointer",
-                }}
-              >
-                <span style={{ fontSize: "15px", fontWeight: "bold" }}>
-                  총 참여 인원
-                </span>
-                <span style={{ color: "#7c79ff", fontWeight: "bold" }}>
-                  {totalVoters}명
-                </span>
-              </div>
-
-              {!vote.isanonymous && showParticipants && (
-                <div
-                  style={{
-                    marginTop: "10px",
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "8px",
-                  }}
-                >
-                  {allParticipants.map((p) => (
-                    <span
-                      key={p.userid}
-                      style={{
-                        padding: "4px 10px",
-                        backgroundColor: "#eee",
-                        borderRadius: "12px",
-                        fontSize: "13px",
-                      }}
-                    >
-                      {p.nickname}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
+              </>
+            )}
           </>
         )}
       </div>
@@ -937,8 +1201,248 @@ function VoteDetailPage() {
   );
 }
 
+function EditPlaceOptionsPanel({
+  editPlaceOptions,
+  onChangeOption,
+  onAddOption,
+  onRemoveOption,
+}) {
+  return (
+    <div
+      style={{
+        marginTop: "16px",
+        padding: "12px",
+        border: "1px solid #eee",
+        borderRadius: "8px",
+        backgroundColor: "#fafafa",
+      }}
+    >
+      <h4 style={{ marginTop: 0 }}>중간장소 후보 수정</h4>
+
+      <p style={{ fontSize: "12px", color: "#888" }}>
+        장소명은 필수입니다. 주소, 위도/경도, 카카오맵 URL 중 하나는 입력해야 합니다.
+        위도와 경도는 둘 다 있거나 둘 다 없어야 합니다.
+      </p>
+
+      {editPlaceOptions.map((option, index) => (
+        <div
+          key={option.id || `new-${index}`}
+          style={{
+            position: "relative",
+            marginBottom: "16px",
+            padding: "12px",
+            paddingTop: "36px",
+            border: "1px solid #ddd",
+            borderRadius: "8px",
+            backgroundColor: "#fff",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => onRemoveOption(index)}
+            style={{
+              position: "absolute",
+              top: "8px",
+              right: "8px",
+              border: "none",
+              background: "none",
+              fontSize: "18px",
+              cursor: "pointer",
+              color: "#f44",
+            }}
+          >
+            ×
+          </button>
+
+          <input
+            value={option.placename}
+            onChange={(e) => onChangeOption(index, "placename", e.target.value)}
+            placeholder="장소명"
+            style={editInputStyle}
+          />
+
+          <input
+            value={option.placeaddress}
+            onChange={(e) =>
+              onChangeOption(index, "placeaddress", e.target.value)
+            }
+            placeholder="주소 선택 입력"
+            style={editInputStyle}
+          />
+
+          <div style={{ display: "flex", gap: "8px" }}>
+            <input
+              value={option.placelat}
+              onChange={(e) => onChangeOption(index, "placelat", e.target.value)}
+              placeholder="위도 선택 입력"
+              style={{ ...editInputStyle, flex: 1 }}
+            />
+
+            <input
+              value={option.placelng}
+              onChange={(e) => onChangeOption(index, "placelng", e.target.value)}
+              placeholder="경도 선택 입력"
+              style={{ ...editInputStyle, flex: 1 }}
+            />
+          </div>
+
+          <input
+            value={option.kakaomapurl}
+            onChange={(e) =>
+              onChangeOption(index, "kakaomapurl", e.target.value)
+            }
+            placeholder="카카오맵 URL 선택 입력"
+            style={editInputStyle}
+          />
+        </div>
+      ))}
+
+      <button type="button" onClick={onAddOption} style={smallButtonStyle}>
+        후보 추가
+      </button>
+    </div>
+  );
+}
+
+function PlaceMapPreview({ option }) {
+  const [addressPlace, setAddressPlace] = useState(null);
+  const [addressError, setAddressError] = useState("");
+
+  const mapUrl = option.kakaomapurl || option.kakaoMapUrl;
+  const hasCoords = hasValue(option.placelat) && hasValue(option.placelng);
+  const hasAddress = hasValue(option.placeaddress);
+
+  useEffect(() => {
+    if (mapUrl || hasCoords || !hasAddress) return;
+
+    if (!window.kakao?.maps?.services) {
+      setAddressError("주소 검색 서비스를 불러오지 못했습니다.");
+      return;
+    }
+
+    const geocoder = new window.kakao.maps.services.Geocoder();
+
+    geocoder.addressSearch(option.placeaddress, (result, status) => {
+      if (status === window.kakao.maps.services.Status.OK && result[0]) {
+        setAddressPlace({
+          id: option.id,
+          name: option.placename || option.optiontext || "장소",
+          address: option.placeaddress,
+          lat: Number(result[0].y),
+          lng: Number(result[0].x),
+          kakaoMapUrl: option.kakaomapurl,
+        });
+        setAddressError("");
+      } else {
+        setAddressPlace(null);
+        setAddressError("주소로 지도를 찾을 수 없습니다.");
+      }
+    });
+  }, [mapUrl, hasCoords, hasAddress, option]);
+
+  if (mapUrl) {
+    if (hasCoords) {
+      const place = optionToPlace(option);
+
+      return (
+        <>
+          <p style={mapInfoTextStyle}>
+            카카오맵 URL 기준 지도입니다. 저장된 좌표를 함께 사용해 표시합니다.
+          </p>
+          <KakaoMapView places={[place]} selectedPlace={place} />
+        </>
+      );
+    }
+
+    return (
+      <>
+        <p style={mapInfoTextStyle}>카카오맵 URL 기준 지도입니다.</p>
+        <iframe
+          title={`kakao-map-url-${option.id}`}
+          src={mapUrl}
+          style={{
+            width: "100%",
+            height: "320px",
+            border: "1px solid #ddd",
+            borderRadius: "8px",
+          }}
+        />
+        <p style={{ fontSize: "12px", color: "#888", marginBottom: 0 }}>
+          URL 미리보기가 표시되지 않으면 카카오맵에서 페이지 내 표시를 제한한 경우입니다.
+        </p>
+      </>
+    );
+  }
+
+  if (hasCoords) {
+    const place = optionToPlace(option);
+
+    return (
+      <>
+        <p style={mapInfoTextStyle}>좌표 기준 지도입니다.</p>
+        <KakaoMapView places={[place]} selectedPlace={place} />
+      </>
+    );
+  }
+
+  if (hasAddress) {
+    return (
+      <>
+        <p style={mapInfoTextStyle}>주소 기준 지도입니다.</p>
+
+        {addressError ? (
+          <p style={{ fontSize: "13px", color: "#f66" }}>{addressError}</p>
+        ) : addressPlace ? (
+          <KakaoMapView places={[addressPlace]} selectedPlace={addressPlace} />
+        ) : (
+          <p style={{ fontSize: "13px", color: "#888" }}>
+            주소를 지도 좌표로 변환하는 중입니다.
+          </p>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <p style={{ fontSize: "13px", color: "#f66", margin: 0 }}>
+      등록된 지도 정보가 없습니다.
+    </p>
+  );
+}
+
+function hasValue(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim() !== "";
+  return value !== "";
+}
+
+function normalizeCoordinate(value) {
+  if (value === null || value === undefined) return null;
+
+  const stringValue = String(value).trim();
+
+  if (stringValue === "") return null;
+
+  return Number(stringValue);
+}
+
+function hasAnyMapInfo(option) {
+  const mapUrl = option.kakaomapurl || option.kakaoMapUrl;
+  const hasCoords = hasValue(option.placelat) && hasValue(option.placelng);
+  const hasAddress = hasValue(option.placeaddress);
+
+  return hasValue(mapUrl) || hasCoords || hasAddress;
+}
+
 function isPlaceOption(option) {
-  return option.optiontype === "place" || option.placelat || option.placelng;
+  return (
+    option.optiontype === "place" ||
+    option.placelat ||
+    option.placelng ||
+    option.placeaddress ||
+    option.kakaomapurl ||
+    option.kakaoMapUrl
+  );
 }
 
 function getOptionLabel(option) {
@@ -986,8 +1490,8 @@ function optionToPlace(option) {
     id: option.id,
     name: option.placename || option.optiontext || "장소",
     address: option.placeaddress || "주소 정보 없음",
-    lat: option.placelat,
-    lng: option.placelng,
+    lat: Number(option.placelat),
+    lng: Number(option.placelng),
     kakaoMapUrl: option.kakaomapurl,
   };
 }
@@ -1006,6 +1510,31 @@ const smallButtonStyle = {
   backgroundColor: "#fff",
   fontSize: "12px",
   cursor: "pointer",
+};
+
+const editInputStyle = {
+  width: "100%",
+  padding: "10px",
+  border: "1px solid #ddd",
+  borderRadius: "8px",
+  boxSizing: "border-box",
+  marginBottom: "8px",
+};
+
+const mapBoxStyle = {
+  marginTop: "-4px",
+  marginBottom: "10px",
+  padding: "12px",
+  border: "1px solid #eee",
+  borderRadius: "8px",
+  backgroundColor: "#fafafa",
+};
+
+const mapInfoTextStyle = {
+  fontSize: "12px",
+  color: "#888",
+  marginTop: 0,
+  marginBottom: "8px",
 };
 
 export default VoteDetailPage;
