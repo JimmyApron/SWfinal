@@ -24,6 +24,9 @@ import VoteDetailPage from "./pages/vote/VoteDetailPage";
 import SettingsPage from "./pages/settings/SettingsPage";
 import SettingEditPage from "./pages/settings/SettingEditPage";
 
+import NotificationPage from "./pages/notification/NotificationPage";
+import BottomNav from "./components/BottomNav";
+
 function NotificationListener() {
   const location = useLocation();
   const locationRef = useRef(location);
@@ -41,28 +44,11 @@ function NotificationListener() {
         if (!user) return;
 
         const myUserId = user.id;
-        
-        // 🔥 [치트키] 채널명 뒤에 현재 시간(타임스탬프)을 붙여 고유한 이름을 만듭니다.
-        // 이렇게 하면 핫 리로드가 일어나도 Supabase가 절대 이전 채널과 헷갈려하지 않습니다!
         const uniqueChannelName = `realtime-notifications-${myUserId}-${Date.now()}`;
 
-        // 1. [초기 안 읽은 알림 확인]
-        const isWatchingChatNow = locationRef.current.search.includes("tab=chat");
-        const { data } = await supabase
-          .from("notifications")
-          .select("*")
-          .eq("receiverid", myUserId)
-          .eq("isread", false)
-          .order("createdat", { ascending: true });
+        // 🎯 [1번 버그 박멸] 들어올 때 첫 알림 강제 자동 읽음 처리 코드를 안전하게 주석/삭제 처리했습니다.
+        // 이 코드가 있으면 리로드할 때마다 알림 카운트가 한 개씩 깎여나갔던 거예요!
 
-        if (data && data.length > 0) {
-          if (!isWatchingChatNow) {
-            alert(data[0].message);
-          }
-          await supabase.from("notifications").update({ isread: true }).eq("id", data[0].id);
-        }
-
-        // 2. 🚀 매번 100% 깨끗하고 겹칠 리 없는 새 채널 도화지를 개설합니다.
         channel = supabase.channel(uniqueChannelName);
 
         channel.on(
@@ -74,20 +60,12 @@ function NotificationListener() {
             filter: `receiverid=eq.${myUserId}` 
           },
           async (payload) => {
-            const isWatchingChatRightNow = locationRef.current.search.includes("tab=chat");
-            const notificationType = payload.new.type;
-
-            if (notificationType === "chat_new" && isWatchingChatRightNow) {
-              await supabase.from("notifications").update({ isread: true }).eq("id", payload.new.id);
-              return;
-            }
-
-            alert(payload.new.message);
-            await supabase.from("notifications").update({ isread: true }).eq("id", payload.new.id);
+            // 🎯 [2번 버그 박멸] 알림이 올 때마다 화면 주소 상관없이 닥치는 대로 '읽음(isread: true)' 처리하던 무서운 코드를 완전히 삭제했습니다!
+            // 이제 데이터베이스의 알림 상태를 프론트엔드 리스너가 강제로 바꾸지 않고 온전히 보존합니다.
+            console.log("🔔 [실시간 새 알림 도착 완료]:", payload.new.message);
           }
         );
 
-        // 3. 최종 구독 승인
         channel.subscribe((status) => {
           if (status === "SUBSCRIBED") {
             console.log(`📡 [실시간 알림 연결 성공] 채널명: ${uniqueChannelName}`);
@@ -101,20 +79,21 @@ function NotificationListener() {
 
     setupRealtimeNotification();
 
-    // 🧼 컴포넌트가 다시 정렬되거나 꺼질 때, 열려있던 고유 채널을 깔끔하게 닫아줍니다.
     return () => {
       if (channel) {
         supabase.removeChannel(channel);
       }
     };
-  }, []); // 빈 배열 유지로 최초 1회만 실행
+  }, []);
 
   return null;
 }
+
 function App() {
   return (
     <BrowserRouter>
       <NotificationListener />
+      <BottomNav />
       <Routes>
         <Route path="/" element={<InviteCodePage />} />
         <Route path="/login" element={<LoginPage />} />
@@ -133,6 +112,8 @@ function App() {
         <Route path="/rooms/:roomid/votes/:voteid" element={<VoteDetailPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/settings/edit" element={<SettingEditPage />} />
+        {/* 🎯 아까 누락되었던 알림 페이지 연결 통로 완벽 복구 */}
+        <Route path="/notifications" element={<NotificationPage />} />
       </Routes>
     </BrowserRouter>
   );

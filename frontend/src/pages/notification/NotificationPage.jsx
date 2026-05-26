@@ -36,6 +36,71 @@ function NotificationPage() {
 
       setCurrentUserId(userId);
 
+      // ========================================================
+      // 🛡️ [무해한 안전 훅] 유저가 알림창을 열었을 때 배경에서 마감 투표 사냥하기
+      // ========================================================
+      try {
+        const nowIso = new Date().toISOString();
+
+        // 1. 내가 속한 방 번호들(roomid) 싹 긁어오기
+        const { data: myRooms } = await supabase
+          .from("room_members")
+          .select("roomid")
+          .eq("userid", userId);
+
+        if (myRooms && myRooms.length > 0) {
+          const roomIds = myRooms.map((r) => r.roomid);
+
+          // 2. 그 방들 중에서 마감 시간은 지났는데 아직 안 닫힌(isclosed = false) 투표 싹 조회
+          const { data: expiredVotes } = await supabase
+            .from("votes")
+            .select("id, roomid, title")
+            .in("roomid", roomIds)
+            .eq("endtimeenabled", true)
+            .lte("endtime", nowIso)
+            .eq("isclosed", false);
+
+          if (expiredVotes && expiredVotes.length > 0) {
+            for (const vote of expiredVotes) {
+              // 해당 방의 멤버들 중 알림 켠 사람들 다 찾기
+              const { data: activeMembers } = await supabase
+                .from("room_members")
+                .select("userid")
+                .eq("roomid", vote.roomid)
+                .eq("votenotifenabled", true);
+
+              if (activeMembers && activeMembers.length > 0) {
+                const closeNotifications = activeMembers.map((member) => ({
+                  roomid: vote.roomid,
+                  receiverid: member.userid,
+                  type: "vote_closed",
+                  title: "🔒 투표 마감 완료",
+                  message: `🏁 [${vote.title}] 투표가 마감되었습니다! 최종 결과를 확인해 보세요.`,
+                  isread: false,
+                  link: `/rooms/${vote.roomid}/votes/${vote.id}`,
+                }));
+
+                // 마감 알림 적재
+                await supabase.from("notifications").insert(closeNotifications);
+              }
+
+              // 3. 중복 방지를 위해 투표 쾅 닫기 (isclosed = true)
+              await supabase
+                .from("votes")
+                .update({ isclosed: true })
+                .eq("id", vote.id);
+
+              console.log(`🏁 [${vote.title}] 투표 마감 알림 처리 완료!`);
+            }
+          }
+        }
+      } catch (checkError) {
+        console.error("🔒 마감 투표 자동 체크 중 에러:", checkError);
+      }
+
+      // ========================================================
+      // 🟢 최신 알림 데이터 불러오기 (기존 로직 유지)
+      // ========================================================
       const data = await getMyNotifications(userId);
       console.log("불러온 알림 목록:", data);
       setNotifications(data);
@@ -157,7 +222,7 @@ function NotificationPage() {
 
   if (!currentUserId) {
     return (
-      <div style={{ padding: "20px" }}>
+      <div style={{ padding: "20px", paddingBottom: "100px" }}>
         <h2>알림</h2>
         <p>사용자 정보를 불러오는 중입니다.</p>
       </div>
@@ -165,7 +230,7 @@ function NotificationPage() {
   }
 
   return (
-    <div style={{ padding: "20px", paddingBottom: "90px" }}>
+    <div style={{ padding: "20px", paddingBottom: "100px", minHeight: "100vh", boxSizing: "border-box" }}>
       <div
         style={{
           display: "flex",
@@ -233,7 +298,17 @@ function NotificationPage() {
                 ×
               </button>
 
-              <strong>{notification.title}</strong>
+              <strong 
+                style={{ 
+                  display: "block",       
+                  fontSize: "16px",       
+                  fontWeight: "800",      
+                  color: "#111111",       
+                  marginBottom: "4px"     
+                }}
+              >
+                {notification.title}
+              </strong>
 
               <p style={{ margin: "6px 0" }}>{notification.message}</p>
 

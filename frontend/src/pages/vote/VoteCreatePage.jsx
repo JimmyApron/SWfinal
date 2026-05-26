@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { createVote } from "../../api/voteApi";
+import { sendVoteNotification } from "../notification/VoteNotification";
+
 
 function VoteCreatePage() {
   const { roomid } = useParams();
@@ -14,12 +16,35 @@ function VoteCreatePage() {
   const returnTab = location.state?.returnTab || "vote";
 
   const [currentUser, setCurrentUser] = useState(null);
+  const [roomName, setRoomName] = useState(""); 
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       setCurrentUser(user);
     });
-  }, []);
+
+    // 📡 방 정보 바인딩용 조회 로직
+    const fetchRoomName = async () => {
+      if (!roomid) return;
+      const { data, error } = await supabase
+        .from("rooms")
+        .select("roomname")
+        .eq("id", Number(roomid))
+        .single();
+      
+      if (error) {
+        console.warn("방 이름 조회 실패:", error);
+        setRoomName("참여 중인 방");
+        return;
+      }
+      
+      if (data) {
+        setRoomName(data.roomname);
+      }
+    };
+
+    fetchRoomName();
+  }, [roomid]);
 
   const [title, setTitle] = useState("");
 
@@ -116,12 +141,12 @@ function VoteCreatePage() {
       return;
     }
 
-    // 🔥 [핵심 타격 구조] 투표 생성 자체는 무조건 성공해야 하므로 변수를 바깥으로 뺍니다.
     let isCreateVoteSuccess = false;
+    let createdVoteId = null; // 🎯 [에러 완벽 박멸] 생성된 투표 ID를 가둘 주머니 안전하게 선언!
 
     try {
-      // 1. 기존 오리지널 투표 생성 API 호출 (이것부터 확실하게 성공시킵니다)
-      await createVote({
+      // 1. 오리지널 투표 생성 API 호출 (종료시간 공백 에러 완벽 대처 완료!)
+      const result = await createVote({
         roomid: Number(roomid),
         title,
         userid: currentUser?.id,
@@ -130,83 +155,34 @@ function VoteCreatePage() {
         ismultiple,
         isanonymous,
         allowaddoption,
-        endtime,
+        endtime: endtimeenabled && endtime ? endtime : null, 
         endtimeenabled,
         reminderenabled,
         votetype,
       });
 
-      // 여기까지 통과하면 DB에 투표는 안전하게 들어간 것입니다!
+      // 🎯 [링크 생성용 ID 추출] 서버가 던져준 고유 투표 일련번호 가로채기
+      createdVoteId = result?.id || result?.data?.id || null;
       isCreateVoteSuccess = true;
 
     } catch (error) {
       console.error("투표 생성 자체 실패:", error);
       alert(error.message || "투표 생성 실패");
-      return; // 투표 작성이 아예 실패했다면 여기서 중단합니다.
+      return; 
     }
 
-    // 2. ⏰ [보호막 가동] 알림 적재 기능은 별도의 try-catch로 감싸서, 여기서 에러가 나더라도 투표 생성 완료를 방해하지 못하게 막습니다!
-    try {
-      if (endtimeenabled && reminderenabled && endtime) {
-        // 타임존 오차 보정 결합
-        const formattedEndTime = endtime.includes("Z") || endtime.includes("+") 
-          ? endtime 
-          : `${endtime}:00+09:00`;
-
-        const now = new Date();
-        const end = new Date(formattedEndTime);
-        const diffInMinutes = (end.getTime() - now.getTime()) / (1000 * 60);
-
-        console.log("⏱️ 디버깅 - 남은 마감 시간(분):", diffInMinutes);
-
-        if (diffInMinutes > 0 && diffInMinutes <= 30) {
-          
-          // 🟢 [회원 조회] 테이블명이나 컬럼명이 달라서 생기는 에러 방어
-          const { data: activeMembers, error: memberFetchError } = await supabase
-            .from("room_members")
-            .select("userid")
-            .eq("roomid", Number(roomid))
-            .eq("votenotifenabled", true); // ⚠️ 혹시 이 컬럼이 DB에 없다면 에러가 날 수 있음
-
-          if (memberFetchError) {
-            console.warn("방 멤버 알림 상태 조회 실패 (DB 컬럼 확인 필요):", memberFetchError);
-          } else if (activeMembers && activeMembers.length > 0) {
-            const memberNotifications = activeMembers.map((member) => ({
-              roomid: Number(roomid),
-              receiverid: member.userid, 
-              senderid: currentUser?.id,
-              type: "vote_reminder",     
-              title: "🗳️ 투표 마감 임박",  
-              message: `⚠️ [마감 임박] 방금 생성된 [${title}] 투표의 마감 시간이 ${Math.max(1, Math.round(diffInMinutes))}분 남았습니다! 서둘러 참여해 주세요!`,
-              isread: false,
-            }));
-
-            await supabase.from("notifications").insert(memberNotifications);
-          }
-
-          // 🟡 [게스트 조회] 에러 방어
-          const { data: activeGuests, error: guestFetchError } = await supabase
-            .from("room_guests")
-            .select("id")
-            .eq("roomid", Number(roomid))
-            .eq("votenotifenabled", true);
-
-          if (guestFetchError) {
-            console.warn("방 게스트 알림 상태 조회 실패 (DB 컬럼 확인 필요):", guestFetchError);
-          } else if (activeGuests && activeGuests.length > 0) {
-            const guestNotifications = activeGuests.map((guest) => ({
-              guestid: guest.id,
-              roomid: Number(roomid),
-              message: `⚠️ [마감 임박] 방금 생성된 [${title}] 투표의 마감 시간이 ${Math.max(1, Math.round(diffInMinutes))}분 남았습니다!`,
-            }));
-
-            await supabase.from("guest_notifications").insert(guestNotifications);
-          }
-        }
-      }
-    } catch (notificationError) {
-      // 🛡️ 알림 기능에서 컬럼 매칭 오류가 나더라도, 조용히 로그만 찍고 투표 성공 단계로 넘겨버립니다!
-      console.error("⚠️ 임박 알림 로직 실행 중 에러가 발생했으나 투표 생성을 지속합니다:", notificationError);
+    // 🚀 [시동 버튼 작동] 투표 생성이 확인되면 분리된 알림 모듈로 연료를 주입하고 가동시킵니다!
+    if (isCreateVoteSuccess) {
+      await sendVoteNotification({
+        roomid,
+        title,
+        createdVoteId, // 파라미터로 넘겨주어 상세페이지 점프 링크 확보!
+        currentUser,
+        roomName,
+        endtimeenabled,
+        reminderenabled,
+        endtime
+      });
     }
 
     // 3. 🎉 최종 완료 안내 및 탭 이동

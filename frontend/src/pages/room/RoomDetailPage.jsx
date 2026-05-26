@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import ScheduleTab from "./ScheduleTab";
@@ -91,7 +91,7 @@ function RoomDetailPage() {
     // 4. 🔔 내 알림 설정 데이터 연동 (회원 / 비회원 크로스 체크) ⭐
     const { data: { user } } = await supabase.auth.getUser();
 
-    if (user) {
+    if (user && user.id) {
       // 🟢 [회원] room_members에서 알림 정보 가져오기
       const { data: myMemberData, error: myMemberError } = await supabase
         .from("room_members")
@@ -185,7 +185,7 @@ function RoomDetailPage() {
     };
     const columnName = dbColumnMap[tabName];
 
-    if (user) {
+    if (user && user.id) {
       // 🟢 [회원] room_members 테이블 업데이트
       const { error } = await supabase
         .from("room_members")
@@ -232,7 +232,7 @@ function RoomDetailPage() {
 
     const { data: { user } } = await supabase.auth.getUser();
 
-    if (user) {
+    if (user && user.id) {
       const { error } = await supabase
         .from("room_members")
         .delete()

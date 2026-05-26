@@ -57,7 +57,7 @@ function SettingsPage() {
   }
 
   return (
-    <div className="setting-container">
+    <div className="setting-container" style={{ paddingBottom: "90px" }}>
       <h2>마이페이지 👤</h2>
 
       {/* 📸 1. 프로필 사진 구역 */}
