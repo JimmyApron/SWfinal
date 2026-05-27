@@ -226,6 +226,76 @@ function VoteMessageCard({ meta, navigate }) {
   );
 }
 
+function MapShareMessageCard({ meta }) {
+  const titleMap = {
+    current_location: "현재 위치 공유",
+    middle_place: "확정된 중간장소",
+    nearby_place: "중간장소 주변 추천 장소",
+  };
+
+  return (
+    <div style={{ minWidth: "190px" }}>
+      <div
+        style={{
+          display: "inline-block",
+          fontSize: "11px",
+          fontWeight: "bold",
+          color: "#fff",
+          backgroundColor: "#2f855a",
+          borderRadius: "10px",
+          padding: "2px 8px",
+          marginBottom: "6px",
+        }}
+      >
+        {titleMap[meta.sharetype] || "장소 공유"}
+      </div>
+
+      <div style={{ fontWeight: "bold", fontSize: "14px", marginBottom: "6px" }}>
+        {meta.name || "이름 없는 장소"}
+      </div>
+
+      {meta.address && (
+        <div style={{ fontSize: "12px", color: "#555", marginBottom: "6px" }}>
+          {meta.address}
+        </div>
+      )}
+
+      {meta.rating !== null && meta.rating !== undefined && (
+        <div style={{ fontSize: "12px", color: "#555", marginBottom: "6px" }}>
+          평점 {Number(meta.rating).toFixed(1)}
+          {meta.reviewcount ? ` / 리뷰 ${meta.reviewcount}` : ""}
+        </div>
+      )}
+
+      {meta.lat && meta.lng && (
+        <div style={{ fontSize: "11px", color: "#777", marginBottom: "8px" }}>
+          {meta.lat}, {meta.lng}
+        </div>
+      )}
+
+      {meta.url && (
+        <a
+          href={meta.url}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            display: "block",
+            textAlign: "center",
+            fontSize: "12px",
+            color: "#fff",
+            backgroundColor: "#3182ce",
+            borderRadius: "8px",
+            padding: "7px 0",
+            textDecoration: "none",
+          }}
+        >
+          카카오맵에서 보기
+        </a>
+      )}
+    </div>
+  );
+}
+
 function ChatTab({ roomId }) {
   const navigate = useNavigate();
 
@@ -679,6 +749,10 @@ function ChatTab({ roomId }) {
                                   navigate={navigate}
                                 />
                               );
+                            }
+
+                            if (meta.__type === "map_share") {
+                              return <MapShareMessageCard meta={meta} />;
                             }
                           } catch {
                             // 일반 텍스트 메시지

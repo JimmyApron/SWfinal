@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { createVote } from "../../api/voteApi";
 import { sendVoteNotification } from "../notification/VoteNotification";
+import LocationPicker from "../../components/map/LocationPicker";
 
 function VoteCreatePage() {
   const { roomid } = useParams();
@@ -119,6 +120,7 @@ function VoteCreatePage() {
   const [endtimeenabled, setEndtimeenabled] = useState(false);
   const [endtime, setEndtime] = useState("");
   const [reminderenabled, setReminderenabled] = useState(false);
+  const [openPlacePickerIndex, setOpenPlacePickerIndex] = useState(null);
 
   const handleVotetypeChange = (newType) => {
     setVotetype(newType);
@@ -175,6 +177,23 @@ function VoteCreatePage() {
     setOptions(newOptions);
   };
 
+  const handleSelectPlaceOption = (index, name, address, place = {}) => {
+    const newOptions = [...options];
+
+    newOptions[index] = {
+      ...newOptions[index],
+      optiontext: name || "",
+      placename: name || "",
+      placeaddress: address || "",
+      placelat: place.lat ?? "",
+      placelng: place.lng ?? "",
+      kakaomapurl: place.kakaoMapUrl || place.kakaomapurl || "",
+    };
+
+    setOptions(newOptions);
+    setOpenPlacePickerIndex(null);
+  };
+
   const handleAddOption = () => {
     const currentType = options[0]?.optiontype || "text";
     setOptions([...options, makeEmptyOption(currentType)]);
@@ -198,6 +217,23 @@ function VoteCreatePage() {
     if (title.trim() === "") {
       alert("투표 제목을 입력하세요.");
       return;
+    }
+
+    if (votetype === "location") {
+      const invalidPlaceOption = options.some((option) => {
+        if (option.optiontype !== "place") return false;
+
+        return (
+          !String(option.placename || option.optiontext || "").trim() ||
+          !hasValue(option.placelat) ||
+          !hasValue(option.placelng)
+        );
+      });
+
+      if (invalidPlaceOption) {
+        alert("선택지 장소를 카카오맵에서 선택해주세요.");
+        return;
+      }
     }
 
     const validOptions = options.filter((option) => {
@@ -490,6 +526,7 @@ function VoteCreatePage() {
                 >
                   <input
                     value={option.placename}
+                    readOnly
                     onChange={(e) =>
                       handleChangeOption(index, "placename", e.target.value)
                     }
@@ -497,11 +534,32 @@ function VoteCreatePage() {
                     style={inputStyle}
                   />
 
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpenPlacePickerIndex((prev) =>
+                        prev === index ? null : index
+                      )
+                    }
+                    style={secondaryButtonStyle}
+                  >
+                    {openPlacePickerIndex === index
+                      ? "장소 검색 닫기"
+                      : "카카오맵에서 장소 검색"}
+                  </button>
+
+                  {openPlacePickerIndex === index && (
+                    <LocationPicker
+                      allowMapClick={false}
+                      onSelect={(name, address, place) =>
+                        handleSelectPlaceOption(index, name, address, place)
+                      }
+                    />
+                  )}
+
                   <input
                     value={option.placeaddress}
-                    onChange={(e) =>
-                      handleChangeOption(index, "placeaddress", e.target.value)
-                    }
+                    readOnly
                     placeholder="주소"
                     style={inputStyle}
                   />
@@ -509,18 +567,14 @@ function VoteCreatePage() {
                   <div style={{ display: "flex", gap: "6px" }}>
                     <input
                       value={option.placelat}
-                      onChange={(e) =>
-                        handleChangeOption(index, "placelat", e.target.value)
-                      }
+                      readOnly
                       placeholder="위도"
                       style={inputStyle}
                     />
 
                     <input
                       value={option.placelng}
-                      onChange={(e) =>
-                        handleChangeOption(index, "placelng", e.target.value)
-                      }
+                      readOnly
                       placeholder="경도"
                       style={inputStyle}
                     />
@@ -528,12 +582,16 @@ function VoteCreatePage() {
 
                   <input
                     value={option.kakaomapurl}
-                    onChange={(e) =>
-                      handleChangeOption(index, "kakaomapurl", e.target.value)
-                    }
+                    readOnly
                     placeholder="카카오맵 URL 선택 입력"
                     style={inputStyle}
                   />
+
+                  {!hasValue(option.placelat) && !hasValue(option.placelng) && (
+                    <p style={helperTextStyle}>
+                      카카오맵에서 장소를 검색해 선택해주세요.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -674,6 +732,12 @@ function makeEmptyOption(optiontype) {
   };
 }
 
+function hasValue(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim() !== "";
+  return value !== "";
+}
+
 const inputStyle = {
   width: "100%",
   height: "42px",
@@ -689,6 +753,21 @@ const labelStyle = {
   gap: "8px",
   marginBottom: "8px",
   cursor: "pointer",
+};
+
+const secondaryButtonStyle = {
+  width: "100%",
+  height: "40px",
+  border: "1px solid #ddd",
+  borderRadius: "6px",
+  backgroundColor: "#fff",
+  cursor: "pointer",
+};
+
+const helperTextStyle = {
+  margin: 0,
+  fontSize: "12px",
+  color: "#888",
 };
 
 export default VoteCreatePage;

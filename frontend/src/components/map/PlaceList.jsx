@@ -1,4 +1,4 @@
-function PlaceList({ places, onSelectPlace }) {
+function PlaceList({ places, onSelectPlace, onSharePlace }) {
   if (!places || places.length === 0) {
     return <p>검색 결과가 없습니다.</p>
   }
@@ -30,6 +30,12 @@ function PlaceList({ places, onSelectPlace }) {
             <button type="button" onClick={() => onSelectPlace(place)}>
               지도에서 보기
             </button>
+
+            {onSharePlace && (
+              <button type="button" onClick={() => onSharePlace(place)}>
+                채팅에 공유
+              </button>
+            )}
 
             {place.kakaoMapUrl && (
               <p>

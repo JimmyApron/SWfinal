@@ -63,8 +63,15 @@ function KakaoMapView({
         return
       }
 
+      const initialCenter = getPreferredCenter({
+        selectedPlace,
+        pickedPlace,
+        places,
+        currentLocation,
+      })
+
       const options = {
-        center: new window.kakao.maps.LatLng(35.1796, 129.0756),
+        center: new window.kakao.maps.LatLng(initialCenter.lat, initialCenter.lng),
         level: 4,
       }
 
@@ -73,8 +80,14 @@ function KakaoMapView({
       setTimeout(() => {
         if (mapObjectRef.current) {
           mapObjectRef.current.relayout()
+          const preferredCenter = getPreferredCenter({
+            selectedPlace,
+            pickedPlace,
+            places,
+            currentLocation,
+          })
           mapObjectRef.current.setCenter(
-            new window.kakao.maps.LatLng(35.1796, 129.0756)
+            new window.kakao.maps.LatLng(preferredCenter.lat, preferredCenter.lng)
           )
         }
       }, 300)
@@ -87,7 +100,7 @@ function KakaoMapView({
         clearTimeout(timerId)
       }
     }
-  }, [isMapReady])
+  }, [currentLocation, isMapReady, pickedPlace, places, selectedPlace])
 
   // 탭 전환/렌더링 타이밍 때문에 지도 화면이 빈칸으로 보이는 문제 보정
   useEffect(() => {
@@ -416,8 +429,8 @@ function KakaoMapView({
       openPlaceInfoWindow(selectedPlace, marker)
     }
 
-    mapObjectRef.current.setCenter(selectedLocation)
     mapObjectRef.current.relayout()
+    mapObjectRef.current.setCenter(selectedLocation)
   }, [selectedPlace, isMapReady])
 
   // 기존 단일 경로 선 표시
@@ -629,6 +642,48 @@ function isValidLatLng(lat, lng) {
     numberLng >= -180 &&
     numberLng <= 180
   )
+}
+
+function getPreferredCenter({
+  selectedPlace,
+  pickedPlace,
+  places = [],
+  currentLocation,
+}) {
+  if (isValidLatLng(selectedPlace?.lat, selectedPlace?.lng)) {
+    return {
+      lat: Number(selectedPlace.lat),
+      lng: Number(selectedPlace.lng),
+    }
+  }
+
+  if (isValidLatLng(pickedPlace?.lat, pickedPlace?.lng)) {
+    return {
+      lat: Number(pickedPlace.lat),
+      lng: Number(pickedPlace.lng),
+    }
+  }
+
+  const firstPlace = places.find((place) => isValidLatLng(place?.lat, place?.lng))
+
+  if (firstPlace) {
+    return {
+      lat: Number(firstPlace.lat),
+      lng: Number(firstPlace.lng),
+    }
+  }
+
+  if (isValidLatLng(currentLocation?.lat, currentLocation?.lng)) {
+    return {
+      lat: Number(currentLocation.lat),
+      lng: Number(currentLocation.lng),
+    }
+  }
+
+  return {
+    lat: 37.5665,
+    lng: 126.978,
+  }
 }
 
 function escapeHtml(value) {

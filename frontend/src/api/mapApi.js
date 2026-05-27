@@ -1,5 +1,39 @@
 import { supabase } from '../lib/supabaseClient'
 
+function buildLocationStatusFields(locationData) {
+  const statusFields = {}
+
+  if (typeof locationData.isDeparted === 'boolean') {
+    statusFields.isdeparted = locationData.isDeparted
+  }
+
+  if ('departedAt' in locationData) {
+    statusFields.departedat = locationData.departedAt
+  }
+
+  if ('arrivedAt' in locationData) {
+    statusFields.arrivedat = locationData.arrivedAt
+  }
+
+  if ('lastLocationUpdatedAt' in locationData) {
+    statusFields.lastlocationupdatedat = locationData.lastLocationUpdatedAt
+  }
+
+  if (locationData.locationStatus) {
+    statusFields.locationstatus = locationData.locationStatus
+  }
+
+  if ('locationError' in locationData) {
+    statusFields.locationerror = locationData.locationError
+  }
+
+  if (locationData.transportMode) {
+    statusFields.transportmode = locationData.transportMode
+  }
+
+  return statusFields
+}
+
 export async function saveMyLocation(locationData) {
   if (!locationData.userId) {
     throw new Error('userId가 필요합니다.')
@@ -20,6 +54,7 @@ export async function saveMyLocation(locationData) {
         longitude: locationData.longitude,
         accuracy: locationData.accuracy,
         createdat: new Date().toISOString(),
+        ...buildLocationStatusFields(locationData),
       },
       {
         onConflict: 'userid,roomid',
@@ -54,6 +89,7 @@ export async function saveMyGuestLocation(locationData) {
         longitude: locationData.longitude,
         accuracy: locationData.accuracy,
         createdat: new Date().toISOString(),
+        ...buildLocationStatusFields(locationData),
       },
       {
         onConflict: 'guestid,roomid',
@@ -139,7 +175,7 @@ export async function getRoomMemberLocations(roomId) {
       profiles:userid (
         id,
         nickname,
-        profile_image_url:profileimageurl
+        profileimageurl:profileimageurl
       ),
       room_guests:guestid (
         id,
@@ -154,6 +190,88 @@ export async function getRoomMemberLocations(roomId) {
   }
 
   return data || []
+}
+
+export async function getRoomParticipants(roomId) {
+  if (!roomId) {
+    throw new Error('roomId가 필요합니다.')
+  }
+
+  const { data: members, error: memberError } = await supabase
+    .from('room_members')
+    .select(`
+      id,
+      roomid,
+      userid,
+      nickname,
+      profiles:userid (
+        id,
+        nickname,
+        profileimageurl:profileimageurl
+      )
+    `)
+    .eq('roomid', Number(roomId))
+
+  if (memberError) {
+    throw memberError
+  }
+
+  const { data: guests, error: guestError } = await supabase
+    .from('room_guests')
+    .select('id, roomid, nickname')
+    .eq('roomid', Number(roomId))
+
+  if (guestError) {
+    throw guestError
+  }
+
+  return [
+    ...(members || []).map((member) => ({
+      ...member,
+      guestid: null,
+      participantType: 'member',
+    })),
+    ...(guests || []).map((guest) => ({
+      id: `guest-${guest.id}`,
+      guestrowid: guest.id,
+      roomid: guest.roomid,
+      userid: null,
+      guestid: guest.id,
+      nickname: guest.nickname,
+      participantType: 'guest',
+    })),
+  ]
+}
+
+export async function updateRoomLocationTransportModes(roomId, travelResults = []) {
+  if (!roomId) {
+    throw new Error('roomId가 필요합니다.')
+  }
+
+  const updates = (travelResults || []).filter((result) => {
+    return (result.userid || result.guestid) && result.mode
+  })
+
+  await Promise.all(
+    updates.map(async (result) => {
+      let query = supabase
+        .from('user_locations')
+        .update({ transportmode: result.mode })
+        .eq('roomid', Number(roomId))
+
+      if (result.userid) {
+        query = query.eq('userid', result.userid)
+      } else {
+        query = query.eq('guestid', result.guestid)
+      }
+
+      const { error } = await query
+
+      if (error) {
+        throw error
+      }
+    })
+  )
 }
 
 export async function saveRoomMiddlePlace({

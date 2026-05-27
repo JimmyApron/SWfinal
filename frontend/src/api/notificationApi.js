@@ -34,6 +34,38 @@ export async function createNotification({
   }
 }
 
+export async function createGuestNotification({
+  roomId,
+  guestId,
+  type = "location_request",
+  title = "위치 등록 요청",
+  message,
+  link,
+}) {
+  if (!guestId) {
+    console.warn("guestId가 없어 게스트 알림을 생성하지 않습니다.");
+    return;
+  }
+
+  const { error } = await supabase.from("notifications").insert([
+    {
+      roomid: Number(roomId),
+      receiverid: guestId,
+      senderid: null,
+      type,
+      title,
+      message,
+      link: link || `/rooms/${Number(roomId)}?tab=location`,
+      isread: false,
+    },
+  ]);
+
+  if (error) {
+    console.error("게스트 알림 생성 실패:", error);
+    throw new Error("게스트 알림 생성 실패");
+  }
+}
+
 export async function createRoomNotifications({
   roomId,
   senderId,
@@ -115,6 +147,29 @@ export async function getMyNotifications(userId) {
   return data || [];
 }
 
+export async function getMyGuestNotifications(guestId) {
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("*")
+    .eq("receiverid", guestId)
+    .order("createdat", { ascending: false });
+
+  if (error) {
+    console.error("게스트 알림 조회 실패:", error);
+    throw new Error("게스트 알림 조회 실패");
+  }
+
+  return (data || []).map((notification) => ({
+    ...notification,
+    source: "guest",
+    title: notification.title || "알림",
+    link:
+      notification.link ||
+      (notification.roomid ? `/rooms/${notification.roomid}` : null),
+    isread: notification.isread ?? false,
+  }));
+}
+
 export async function markNotificationAsRead(notificationId) {
   const { error } = await supabase
     .from("notifications")
@@ -128,6 +183,17 @@ export async function markNotificationAsRead(notificationId) {
   }
 }
 
+export async function markGuestNotificationAsRead(notificationId) {
+  const { error } = await supabase
+    .from("notifications")
+    .update({ isread: true })
+    .eq("id", notificationId);
+
+  if (error) {
+    console.warn("게스트 알림 읽음 처리 실패:", error);
+  }
+}
+
 export async function getUnreadNotificationCount(userId) {
   const { count, error } = await supabase
     .from("notifications")
@@ -137,6 +203,21 @@ export async function getUnreadNotificationCount(userId) {
 
   if (error) {
     console.error("안 읽은 알림 개수 조회 실패:", error);
+    return 0;
+  }
+
+  return count || 0;
+}
+
+export async function getUnreadGuestNotificationCount(guestId) {
+  const { count, error } = await supabase
+    .from("notifications")
+    .select("*", { count: "exact", head: true })
+    .eq("receiverid", guestId)
+    .eq("isread", false);
+
+  if (error) {
+    console.warn("읽지 않은 게스트 알림 수 조회 실패:", error);
     return 0;
   }
 
@@ -156,6 +237,18 @@ export async function deleteNotification(notificationId) {
   }
 }
 
+export async function deleteGuestNotification(notificationId) {
+  const { error } = await supabase
+    .from("notifications")
+    .delete()
+    .eq("id", notificationId);
+
+  if (error) {
+    console.error("게스트 알림 삭제 실패:", error);
+    throw new Error("게스트 알림 삭제 실패");
+  }
+}
+
 export async function deleteMyNotifications(userId) {
   const { error } = await supabase
     .from("notifications")
@@ -166,5 +259,17 @@ export async function deleteMyNotifications(userId) {
     console.error("전체 알림 삭제 실패:", error);
     console.error("전체 알림 삭제 실패 상세:", JSON.stringify(error, null, 2));
     throw new Error("전체 알림 삭제 실패");
+  }
+}
+
+export async function deleteMyGuestNotifications(guestId) {
+  const { error } = await supabase
+    .from("notifications")
+    .delete()
+    .eq("receiverid", guestId);
+
+  if (error) {
+    console.error("전체 게스트 알림 삭제 실패:", error);
+    throw new Error("전체 게스트 알림 삭제 실패");
   }
 }

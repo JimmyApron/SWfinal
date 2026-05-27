@@ -3,15 +3,30 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import {
   getMyNotifications,
+  getMyGuestNotifications,
   markNotificationAsRead,
+  markGuestNotificationAsRead,
   deleteNotification,
+  deleteGuestNotification,
   deleteMyNotifications,
+  deleteMyGuestNotifications,
 } from "../../api/notificationApi";
 
 function NotificationPage() {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [isGuestUser, setIsGuestUser] = useState(false);
+
+  const normalizeNotification = (notification) => ({
+    ...notification,
+    source: notification.source || (notification.guestid ? "guest" : "member"),
+    title: notification.title || "알림",
+    link:
+      notification.link ||
+      (notification.roomid ? `/rooms/${notification.roomid}` : null),
+    isread: notification.isread ?? false,
+  });
 
   useEffect(() => {
     let channel = null;
@@ -22,9 +37,11 @@ function NotificationPage() {
       } = await supabase.auth.getUser();
 
       let userId = user?.id;
+      let isGuest = false;
 
       if (!userId) {
         userId = localStorage.getItem("guest_id");
+        isGuest = Boolean(userId);
       }
 
       console.log("현재 알림 조회 userId:", userId);
@@ -35,6 +52,7 @@ function NotificationPage() {
       }
 
       setCurrentUserId(userId);
+      setIsGuestUser(isGuest);
 
       // ========================================================
       // 🛡️ [무해한 안전 훅] 유저가 알림창을 열었을 때 배경에서 마감 투표 사냥하기
@@ -101,7 +119,9 @@ function NotificationPage() {
       // ========================================================
       // 🟢 최신 알림 데이터 불러오기 (기존 로직 유지)
       // ========================================================
-      const data = await getMyNotifications(userId);
+      const data = isGuest
+        ? await getMyGuestNotifications(userId)
+        : await getMyNotifications(userId);
       console.log("불러온 알림 목록:", data);
       setNotifications(data);
 
@@ -128,14 +148,16 @@ function NotificationPage() {
 
               if (alreadyExists) return prev;
 
-              return [payload.new, ...prev];
+              return [normalizeNotification(payload.new), ...prev];
             });
           }
 
           if (payload.eventType === "UPDATE") {
             setNotifications((prev) =>
               prev.map((item) =>
-                item.id === payload.new.id ? payload.new : item
+                item.id === payload.new.id
+                  ? normalizeNotification(payload.new)
+                  : item
               )
             );
           }
@@ -164,7 +186,11 @@ function NotificationPage() {
 
   const handleClickNotification = async (notification) => {
     try {
-      await markNotificationAsRead(notification.id);
+      if (notification.source === "guest" || isGuestUser) {
+        await markGuestNotificationAsRead(notification.id);
+      } else {
+        await markNotificationAsRead(notification.id);
+      }
 
       setNotifications((prev) =>
         prev.map((item) =>
@@ -189,7 +215,15 @@ function NotificationPage() {
     if (!confirmDelete) return;
 
     try {
-      await deleteNotification(notificationId);
+      const targetNotification = notifications.find(
+        (notification) => notification.id === notificationId
+      );
+
+      if (targetNotification?.source === "guest" || isGuestUser) {
+        await deleteGuestNotification(notificationId);
+      } else {
+        await deleteNotification(notificationId);
+      }
 
       setNotifications((prev) =>
         prev.filter((notification) => notification.id !== notificationId)
@@ -212,7 +246,11 @@ function NotificationPage() {
     if (!confirmDelete) return;
 
     try {
-      await deleteMyNotifications(currentUserId);
+      if (isGuestUser) {
+        await deleteMyGuestNotifications(currentUserId);
+      } else {
+        await deleteMyNotifications(currentUserId);
+      }
       setNotifications([]);
     } catch (error) {
       console.error("전체 알림 삭제 실패:", error);

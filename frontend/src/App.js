@@ -106,8 +106,68 @@ function NotificationListener() {
 }
 
 function App() {
+  const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+
+  if (!googleClientId) {
+    return (
+      <BrowserRouter>
+        <NotificationListener />
+        <Layout>
+          <Routes>
+            {/* 泥??臾??붾㈃ */}
+            <Route path="/" element={<InviteCodePage />} />
+
+            {/* ?몄쬆 諛?吏꾩엯 ?뚯씠?꾨씪??*/}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignupPage />} />
+            <Route path="/guest" element={<GuestLoginPage />} />
+            <Route path="/home" element={<HomePage />} />
+
+            {/* 諛?愿??湲곕뒫 */}
+            <Route path="/rooms/create" element={<RoomCreatePage />} />
+            <Route path="/rooms/invite" element={<RoomInvitePage />} />
+            <Route path="/rooms/:roomId" element={<RoomDetailPage />} />
+
+            {/* 諛??대? ??湲곕뒫 */}
+            <Route path="/rooms/:roomid/schedule" element={<ScheduleTab />} />
+            <Route path="/rooms/:roomid/location" element={<LocationTab />} />
+            <Route path="/rooms/:roomid/votes" element={<VoteListPage />} />
+            <Route path="/rooms/:roomid/chat" element={<ChatTab />} />
+
+            <Route
+              path="/rooms/:roomid/available-result"
+              element={<AvailableResultPage />}
+            />
+            <Route
+              path="/rooms/:roomid/vote-create"
+              element={<VoteCreatePage />}
+            />
+            <Route
+              path="/rooms/:roomid/votes/:voteid"
+              element={<VoteDetailPage />}
+            />
+
+            {/* ?뺤젙 ?쇱젙 ?곸꽭 */}
+            <Route
+              path="/confirmed-schedule"
+              element={<ConfirmedScheduleDetailPage />}
+            />
+
+            {/* 罹섎┛??/ ?뚮┝ */}
+            <Route path="/calendar" element={<CalendarPage />} />
+            <Route path="/notifications" element={<NotificationPage />} />
+
+            {/* ?ㅼ젙 愿??湲곕뒫 */}
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings/edit" element={<SettingEditPage />} />
+          </Routes>
+        </Layout>
+      </BrowserRouter>
+    );
+  }
+
   return (
-    <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
+    <GoogleOAuthProvider clientId={googleClientId}>
       <BrowserRouter>
         <NotificationListener />
         <Layout>

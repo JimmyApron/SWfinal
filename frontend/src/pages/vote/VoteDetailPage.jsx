@@ -13,6 +13,7 @@ import {
 } from "../../api/voteApi";
 import { addEventToGoogleCalendar } from "../../api/googleCalendarApi";
 import KakaoMapView from "../../components/map/KakaoMapView";
+import LocationPicker from "../../components/map/LocationPicker";
 
 function VoteDetailPage() {
   const { roomid, voteid } = useParams();
@@ -270,6 +271,10 @@ function VoteDetailPage() {
     const hasLat = hasValue(option.placelat);
     const hasLng = hasValue(option.placelng);
 
+    if (!hasLat || !hasLng) {
+      return "선택지 장소를 카카오맵에서 선택해주세요.";
+    }
+
     if ((hasLat && !hasLng) || (!hasLat && hasLng)) {
       return "위도와 경도는 둘 다 입력해야 합니다.";
     }
@@ -331,8 +336,8 @@ function VoteDetailPage() {
       if (isLocationVote) {
         const placeName = newPlaceName.trim();
 
-        if (!placeName) {
-          alert("장소명을 입력하세요.");
+        if (!placeName || !hasValue(newPlaceLat) || !hasValue(newPlaceLng)) {
+          alert("선택지 장소를 카카오맵에서 선택해주세요.");
           return;
         }
 
@@ -433,8 +438,8 @@ function VoteDetailPage() {
   const handleConfirm = async (option) => {
     const typeLabel = vote.votetype === "schedule" ? "일정" : "중간장소";
 
-    if (vote.votetype === "location" && !hasAnyMapInfo(option)) {
-      alert("위치정보를 등록해주세요.");
+    if (vote.votetype === "location" && !hasPlaceCoordinates(option)) {
+      alert("선택지 장소를 카카오맵에서 선택해주세요.");
       return;
     }
 
@@ -1052,14 +1057,14 @@ function VoteDetailPage() {
                       >
                         <input
                           value={newPlaceName}
-                          onChange={(e) => setNewPlaceName(e.target.value)}
+                          readOnly
                           placeholder="추가할 장소명"
                           style={editInputStyle}
                         />
 
                         <input
                           value={newPlaceAddress}
-                          onChange={(e) => setNewPlaceAddress(e.target.value)}
+                          readOnly
                           placeholder="주소 선택 입력"
                           style={editInputStyle}
                         />
@@ -1067,14 +1072,14 @@ function VoteDetailPage() {
                         <div style={{ display: "flex", gap: "8px" }}>
                           <input
                             value={newPlaceLat}
-                            onChange={(e) => setNewPlaceLat(e.target.value)}
+                            readOnly
                             placeholder="위도 선택 입력"
                             style={{ ...editInputStyle, flex: 1 }}
                           />
 
                           <input
                             value={newPlaceLng}
-                            onChange={(e) => setNewPlaceLng(e.target.value)}
+                            readOnly
                             placeholder="경도 선택 입력"
                             style={{ ...editInputStyle, flex: 1 }}
                           />
@@ -1082,7 +1087,7 @@ function VoteDetailPage() {
 
                         <input
                           value={newKakaoMapUrl}
-                          onChange={(e) => setNewKakaoMapUrl(e.target.value)}
+                          readOnly
                           placeholder="카카오맵 URL 선택 입력"
                           style={editInputStyle}
                         />
@@ -1103,7 +1108,7 @@ function VoteDetailPage() {
                           onClick={() => setShowPickMap(!showPickMap)}
                           style={{ ...smallButtonStyle, marginBottom: "8px" }}
                         >
-                          {showPickMap ? "지도 접기" : "지도에서 위치 선택"}
+                          {showPickMap ? "장소 검색 닫기" : "카카오맵에서 장소 검색"}
                         </button>
 
                         {newPickedPlace && (
@@ -1114,11 +1119,19 @@ function VoteDetailPage() {
                         )}
 
                         {showPickMap && (
-                          <KakaoMapView
-                            onMapClick={setNewPickedPlace}
-                            pickedPlace={newPickedPlace}
-                            places={newPickedPlace ? [newPickedPlace] : []}
-                            selectedPlace={newPickedPlace}
+                          <LocationPicker
+                            allowMapClick={false}
+                            onSelect={(name, address, place = {}) => {
+                              setNewPlaceName(name || "");
+                              setNewPlaceAddress(address || "");
+                              setNewPlaceLat(place.lat ?? "");
+                              setNewPlaceLng(place.lng ?? "");
+                              setNewKakaoMapUrl(
+                                place.kakaoMapUrl || place.kakaomapurl || ""
+                              );
+                              setNewPickedPlace(place);
+                              setShowPickMap(false);
+                            }}
                           />
                         )}
 
@@ -1133,7 +1146,7 @@ function VoteDetailPage() {
                             cursor: "pointer",
                           }}
                         >
-                          지도 선택 항목 추가
+                          장소 검색 항목 추가
                         </button>
                       </div>
                     ) : (
@@ -1487,6 +1500,22 @@ function EditPlaceOptionsPanel({
   onAddOption,
   onRemoveOption,
 }) {
+  const [openPickerIndex, setOpenPickerIndex] = useState(null);
+
+  const handleSelectPlace = (index, name, address, place = {}) => {
+    onChangeOption(index, "placename", name || "");
+    onChangeOption(index, "optiontext", name || "");
+    onChangeOption(index, "placeaddress", address || "");
+    onChangeOption(index, "placelat", place.lat ?? "");
+    onChangeOption(index, "placelng", place.lng ?? "");
+    onChangeOption(
+      index,
+      "kakaomapurl",
+      place.kakaoMapUrl || place.kakaomapurl || ""
+    );
+    setOpenPickerIndex(null);
+  };
+
   return (
     <div
       style={{
@@ -1500,8 +1529,7 @@ function EditPlaceOptionsPanel({
       <h4 style={{ marginTop: 0 }}>중간장소 후보 수정</h4>
 
       <p style={{ fontSize: "12px", color: "#888" }}>
-        장소명은 필수입니다. 주소, 위도/경도, 카카오맵 URL 중 하나는 입력해야
-        합니다. 위도와 경도는 둘 다 있거나 둘 다 없어야 합니다.
+        장소는 카카오맵 검색 결과에서 선택해야 합니다.
       </p>
 
       {editPlaceOptions.map((option, index) => (
@@ -1536,16 +1564,33 @@ function EditPlaceOptionsPanel({
 
           <input
             value={option.placename}
-            onChange={(e) => onChangeOption(index, "placename", e.target.value)}
+            readOnly
             placeholder="장소명"
             style={editInputStyle}
           />
 
+          <button
+            type="button"
+            onClick={() =>
+              setOpenPickerIndex((prev) => (prev === index ? null : index))
+            }
+            style={{ ...smallButtonStyle, marginBottom: "8px" }}
+          >
+            {openPickerIndex === index ? "장소 검색 닫기" : "카카오맵에서 장소 검색"}
+          </button>
+
+          {openPickerIndex === index && (
+            <LocationPicker
+              allowMapClick={false}
+              onSelect={(name, address, place) =>
+                handleSelectPlace(index, name, address, place)
+              }
+            />
+          )}
+
           <input
             value={option.placeaddress}
-            onChange={(e) =>
-              onChangeOption(index, "placeaddress", e.target.value)
-            }
+            readOnly
             placeholder="주소 선택 입력"
             style={editInputStyle}
           />
@@ -1553,14 +1598,14 @@ function EditPlaceOptionsPanel({
           <div style={{ display: "flex", gap: "8px" }}>
             <input
               value={option.placelat}
-              onChange={(e) => onChangeOption(index, "placelat", e.target.value)}
+              readOnly
               placeholder="위도 선택 입력"
               style={{ ...editInputStyle, flex: 1 }}
             />
 
             <input
               value={option.placelng}
-              onChange={(e) => onChangeOption(index, "placelng", e.target.value)}
+              readOnly
               placeholder="경도 선택 입력"
               style={{ ...editInputStyle, flex: 1 }}
             />
@@ -1568,9 +1613,7 @@ function EditPlaceOptionsPanel({
 
           <input
             value={option.kakaomapurl}
-            onChange={(e) =>
-              onChangeOption(index, "kakaomapurl", e.target.value)
-            }
+            readOnly
             placeholder="카카오맵 URL 선택 입력"
             style={editInputStyle}
           />
@@ -1713,6 +1756,10 @@ function hasAnyMapInfo(option) {
   const hasAddress = hasValue(option.placeaddress);
 
   return hasValue(mapUrl) || hasCoords || hasAddress;
+}
+
+function hasPlaceCoordinates(option) {
+  return hasValue(option.placelat) && hasValue(option.placelng);
 }
 
 function isPlaceOption(option) {

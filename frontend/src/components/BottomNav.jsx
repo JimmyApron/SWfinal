@@ -2,11 +2,15 @@ import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { FaHome, FaCalendarAlt, FaBell, FaCog } from "react-icons/fa";
 import { supabase } from "../lib/supabaseClient";
-import { getUnreadNotificationCount } from "../api/notificationApi";
+import {
+  getUnreadNotificationCount,
+  getUnreadGuestNotificationCount,
+} from "../api/notificationApi";
 import "./BottomNav.css";
 
 function BottomNav() {
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [isGuestUser, setIsGuestUser] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
@@ -16,16 +20,21 @@ function BottomNav() {
       } = await supabase.auth.getUser();
 
       let userId = user?.id;
+      let isGuest = false;
 
       if (!userId) {
         userId = localStorage.getItem("guest_id");
+        isGuest = Boolean(userId);
       }
 
       if (!userId) return;
 
       setCurrentUserId(userId);
+      setIsGuestUser(isGuest);
 
-      const count = await getUnreadNotificationCount(userId);
+      const count = isGuest
+        ? await getUnreadGuestNotificationCount(userId)
+        : await getUnreadNotificationCount(userId);
       setUnreadCount(count);
     };
 
@@ -36,7 +45,9 @@ function BottomNav() {
     if (!currentUserId) return;
 
     const reloadUnreadCount = async () => {
-      const count = await getUnreadNotificationCount(currentUserId);
+      const count = isGuestUser
+        ? await getUnreadGuestNotificationCount(currentUserId)
+        : await getUnreadNotificationCount(currentUserId);
       setUnreadCount(count);
     };
 
@@ -59,7 +70,7 @@ function BottomNav() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUserId]);
+  }, [currentUserId, isGuestUser]);
 
   const displayCount = unreadCount > 9 ? "9+" : `+${unreadCount}`;
 

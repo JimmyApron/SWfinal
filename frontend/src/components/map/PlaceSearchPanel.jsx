@@ -5,7 +5,12 @@ import PlaceCategoryTabs from './PlaceCategoryTabs'
 import PlaceFilter from './PlaceFilter'
 import PlaceList from './PlaceList'
 
-function PlaceSearchPanel({ searchLocation, onSearchResult, onSelectPlace }) {
+function PlaceSearchPanel({
+  searchLocation,
+  onSearchResult,
+  onSelectPlace,
+  onSharePlace,
+}) {
   const [selectedCategory, setSelectedCategory] = useState('restaurant')
   const [radius, setRadius] = useState('1000')
   const [ratingFilter, setRatingFilter] = useState('all')
@@ -111,7 +116,11 @@ function PlaceSearchPanel({ searchLocation, onSearchResult, onSelectPlace }) {
 
       {message && <p>{message}</p>}
 
-      <PlaceList places={places} onSelectPlace={onSelectPlace} />
+      <PlaceList
+        places={places}
+        onSelectPlace={onSelectPlace}
+        onSharePlace={onSharePlace}
+      />
     </section>
   )
 }
