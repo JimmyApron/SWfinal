@@ -509,6 +509,7 @@ function RoomDetailPage() {
               >
                 {members.map((m) => {
                   const imageUrl = m.profiles?.profileimageurl;
+                  const isHost = room?.createdby === m.userid;
 
                   return (
                     <div
@@ -558,6 +559,17 @@ function RoomDetailPage() {
                             color: "#333",
                           }}
                         >
+                          {isHost && (
+                            <span
+                              style={{
+                                color: "#8366F4",
+                                marginRight: "4px",
+                                fontWeight: "bold",
+                              }}
+                            >
+                              방장
+                            </span>
+                          )}
                           {m.nickname || "이름없음"}
                         </span>
 
