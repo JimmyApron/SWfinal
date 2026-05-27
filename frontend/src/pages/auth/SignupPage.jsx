@@ -133,11 +133,7 @@ function SignupPage() {
         password: password,
       })
 
-      setMessage('🎉 회원가입이 완벽하게 완료되었습니다! 즉시 로그인이 가능합니다.')
-      
-      setTimeout(() => {
-        navigate('/login')
-      }, 1500)
+      setMessage('📧 인증 이메일을 전송했습니다. 이메일함을 확인하고 링크를 클릭하면 로그인할 수 있어요.')
 
     } catch (error) {
       console.error('회원가입 오류:', error)
@@ -147,7 +143,7 @@ function SignupPage() {
 
   return (
     <section>
-      <h2>회원가입 (인증메일 OFF 버전)</h2>
+      <h2>회원가입</h2>
 
       <form onSubmit={handleSignup}>
         <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>

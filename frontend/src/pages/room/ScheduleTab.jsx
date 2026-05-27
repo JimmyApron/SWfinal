@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   getScheduleCandidates,
   getRoomMembers,
+  getRoomGuests,
   getMemberAvailabilities,
   saveMemberAvailabilities,
   updateRoomLastActivity,
@@ -13,21 +14,30 @@ import {
 import { supabase } from "../../lib/supabaseClient";
 import { createNotification } from "../../api/notificationApi";
 
-function ScheduleTab({ roomId }) {
+function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const navigate = useNavigate();
   const [candidates, setCandidates] = useState([]);
   const [members, setMembers] = useState([]);
+  const [guests, setGuests] = useState([]);
   const [availabilities, setAvailabilities] = useState([]);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [selectedSlots, setSelectedSlots] = useState([]);
   const [dragMode, setDragMode] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null); //현재 로그인 유저 상태
+  const [currentUser, setCurrentUser] = useState(null);
   const [newDate, setNewDate] = useState("");
   const [newStartTime, setNewStartTime] = useState("");
   const [newEndTime, setNewEndTime] = useState("");
   const [newIsAllDay, setNewIsAllDay] = useState(false);
   const [editingCandidateId, setEditingCandidateId] = useState(null);
+
+  const [confirmedSchedules, setConfirmedSchedules] = useState([]);
+  const [showConfirmedForm, setShowConfirmedForm] = useState(false);
+  const [confirmedTitle, setConfirmedTitle] = useState("");
+  const [confirmedDate, setConfirmedDate] = useState("");
+  const [confirmedStartTime, setConfirmedStartTime] = useState("");
+  const [confirmedEndTime, setConfirmedEndTime] = useState("");
+  const [confirmedIsAllDay, setConfirmedIsAllDay] = useState(false);
 
   const memberColors = [
     "#7c79ff",
@@ -50,8 +60,12 @@ function ScheduleTab({ roomId }) {
   }
 
   const getMemberColor = (userid) => {
-    const index = members.findIndex((member) => member.userid === userid);
-    return memberColors[index % memberColors.length];
+    const allIds = [
+      ...members.map((m) => m.userid),
+      ...guests.map((g) => g.id),
+    ];
+    const index = allIds.findIndex((id) => id === userid);
+    return memberColors[index >= 0 ? index % memberColors.length : 0];
   };
 
   const formatDateWithDay = (dateString) => {
@@ -139,22 +153,35 @@ function ScheduleTab({ roomId }) {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user) {
-        alert("로그인이 필요합니다.");
-        return;
+      let userId, userNickname;
+
+      if (user) {
+        userId = user.id;
+        userNickname = user.user_metadata?.nickname || user.email;
+      } else {
+        const guestId = localStorage.getItem("guest_id");
+        const guestNickname = localStorage.getItem("guest_nickname");
+
+        if (!guestId) {
+          alert("로그인이 필요합니다.");
+          return;
+        }
+
+        userId = guestId;
+        userNickname = guestNickname;
       }
 
       const rows = selectedSlots.map((slot) => ({
         roomid: Number(roomId),
         candidateid: slot.candidateId,
-        userid: user.id,
-        nickname: user.user_metadata.nickname,
+        userid: userId,
+        nickname: userNickname,
         date: slot.date,
         starttime: slot.starttime,
         endtime: slot.endtime,
       }));
 
-      await saveMemberAvailabilities(roomId, user.id, rows);
+      await saveMemberAvailabilities(roomId, userId, rows);
       await updateRoomLastActivity(roomId);
 
       alert("가능한 일정이 저장되었습니다.");
@@ -263,24 +290,28 @@ function ScheduleTab({ roomId }) {
     }
   };
 
-  const handleRequestSchedule = async (member) => {
+  const handleRequestSchedule = async (receiver) => {
     try {
-      if (!currentUser) {
+      const senderId = currentUser?.id || localStorage.getItem("guest_id");
+
+      if (!senderId) {
         alert("사용자 정보를 불러오는 중입니다.");
         return;
       }
 
+      const receiverId = receiver.userid || receiver.id;
+
       await createNotification({
         roomId,
-        receiverId: member.userid,
-        senderId: currentUser.id,
+        receiverId,
+        senderId,
         type: "schedule_request",
         title: "일정 등록 요청",
         message: "아직 가능한 일정을 등록하지 않았습니다. 일정을 등록해주세요!",
         link: `/rooms/${roomId}`,
       });
 
-      alert(`${member.nickname || "상대방"}님에게 일정 등록 요청 알림을 보냈습니다.`);
+      alert(`${receiver.nickname || "상대방"}님에게 일정 등록 요청 알림을 보냈습니다.`);
     } catch (error) {
       console.error("일정 등록 요청 알림 전송 실패:", error);
       alert("일정 등록 요청 알림 전송에 실패했습니다.");
@@ -295,6 +326,64 @@ function ScheduleTab({ roomId }) {
     });
   };
 
+  const loadConfirmedSchedules = async () => {
+    const { data } = await supabase
+      .from("confirmed_schedules")
+      .select("*")
+      .eq("roomid", roomId)
+      .order("date", { ascending: true });
+    setConfirmedSchedules(data || []);
+  };
+
+  const handleAddConfirmedSchedule = async () => {
+    if (!confirmedDate) { alert("날짜를 선택하세요."); return; }
+    if (!confirmedIsAllDay && (!confirmedStartTime || !confirmedEndTime)) {
+      alert("시작 시간과 종료 시간을 선택하세요."); return;
+    }
+    if (!confirmedIsAllDay && confirmedStartTime >= confirmedEndTime) {
+      alert("시작 시간은 종료 시간보다 빨라야 합니다."); return;
+    }
+
+    const { error } = await supabase.from("confirmed_schedules").insert([{
+      roomid: Number(roomId),
+      title: confirmedTitle || null,
+      date: confirmedDate,
+      starttime: confirmedIsAllDay ? null : confirmedStartTime,
+      endtime: confirmedIsAllDay ? null : confirmedEndTime,
+      isallday: confirmedIsAllDay,
+    }]);
+
+    if (error) { alert("확정 일정 추가 실패"); return; }
+
+    await updateRoomLastActivity(roomId);
+    setConfirmedTitle("");
+    setConfirmedDate("");
+    setConfirmedStartTime("");
+    setConfirmedEndTime("");
+    setConfirmedIsAllDay(false);
+    setShowConfirmedForm(false);
+    await loadConfirmedSchedules();
+  };
+
+  const handleToggleAbsence = async (schedule) => {
+    const userId = currentUser?.id;
+    if (!userId) return;
+    const absentees = schedule.absentees || [];
+    const isAbsent = absentees.includes(userId);
+    const updated = isAbsent
+      ? absentees.filter((id) => id !== userId)
+      : [...absentees, userId];
+    await supabase.from("confirmed_schedules").update({ absentees: updated }).eq("id", schedule.id);
+    await loadConfirmedSchedules();
+  };
+
+  const handleDeleteConfirmedSchedule = async (id) => {
+    if (!window.confirm("이 일정을 삭제할까요? 모든 멤버에게 사라집니다.")) return;
+    await supabase.from("confirmed_schedules").delete().eq("id", id);
+    await updateRoomLastActivity(roomId);
+    await loadConfirmedSchedules();
+  };
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -306,25 +395,141 @@ function ScheduleTab({ roomId }) {
 
         const candidateData = await getScheduleCandidates(roomId);
         const memberData = await getRoomMembers(roomId);
+        const guestData = await getRoomGuests(roomId);
         const availabilityData = await getMemberAvailabilities(roomId);
 
         setCandidates(candidateData);
         setMembers(memberData);
+        setGuests(guestData);
         setAvailabilities(availabilityData);
+        await loadConfirmedSchedules();
       } catch (error) {
         console.error(error);
       }
     };
 
     loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
+  const myUserId = currentUser?.id || localStorage.getItem("guest_id");
   const myAvailability = availabilities.some(
-    (item) => item.userid === currentUser?.id
+    (item) => item.userid === myUserId
   );
 
   return (
     <div>
+      {/* Confirmed schedules section */}
+      <div style={{ marginBottom: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+          <h2 style={{ margin: 0 }}>확정된 일정</h2>
+          <button
+            onClick={() => setShowConfirmedForm((v) => !v)}
+            style={{ padding: "6px 14px", backgroundColor: "#7c79ff", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "13px" }}
+          >
+            {showConfirmedForm ? "취소" : "+ 일정 추가"}
+          </button>
+        </div>
+
+        {showConfirmedForm && (
+          <div style={{ backgroundColor: "#f8f8ff", borderRadius: "10px", padding: "14px", marginBottom: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
+            <input
+              type="text"
+              placeholder="일정 제목 (선택)"
+              value={confirmedTitle}
+              onChange={(e) => setConfirmedTitle(e.target.value)}
+              style={{ padding: "7px 10px", border: "1px solid #d8d8ff", borderRadius: "6px", fontSize: "14px" }}
+            />
+            <input
+              type="date"
+              value={confirmedDate}
+              onChange={(e) => setConfirmedDate(e.target.value)}
+              style={{ padding: "7px 10px", border: "1px solid #d8d8ff", borderRadius: "6px", fontSize: "14px" }}
+            />
+            <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "14px" }}>
+              <input
+                type="checkbox"
+                checked={confirmedIsAllDay}
+                onChange={(e) => setConfirmedIsAllDay(e.target.checked)}
+              />
+              하루종일
+            </label>
+            {!confirmedIsAllDay && (
+              <div style={{ display: "flex", gap: "8px" }}>
+                <select
+                  value={confirmedStartTime}
+                  onChange={(e) => setConfirmedStartTime(e.target.value)}
+                  style={{ flex: 1, padding: "7px", border: "1px solid #d8d8ff", borderRadius: "6px", fontSize: "14px" }}
+                >
+                  <option value="">시작 시간</option>
+                  {timeSlots.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <select
+                  value={confirmedEndTime}
+                  onChange={(e) => setConfirmedEndTime(e.target.value)}
+                  style={{ flex: 1, padding: "7px", border: "1px solid #d8d8ff", borderRadius: "6px", fontSize: "14px" }}
+                >
+                  <option value="">종료 시간</option>
+                  {timeSlots.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            )}
+            <button
+              onClick={handleAddConfirmedSchedule}
+              style={{ padding: "8px", backgroundColor: "#7c79ff", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "14px", fontWeight: "bold" }}
+            >
+              추가하기
+            </button>
+          </div>
+        )}
+
+        {confirmedSchedules.length === 0 ? (
+          <p style={{ color: "#aaa", fontSize: "13px", margin: 0 }}>아직 확정된 일정이 없습니다.</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {confirmedSchedules.map((s) => {
+              const isAbsent = (s.absentees || []).includes(currentUser?.id);
+              const isOwner = currentUser?.id && currentUser.id === ownerUserId;
+              return (
+                <div key={s.id} onClick={() => navigate("/confirmed-schedule", { state: { schedule: { ...s, roomname: roomName } } })} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#f0f0ff", borderRadius: "10px", padding: "10px 14px", cursor: "pointer" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                    <span style={{ color: "#7c79ff", fontSize: "16px", marginTop: "1px" }}>📌</span>
+                    <div>
+                      <div style={{ fontWeight: "600", fontSize: "14px", color: "#333" }}>
+                        {s.title || "(제목 없음)"}
+                        {isAbsent && <span style={{ marginLeft: "6px", fontSize: "11px", color: "#fff", backgroundColor: "#bbb", borderRadius: "4px", padding: "1px 5px" }}>불참</span>}
+                      </div>
+                      <div style={{ color: "#888", fontSize: "12px", marginTop: "2px" }}>
+                        {formatDateWithDay(s.date)}
+                        {s.isallday ? " · 하루종일" : (s.starttime ? ` · ${s.starttime.slice(0, 5)}${s.endtime ? ` ~ ${s.endtime.slice(0, 5)}` : ""}` : "")}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    {currentUser && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleToggleAbsence(s); }}
+                        style={{ background: "none", border: `1px solid ${isAbsent ? "#7c79ff" : "#ddd"}`, color: isAbsent ? "#7c79ff" : "#999", cursor: "pointer", fontSize: "12px", padding: "3px 8px", borderRadius: "6px" }}
+                      >
+                        {isAbsent ? "참석으로 변경" : "일정 취소"}
+                      </button>
+                    )}
+                    {isOwner && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteConfirmedSchedule(s.id); }}
+                        style={{ background: "none", border: "1px solid #ffcccc", color: "#e57373", cursor: "pointer", fontSize: "12px", padding: "3px 8px", borderRadius: "6px" }}
+                      >
+                        일정 삭제
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       <h2>일정 후보</h2>
 
       <div>
@@ -510,7 +715,7 @@ function ScheduleTab({ roomId }) {
         <button
           onClick={() => {
             const mySaveSlots = availabilities
-              .filter((item) => item.userid === currentUser?.id)
+              .filter((item) => item.userid === myUserId)
               .map((item) => ({
                 key: getSlotKey(item.candidateid, item.starttime.slice(0, 5)),
                 candidateId: item.candidateid,
@@ -546,7 +751,7 @@ function ScheduleTab({ roomId }) {
           (item) => item.userid === member.userid
         );
 
-        const isMe = member.userid === currentUser?.id;
+        const isMe = !!currentUser?.id && member.userid === currentUser.id;
 
         return (
           <div key={member.id} style={{ display: "flex", gap: "10px" }}>
@@ -562,6 +767,35 @@ function ScheduleTab({ roomId }) {
 
             {!isRegistered && !isMe && (
               <button onClick={() => handleRequestSchedule(member)}>
+                일정 등록 요청
+              </button>
+            )}
+          </div>
+        );
+      })}
+
+      {guests.map((guest) => {
+        const isRegistered = availabilities.some(
+          (item) => item.userid === guest.id
+        );
+
+        const guestId = localStorage.getItem("guest_id");
+        const isMe = !!guestId && guest.id === guestId;
+
+        return (
+          <div key={guest.id} style={{ display: "flex", gap: "10px" }}>
+            <span>👤</span>
+            <span>{guest.nickname || "닉네임 없음"}</span>
+            <span>
+              {isRegistered
+                ? "등록 완료"
+                : isMe
+                ? "내 일정 미등록"
+                : "일정 등록 안 함"}
+            </span>
+
+            {!isRegistered && !isMe && (
+              <button onClick={() => handleRequestSchedule(guest)}>
                 일정 등록 요청
               </button>
             )}

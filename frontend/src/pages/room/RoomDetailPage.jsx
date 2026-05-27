@@ -5,6 +5,8 @@ import ScheduleTab from "./ScheduleTab";
 import MapPage from "../../components/map/MapPage";
 import ChatTab from "../Chat/ChatTab";
 import VoteListPage from "../vote/VoteListPage";
+import { getFriends, checkFriendStatus, sendFriendRequestById } from "../../api/friendApi";
+import { createNotification } from "../../api/notificationApi";
 
 function RoomDetailPage() {
   const navigate = useNavigate();
@@ -17,6 +19,11 @@ function RoomDetailPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
+  const [currentUser, setCurrentUser] = useState(null);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [friendList, setFriendList] = useState([]);
+  const [invitingSending, setInvitingSending] = useState(false);
+  const [memberPopup, setMemberPopup] = useState(null);
 
   const [members, setMembers] = useState([]);
   const [guests, setGuests] = useState([]);
@@ -89,6 +96,8 @@ function RoomDetailPage() {
       data: { user },
     } = await supabase.auth.getUser();
 
+    if (user) setCurrentUser(user);
+
     if (user && user.id) {
       const { data: myMemberData, error: myMemberError } = await supabase
         .from("room_members")
@@ -150,6 +159,65 @@ function RoomDetailPage() {
     } catch (error) {
       alert("복사에 실패했습니다.");
       console.error(error);
+    }
+  };
+
+  const handleOpenInviteModal = async () => {
+    if (!currentUser) return;
+    setShowInviteModal(true);
+    try {
+      const friends = await getFriends(currentUser.id);
+      // 이미 방에 있는 멤버 제외
+      const memberIds = new Set(members.map((m) => m.userid));
+      setFriendList(friends.filter((f) => !memberIds.has(f.id)));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleInviteFriend = async (friend) => {
+    if (!currentUser || !room) return;
+    setInvitingSending(true);
+    try {
+      const { data: senderProfile } = await supabase
+        .from("profiles")
+        .select("nickname")
+        .eq("id", currentUser.id)
+        .single();
+      const senderNickname =
+        senderProfile?.nickname || currentUser.user_metadata?.nickname || currentUser.email;
+      await createNotification({
+        roomId: Number(roomId),
+        receiverId: friend.id,
+        senderId: currentUser.id,
+        type: "room_invite",
+        title: "🏠 방 초대",
+        message: `${senderNickname}님이 [${room.roomname}]에 초대했습니다`,
+        link: `/rooms/${roomId}`,
+      });
+      alert(`${friend.nickname}님에게 초대를 보냈습니다.`);
+    } catch (e) {
+      alert("초대 전송 실패: " + e.message);
+    } finally {
+      setInvitingSending(false);
+    }
+  };
+
+  const handleClickMember = async (member) => {
+    if (!currentUser || member.userid === currentUser.id) return;
+    setMemberPopup({ member, status: null, loading: true });
+    const data = await checkFriendStatus(currentUser.id, member.userid);
+    setMemberPopup({ member, status: data?.status || null, loading: false });
+  };
+
+  const handleAddFriendFromRoom = async () => {
+    if (!memberPopup || !currentUser) return;
+    try {
+      await sendFriendRequestById(currentUser.id, memberPopup.member.userid);
+      setMemberPopup((prev) => ({ ...prev, status: "pending" }));
+      alert(`${memberPopup.member.nickname}님에게 친구 요청을 보냈습니다.`);
+    } catch (e) {
+      alert(e.message);
     }
   };
 
@@ -308,16 +376,11 @@ function RoomDetailPage() {
           backgroundColor: "#f5f5f5",
         }}
       >
-        <button onClick={() => navigate("/home")}>←</button>
+        {currentUser && <button onClick={() => navigate("/home")}>←</button>}
         <span>{room.roomname}</span>
         <span>총 {members.length + guests.length}명</span>
         <button onClick={() => setIsSidebarOpen(true)}>⚙</button>
       </header>
-
-      <div>
-        <p>초대코드: {room.invitecode}</p>
-        <button onClick={handleCopyInviteCode}>초대코드 복사하기</button>
-      </div>
 
       <div>
         <button onClick={() => handleChangeTab("schedule")}>일정</button>
@@ -341,7 +404,7 @@ function RoomDetailPage() {
             : {}
         }
       >
-        {tab === "schedule" && <ScheduleTab roomId={roomId} />}
+        {tab === "schedule" && <ScheduleTab roomId={roomId} ownerUserId={room?.createdby} roomName={room?.roomname} />}
         {tab === "location" && <MapPage roomId={roomId} />}
         {tab === "vote" && <VoteListPage roomid={roomId} />}
         {tab === "chat" && <ChatTab roomId={roomId} />}
@@ -493,6 +556,24 @@ function RoomDetailPage() {
             </div>
 
             <div style={{ marginBottom: "25px" }}>
+              <h4 style={{ margin: "0 0 10px 0" }}>👥 친구 초대</h4>
+              <button
+                onClick={handleOpenInviteModal}
+                style={{ width: "100%", padding: "10px", backgroundColor: "#7c79ff", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold", fontSize: "14px" }}
+              >
+                친구 초대하기
+              </button>
+            </div>
+
+            <div style={{ marginBottom: "25px" }}>
+              <h4 style={{ margin: "0 0 10px 0" }}>🔗 초대코드</h4>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 12px", backgroundColor: "#f5f5f5", borderRadius: "8px" }}>
+                <span style={{ flex: 1, fontSize: "15px", fontWeight: "bold", letterSpacing: "2px", color: "#333" }}>{room.invitecode}</span>
+                <button onClick={handleCopyInviteCode} style={{ padding: "6px 12px", backgroundColor: "#7c79ff", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "13px", whiteSpace: "nowrap" }}>복사</button>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "25px" }}>
               <h4 style={{ margin: "0 0 10px 0" }}>
                 👥 참여자 명단 ({members.length + guests.length}명)
               </h4>
@@ -509,6 +590,7 @@ function RoomDetailPage() {
               >
                 {members.map((m) => {
                   const imageUrl = m.profiles?.profileimageurl;
+                  const isMe = currentUser && m.userid === currentUser.id;
 
                   return (
                     <div
@@ -552,13 +634,16 @@ function RoomDetailPage() {
 
                       <div style={{ display: "flex", flexDirection: "column" }}>
                         <span
+                          onClick={() => !isMe && handleClickMember(m)}
                           style={{
                             fontSize: "14px",
                             fontWeight: "600",
-                            color: "#333",
+                            color: isMe ? "#333" : "#7c79ff",
+                            cursor: isMe ? "default" : "pointer",
+                            textDecoration: isMe ? "none" : "underline",
                           }}
                         >
-                          {m.nickname || "이름없음"}
+                          {m.nickname || "이름없음"}{isMe ? " (나)" : ""}
                         </span>
 
                         <span
@@ -655,6 +740,71 @@ function RoomDetailPage() {
             </button>
           </div>
         </div>
+      )}
+      {/* 친구 초대 모달 */}
+      {showInviteModal && (
+        <>
+          <div onClick={() => setShowInviteModal(false)} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", zIndex: 3000 }} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", backgroundColor: "#fff", borderRadius: "16px", padding: "24px", width: "300px", maxHeight: "70vh", display: "flex", flexDirection: "column", zIndex: 3001, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <span style={{ fontSize: "16px", fontWeight: "bold" }}>친구 초대</span>
+              <button onClick={() => setShowInviteModal(false)} style={{ border: "none", background: "none", fontSize: "20px", cursor: "pointer", color: "#aaa" }}>✕</button>
+            </div>
+            <div style={{ flex: 1, overflowY: "auto" }}>
+              {friendList.length === 0 ? (
+                <p style={{ color: "#aaa", textAlign: "center", fontSize: "14px", marginTop: "20px" }}>초대할 수 있는 친구가 없습니다</p>
+              ) : (
+                friendList.map((friend) => (
+                  <div key={friend.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 0", borderBottom: "1px solid #f5f5f5" }}>
+                    {friend.profileimageurl ? (
+                      <img src={friend.profileimageurl} alt={friend.nickname} style={{ width: "38px", height: "38px", borderRadius: "50%", objectFit: "cover" }} />
+                    ) : (
+                      <div style={{ width: "38px", height: "38px", borderRadius: "50%", backgroundColor: "#e0e0ff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px" }}>👤</div>
+                    )}
+                    <span style={{ flex: 1, fontSize: "14px" }}>{friend.nickname}</span>
+                    <button
+                      onClick={() => handleInviteFriend(friend)}
+                      disabled={invitingSending}
+                      style={{ padding: "6px 14px", backgroundColor: "#7c79ff", color: "#fff", border: "none", borderRadius: "8px", fontSize: "13px", cursor: "pointer" }}
+                    >
+                      초대
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+      {/* 멤버 클릭 팝업 */}
+      {memberPopup && (
+        <>
+          <div onClick={() => setMemberPopup(null)} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", zIndex: 3000 }} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", backgroundColor: "#fff", borderRadius: "16px", padding: "24px", width: "260px", zIndex: 3001, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", textAlign: "center" }}>
+            <div style={{ fontSize: "36px", marginBottom: "8px" }}>👤</div>
+            <p style={{ margin: "0 0 4px", fontSize: "16px", fontWeight: "bold" }}>{memberPopup.member.nickname}</p>
+            <p style={{ margin: "0 0 20px", fontSize: "12px", color: "#8366F4" }}>회원</p>
+
+            {memberPopup.loading ? (
+              <p style={{ fontSize: "13px", color: "#aaa" }}>확인 중...</p>
+            ) : memberPopup.status === "accepted" ? (
+              <p style={{ fontSize: "13px", color: "#4CAF50", fontWeight: "600" }}>✓ 이미 친구입니다</p>
+            ) : memberPopup.status === "pending" ? (
+              <p style={{ fontSize: "13px", color: "#f90", fontWeight: "600" }}>요청 대기 중</p>
+            ) : (
+              <button
+                onClick={handleAddFriendFromRoom}
+                style={{ width: "100%", padding: "10px", backgroundColor: "#7c79ff", color: "#fff", border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "bold", cursor: "pointer" }}
+              >
+                친구 추가
+              </button>
+            )}
+
+            <button onClick={() => setMemberPopup(null)} style={{ marginTop: "10px", width: "100%", padding: "8px", backgroundColor: "#f5f5f5", color: "#555", border: "none", borderRadius: "10px", fontSize: "13px", cursor: "pointer" }}>
+              닫기
+            </button>
+          </div>
+        </>
       )}
     </div>
   );

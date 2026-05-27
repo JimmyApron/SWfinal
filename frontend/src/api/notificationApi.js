@@ -16,7 +16,7 @@ export async function createNotification({
 
   const { error } = await supabase.from("notifications").insert([
     {
-      roomid: Number(roomId),
+      roomid: roomId != null ? Number(roomId) : null,
       receiverid: receiverId,
       senderid: senderId || null,
       type,

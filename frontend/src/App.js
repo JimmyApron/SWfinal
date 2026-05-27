@@ -28,6 +28,7 @@ import VoteListPage from "./pages/vote/VoteListPage";
 import VoteDetailPage from "./pages/vote/VoteDetailPage";
 
 import CalendarPage from "./pages/calendar/CalendarPage";
+import FriendCalendarPage from "./pages/calendar/FriendCalendarPage";
 import NotificationPage from "./pages/notification/NotificationPage";
 
 import SettingsPage from "./pages/settings/SettingsPage";
@@ -153,6 +154,7 @@ function App() {
 
             {/* 캘린더 / 알림 */}
             <Route path="/calendar" element={<CalendarPage />} />
+            <Route path="/calendar/friend/:friendId" element={<FriendCalendarPage />} />
             <Route path="/notifications" element={<NotificationPage />} />
 
             {/* 설정 관련 기능 */}

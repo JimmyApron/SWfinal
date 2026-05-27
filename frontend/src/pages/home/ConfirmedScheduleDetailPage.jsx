@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
-import { updateConfirmedScheduleLocation, cancelConfirmedSchedule, dismissConfirmedSchedule } from "../../api/scheduleApi";
+import { updateConfirmedScheduleLocation, cancelConfirmedSchedule } from "../../api/scheduleApi";
 import { createRoomNotifications } from "../../api/notificationApi";
 import LocationPicker from "../../components/map/LocationPicker";
 
@@ -15,28 +15,34 @@ function ConfirmedScheduleDetailPage() {
   const [saving, setSaving] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  const [voteCreatorId, setVoteCreatorId] = useState(null);
+  const [roomOwnerId, setRoomOwnerId] = useState(null);
   const [attendees, setAttendees] = useState([]);
+  const [absentees, setAbsentees] = useState(schedule?.absentees || []);
 
   useEffect(() => {
-    if (!schedule) { navigate("/home"); return; }
+    if (!schedule) { navigate(-1); return; }
 
     const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
 
+      const [{ data: roomData }, { data: scheduleData }] = await Promise.all([
+        supabase.from("rooms").select("createdby").eq("id", schedule.roomid).single(),
+        supabase.from("confirmed_schedules").select("absentees").eq("id", schedule.id).single(),
+      ]);
+
+      if (roomData) setRoomOwnerId(roomData.createdby);
+      if (scheduleData) setAbsentees(scheduleData.absentees || []);
+
       if (!schedule.voteid) return;
 
       const { data: vote } = await supabase
         .from("votes")
-        .select("userid, confirmedoptionid")
+        .select("confirmedoptionid")
         .eq("id", schedule.voteid)
         .single();
 
-      if (!vote) return;
-      setVoteCreatorId(vote.userid);
-
-      if (vote.confirmedoptionid) {
+      if (vote?.confirmedoptionid) {
         const { data: responses } = await supabase
           .from("voteresponses")
           .select("userid")
@@ -60,7 +66,41 @@ function ConfirmedScheduleDetailPage() {
 
   if (!schedule) return null;
 
-  const isCreator = currentUser?.id === voteCreatorId;
+  const isRoomOwner = currentUser?.id && currentUser.id === roomOwnerId;
+  const isAbsent = absentees.includes(currentUser?.id);
+
+  const handleToggleAbsence = async () => {
+    const userId = currentUser?.id;
+    if (!userId) return;
+    const updated = isAbsent
+      ? absentees.filter((id) => id !== userId)
+      : [...absentees, userId];
+
+    await supabase.from("confirmed_schedules").update({ absentees: updated }).eq("id", schedule.id);
+    setAbsentees(updated);
+
+    if (!isAbsent) {
+      const { data: memberRows } = await supabase
+        .from("room_members")
+        .select("userid")
+        .eq("roomid", schedule.roomid);
+
+      const totalMembers = (memberRows || []).length;
+      if (totalMembers - updated.length <= 1) {
+        await cancelConfirmedSchedule(schedule.id, schedule.voteid);
+        await createRoomNotifications({
+          roomId: schedule.roomid,
+          senderId: userId,
+          type: "schedule_cancelled",
+          title: "확정 일정이 취소되었습니다",
+          message: `참여 인원 부족으로 "${schedule.title || schedule.date}" 일정이 자동 취소되었습니다.`,
+          link: `/rooms/${schedule.roomid}?tab=vote`,
+        });
+        alert("참여 인원이 1명만 남아 일정이 자동 취소되었습니다.");
+        navigate(-1);
+      }
+    }
+  };
 
   const dateLabel = schedule.isallday
     ? `${schedule.date} (하루종일)`
@@ -72,7 +112,7 @@ function ConfirmedScheduleDetailPage() {
       setSaving(true);
       await updateConfirmedScheduleLocation(schedule.id, locationText.trim(), locationAddress);
       alert("위치가 저장되었습니다.");
-      navigate("/home");
+      navigate(-1);
     } catch (error) {
       alert("위치 저장 실패: " + error.message);
     } finally {
@@ -93,7 +133,7 @@ function ConfirmedScheduleDetailPage() {
         link: `/rooms/${schedule.roomid}?tab=vote`,
       });
       alert("일정 확정이 취소되었습니다.");
-      navigate("/home");
+      navigate(-1);
     } catch (error) {
       alert("취소 실패: " + error.message);
     }
@@ -105,7 +145,7 @@ function ConfirmedScheduleDetailPage() {
         height: "56px", display: "flex", alignItems: "center",
         padding: "0 16px", borderBottom: "1px solid #eee", gap: "12px",
       }}>
-        <button onClick={() => navigate("/home")} style={{ border: "none", background: "none", fontSize: "24px" }}>←</button>
+        <button onClick={() => navigate(-1)} style={{ border: "none", background: "none", fontSize: "24px" }}>←</button>
         <h3 style={{ margin: 0 }}>확정 일정 상세</h3>
       </div>
 
@@ -181,28 +221,34 @@ function ConfirmedScheduleDetailPage() {
 
         <div style={{ marginBottom: "24px" }} />
 
-        <button
-          onClick={isCreator ? handleCancel : async () => {
-            if (!window.confirm("일정 확정을 취소할까요?")) return;
-            try {
-              await dismissConfirmedSchedule(currentUser.id, schedule.id);
-              navigate("/home");
-            } catch (error) {
-              alert("취소 실패: " + error.message);
-            }
-          }}
-          style={{
-            width: "100%", padding: "12px",
-            backgroundColor: "#fff", color: "#f44",
-            border: "1px solid #f44", borderRadius: "10px", fontSize: "15px", cursor: "pointer",
-          }}
-        >
-          일정 확정 취소
-        </button>
-        {isCreator && (
-          <p style={{ textAlign: "center", fontSize: "12px", color: "#aaa", marginTop: "6px" }}>
-            취소하면 모든 멤버의 화면에서 삭제됩니다
-          </p>
+        {currentUser && (
+          <button
+            onClick={handleToggleAbsence}
+            style={{
+              width: "100%", padding: "12px", marginBottom: "8px",
+              backgroundColor: "#fff", color: isAbsent ? "#7c79ff" : "#f44",
+              border: `1px solid ${isAbsent ? "#7c79ff" : "#f44"}`, borderRadius: "10px", fontSize: "15px", cursor: "pointer",
+            }}
+          >
+            {isAbsent ? "참석으로 변경" : "일정 취소"}
+          </button>
+        )}
+        {isRoomOwner && (
+          <>
+            <button
+              onClick={handleCancel}
+              style={{
+                width: "100%", padding: "12px",
+                backgroundColor: "#fff", color: "#f44",
+                border: "1px solid #f44", borderRadius: "10px", fontSize: "15px", cursor: "pointer",
+              }}
+            >
+              일정 삭제
+            </button>
+            <p style={{ textAlign: "center", fontSize: "12px", color: "#aaa", marginTop: "6px" }}>
+              삭제하면 모든 멤버의 화면에서 사라집니다
+            </p>
+          </>
         )}
       </div>
     </div>

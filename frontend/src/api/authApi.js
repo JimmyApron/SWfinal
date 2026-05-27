@@ -53,6 +53,9 @@ export async function signupApi({ email, password, nickname }) {
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
     email,
     password,
+    options: {
+      emailRedirectTo: `${window.location.origin}/login`,
+    },
   })
 
   if (signUpError) {

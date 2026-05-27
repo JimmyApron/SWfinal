@@ -81,7 +81,7 @@ function SettingsPage() {
     if (!window.confirm('정말 로그아웃 하시겠습니까? 🥺')) return
 
     try {
-      logoutApi()
+      await logoutApi()
       window.location.href = '/'
     } catch (error) {
       window.location.href = '/'
@@ -147,75 +147,6 @@ function SettingsPage() {
         <p className="info-value">
           {userProfile?.email || '이메일 정보 없음'}
         </p>
-      </div>
-
-      <div className="profile-info-group">
-        <label className="info-label">구글 캘린더 연동</label>
-
-        {googleConnected ? (
-          <div>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                marginBottom: '10px',
-              }}
-            >
-              <span style={{ fontSize: '14px', color: '#4CAF50' }}>
-                ✓ 연결됨
-              </span>
-
-              <button
-                onClick={handleGoogleDisconnect}
-                style={{
-                  fontSize: '13px',
-                  color: '#f44',
-                  border: '1px solid #f44',
-                  background: 'none',
-                  borderRadius: '8px',
-                  padding: '4px 12px',
-                  cursor: 'pointer',
-                }}
-              >
-                연결 해제
-              </button>
-            </div>
-
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <span style={{ fontSize: '14px', color: '#333' }}>
-                확정 일정 자동 추가
-              </span>
-
-              <Toggle value={googleAutoSync} onChange={handleAutoSyncToggle} />
-            </div>
-
-            <p style={{ fontSize: '11px', color: '#aaa', margin: '4px 0 0' }}>
-              켜면 캘린더에 등록한 일정이 구글 캘린더에 자동으로 추가됩니다
-            </p>
-          </div>
-        ) : (
-          <button
-            onClick={() => googleLogin()}
-            style={{
-              fontSize: '14px',
-              color: '#fff',
-              backgroundColor: '#4285F4',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '8px 16px',
-              cursor: 'pointer',
-            }}
-          >
-            Google 캘린더 연결
-          </button>
-        )}
       </div>
 
       <div className="setting-actions">
