@@ -28,6 +28,26 @@ function RoomListPage() {
 
   useEffect(() => {
     handleGetRooms();
+
+    // 실시간 구독: 내가 속한 방의 멤버 변화가 생기면 목록 갱신
+    const channel = supabase
+      .channel("room_list_realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "room_members",
+        },
+        () => {
+          handleGetRooms();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   return (

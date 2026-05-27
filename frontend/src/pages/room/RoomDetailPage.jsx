@@ -144,6 +144,58 @@ function RoomDetailPage() {
 
   useEffect(() => {
     fetchRoomData();
+
+    // 실시간 구독 설정: 방 정보, 멤버, 게스트 변화 감지
+    const channel = supabase
+      .channel(`room_detail_realtime_${roomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "rooms",
+          filter: `id=eq.${roomId}`,
+        },
+        (payload) => {
+          console.log("Room updated:", payload);
+          fetchRoomData();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "room_members",
+          filter: `roomid=eq.${roomId}`,
+        },
+        (payload) => {
+          console.log("Member changed:", payload);
+          fetchRoomData();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "room_guests",
+          filter: `roomid=eq.${roomId}`,
+        },
+        (payload) => {
+          console.log("Guest changed:", payload);
+          fetchRoomData();
+        }
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          console.log("Successfully subscribed to room changes");
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [roomId]);
 
   const handleChangeTab = (nextTab) => {
@@ -242,6 +294,35 @@ function RoomDetailPage() {
       return;
     }
 
+    const isHost = String(room?.createdby) === String(currentUser?.id);
+
+    if (isHost) {
+      const others = [
+        ...members.map((m) => ({ ...m, type: "member", joinDate: m.joinedat })),
+        ...guests.map((g) => ({ ...g, type: "guest", joinDate: g.createdat })),
+      ]
+        .filter(
+          (p) =>
+            String(p.type === "member" ? p.userid : p.id) !==
+            String(currentUser?.id)
+        )
+        .sort((a, b) => new Date(a.joinDate) - new Date(b.joinDate));
+
+      if (others.length > 0) {
+        const nextHost = others[0];
+        const nextHostId =
+          nextHost.type === "member" ? nextHost.userid : nextHost.id;
+
+        try {
+          await transferRoomOwnership(roomId, nextHostId);
+        } catch (error) {
+          console.error("방장 자동 위임 실패:", error);
+          alert("방장 위임 중 오류가 발생했습니다.");
+          return;
+        }
+      }
+    }
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -259,7 +340,9 @@ function RoomDetailPage() {
         return;
       }
     } else {
-      const guestNickname = sessionStorage.getItem("guestNickname") || localStorage.getItem("guest_nickname");
+      const guestNickname =
+        sessionStorage.getItem("guestNickname") ||
+        localStorage.getItem("guest_nickname");
 
       if (!guestNickname) {
         alert("게스트 정보를 찾을 수 없습니다.");
