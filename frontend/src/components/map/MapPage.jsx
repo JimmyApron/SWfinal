@@ -10,7 +10,8 @@ import { getCurrentPosition } from '../../services/geolocationService'
 import { getRouteTime } from '../../api/routeTimeApi'
 import { decodePolyline } from '../../utils/decodePolyline'
 import { supabase } from '../../lib/supabaseClient'
-import { createRoomNotifications } from '../../api/notificationApi'
+import { createNotification, createRoomNotifications } from '../../api/notificationApi'
+import { getRoomMembers } from '../../api/scheduleApi'
 import {
   saveMyLocation,
   saveMyGuestLocation,
@@ -26,13 +27,13 @@ function MapPage({ roomId }) {
 
   const [currentUserId, setCurrentUserId] = useState(null)
   const [currentGuestId, setCurrentGuestId] = useState(null)
+  const [members, setMembers] = useState([])
 
   const [currentLocation, setCurrentLocation] = useState(null)
   const [memberLocations, setMemberLocations] = useState([])
 
   const [places, setPlaces] = useState([])
   const [selectedPlace, setSelectedPlace] = useState(null)
-  const [destination, setDestination] = useState(null)
 
   const [middlePlace, setMiddlePlace] = useState(null)
   const [memberRouteResults, setMemberRouteResults] = useState([])
@@ -79,7 +80,7 @@ function MapPage({ roomId }) {
   useEffect(() => {
     if (!currentRoomId) return
 
-    loadMemberLocations()
+    loadRoomData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRoomId])
 
@@ -113,13 +114,29 @@ function MapPage({ roomId }) {
     )
   }
 
+  const loadRoomData = async () => {
+    await Promise.all([loadMemberLocations(), loadMembers()])
+  }
+
+  const loadMembers = async () => {
+    if (!currentRoomId) return []
+
+    try {
+      const memberData = await getRoomMembers(currentRoomId)
+      setMembers(memberData || [])
+      return memberData || []
+    } catch (error) {
+      console.error('멤버 조회 오류:', error)
+      return []
+    }
+  }
+
   const loadMemberLocations = async () => {
     if (!currentRoomId) return []
 
     try {
       const locations = await getRoomMemberLocations(currentRoomId)
       setMemberLocations(locations)
-      setMessage('DB에 저장된 멤버 위치를 불러왔습니다.')
       return locations
     } catch (error) {
       console.error('멤버 위치 조회 오류:', error)
@@ -165,19 +182,46 @@ function MapPage({ roomId }) {
         })
       }
 
-      const locations = await getRoomMemberLocations(currentRoomId)
-      setMemberLocations(locations)
+      await loadMemberLocations()
 
-      setMessage('현재 위치를 가져오고 DB에 저장했습니다.')
+      setMessage('현재 위치를 저장했습니다.')
     } catch (error) {
       console.error('현재 위치 저장 오류:', error)
-      setMessage('현재 위치를 가져오거나 DB에 저장하는 중 오류가 발생했습니다.')
+      setMessage('현재 위치를 가져오거나 저장하는 중 오류가 발생했습니다.')
     }
+  }
+
+  const handleRequestLocation = async (member) => {
+    try {
+      if (!currentUserId) {
+        alert('로그인한 사용자만 위치 등록 요청을 보낼 수 있습니다.')
+        return
+      }
+
+      await createNotification({
+        roomId: currentRoomId,
+        receiverId: member.userid,
+        senderId: currentUserId,
+        type: 'location_request',
+        title: '위치 등록 요청',
+        message: '아직 위치를 등록하지 않았습니다. 위치를 등록해주세요!',
+        link: `/rooms/${currentRoomId}?tab=location`,
+      })
+
+      alert(`${member.nickname || '상대방'}님에게 위치 등록 요청 알림을 보냈습니다.`)
+    } catch (error) {
+      console.error('위치 등록 요청 알림 전송 실패:', error)
+      alert('위치 등록 요청 알림 전송에 실패했습니다.')
+    }
+  }
+
+  const isMemberLocationRegistered = (member) => {
+    return memberLocations.some((location) => location.userid === member.userid)
   }
 
   const calculateAllMemberRoutesToMiddlePlace = async (place) => {
     if (!place) {
-      setMessage('중간장소 정보가 없습니다.')
+      setMessage('중간 장소 정보가 없습니다.')
       return
     }
 
@@ -291,11 +335,11 @@ function MapPage({ roomId }) {
     setMemberRoutePaths(routePaths)
 
     if (routeResults.some((result) => result.error)) {
-      setMessage('일부 멤버의 경로 계산에 실패했지만, 위치 정보는 표시합니다.')
+      setMessage('일부 멤버의 경로 계산에 실패했지만 위치 정보는 표시합니다.')
       return
     }
 
-    setMessage('중간장소까지 모든 멤버의 이동시간과 경로를 계산했습니다.')
+    setMessage('중간 장소까지 모든 멤버의 이동시간과 경로를 계산했습니다.')
   }
 
   useEffect(() => {
@@ -309,18 +353,14 @@ function MapPage({ roomId }) {
 
         setMiddlePlace(savedMiddlePlace)
         setSelectedPlace(savedMiddlePlace)
-
-        // DB에 이미 확정된 중간장소가 있으면 추천 후보 대신 확정 장소만 표시
         setPlaces([savedMiddlePlace])
-
         setMemberRouteResults([])
         setMemberRoutePaths([])
-
-        setMessage(`${savedMiddlePlace.name}이 이미 중간장소로 확정되어 있습니다.`)
+        setMessage(`${savedMiddlePlace.name}이(가) 중간 장소로 확정되어 있습니다.`)
 
         await calculateAllMemberRoutesToMiddlePlace(savedMiddlePlace)
       } catch (error) {
-        console.error('확정 중간장소 조회 오류:', error)
+        console.error('확정 중간 장소 조회 오류:', error)
       }
     }
 
@@ -343,7 +383,7 @@ function MapPage({ roomId }) {
     })
 
     if (!response.ok) {
-      console.warn('자동차 경로선 API 요청 실패')
+      console.warn('자동차 경로 API 요청 실패')
       return null
     }
 
@@ -369,16 +409,10 @@ function MapPage({ roomId }) {
 
       setMiddlePlace(confirmedPlace)
       setSelectedPlace(confirmedPlace)
-      setDestination(confirmedPlace)
-
-      // 추천 후보 마커 제거하고 확정된 중간장소 1개만 지도에 표시
       setPlaces([confirmedPlace])
-
-      // 이전 경로선 초기화 후 확정 장소 기준 경로 다시 계산
       setMemberRouteResults(confirmedPlace.travelResults || [])
       setMemberRoutePaths([])
-
-      setMessage(`${confirmedPlace.name}을 중간장소로 확정했습니다. 멤버별 경로를 계산합니다.`)
+      setMessage(`${confirmedPlace.name}을(를) 중간 장소로 확정했습니다. 멤버별 경로를 계산합니다.`)
 
       try {
         if (currentUserId && currentRoomId) {
@@ -386,30 +420,30 @@ function MapPage({ roomId }) {
             roomId: currentRoomId,
             senderId: currentUserId,
             type: 'middle_place_confirmed',
-            title: '중간장소가 확정되었습니다',
-            message: `${confirmedPlace.name}이 중간장소로 확정되었습니다.`,
+            title: '중간 장소가 확정되었습니다',
+            message: `${confirmedPlace.name}이(가) 중간 장소로 확정되었습니다.`,
             link: `/rooms/${currentRoomId}?tab=location`,
           })
         }
       } catch (error) {
-        console.error('중간장소 확정 알림 생성 실패:', error)
+        console.error('중간 장소 확정 알림 생성 실패:', error)
       }
 
       await calculateAllMemberRoutesToMiddlePlace(confirmedPlace)
     } catch (error) {
-      console.error('중간장소 확정 저장 오류:', error)
-      setMessage('중간장소 확정 중 오류가 발생했습니다.')
+      console.error('중간 장소 확정 저장 오류:', error)
+      setMessage('중간 장소 확정 중 오류가 발생했습니다.')
     }
   }
 
   const handleCreateMiddlePlaceVote = (selectedPlaces) => {
     if (!currentRoomId) {
-      setMessage('방 정보를 찾을 수 없어서 중간장소 투표를 만들 수 없습니다.')
+      setMessage('방 정보를 찾을 수 없어 중간 장소 투표를 만들 수 없습니다.')
       return
     }
 
     if (!selectedPlaces || selectedPlaces.length === 0) {
-      setMessage('투표로 만들 중간장소 후보를 1개 이상 선택해주세요.')
+      setMessage('투표로 만들 중간 장소 후보를 1개 이상 선택해주세요.')
       return
     }
 
@@ -432,7 +466,7 @@ function MapPage({ roomId }) {
         votePurpose: 'location',
         votetype: 'location',
         selectedPlaces: votePlaces,
-        title: '중간장소 투표',
+        title: '중간 장소 투표',
         returnTab: 'location',
       },
     })
@@ -440,12 +474,12 @@ function MapPage({ roomId }) {
 
   const handleCancelMiddlePlace = async () => {
     if (!middlePlace) {
-      setMessage('취소할 중간장소가 없습니다.')
+      setMessage('취소할 중간 장소가 없습니다.')
       return
     }
 
     const confirmCancel = window.confirm(
-      '확정된 중간장소를 취소할까요? 다시 중간장소를 추천받을 수 있습니다.'
+      '확정된 중간 장소를 취소할까요? 다시 중간 장소를 추천받을 수 있습니다.'
     )
 
     if (!confirmCancel) return
@@ -455,27 +489,25 @@ function MapPage({ roomId }) {
 
       setMiddlePlace(null)
       setSelectedPlace(null)
-      setDestination(null)
       setPlaces([])
       setMemberRouteResults([])
       setMemberRoutePaths([])
 
-      setMessage('중간장소 확정을 취소했습니다. 다시 중간장소를 추천받을 수 있습니다.')
+      setMessage('중간 장소 확정을 취소했습니다. 다시 중간 장소를 추천받을 수 있습니다.')
     } catch (error) {
-      console.error('중간장소 확정 취소 오류:', error)
-      setMessage('중간장소 확정 취소 중 오류가 발생했습니다.')
+      console.error('중간 장소 확정 취소 오류:', error)
+      setMessage('중간 장소 확정 취소 중 오류가 발생했습니다.')
     }
   }
 
   const handleSelectPlace = (place) => {
     setSelectedPlace(place)
-    setDestination(place)
-    setMessage(`${place.name}을 목적지로 설정했습니다.`)
+    setMessage(`${place.name}을(를) 목적지로 설정했습니다.`)
   }
 
   const handleRefreshMemberRoutes = async () => {
     if (!middlePlace) {
-      setMessage('먼저 중간장소를 확정해주세요.')
+      setMessage('먼저 중간 장소를 확정해주세요.')
       return
     }
 
@@ -484,15 +516,50 @@ function MapPage({ roomId }) {
 
   return (
     <section className="map-section">
-      <h2>지도 기능</h2>
+      <h2>위치 기능</h2>
 
       <CurrentLocationButton onClick={handleCurrentLocation} />
 
       {message && <p>{message}</p>}
 
+      {members.length > 0 && (
+        <div className="location-box">
+          <h3>멤버 위치 등록 현황</h3>
+
+          {members.map((member) => {
+            const isRegistered = isMemberLocationRegistered(member)
+            const isMe = member.userid === currentUserId
+
+            return (
+              <div
+                key={member.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  marginBottom: '6px',
+                }}
+              >
+                <span>👤</span>
+                <span>{member.nickname || '닉네임 없음'}</span>
+                <span>
+                  {isRegistered ? '위치 등록 완료' : isMe ? '내 위치 미등록' : '위치 등록 안 함'}
+                </span>
+
+                {!isRegistered && !isMe && (
+                  <button type="button" onClick={() => handleRequestLocation(member)}>
+                    위치 등록 요청
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       {currentLocation && (
         <div className="location-box">
-          <h3>내 브라우저 현재 위치</h3>
+          <h3>브라우저 현재 위치</h3>
           <p>위도: {currentLocation.lat}</p>
           <p>경도: {currentLocation.lng}</p>
           <p>정확도: {Math.round(currentLocation.accuracy)}m</p>
@@ -505,9 +572,7 @@ function MapPage({ roomId }) {
 
           {memberLocations.map((location) => (
             <div key={getMemberKey(location)}>
-              <p>
-                닉네임: {getMemberNickname(location)}
-              </p>
+              <p>닉네임: {getMemberNickname(location)}</p>
               <p>위도: {location.latitude}</p>
               <p>경도: {location.longitude}</p>
             </div>
@@ -517,21 +582,21 @@ function MapPage({ roomId }) {
 
       {middlePlace && (
         <div className="location-box">
-          <h3>확정된 중간장소</h3>
+          <h3>확정된 중간 장소</h3>
           <p>장소명: {middlePlace.name}</p>
           <p>주소: {middlePlace.address || '주소 정보 없음'}</p>
           <p>위도: {middlePlace.lat}</p>
           <p>경도: {middlePlace.lng}</p>
 
           <button type="button" onClick={handleCancelMiddlePlace}>
-            중간장소 확정 취소
+            중간 장소 확정 취소
           </button>
         </div>
       )}
 
       {memberRouteResults.length > 0 && (
         <div className="location-box">
-          <h3>중간장소까지 멤버별 이동시간</h3>
+          <h3>중간 장소까지 멤버별 이동시간</h3>
 
           <button type="button" onClick={handleRefreshMemberRoutes}>
             멤버 위치 기준으로 다시 계산
@@ -580,10 +645,10 @@ function MapPage({ roomId }) {
         />
       ) : (
         <section>
-          <h2>확정된 중간장소 주변 추천</h2>
+          <h2>확정된 중간 장소 주변 추천</h2>
           <p>
-            먼저 유명 중간장소를 추천받고, 그중 하나를 중간장소로 확정해주세요.
-            중간장소가 확정되면 그 주변의 음식점, 카페, 놀거리 장소를 검색할 수 있습니다.
+            먼저 유명 중간 장소를 추천받고, 그중 하나를 중간 장소로 확정해주세요.
+            중간 장소가 확정되면 주변 음식점, 카페, 놀거리를 검색할 수 있습니다.
           </p>
         </section>
       )}
