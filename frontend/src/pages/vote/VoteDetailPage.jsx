@@ -11,6 +11,7 @@ import {
   updateVoteOption,
   confirmVote,
 } from "../../api/voteApi";
+import { sendVoteClosedNotification } from "../notification/VoteNotification";
 import { addEventToGoogleCalendar } from "../../api/googleCalendarApi";
 import KakaoMapView from "../../components/map/KakaoMapView";
 
@@ -533,6 +534,15 @@ function VoteDetailPage() {
 
     try {
       await closeVote(Number(voteid));
+
+      // 📢 방에 소속된 모든 사람(회원+게스트)에게 마감 알림 발송
+      await sendVoteClosedNotification({
+        roomid: Number(roomid),
+        voteid: Number(voteid),
+        title: vote.title,
+        senderId: currentUser?.id,
+      });
+
       await loadVote();
     } catch (error) {
       alert("투표 종료 실패");

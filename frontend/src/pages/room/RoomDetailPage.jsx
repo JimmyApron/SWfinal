@@ -6,6 +6,7 @@ import ScheduleTab from "./ScheduleTab";
 import MapPage from "../../components/map/MapPage";
 import ChatTab from "../Chat/ChatTab";
 import VoteListPage from "../vote/VoteListPage";
+import { checkAndNotifyClosedVotes } from "../notification/VoteNotification";
 
 function RoomDetailPage() {
   const navigate = useNavigate();
@@ -114,20 +115,16 @@ function RoomDetailPage() {
       }
     } else {
       const guestId = localStorage.getItem("guest_id");
-      const guestNickname = sessionStorage.getItem("guestNickname") || localStorage.getItem("guest_nickname");
 
       if (guestId) {
         setCurrentUser({ id: guestId, type: "guest" });
-      }
 
-      if (guestNickname) {
         const { data: myGuestData, error: myGuestError } = await supabase
           .from("room_guests")
           .select(
             "schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled"
           )
-          .eq("roomid", roomId)
-          .eq("nickname", guestNickname)
+          .eq("id", guestId)
           .single();
 
         if (!myGuestError && myGuestData) {
@@ -144,6 +141,9 @@ function RoomDetailPage() {
 
   useEffect(() => {
     fetchRoomData();
+
+    // 🛡️ [무해한 안전 훅] 방에 들어왔을 때 마감된 투표가 있으면 자동으로 닫고 알림 쏘기
+    checkAndNotifyClosedVotes(roomId);
 
     // 실시간 구독 설정: 방 정보, 멤버, 게스트 변화 감지
     const channel = supabase

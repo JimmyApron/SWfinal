@@ -30,21 +30,22 @@ function VoteCreatePage() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user) return;
-
-      setCurrentUser(user);
-
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("nickname")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (profileError) {
-        console.error("프로필 조회 실패:", profileError);
+      if (user) {
+        setCurrentUser(user);
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("nickname")
+          .eq("id", user.id)
+          .maybeSingle();
+        setNickname(profile?.nickname || user.email);
+      } else {
+        const guestId = localStorage.getItem("guest_id");
+        const guestNick = localStorage.getItem("guest_nickname") || "게스트";
+        if (guestId) {
+          setCurrentUser({ id: guestId, type: "guest" });
+          setNickname(guestNick);
+        }
       }
-
-      setNickname(profile?.nickname || user.email);
     };
 
     const fetchRoomName = async () => {

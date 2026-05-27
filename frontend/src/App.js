@@ -63,9 +63,15 @@ function NotificationListener() {
     const setupRealtimeNotification = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        
+        let myUserId = user?.id;
 
-        const myUserId = user.id;
+        if (!myUserId) {
+          myUserId = localStorage.getItem("guest_id");
+        }
+
+        if (!myUserId) return;
+
         const uniqueChannelName = `realtime-notifications-${myUserId}-${Date.now()}`;
 
         channel = supabase.channel(uniqueChannelName);

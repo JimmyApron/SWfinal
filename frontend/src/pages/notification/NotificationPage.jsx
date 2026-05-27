@@ -7,6 +7,7 @@ import {
   deleteNotification,
   deleteMyNotifications,
 } from "../../api/notificationApi";
+import { sendVoteClosedNotification } from "./VoteNotification";
 
 function NotificationPage() {
   const navigate = useNavigate();
@@ -41,16 +42,19 @@ function NotificationPage() {
       // ========================================================
       try {
         const nowIso = new Date().toISOString();
+        
+        // 내가 속한 방 번호들(회원 or 게스트) 싹 긁어오기
+        const [ { data: memberRooms }, { data: guestRooms } ] = await Promise.all([
+          supabase.from("room_members").select("roomid").eq("userid", userId),
+          supabase.from("room_guests").select("roomid").eq("id", userId)
+        ]);
 
-        // 1. 내가 속한 방 번호들(roomid) 싹 긁어오기
-        const { data: myRooms } = await supabase
-          .from("room_members")
-          .select("roomid")
-          .eq("userid", userId);
+        const roomIds = [
+          ...(memberRooms || []).map((r) => r.roomid),
+          ...(guestRooms || []).map((r) => r.roomid)
+        ];
 
-        if (myRooms && myRooms.length > 0) {
-          const roomIds = myRooms.map((r) => r.roomid);
-
+        if (roomIds.length > 0) {
           // 2. 그 방들 중에서 마감 시간은 지났는데 아직 안 닫힌(isclosed = false) 투표 싹 조회
           const { data: expiredVotes } = await supabase
             .from("votes")
@@ -62,27 +66,12 @@ function NotificationPage() {
 
           if (expiredVotes && expiredVotes.length > 0) {
             for (const vote of expiredVotes) {
-              // 해당 방의 멤버들 중 알림 켠 사람들 다 찾기
-              const { data: activeMembers } = await supabase
-                .from("room_members")
-                .select("userid")
-                .eq("roomid", vote.roomid)
-                .eq("votenotifenabled", true);
-
-              if (activeMembers && activeMembers.length > 0) {
-                const closeNotifications = activeMembers.map((member) => ({
-                  roomid: vote.roomid,
-                  receiverid: member.userid,
-                  type: "vote_closed",
-                  title: "🔒 투표 마감 완료",
-                  message: `🏁 [${vote.title}] 투표가 마감되었습니다! 최종 결과를 확인해 보세요.`,
-                  isread: false,
-                  link: `/rooms/${vote.roomid}/votes/${vote.id}`,
-                }));
-
-                // 마감 알림 적재
-                await supabase.from("notifications").insert(closeNotifications);
-              }
+              // 📢 공통 마감 알림 함수 사용 (통합 notifications 테이블 저장)
+              await sendVoteClosedNotification({
+                roomid: vote.roomid,
+                voteid: vote.id,
+                title: vote.title,
+              });
 
               // 3. 중복 방지를 위해 투표 쾅 닫기 (isclosed = true)
               await supabase
