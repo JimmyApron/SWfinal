@@ -63,6 +63,7 @@ function RoomDetailPage() {
         id,
         nickname,
         userid,
+        joinedat,
         profiles (
           profileimageurl
         )
@@ -78,7 +79,7 @@ function RoomDetailPage() {
 
     const { data: guestData, error: guestError } = await supabase
       .from("room_guests")
-      .select("id, nickname")
+      .select("id, nickname, createdat")
       .eq("roomid", roomId);
 
     if (!guestError) {
@@ -276,6 +277,19 @@ function RoomDetailPage() {
   if (!room) {
     return <div>로딩 중...</div>;
   }
+
+  const sortedParticipants = [
+    ...members.map((m) => ({ ...m, type: "member", joinDate: m.joinedat })),
+    ...guests.map((g) => ({ ...g, type: "guest", joinDate: g.createdat })),
+  ].sort((a, b) => {
+    const isHostA = room?.createdby === a.userid;
+    const isHostB = room?.createdby === b.userid;
+
+    if (isHostA) return -1;
+    if (isHostB) return 1;
+
+    return new Date(a.joinDate) - new Date(b.joinDate);
+  });
 
   return (
     <div
@@ -507,129 +521,133 @@ function RoomDetailPage() {
                   backgroundColor: "#fafafa",
                 }}
               >
-                {members.map((m) => {
-                  const imageUrl = m.profiles?.profileimageurl;
-                  const isHost = room?.createdby === m.userid;
+                {sortedParticipants.map((p) => {
+                  const isHost = room?.createdby === p.userid;
 
-                  return (
-                    <div
-                      key={m.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "10px",
-                        padding: "6px 0",
-                        borderBottom: "1px solid #f0f0f0",
-                      }}
-                    >
-                      {imageUrl ? (
-                        <img
-                          src={imageUrl}
-                          alt="프로필"
-                          style={{
-                            width: "32px",
-                            height: "32px",
-                            borderRadius: "50%",
-                            objectFit: "cover",
-                            border: "1px solid #ddd",
-                          }}
-                        />
-                      ) : (
+                  if (p.type === "member") {
+                    const imageUrl = p.profiles?.profileimageurl;
+
+                    return (
+                      <div
+                        key={`member-${p.id}`}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                          padding: "6px 0",
+                          borderBottom: "1px solid #f0f0f0",
+                        }}
+                      >
+                        {imageUrl ? (
+                          <img
+                            src={imageUrl}
+                            alt="프로필"
+                            style={{
+                              width: "32px",
+                              height: "32px",
+                              borderRadius: "50%",
+                              objectFit: "cover",
+                              border: "1px solid #ddd",
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: "32px",
+                              height: "32px",
+                              borderRadius: "50%",
+                              backgroundColor: "#e0e0e0",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "16px",
+                            }}
+                          >
+                            👤
+                          </div>
+                        )}
+
+                        <div style={{ display: "flex", flexDirection: "column" }}>
+                          {isHost && (
+                            <span
+                              style={{
+                                color: "#8366F4",
+                                fontSize: "11px",
+                                fontWeight: "bold",
+                                marginBottom: "-2px",
+                              }}
+                            >
+                              방장
+                            </span>
+                          )}
+                          <span
+                            style={{
+                              fontSize: "14px",
+                              fontWeight: "600",
+                              color: "#333",
+                            }}
+                          >
+                            {p.nickname || "이름없음"}
+                          </span>
+
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              color: "#8366F4",
+                              fontWeight: "600",
+                            }}
+                          >
+                            회원
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div
+                        key={`guest-${p.id}`}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                          padding: "6px 0",
+                          borderBottom: "1px solid #f0f0f0",
+                        }}
+                      >
                         <div
                           style={{
                             width: "32px",
                             height: "32px",
                             borderRadius: "50%",
-                            backgroundColor: "#e0e0e0",
+                            backgroundColor: "#ffeaa7",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             fontSize: "16px",
                           }}
                         >
-                          👤
+                          🐱
                         </div>
-                      )}
 
-                      <div style={{ display: "flex", flexDirection: "column" }}>
-                        <span
-                          style={{
-                            fontSize: "14px",
-                            fontWeight: "600",
-                            color: "#333",
-                          }}
-                        >
-                          {isHost && (
-                            <span
-                              style={{
-                                color: "#8366F4",
-                                marginRight: "4px",
-                                fontWeight: "bold",
-                              }}
-                            >
-                              방장
-                            </span>
-                          )}
-                          {m.nickname || "이름없음"}
-                        </span>
+                        <div style={{ display: "flex", flexDirection: "column" }}>
+                          <span
+                            style={{
+                              fontSize: "14px",
+                              fontWeight: "600",
+                              color: "#555",
+                            }}
+                          >
+                            {p.nickname}
+                          </span>
 
-                        <span
-                          style={{
-                            fontSize: "11px",
-                            color: "#8366F4",
-                            fontWeight: "600",
-                          }}
-                        >
-                          회원
-                        </span>
+                          <span style={{ fontSize: "11px", color: "#e67e22" }}>
+                            게스트
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  );
+                    );
+                  }
                 })}
-
-                {guests.map((g) => (
-                  <div
-                    key={g.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "10px",
-                      padding: "6px 0",
-                      borderBottom: "1px solid #f0f0f0",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "32px",
-                        height: "32px",
-                        borderRadius: "50%",
-                        backgroundColor: "#ffeaa7",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: "16px",
-                      }}
-                    >
-                      🐱
-                    </div>
-
-                    <div style={{ display: "flex", flexDirection: "column" }}>
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          fontWeight: "600",
-                          color: "#555",
-                        }}
-                      >
-                        {g.nickname}
-                      </span>
-
-                      <span style={{ fontSize: "11px", color: "#e67e22" }}>
-                        게스트
-                      </span>
-                    </div>
-                  </div>
-                ))}
 
                 {members.length === 0 && guests.length === 0 && (
                   <p
