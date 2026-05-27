@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
+import { transferRoomOwnership } from "../../api/roomApi";
 import ScheduleTab from "./ScheduleTab";
 import MapPage from "../../components/map/MapPage";
 import ChatTab from "../Chat/ChatTab";
@@ -20,6 +21,8 @@ function RoomDetailPage() {
 
   const [members, setMembers] = useState([]);
   const [guests, setGuests] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [selectedParticipantId, setSelectedParticipantId] = useState(null);
 
   const [notifSettings, setNotifSettings] = useState({
     schedule: true,
@@ -91,6 +94,7 @@ function RoomDetailPage() {
     } = await supabase.auth.getUser();
 
     if (user && user.id) {
+      setCurrentUser({ id: user.id, type: "member" });
       const { data: myMemberData, error: myMemberError } = await supabase
         .from("room_members")
         .select(
@@ -109,7 +113,12 @@ function RoomDetailPage() {
         });
       }
     } else {
-      const guestNickname = sessionStorage.getItem("guestNickname");
+      const guestId = localStorage.getItem("guest_id");
+      const guestNickname = sessionStorage.getItem("guestNickname") || localStorage.getItem("guest_nickname");
+
+      if (guestId) {
+        setCurrentUser({ id: guestId, type: "guest" });
+      }
 
       if (guestNickname) {
         const { data: myGuestData, error: myGuestError } = await supabase
@@ -202,7 +211,7 @@ function RoomDetailPage() {
         return;
       }
     } else {
-      const guestNickname = sessionStorage.getItem("guestNickname");
+      const guestNickname = sessionStorage.getItem("guestNickname") || localStorage.getItem("guest_nickname");
 
       if (!guestNickname) {
         alert("게스트 정보를 확인할 수 없어 설정을 변경할 수 없습니다.");
@@ -250,7 +259,7 @@ function RoomDetailPage() {
         return;
       }
     } else {
-      const guestNickname = sessionStorage.getItem("guestNickname");
+      const guestNickname = sessionStorage.getItem("guestNickname") || localStorage.getItem("guest_nickname");
 
       if (!guestNickname) {
         alert("게스트 정보를 찾을 수 없습니다.");
@@ -274,6 +283,22 @@ function RoomDetailPage() {
     navigate("/home");
   };
 
+  const handleTransferHost = async (p) => {
+    const newHostId = p.type === "member" ? p.userid : p.id;
+    const confirmMessage = `방장 권한을 ${p.nickname}님에게 양도하시겠습니까?`;
+
+    if (window.confirm(confirmMessage)) {
+      try {
+        await transferRoomOwnership(roomId, newHostId);
+        alert("방장 권한이 양도되었습니다.");
+        setRoom({ ...room, createdby: String(newHostId) });
+        setSelectedParticipantId(null);
+      } catch (error) {
+        alert(error.message);
+      }
+    }
+  };
+
   if (!room) {
     return <div>로딩 중...</div>;
   }
@@ -282,14 +307,16 @@ function RoomDetailPage() {
     ...members.map((m) => ({ ...m, type: "member", joinDate: m.joinedat })),
     ...guests.map((g) => ({ ...g, type: "guest", joinDate: g.createdat })),
   ].sort((a, b) => {
-    const isHostA = room?.createdby === a.userid;
-    const isHostB = room?.createdby === b.userid;
+    const isHostA = String(room?.createdby) === String(a.type === "member" ? a.userid : a.id);
+    const isHostB = String(room?.createdby) === String(b.type === "member" ? b.userid : b.id);
 
     if (isHostA) return -1;
     if (isHostB) return 1;
 
     return new Date(a.joinDate) - new Date(b.joinDate);
   });
+
+  const isCurrentUserHost = String(room?.createdby) === String(currentUser?.id);
 
   return (
     <div
@@ -513,7 +540,7 @@ function RoomDetailPage() {
 
               <div
                 style={{
-                  maxHeight: "230px",
+                  maxHeight: "350px",
                   overflowY: "auto",
                   border: "1px solid #eee",
                   padding: "10px",
@@ -522,48 +549,82 @@ function RoomDetailPage() {
                 }}
               >
                 {sortedParticipants.map((p) => {
-                  const isHost = room?.createdby === p.userid;
+                  const participantUniqueId = p.type === "member" ? p.userid : p.id;
+                  const isHost = String(room?.createdby) === String(participantUniqueId);
+                  const isSelected = selectedParticipantId === participantUniqueId;
 
-                  if (p.type === "member") {
-                    const imageUrl = p.profiles?.profileimageurl;
-
-                    return (
+                  return (
+                    <div
+                      key={`${p.type}-${p.id}`}
+                      onClick={() => {
+                        if (isCurrentUserHost && !isHost) {
+                          setSelectedParticipantId(
+                            isSelected ? null : participantUniqueId
+                          );
+                        }
+                      }}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        padding: "8px 0",
+                        borderBottom: "1px solid #f0f0f0",
+                        cursor: isCurrentUserHost && !isHost ? "pointer" : "default",
+                        backgroundColor: isSelected ? "#f0ebff" : "transparent",
+                        borderRadius: "5px",
+                        transition: "background-color 0.2s",
+                      }}
+                    >
                       <div
-                        key={`member-${p.id}`}
                         style={{
                           display: "flex",
                           alignItems: "center",
                           gap: "10px",
-                          padding: "6px 0",
-                          borderBottom: "1px solid #f0f0f0",
+                          padding: "0 5px",
                         }}
                       >
-                        {imageUrl ? (
-                          <img
-                            src={imageUrl}
-                            alt="프로필"
-                            style={{
-                              width: "32px",
-                              height: "32px",
-                              borderRadius: "50%",
-                              objectFit: "cover",
-                              border: "1px solid #ddd",
-                            }}
-                          />
+                        {p.type === "member" ? (
+                          p.profiles?.profileimageurl ? (
+                            <img
+                              src={p.profiles.profileimageurl}
+                              alt="프로필"
+                              style={{
+                                width: "32px",
+                                height: "32px",
+                                borderRadius: "50%",
+                                objectFit: "cover",
+                                border: "1px solid #ddd",
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: "32px",
+                                height: "32px",
+                                borderRadius: "50%",
+                                backgroundColor: "#e0e0e0",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "16px",
+                              }}
+                            >
+                              👤
+                            </div>
+                          )
                         ) : (
                           <div
                             style={{
                               width: "32px",
                               height: "32px",
                               borderRadius: "50%",
-                              backgroundColor: "#e0e0e0",
+                              backgroundColor: "#ffeaa7",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
                               fontSize: "16px",
                             }}
                           >
-                            👤
+                            🐱
                           </div>
                         )}
 
@@ -593,60 +654,40 @@ function RoomDetailPage() {
                           <span
                             style={{
                               fontSize: "11px",
-                              color: "#8366F4",
+                              color: p.type === "member" ? "#8366F4" : "#e67e22",
                               fontWeight: "600",
                             }}
                           >
-                            회원
+                            {p.type === "member" ? "회원" : "게스트"}
                           </span>
                         </div>
                       </div>
-                    );
-                  } else {
-                    return (
-                      <div
-                        key={`guest-${p.id}`}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "10px",
-                          padding: "6px 0",
-                          borderBottom: "1px solid #f0f0f0",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: "32px",
-                            height: "32px",
-                            borderRadius: "50%",
-                            backgroundColor: "#ffeaa7",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "16px",
-                          }}
-                        >
-                          🐱
-                        </div>
 
-                        <div style={{ display: "flex", flexDirection: "column" }}>
-                          <span
+                      {isSelected && (
+                        <div style={{ marginTop: "8px", padding: "0 5px" }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTransferHost(p);
+                            }}
                             style={{
-                              fontSize: "14px",
-                              fontWeight: "600",
-                              color: "#555",
+                              width: "100%",
+                              padding: "6px",
+                              background: "#8366F4",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "5px",
+                              fontSize: "12px",
+                              fontWeight: "bold",
+                              cursor: "pointer",
                             }}
                           >
-                            {p.nickname}
-                          </span>
-
-                          <span style={{ fontSize: "11px", color: "#e67e22" }}>
-                            게스트
-                          </span>
+                            방장 권한 주기
+                          </button>
                         </div>
-                      </div>
-                    );
-                  }
+                      )}
+                    </div>
+                  );
                 })}
 
                 {members.length === 0 && guests.length === 0 && (

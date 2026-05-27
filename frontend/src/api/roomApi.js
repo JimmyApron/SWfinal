@@ -176,6 +176,20 @@ export async function updateRoomLastActivity(roomId) {
   }
 }
 
+export async function transferRoomOwnership(roomId, newHostId) {
+  const { error } = await supabase
+    .from("rooms")
+    .update({
+      createdby: newHostId,
+    })
+    .eq("id", Number(roomId));
+
+  if (error) {
+    console.error("방장 권한 양도 실패:", error);
+    throw new Error("방장 권한 양도 중 오류가 발생했습니다.");
+  }
+}
+
 export async function getRoomById(roomId) {
   const { data, error } = await supabase
     .from("rooms")
