@@ -208,6 +208,9 @@ function CalendarPage() {
   const [googleConnected, setGoogleConnected] = useState(
     !!localStorage.getItem("google_calendar_token")
   );
+  const [googleAutoSync, setGoogleAutoSync] = useState(
+    localStorage.getItem("google_calendar_auto_sync") === "true"
+  );
 
   const [sharingFriends, setSharingFriends] = useState([]);
   const [friendListForShare, setFriendListForShare] = useState([]);
@@ -246,6 +249,14 @@ function CalendarPage() {
     localStorage.removeItem("google_calendar_auto_sync");
 
     setGoogleConnected(false);
+    setGoogleAutoSync(false);
+  };
+
+  const handleAutoSyncToggle = () => {
+    const next = !googleAutoSync;
+
+    localStorage.setItem("google_calendar_auto_sync", String(next));
+    setGoogleAutoSync(next);
   };
 
   const handleOpenSidePanel = async () => {
@@ -490,7 +501,8 @@ function CalendarPage() {
         color: form.color,
         isallday: form.isallday,
         date: form.startdate,
-        enddate: form.enddate && form.enddate !== form.startdate ? form.enddate : null,
+        enddate:
+          form.enddate && form.enddate !== form.startdate ? form.enddate : null,
         starttime: form.isallday ? null : form.starttime || null,
         endtime: form.isallday ? null : form.endtime || null,
         location: form.location.trim() || null,
@@ -1278,14 +1290,48 @@ function CalendarPage() {
                   </button>
                 </div>
 
-                <p
+                <div
                   style={{
-                    fontSize: "11px",
-                    color: "#aaa",
-                    margin: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: "6px",
                   }}
                 >
-                  구글 캘린더 연결 상태만 표시됩니다.
+                  <span style={{ fontSize: "14px", color: "#333" }}>
+                    확정 일정 자동 추가
+                  </span>
+
+                  <div
+                    onClick={handleAutoSyncToggle}
+                    style={{
+                      width: "44px",
+                      height: "24px",
+                      borderRadius: "12px",
+                      cursor: "pointer",
+                      backgroundColor: googleAutoSync ? "#7c79ff" : "#ccc",
+                      position: "relative",
+                      transition: "background-color 0.2s",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "20px",
+                        height: "20px",
+                        borderRadius: "50%",
+                        backgroundColor: "#fff",
+                        position: "absolute",
+                        top: "2px",
+                        left: googleAutoSync ? "22px" : "2px",
+                        transition: "left 0.2s",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <p style={{ fontSize: "11px", color: "#aaa", margin: 0 }}>
+                  켜면 캘린더에 등록한 일정이 구글 캘린더에 자동으로 추가됩니다
                 </p>
               </div>
             ) : (
@@ -1474,7 +1520,9 @@ function CalendarPage() {
                 marginBottom: "20px",
               }}
             >
-              <h3 style={{ margin: 0 }}>{editingEvent ? "일정 수정" : "일정 추가"}</h3>
+              <h3 style={{ margin: 0 }}>
+                {editingEvent ? "일정 수정" : "일정 추가"}
+              </h3>
 
               <button
                 onClick={() => setShowForm(false)}
