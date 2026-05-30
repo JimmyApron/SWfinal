@@ -107,7 +107,12 @@ function NotificationListener() {
 }
 
 function App() {
-  return (
+  useEffect(() => {
+    supabase.auth.onAuthStateChange((event, session) => {
+      console.log('auth event:', event, session)
+    })
+  }, [])
+   return (
     <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
       <BrowserRouter>
         <NotificationListener />

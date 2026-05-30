@@ -1,82 +1,105 @@
-import { useState } from 'react'
-import { signupApi, checkEmailDuplicateApi, checkNicknameDuplicateApi } from '../../api/authApi'
+import { useState, useEffect, useRef } from 'react'
+import { sendEmailOtpApi, verifyEmailOtpApi, signupApi, checkNicknameDuplicateApi } from '../../api/authApi'
 import { FaEye, FaEyeSlash } from 'react-icons/fa'
 import { useNavigate } from 'react-router-dom'
+import { supabase } from '../../lib/supabaseClient'
 
 function SignupPage() {
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
-  const [nickname, setNickname] = useState('')
-  const [password, setPassword] = useState('')
-  const [passwordCheck, setPasswordCheck] = useState('')
-  const [message, setMessage] = useState('')
 
-  const [isEmailChecked, setIsEmailChecked] = useState(false)
+  const [email, setEmail] = useState('')
+  const [otpCode, setOtpCode] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [emailVerified, setEmailVerified] = useState(false)
+
+  const [nickname, setNickname] = useState('')
   const [isNicknameChecked, setIsNicknameChecked] = useState(false)
 
+  const [password, setPassword] = useState('')
+  const [passwordCheck, setPasswordCheck] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [showPasswordCheck, setShowPasswordCheck] = useState(false)
+
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [timeLeft, setTimeLeft] = useState(0)
+  const timerRef = useRef(null)
+
+  useEffect(() => {
+    if (!otpSent || emailVerified) return
+    setTimeLeft(600)
+    clearInterval(timerRef.current)
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) { clearInterval(timerRef.current); return 0 }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timerRef.current)
+  }, [otpSent, emailVerified])
+
+  const formatTime = (seconds) => {
+    const m = String(Math.floor(seconds / 60)).padStart(2, '0')
+    const s = String(seconds % 60).padStart(2, '0')
+    return `${m}:${s}`
+  }
 
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
   const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/
 
-  // 이메일 실시간 입력 핸들러
-  const handleEmailChange = (event) => {
-    const currentEmail = event.target.value
-    setEmail(currentEmail)
-    setIsEmailChecked(false)
-
-    if (currentEmail === '') {
-      setMessage('')
-    } else if (!emailRegex.test(currentEmail)) {
-      setMessage('⚠️ 올바른 이메일 형식이 아닙니다. (예: user@example.com)')
-    } else {
-      setMessage('이메일 형식이 올바릅니다. 중복확인을 해주세요.')
-    }
+  const handleEmailChange = (e) => {
+    setEmail(e.target.value)
+    setOtpSent(false)
+    setEmailVerified(false)
+    setOtpCode('')
+    setMessage('')
   }
 
-  // 이메일 중복 확인 핸들러 (순수 DB 조회)
-  const handleEmailCheck = async (event) => {
-    event.preventDefault()
-    if (!email) {
-      setMessage('이메일을 입력한 후 중복 확인을 해주세요.')
-      return
-    }
+  const handleSendOtp = async () => {
+    if (!email) { setMessage('이메일을 입력해주세요.'); return }
+    if (!emailRegex.test(email)) { setMessage('⚠️ 올바른 이메일 형식이 아닙니다. (예: user@example.com)'); return }
 
-    if (!emailRegex.test(email)) {
-      setMessage('⚠️ 올바른 이메일 형식이 아닙니다. (예: user@example.com)')
-      return
-    }
+    setLoading(true)
+    setMessage('인증 코드 전송 중...')
 
     try {
-      setMessage('이메일 중복 확인 중입니다...')
-      const isDuplicate = await checkEmailDuplicateApi(email.trim())
-      
-      if (isDuplicate) {
-        setIsEmailChecked(false)
-        setMessage('❌ 이미 사용 중인 이메일입니다.')
-      } else {
-        setIsEmailChecked(true)
-        setMessage('✅ 사용 가능한 이메일입니다.')
-      }
+      await sendEmailOtpApi(email.trim())
+      setOtpSent(true)
+      setMessage('📧 인증 코드를 이메일로 전송했습니다. 6자리 코드를 입력해주세요.')
     } catch (error) {
-      console.error('이메일 중복 체크 오류:', error)
-      setMessage('이메일 중복 체크에 실패했습니다.')
+      setMessage(error.message === '이미 사용 중인 이메일입니다.'
+        ? '❌ 이미 사용 중인 이메일입니다.'
+        : '인증 코드 전송에 실패했습니다. 다시 시도해주세요.')
+    } finally {
+      setLoading(false)
     }
   }
 
-  // 닉네임 중복 확인 핸들러
-  const handleNicknameCheck = async (event) => {
-    event.preventDefault()
-    if (!nickname) {
-      setMessage('닉네임을 입력한 후 중복 확인을 해주세요.')
-      return
+  const handleVerifyOtp = async () => {
+    if (!otpCode || otpCode.length !== 6) { setMessage('6자리 인증 코드를 입력해주세요.'); return }
+
+    setLoading(true)
+    setMessage('인증 코드 확인 중...')
+
+    try {
+      await verifyEmailOtpApi(email.trim(), otpCode)
+      setEmailVerified(true)
+      setOtpSent(false)
+      setMessage('✅ 이메일 인증이 완료되었습니다.')
+    } catch (error) {
+      setMessage('❌ 인증 코드가 올바르지 않습니다. 다시 확인해주세요.')
+    } finally {
+      setLoading(false)
     }
+  }
+
+  const handleNicknameCheck = async (e) => {
+    e.preventDefault()
+    if (!nickname) { setMessage('닉네임을 입력한 후 중복 확인을 해주세요.'); return }
 
     try {
       setMessage('닉네임 중복 확인 중입니다...')
       const isDuplicate = await checkNicknameDuplicateApi(nickname.trim())
-
       if (isDuplicate) {
         setIsNicknameChecked(false)
         setMessage('❌ 이미 사용 중인 닉네임입니다.')
@@ -85,56 +108,27 @@ function SignupPage() {
         setMessage('✅ 사용 가능한 닉네임입니다.')
       }
     } catch (error) {
-      console.error('닉네임 중복 체크 오류:', error)
       setMessage('닉네임 중복 체크에 실패했습니다.')
     }
   }
 
-  // 회원가입 최종 제출 핸들러 (즉시 가입 처리 완료)
-  const handleSignup = async (event) => {
-    event.preventDefault()
+  const handleSignup = async (e) => {
+    e.preventDefault()
 
-    if (!email || !nickname || !password || !passwordCheck) {
-      setMessage('모든 값을 입력해주세요.')
-      return
-    }
-
-    if (!emailRegex.test(email)) {
-      setMessage('⚠️ 올바른 이메일 형식이 아닙니다.')
-      return
-    }
-
-    if (!isEmailChecked) {
-      setMessage('이메일 중복 확인을 완료해주세요.')
-      return
-    }
-
-    if (!isNicknameChecked) {
-      setMessage('닉네임 중복 확인을 완료해주세요.')
-      return
-    }
-
+    if (!emailVerified) { setMessage('이메일 인증을 완료해주세요.'); return }
+    if (!isNicknameChecked) { setMessage('닉네임 중복 확인을 완료해주세요.'); return }
     if (!passwordRegex.test(password)) {
       setMessage('⚠️ 비밀번호는 영문 대/소문자, 숫자, 특수문자를 모두 포함하여 최소 8자 이상이어야 합니다.')
       return
     }
-
-    if (password !== passwordCheck) {
-      setMessage('비밀번호가 서로 다릅니다.')
-      return
-    }
+    if (password !== passwordCheck) { setMessage('비밀번호가 서로 다릅니다.'); return }
 
     try {
       setMessage('회원가입 중입니다...')
-
-      await signupApi({
-        email: email.trim(),
-        nickname: nickname.trim(),
-        password: password,
-      })
-
-      setMessage('📧 인증 이메일을 전송했습니다. 이메일함을 확인하고 링크를 클릭하면 로그인할 수 있어요.')
-
+      await signupApi({ password, nickname: nickname.trim() })
+      await supabase.auth.signOut()
+      setMessage('🎉 회원가입이 완료되었습니다! 로그인 페이지로 이동합니다.')
+      setTimeout(() => navigate('/login'), 2000)
     } catch (error) {
       console.error('회원가입 오류:', error)
       setMessage(error.message || '회원가입에 실패했습니다.')
@@ -146,39 +140,82 @@ function SignupPage() {
       <h2>회원가입</h2>
 
       <form onSubmit={handleSignup}>
+        {/* 이메일 + 인증하기 */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
           <input
             type="email"
             placeholder="이메일"
             value={email}
             onChange={handleEmailChange}
+            disabled={emailVerified}
           />
-          <button type="button" onClick={handleEmailCheck}>중복확인</button>
+          <button
+            type="button"
+            onClick={handleSendOtp}
+            disabled={loading || emailVerified}
+          >
+            {emailVerified ? '인증완료' : otpSent ? '재전송' : '인증하기'}
+          </button>
         </div>
 
+        {/* OTP 코드 입력 */}
+        {otpSent && !emailVerified && (
+          <div style={{ marginBottom: '10px' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <input
+                  type="text"
+                  placeholder="인증 코드 6자리"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  maxLength={6}
+                  style={{ width: '100%', paddingRight: '52px', boxSizing: 'border-box' }}
+                />
+                <span style={{
+                  position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
+                  fontSize: '13px', color: timeLeft <= 60 ? '#e53935' : '#888', fontWeight: 'bold'
+                }}>
+                  {formatTime(timeLeft)}
+                </span>
+              </div>
+              <button type="button" onClick={handleVerifyOtp} disabled={loading || timeLeft === 0}>
+                확인
+              </button>
+            </div>
+            {timeLeft === 0 && (
+              <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#e53935' }}>
+                인증 코드가 만료되었습니다. 재전송 버튼을 눌러주세요.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* 닉네임 */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
           <input
             type="text"
             placeholder="닉네임"
             value={nickname}
-            onChange={(event) => {
-              setNickname(event.target.value)
-              setIsNicknameChecked(false)
-            }}
+            onChange={(e) => { setNickname(e.target.value); setIsNicknameChecked(false) }}
+            disabled={!emailVerified}
           />
-          <button type="button" onClick={handleNicknameCheck}>중복확인</button>
+          <button type="button" onClick={handleNicknameCheck} disabled={!emailVerified}>
+            중복확인
+          </button>
         </div>
 
+        {/* 비밀번호 */}
         <div style={{ position: 'relative', width: '100%', marginBottom: '10px' }}>
           <input
             type={showPassword ? 'text' : 'password'}
             placeholder="비밀번호"
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={!emailVerified}
             style={{ width: '100%', paddingRight: '40px', boxSizing: 'border-box' }}
           />
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={() => setShowPassword(!showPassword)}
             style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '0', color: '#666' }}
           >
@@ -186,16 +223,18 @@ function SignupPage() {
           </button>
         </div>
 
+        {/* 비밀번호 확인 */}
         <div style={{ position: 'relative', width: '100%', marginBottom: '10px' }}>
           <input
             type={showPasswordCheck ? 'text' : 'password'}
             placeholder="비밀번호 확인"
             value={passwordCheck}
-            onChange={(event) => setPasswordCheck(event.target.value)}
+            onChange={(e) => setPasswordCheck(e.target.value)}
+            disabled={!emailVerified}
             style={{ width: '100%', paddingRight: '40px', boxSizing: 'border-box' }}
           />
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={() => setShowPasswordCheck(!showPasswordCheck)}
             style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '0', color: '#666' }}
           >
@@ -203,10 +242,10 @@ function SignupPage() {
           </button>
         </div>
 
-        <button 
+        <button
           type="submit"
-          disabled={!isEmailChecked || !isNicknameChecked}
-          style={{ width: '100%', padding: '8px', cursor: isEmailChecked && isNicknameChecked ? 'pointer' : 'not-allowed' }}
+          disabled={!emailVerified || !isNicknameChecked}
+          style={{ width: '100%', padding: '8px', cursor: emailVerified && isNicknameChecked ? 'pointer' : 'not-allowed' }}
         >
           회원가입 완료하기
         </button>

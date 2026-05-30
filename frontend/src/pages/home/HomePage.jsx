@@ -52,18 +52,63 @@ function HomePage() {
   const [friendEmail, setFriendEmail] = useState("");
   const [friendLoading, setFriendLoading] = useState(false);
 
+  // 소셜 로그인 유저 닉네임 중복 없이 자동 생성
+  const assignUniqueNickname = async (user) => {
+    const baseName =
+      user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      user.email?.split('@')[0] ||
+      '소셜유저'
+
+    let nickname = baseName
+    let isDuplicate = true
+
+    while (isDuplicate) {
+      const { data } = await supabase
+        .from('profiles')
+        .select('nickname')
+        .eq('nickname', nickname)
+        .maybeSingle()
+
+      if (!data) {
+        isDuplicate = false
+      } else {
+        const rand = Math.floor(1000 + Math.random() * 9000)
+        nickname = `${baseName}#${rand}`
+      }
+    }
+
+    await supabase
+      .from('profiles')
+      .upsert({ id: user.id, nickname, email: user.email })
+  }
+
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setCurrentUser(user);
+
+      // 소셜 로그인 유저 닉네임 중복 처리
+      const provider = user.app_metadata?.provider
+      if (provider === 'google' || provider === 'kakao') {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('nickname')
+          .eq('id', user.id)
+          .maybeSingle()
+
+        if (!profile?.nickname) {
+          await assignUniqueNickname(user)
+        }
+      }
+
       try {
         const data = await getMyConfirmedSchedules(user.id);
         setConfirmedSchedules(data);
       } catch (e) {
         console.error("확정 일정 조회 실패:", e);
       }
-      // 배지용 pending 수 미리 로드
       try {
         const reqs = await getPendingRequests(user.id);
         setPendingRequests(reqs);
@@ -72,6 +117,7 @@ function HomePage() {
       }
     };
     init();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadAll = useCallback(async (userId) => {
@@ -153,7 +199,6 @@ function HomePage() {
           <div onClick={() => setShowFriendPanel(false)} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.3)", zIndex: 200 }} />
           <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "300px", backgroundColor: "#fff", zIndex: 201, boxShadow: "-2px 0 12px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column" }}>
 
-            {/* 헤더 */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 20px 16px", borderBottom: "1px solid #eee" }}>
               <span style={{ fontSize: "16px", fontWeight: "bold" }}>친구</span>
               <button onClick={() => setShowFriendPanel(false)} style={{ border: "none", background: "none", fontSize: "20px", cursor: "pointer", color: "#aaa" }}>✕</button>
@@ -161,7 +206,6 @@ function HomePage() {
 
             <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
 
-              {/* 친구 요청 보내기 */}
               <p style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: "600", color: "#555" }}>이메일로 친구 요청</p>
               <div style={{ display: "flex", gap: "8px", marginBottom: "24px" }}>
                 <input
@@ -180,7 +224,6 @@ function HomePage() {
                 </button>
               </div>
 
-              {/* 받은 친구 요청 */}
               {pendingRequests.length > 0 && (
                 <div style={{ marginBottom: "24px" }}>
                   <p style={{ margin: "0 0 10px", fontSize: "13px", fontWeight: "600", color: "#555" }}>
@@ -210,7 +253,6 @@ function HomePage() {
                 </div>
               )}
 
-              {/* 친구 목록 */}
               <p style={{ margin: "0 0 12px", fontSize: "13px", fontWeight: "600", color: "#555" }}>
                 친구 목록 {friends.length > 0 && `(${friends.length})`}
               </p>

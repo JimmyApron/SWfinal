@@ -46,50 +46,70 @@ export const checkNicknameDuplicateApi = async (nickname) => {
 }
 
 /**
- * 3. 회원가입 API (인증 메일 없이 즉시 완결되는 버전)
+ * 3. 이메일로 OTP 인증 코드 전송 (회원가입 이메일 인증용)
  */
-export async function signupApi({ email, password, nickname }) {
-  // ① Supabase Auth에 회원등록 (이메일 인증이 꺼져있으면 즉시 가입 승인됨)
-  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+export async function sendEmailOtpApi(email) {
+  // 이미 가입된 이메일인지 profiles 테이블에서 확인
+  const { data: existing } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('email', email)
+    .maybeSingle()
+
+  if (existing) {
+    throw new Error('이미 사용 중인 이메일입니다.')
+  }
+
+  const { error } = await supabase.auth.signInWithOtp({
     email,
-    password,
-    options: {
-      emailRedirectTo: `${window.location.origin}/login`,
-    },
+    options: { shouldCreateUser: true },
   })
 
-  if (signUpError) {
-    throw signUpError
-  }
+  if (error) throw error
+}
 
-  const user = signUpData.user
+/**
+ * 3-1. OTP 코드 검증
+ */
+export async function verifyEmailOtpApi(email, token) {
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type: 'email',
+  })
 
-  if (!user) {
-    throw new Error('회원가입 중 사용자 정보를 가져오지 못했습니다.')
-  }
+  if (error) throw error
+  return data
+}
 
-  // ② 가입 성공 즉시 profiles 테이블에 회원 정보 꽂아넣기
-  const { data: profileData, error: profileError } = await supabase
+/**
+ * 3-2. 회원가입 완료 API (OTP 세션 상태에서 비밀번호 설정 + 프로필 생성)
+ */
+export async function signupApi({ password, nickname }) {
+  const { data: updateData, error: updateError } = await supabase.auth.updateUser({
+    password,
+    data: { nickname },
+  })
+
+  if (updateError) throw updateError
+
+  const user = updateData.user
+
+  const { data: existing } = await supabase
     .from('profiles')
-    .insert([
-      {
-        id: user.id,
-        email,
-        nickname,
-      },
-    ])
-    .select()
-    .single()
+    .select('id')
+    .eq('id', user.id)
+    .maybeSingle()
 
-  if (profileError) {
-    throw profileError
+  if (!existing) {
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert([{ id: user.id, email: user.email, nickname }])
+
+    if (profileError) throw profileError
   }
 
-  return {
-    user,
-    profile: profileData,
-    message: '회원가입이 완료되었습니다.',
-  }
+  return { user, message: '회원가입이 완료되었습니다.' }
 }
 
 /**
@@ -143,31 +163,59 @@ export async function logoutApi() {
  * 6. 현재 로그인된 사용자 정보 가져오기 API
  */
 export async function getCurrentUserApi() {
-  const { data, error } = await supabase.auth.getUser()
+  // getSession() reads from localStorage — works for OAuth users
+  const { data: sessionData } = await supabase.auth.getSession()
+  let user = sessionData?.session?.user
 
-  if (error) {
-    throw error
-  }
-
-  const user = data.user
-
+  // Fallback: getUser() makes a network call
   if (!user) {
-    return null
+    const { data, error } = await supabase.auth.getUser()
+    if (error && !error.message?.includes('session missing')) throw error
+    user = data?.user
   }
 
-  const { data: profile, error: profileError } = await supabase
+  if (!user) return null
+
+  const { data: profile } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', user.id)
+    .maybeSingle()
+
+  if (profile) return { user, profile }
+
+  // OAuth 신규 유저: profiles 테이블에 자동 생성
+  const nickname =
+    user.user_metadata?.full_name ||
+    user.user_metadata?.name ||
+    user.email?.split('@')[0] ||
+    '소셜유저'
+  const profileimageurl =
+    user.user_metadata?.avatar_url ||
+    user.user_metadata?.picture ||
+    null
+
+  const { data: newProfile, error: insertError } = await supabase
+    .from('profiles')
+    .insert([{ id: user.id, email: user.email, nickname, profileimageurl }])
+    .select()
     .single()
 
-  if (profileError) {
-    throw profileError
-  }
+  if (!insertError) return { user, profile: newProfile }
 
+  // insert 실패 시 (DB 트리거나 중복 등) 다시 조회 시도
+  const { data: retryProfile } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (retryProfile) return { user, profile: retryProfile }
+
+  // 그래도 없으면 auth 메타데이터로 임시 프로필 반환 (설정 페이지 접근 보장)
   return {
     user,
-    profile,
+    profile: { id: user.id, email: user.email, nickname, profileimageurl },
   }
 }
 

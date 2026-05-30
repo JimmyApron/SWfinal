@@ -1,85 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useGoogleLogin } from '@react-oauth/google'
-import { logoutApi } from '../../api/authApi'
-import { getCurrentUserApi } from '../../api/authApi'
-
-function Toggle({ value, onChange }) {
-  return (
-    <div
-      onClick={onChange}
-      style={{
-        width: '44px',
-        height: '24px',
-        borderRadius: '12px',
-        cursor: 'pointer',
-        backgroundColor: value ? '#7c79ff' : '#ccc',
-        position: 'relative',
-        transition: 'background-color 0.2s',
-        flexShrink: 0,
-      }}
-    >
-      <div
-        style={{
-          width: '20px',
-          height: '20px',
-          borderRadius: '50%',
-          backgroundColor: '#fff',
-          position: 'absolute',
-          top: '2px',
-          left: value ? '22px' : '2px',
-          transition: 'left 0.2s',
-        }}
-      />
-    </div>
-  )
-}
+import { logoutApi, getCurrentUserApi } from '../../api/authApi'
+import { supabase } from '../../lib/supabaseClient'
 
 function SettingsPage() {
   const navigate = useNavigate()
   const [userProfile, setUserProfile] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
-
-  const [googleConnected, setGoogleConnected] = useState(
-    !!localStorage.getItem('google_calendar_token')
-  )
-
-  const [googleAutoSync, setGoogleAutoSync] = useState(
-    localStorage.getItem('google_calendar_auto_sync') === 'true'
-  )
-
-  const googleLogin = useGoogleLogin({
-    scope: 'https://www.googleapis.com/auth/calendar.events',
-    onSuccess: (tokenResponse) => {
-      const expiry = Date.now() + tokenResponse.expires_in * 1000
-
-      localStorage.setItem('google_calendar_token', tokenResponse.access_token)
-      localStorage.setItem('google_calendar_token_expiry', String(expiry))
-
-      setGoogleConnected(true)
-      alert('구글 캘린더가 연결되었습니다!')
-    },
-    onError: () => alert('구글 캘린더 연결에 실패했습니다.'),
-  })
-
-  const handleGoogleDisconnect = () => {
-    localStorage.removeItem('google_calendar_token')
-    localStorage.removeItem('google_calendar_token_expiry')
-    localStorage.removeItem('google_calendar_auto_sync')
-
-    setGoogleConnected(false)
-    setGoogleAutoSync(false)
-  }
-
-  const handleAutoSyncToggle = () => {
-    const next = !googleAutoSync
-    localStorage.setItem('google_calendar_auto_sync', String(next))
-    setGoogleAutoSync(next)
-  }
+  const [loginProvider, setLoginProvider] = useState(null)
 
   const handleLogout = async () => {
     if (!window.confirm('정말 로그아웃 하시겠습니까? 🥺')) return
-
     try {
       await logoutApi()
       window.location.href = '/'
@@ -90,32 +21,108 @@ function SettingsPage() {
 
   useEffect(() => {
     const fetchUserData = async () => {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (!user || authError) {
+        navigate('/')
+        setIsLoading(false)
+        return
+      }
+
+      // provider 감지
+      const provider = user.app_metadata?.provider
+
+      console.log('provider:', provider)  // ← 추가
+      console.log('app_metadata:', user.app_metadata)
+      console.log('providers:', JSON.stringify(user?.app_metadata?.providers))
+      console.log('identities:', JSON.stringify(user?.identities))
+
+      const lastSignedInIdentity = user.identities?.reduce((latest, identity) => {
+        return new Date(identity.last_sign_in_at) > new Date(latest.last_sign_in_at)
+          ? identity
+          : latest
+      })
+      const actualProvider = lastSignedInIdentity?.provider || provider
+      console.log('actualProvider:', actualProvider)
+      setLoginProvider(actualProvider)
+
       try {
         const data = await getCurrentUserApi()
-
         if (data) {
           setUserProfile(data.profile)
-        } else {
-          alert('로그인이 필요한 페이지입니다.')
-          navigate('/')
-        }
-      } catch (error) {
-        console.error('유저 정보 로드 실패:', error)
-
-        if (
-          error.message?.includes('session missing') ||
-          error.message?.includes('AuthSessionMissingError')
-        ) {
-          navigate('/')
+          setIsLoading(false)
           return
         }
-      } finally {
-        setIsLoading(false)
+      } catch (profileError) {
+        console.error('프로필 조회 실패:', profileError)
       }
+
+      setUserProfile({
+        id: user.id,
+        email: user.email,
+        nickname:
+          user.user_metadata?.full_name ||
+          user.user_metadata?.name ||
+          user.email?.split('@')[0] ||
+          '소셜유저',
+        profileimageurl:
+          user.user_metadata?.avatar_url ||
+          user.user_metadata?.picture ||
+          null,
+      })
+      setIsLoading(false)
     }
 
     fetchUserData()
   }, [navigate])
+
+  const renderProviderBadge = () => {
+    if (loginProvider === 'google') {
+      return (
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          backgroundColor: '#fff',
+          border: '1px solid #e0e0e0',
+          borderRadius: '20px',
+          padding: '4px 12px',
+          fontSize: '13px',
+          color: '#444',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+        }}>
+          <img
+            src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+            alt="Google"
+            width="16"
+          />
+          Google로 로그인 중
+        </div>
+      )
+    }
+    if (loginProvider === 'kakao') {
+      return (
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          backgroundColor: '#FEE500',
+          borderRadius: '20px',
+          padding: '4px 12px',
+          fontSize: '13px',
+          color: '#000',
+          fontWeight: 'bold',
+        }}>
+          <img
+            src="https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_small.png"
+            alt="Kakao"
+            width="16"
+          />
+          카카오톡으로 로그인 중
+        </div>
+      )
+    }
+    return null
+  }
 
   if (isLoading) {
     return <div className="loading-container">로딩 중...</div>
@@ -147,6 +154,8 @@ function SettingsPage() {
         <p className="info-value">
           {userProfile?.email || '이메일 정보 없음'}
         </p>
+        {/* 이메일 바로 아래 배지 */}
+        {renderProviderBadge()}
       </div>
 
       <div className="setting-actions">

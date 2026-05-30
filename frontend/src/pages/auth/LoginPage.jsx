@@ -14,14 +14,21 @@ function LoginPage() {
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/home` },
+      options: { 
+        redirectTo: `${window.location.origin}/home`
+         },
     })
   }
 
   const handleKakaoLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'kakao',
-      options: { redirectTo: `${window.location.origin}/home` },
+      options: { 
+        redirectTo: `${window.location.origin}/home`,
+        scopes: 'profile_nickname',
+        queryParams: {
+          prompt: 'none',
+        }, },
     })
   }
 

@@ -64,8 +64,8 @@ function BottomNav() {
   const handleRestrictedClick = async (e, path) => {
     e.preventDefault();
     // 세션이 있으면 로그인 유저 → 이동
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) { navigate(path); return; }
+    const { data: { user} } = await supabase.auth.getUser();
+    if (user) { navigate(path); return; }
     // guest_id가 없으면 로그인 시도한 유저 (OAuth 등) → 이동
     const guestId = localStorage.getItem("guest_id");
     if (!guestId) { navigate(path); return; }
