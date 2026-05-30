@@ -10,12 +10,14 @@ function PlaceSearchPanel({
   onSearchResult,
   onSelectPlace,
   onSharePlace,
+  onCreateAdditionalPlaceVote,
 }) {
   const [selectedCategory, setSelectedCategory] = useState('restaurant')
   const [radius, setRadius] = useState('1000')
   const [ratingFilter, setRatingFilter] = useState('all')
   const [reviewCountFilter, setReviewCountFilter] = useState('all')
   const [places, setPlaces] = useState([])
+  const [selectedPlaceIds, setSelectedPlaceIds] = useState([])
   const [message, setMessage] = useState('')
 
   const handleSearchPlaces = async () => {
@@ -59,6 +61,7 @@ function PlaceSearchPanel({
       })
 
       setPlaces(filteredPlaces)
+      setSelectedPlaceIds(filteredPlaces.map((place) => String(place.id)))
       onSearchResult(filteredPlaces)
 
       if (filteredPlaces.length === 0) {
@@ -70,6 +73,28 @@ function PlaceSearchPanel({
       console.error('장소 검색 오류:', error)
       setMessage(error.message || '장소 검색에 실패했습니다.')
     }
+  }
+
+  const handleToggleVotePlace = (place) => {
+    const placeId = String(place.id)
+    setSelectedPlaceIds((currentIds) =>
+      currentIds.includes(placeId)
+        ? currentIds.filter((id) => id !== placeId)
+        : [...currentIds, placeId]
+    )
+  }
+
+  const handleCreateVote = () => {
+    const selectedPlaces = places.filter((place) =>
+      selectedPlaceIds.includes(String(place.id))
+    )
+
+    if (selectedPlaces.length === 0) {
+      setMessage('투표에 넣을 추가장소 후보를 1개 이상 선택해주세요.')
+      return
+    }
+
+    onCreateAdditionalPlaceVote(selectedPlaces)
   }
 
   if (!searchLocation) {
@@ -116,10 +141,18 @@ function PlaceSearchPanel({
 
       {message && <p>{message}</p>}
 
+      {places.length > 0 && onCreateAdditionalPlaceVote && (
+        <button type="button" onClick={handleCreateVote}>
+          선택한 후보로 추가장소 투표 만들기
+        </button>
+      )}
+
       <PlaceList
         places={places}
         onSelectPlace={onSelectPlace}
         onSharePlace={onSharePlace}
+        selectedPlaceIds={selectedPlaceIds}
+        onToggleVotePlace={onCreateAdditionalPlaceVote ? handleToggleVotePlace : null}
       />
     </section>
   )

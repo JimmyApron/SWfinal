@@ -18,6 +18,12 @@ function normalizeCoordinate(primaryValue, fallbackValue) {
   return null;
 }
 
+const MIDDLE_PLACE_VOTE_TITLE = "중간 장소 투표";
+
+function isLocationVoteType(votetype) {
+  return ["location", "middle_location", "additional_location"].includes(votetype);
+}
+
 /**
  * 투표 옵션 정리 함수
  * - 일반 투표
@@ -65,6 +71,7 @@ export async function createVote({
   endtimeenabled,
   reminderenabled,
   votetype,
+  locationkind,
 }) {
   if (!roomid) {
     throw new Error("roomid가 없습니다. 투표를 생성할 방 정보가 필요합니다.");
@@ -86,6 +93,7 @@ export async function createVote({
         endtimeenabled,
         reminderenabled,
         votetype: votetype || "general",
+        locationkind: locationkind || null,
       },
     ])
     .select()
@@ -258,6 +266,12 @@ export async function confirmVote(
       .delete()
       .eq("voteid", Number(voteid));
 
+    const { data: middlePlace } = await supabase
+      .from("room_middle_places")
+      .select("name, address")
+      .eq("roomid", Number(roomid))
+      .maybeSingle();
+
     const { error } = await supabase.from("confirmed_schedules").insert([
       {
         roomid: Number(roomid),
@@ -267,6 +281,8 @@ export async function confirmVote(
         starttime: option.starttime || null,
         endtime: option.endtime || null,
         isallday: !option.starttime,
+        location: middlePlace?.name || null,
+        locationaddress: middlePlace?.address || null,
       },
     ]);
 
@@ -275,10 +291,10 @@ export async function confirmVote(
       throw error;
     }
 
-    return;
+    return { hasConfirmedSchedule: true };
   }
 
-  if (votetype === "location") {
+  if (isLocationVoteType(votetype)) {
     const confirmedBy = extraValue;
 
     const placeName =
@@ -300,8 +316,6 @@ export async function confirmVote(
         ? Number(option.placelng)
         : null;
 
-    const kakaoMapUrl = option.kakaomapurl || option.kakaoMapUrl || null;
-
     await supabase
       .from("confirmed_locations")
       .delete()
@@ -320,6 +334,25 @@ export async function confirmVote(
       throw error;
     }
 
+    const { data: locationVote, error: voteError } = await supabase
+      .from("votes")
+      .select("title, votetype, locationkind")
+      .eq("id", Number(voteid))
+      .single();
+
+    if (voteError) {
+      console.error("위치 투표 조회 실패:", voteError);
+      throw voteError;
+    }
+
+    const isMiddlePlaceVote =
+      locationVote?.locationkind === "middle" ||
+      (
+        locationVote?.votetype === "location" &&
+        !locationVote?.locationkind &&
+        locationVote?.title?.trim() === MIDDLE_PLACE_VOTE_TITLE
+      );
+
     /**
      * 위치 탭에서 확정 중간장소로 다시 불러올 수 있도록 저장
      *
@@ -327,7 +360,7 @@ export async function confirmVote(
      * room_middle_places 테이블에 kakaomapurl 컬럼이 없다면
      * 아래 upsert에서 에러가 날 수 있어서 kakaomapurl은 넣지 않음.
      */
-    if (placeLat !== null && placeLng !== null) {
+    if (isMiddlePlaceVote && placeLat !== null && placeLng !== null) {
       const { error: middlePlaceError } = await supabase
         .from("room_middle_places")
         .upsert(
@@ -348,7 +381,37 @@ export async function confirmVote(
       }
     }
 
-    return;
+    const { data: confirmedSchedules, error: scheduleError } = await supabase
+      .from("confirmed_schedules")
+      .select("id")
+      .eq("roomid", Number(roomid))
+      .gte("date", new Date().toISOString().slice(0, 10));
+
+    if (scheduleError) {
+      console.error("확정 일정 조회 실패:", scheduleError);
+      throw scheduleError;
+    }
+
+    if (isMiddlePlaceVote && confirmedSchedules?.length > 0) {
+      const { error: scheduleLocationError } = await supabase
+        .from("confirmed_schedules")
+        .update({
+          location: placeName,
+          locationaddress: placeAddress,
+        })
+        .eq("roomid", Number(roomid))
+        .gte("date", new Date().toISOString().slice(0, 10));
+
+      if (scheduleLocationError) {
+        console.error("확정 일정 위치 저장 실패:", scheduleLocationError);
+        throw scheduleLocationError;
+      }
+    }
+
+    return {
+      hasConfirmedSchedule: Boolean(confirmedSchedules?.length),
+      isMiddlePlaceVote,
+    };
   }
 }
 

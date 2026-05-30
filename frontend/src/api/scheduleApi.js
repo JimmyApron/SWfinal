@@ -112,7 +112,7 @@ export async function deleteScheduleCandidate(candidateId) {
   }
 }
 
-export async function getMyConfirmedSchedules(userId) {
+export async function getMyConfirmedSchedules(userId, { includeLocationOnly = false } = {}) {
   const { data: memberships, error: memberError } = await supabase
     .from("room_members")
     .select("roomid, rooms(roomname)")
@@ -123,7 +123,7 @@ export async function getMyConfirmedSchedules(userId) {
   const roomIds = memberships.map((m) => m.roomid);
   if (roomIds.length === 0) return [];
 
-  const [{ data, error }, { data: dismissed }, { data: myResponses }] = await Promise.all([
+  const [{ data, error }, { data: dismissed }] = await Promise.all([
     supabase
       .from("confirmed_schedules")
       .select("*")
@@ -134,39 +134,139 @@ export async function getMyConfirmedSchedules(userId) {
       .from("dismissed_schedules")
       .select("scheduleid")
       .eq("userid", userId),
-    supabase
-      .from("voteresponses")
-      .select("optionid")
-      .eq("userid", userId),
   ]);
-
   if (error) throw new Error("확정 일정 조회 실패");
 
   const dismissedIds = new Set((dismissed || []).map((d) => d.scheduleid));
-  const myOptionIds = new Set((myResponses || []).map((r) => r.optionid));
-
-  // votes 테이블에서 confirmedoptionid 조회 (confirmed_schedules에는 없음)
-  const voteIds = (data || []).filter((s) => s.voteid).map((s) => s.voteid);
-  const voteConfirmedMap = {};
-  if (voteIds.length > 0) {
-    const { data: votes } = await supabase
-      .from("votes")
-      .select("id, confirmedoptionid")
-      .in("id", voteIds);
-    (votes || []).forEach((v) => { voteConfirmedMap[v.id] = v.confirmedoptionid; });
-  }
-
-  return data
-    .filter((s) => {
-      if (dismissedIds.has(s.id)) return false;
-      if (!s.voteid) return true;
-      const confirmedOptionId = voteConfirmedMap[s.voteid];
-      return confirmedOptionId ? myOptionIds.has(confirmedOptionId) : false;
-    })
+  const visibleSchedules = data
+    .filter((s) => !dismissedIds.has(s.id))
     .map((s) => {
       const membership = memberships.find((m) => m.roomid === s.roomid);
       return { ...s, roomname: membership?.rooms?.roomname || "" };
     });
+
+  if (!includeLocationOnly) return visibleSchedules;
+
+  const { data: middlePlaces, error: middlePlaceError } = await supabase
+    .from("room_middle_places")
+    .select("roomid, name, address, lat, lng")
+    .in("roomid", roomIds);
+
+  if (middlePlaceError) throw new Error("중간 위치 조회 실패");
+
+  const middlePlaceMap = new Map(
+    (middlePlaces || []).map((place) => [place.roomid, place])
+  );
+  const schedulesWithMiddlePlace = visibleSchedules.map((schedule) => {
+    const middlePlace = middlePlaceMap.get(schedule.roomid);
+    return {
+      ...schedule,
+      middlePlace: middlePlace
+        ? {
+            name: middlePlace.name,
+            address: middlePlace.address || null,
+            lat: middlePlace.lat,
+            lng: middlePlace.lng,
+          }
+        : null,
+    };
+  });
+  const scheduledRoomIds = new Set(visibleSchedules.map((s) => s.roomid));
+  const locationOnlyCards = (middlePlaces || [])
+    .filter((place) => !scheduledRoomIds.has(place.roomid))
+    .map((place) => {
+      const membership = memberships.find((m) => m.roomid === place.roomid);
+      return {
+        id: `middle-place-${place.roomid}`,
+        roomid: place.roomid,
+        roomname: membership?.rooms?.roomname || "",
+        date: null,
+        location: place.name,
+        locationaddress: place.address || null,
+        middlePlace: {
+          name: place.name,
+          address: place.address || null,
+          lat: place.lat,
+          lng: place.lng,
+        },
+        isLocationOnly: true,
+      };
+    });
+
+  return [...schedulesWithMiddlePlace, ...locationOnlyCards];
+}
+
+export async function createConfirmedScheduleForRoom(roomId, schedule) {
+  const { error } = await supabase.from("confirmed_schedules").insert([
+    {
+      roomid: Number(roomId),
+      title: schedule.title?.trim() || null,
+      date: schedule.date,
+      starttime: schedule.starttime || null,
+      endtime: schedule.endtime || null,
+      isallday: !schedule.starttime,
+      location: schedule.location || null,
+      locationaddress: schedule.locationaddress || null,
+    },
+  ]);
+
+  if (error) {
+    console.error("확정 일정 저장 실패:", error);
+    throw new Error("확정 일정 저장 실패");
+  }
+}
+
+export async function getAdditionalConfirmedLocations(roomId) {
+  const { data, error } = await supabase
+    .from("confirmed_locations")
+    .select("id, placename, voteid")
+    .eq("roomid", Number(roomId))
+    .order("createdat", { ascending: true });
+
+  if (error) {
+    console.error("추가 위치 조회 실패:", error);
+    throw new Error("추가 위치 조회 실패");
+  }
+
+  const voteIds = (data || [])
+    .map((location) => location.voteid)
+    .filter(Boolean);
+  const { data: votes, error: voteError } = voteIds.length > 0
+    ? await supabase
+        .from("votes")
+        .select("id, title, votetype, locationkind")
+        .in("id", voteIds)
+    : { data: [], error: null };
+
+  if (voteError) {
+    console.error("추가 위치 투표 조회 실패:", voteError);
+    throw new Error("추가 위치 조회 실패");
+  }
+
+  const voteMap = new Map((votes || []).map((vote) => [vote.id, vote]));
+
+  return (data || []).filter((location) => {
+    if (!location.voteid) return true;
+    const vote = voteMap.get(location.voteid);
+    if (vote?.locationkind === "middle") return false;
+    if (vote?.locationkind === "additional") return true;
+    return vote?.title?.replace(/\s/g, "") !== "중간장소투표";
+  });
+}
+
+export async function addAdditionalConfirmedLocation(roomId, placeName) {
+  const { data, error } = await supabase
+    .from("confirmed_locations")
+    .insert([{ roomid: Number(roomId), placename: placeName, voteid: null }])
+    .select("id, placename")
+    .single();
+
+  if (error) {
+    console.error("추가 위치 저장 실패:", error);
+    throw new Error("추가 위치 저장 실패");
+  }
+
+  return data;
 }
 
 export async function dismissConfirmedSchedule(userId, scheduleId) {

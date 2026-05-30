@@ -37,6 +37,7 @@ function Toggle({ value, onChange }) {
 
 function SettingsPage() {
   const navigate = useNavigate()
+  const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID
   const [userProfile, setUserProfile] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -203,18 +204,25 @@ function SettingsPage() {
         ) : (
           <button
             onClick={() => googleLogin()}
+            disabled={!googleClientId}
             style={{
               fontSize: '14px',
               color: '#fff',
-              backgroundColor: '#4285F4',
+              backgroundColor: googleClientId ? '#4285F4' : '#aaa',
               border: 'none',
               borderRadius: '8px',
               padding: '8px 16px',
-              cursor: 'pointer',
+              cursor: googleClientId ? 'pointer' : 'not-allowed',
             }}
           >
             Google 캘린더 연결
           </button>
+        )}
+
+        {!googleClientId && (
+          <p style={{ fontSize: '12px', color: '#888', marginBottom: 0 }}>
+            Google OAuth Client ID 설정이 필요합니다.
+          </p>
         )}
       </div>
 

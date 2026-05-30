@@ -1,4 +1,10 @@
-function PlaceList({ places, onSelectPlace, onSharePlace }) {
+function PlaceList({
+  places,
+  onSelectPlace,
+  onSharePlace,
+  selectedPlaceIds = [],
+  onToggleVotePlace,
+}) {
   if (!places || places.length === 0) {
     return <p>검색 결과가 없습니다.</p>
   }
@@ -10,6 +16,17 @@ function PlaceList({ places, onSelectPlace, onSharePlace }) {
       <ul>
         {places.map((place) => (
           <li key={place.id}>
+            {onToggleVotePlace && (
+              <label style={{ display: 'block', marginBottom: '8px' }}>
+                <input
+                  type="checkbox"
+                  checked={selectedPlaceIds.includes(String(place.id))}
+                  onChange={() => onToggleVotePlace(place)}
+                />{' '}
+                투표 후보로 선택
+              </label>
+            )}
+
             <strong>{place.name}</strong>
 
             <p>{place.address}</p>

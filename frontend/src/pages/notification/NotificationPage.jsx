@@ -10,6 +10,7 @@ import {
   deleteGuestNotification,
   deleteMyNotifications,
   deleteMyGuestNotifications,
+  isNotificationVisibleToRecipient,
 } from "../../api/notificationApi";
 
 function NotificationPage() {
@@ -102,6 +103,28 @@ function NotificationPage() {
                 await supabase.from("notifications").insert(closeNotifications);
               }
 
+              const { data: activeGuests } = await supabase
+                .from("room_guests")
+                .select("id")
+                .eq("roomid", vote.roomid)
+                .eq("votenotifenabled", true);
+
+              if (activeGuests && activeGuests.length > 0) {
+                const closeGuestNotifications = activeGuests.map((guest) => ({
+                  roomid: vote.roomid,
+                  receiverid: guest.id,
+                  type: "vote_closed",
+                  title: "투표 마감 완료",
+                  message: `[${vote.title}] 투표가 마감되었습니다. 최종 결과를 확인해 보세요.`,
+                  isread: false,
+                  link: `/rooms/${vote.roomid}/votes/${vote.id}`,
+                }));
+
+                await supabase
+                  .from("notifications")
+                  .insert(closeGuestNotifications);
+              }
+
               // 3. 중복 방지를 위해 투표 쾅 닫기 (isclosed = true)
               await supabase
                 .from("votes")
@@ -137,10 +160,18 @@ function NotificationPage() {
           table: "notifications",
           filter: `receiverid=eq.${userId}`,
         },
-        (payload) => {
+        async (payload) => {
           console.log("알림 실시간 수신:", payload);
 
           if (payload.eventType === "INSERT") {
+            const isVisible = await isNotificationVisibleToRecipient(
+              payload.new,
+              userId,
+              isGuest
+            );
+
+            if (!isVisible) return;
+
             setNotifications((prev) => {
               const alreadyExists = prev.some(
                 (item) => item.id === payload.new.id

@@ -56,12 +56,21 @@ export const sendVoteNotification = async ({
 
     if (!guestFetchError && activeGuests && activeGuests.length > 0) {
       const newVoteGuestNotifications = activeGuests.map((guest) => ({
-        guestid: guest.id,
+        receiverid: guest.id,
         roomid: Number(roomid),
+        senderid: currentUser?.id || null,
+        type: "vote_new",
+        title: "새 투표 생성",
+        isread: false,
+        link: createdVoteId ? `/rooms/${roomid}/votes/${createdVoteId}` : `/rooms/${roomid}?tab=vote`,
         message: `🔔 [${roomName}] 방에 새로운 투표 [${title}]이(가) 생성되었습니다!`,
       }));
 
-      await supabase.from("guest_notifications").insert(newVoteGuestNotifications);
+      const { error: guestNotificationError } = await supabase
+        .from("notifications")
+        .insert(newVoteGuestNotifications);
+
+      if (guestNotificationError) throw guestNotificationError;
       console.log("📢 새 투표 게스트 알림 발송 성공!");
     }
 
@@ -94,11 +103,20 @@ export const sendVoteNotification = async ({
 
         if (activeGuests && activeGuests.length > 0) {
           const guestReminders = activeGuests.map((guest) => ({
-            guestid: guest.id,
+            receiverid: guest.id,
             roomid: Number(roomid),
+            senderid: currentUser?.id || null,
+            type: "vote_reminder",
+            title: "투표 마감 임박",
+            isread: false,
+            link: createdVoteId ? `/rooms/${roomid}/votes/${createdVoteId}` : `/rooms/${roomid}?tab=vote`,
             message: `⚠️ [${roomName}] 방의 [${title}] 투표 마감 시간이 ${Math.max(1, Math.round(diffInMinutes))}분 남았습니다!`,
           }));
-          await supabase.from("guest_notifications").insert(guestReminders);
+          const { error: guestReminderError } = await supabase
+            .from("notifications")
+            .insert(guestReminders);
+
+          if (guestReminderError) throw guestReminderError;
         }
         console.log("⏱️ 마감 임박 알림 추가 적재 완료!");
       }
@@ -151,6 +169,30 @@ export const checkAndNotifyClosedVotes = async (roomid) => {
         }));
 
         await supabase.from("notifications").insert(closeNotifications);
+      }
+
+      const { data: activeGuests } = await supabase
+        .from("room_guests")
+        .select("id")
+        .eq("roomid", Number(roomid))
+        .eq("votenotifenabled", true);
+
+      if (activeGuests && activeGuests.length > 0) {
+        const closeGuestNotifications = activeGuests.map((guest) => ({
+          roomid: Number(roomid),
+          receiverid: guest.id,
+          type: "vote_closed",
+          title: "투표 마감 완료",
+          message: "투표가 마감되었습니다. 최종 결과를 확인해 보세요.",
+          isread: false,
+          link: `/rooms/${roomid}/votes/${vote.id}`,
+        }));
+
+        const { error: guestCloseError } = await supabase
+          .from("notifications")
+          .insert(closeGuestNotifications);
+
+        if (guestCloseError) throw guestCloseError;
       }
 
       // 3. 🔒 [중요] 중복 알림이 가지 않도록, 알림 쏜 투표는 즉시 isclosed = true 처리!

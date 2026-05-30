@@ -226,6 +226,67 @@ function VoteMessageCard({ meta, navigate }) {
   );
 }
 
+function InlineKakaoMap({ lat, lng, name }) {
+  const mapRef = useRef(null);
+
+  useEffect(() => {
+    const numberLat = Number(lat);
+    const numberLng = Number(lng);
+
+    if (
+      !Number.isFinite(numberLat) ||
+      !Number.isFinite(numberLng) ||
+      !mapRef.current ||
+      !window.kakao?.maps
+    ) {
+      return;
+    }
+
+    let marker = null;
+
+    const createMap = () => {
+      if (!mapRef.current) return;
+
+      const position = new window.kakao.maps.LatLng(numberLat, numberLng);
+      const map = new window.kakao.maps.Map(mapRef.current, {
+        center: position,
+        level: 4,
+      });
+
+      marker = new window.kakao.maps.Marker({
+        map,
+        position,
+        title: name || "공유 위치",
+      });
+    };
+
+    if (window.kakao.maps.load) {
+      window.kakao.maps.load(createMap);
+    } else {
+      createMap();
+    }
+
+    return () => {
+      marker?.setMap(null);
+    };
+  }, [lat, lng, name]);
+
+  return (
+    <div
+      ref={mapRef}
+      style={{
+        width: "260px",
+        maxWidth: "100%",
+        height: "180px",
+        marginTop: "8px",
+        borderRadius: "8px",
+        overflow: "hidden",
+        backgroundColor: "#f2f2f2",
+      }}
+    />
+  );
+}
+
 function MapShareMessageCard({ meta }) {
   const titleMap = {
     current_location: "현재 위치 공유",
@@ -273,24 +334,8 @@ function MapShareMessageCard({ meta }) {
         </div>
       )}
 
-      {meta.url && (
-        <a
-          href={meta.url}
-          target="_blank"
-          rel="noreferrer"
-          style={{
-            display: "block",
-            textAlign: "center",
-            fontSize: "12px",
-            color: "#fff",
-            backgroundColor: "#3182ce",
-            borderRadius: "8px",
-            padding: "7px 0",
-            textDecoration: "none",
-          }}
-        >
-          카카오맵에서 보기
-        </a>
+      {meta.lat && meta.lng && (
+        <InlineKakaoMap lat={meta.lat} lng={meta.lng} name={meta.name} />
       )}
     </div>
   );

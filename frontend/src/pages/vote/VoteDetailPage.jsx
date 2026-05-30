@@ -49,6 +49,7 @@ function VoteDetailPage() {
   const [showPickMap, setShowPickMap] = useState(false);
 
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [pendingOption, setPendingOption] = useState(null);
   const [appointmentTitle, setAppointmentTitle] = useState("");
 
@@ -117,7 +118,14 @@ function VoteDetailPage() {
   const hasVoted = myResponses.length > 0;
   const totalVoters = new Set(responses.map((r) => r.userid)).size;
   const isCreator = currentUser?.id === vote.userid;
-  const isLocationVote = vote.votetype === "location";
+  const isLocationVote = isLocationVoteType(vote.votetype);
+  const isMiddlePlaceVote =
+    vote.locationkind === "middle" ||
+    (
+      vote.votetype === "location" &&
+      !vote.locationkind &&
+      vote.title?.trim() === "중간 장소 투표"
+    );
 
   const isClosed =
     vote.isclosed ||
@@ -436,9 +444,14 @@ function VoteDetailPage() {
   };
 
   const handleConfirm = async (option) => {
-    const typeLabel = vote.votetype === "schedule" ? "일정" : "중간장소";
+    const typeLabel =
+      vote.votetype === "schedule"
+        ? "일정"
+        : isMiddlePlaceVote
+        ? "중간위치"
+        : "추가장소";
 
-    if (vote.votetype === "location" && !hasPlaceCoordinates(option)) {
+    if (isLocationVote && !hasPlaceCoordinates(option)) {
       alert("선택지 장소를 카카오맵에서 선택해주세요.");
       return;
     }
@@ -459,7 +472,7 @@ function VoteDetailPage() {
     }
 
     try {
-      await confirmVote(
+      const result = await confirmVote(
         Number(voteid),
         option,
         Number(roomid),
@@ -468,8 +481,36 @@ function VoteDetailPage() {
       );
 
       await loadVote();
+
+      if (
+        isLocationVote &&
+        !result?.hasConfirmedSchedule
+      ) {
+        setAppointmentTitle("");
+        setShowScheduleModal(true);
+      }
     } catch (error) {
       alert("확정 실패: " + (error.message || JSON.stringify(error)));
+    }
+  };
+
+  const handleLocationConfirmedWithSchedule = (goToSchedule) => {
+    if (!appointmentTitle.trim()) {
+      alert("약속 이름을 입력하세요.");
+      return;
+    }
+
+    localStorage.setItem(
+      `appointment_draft_title_${Number(roomid)}`,
+      appointmentTitle.trim()
+    );
+    setShowScheduleModal(false);
+    setAppointmentTitle("");
+
+    if (goToSchedule) {
+      navigate(`/rooms/${roomid}?tab=schedule`);
+    } else {
+      navigate("/home");
     }
   };
 
@@ -776,6 +817,104 @@ function VoteDetailPage() {
         </div>
       )}
 
+      {showScheduleModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#fff",
+              borderRadius: "16px",
+              padding: "24px",
+              width: "300px",
+            }}
+          >
+            <h3 style={{ marginBottom: "4px", textAlign: "center" }}>
+              위치가 확정되었습니다!
+            </h3>
+
+            <p
+              style={{
+                color: "#666",
+                fontSize: "13px",
+                textAlign: "center",
+                marginBottom: "16px",
+              }}
+            >
+              약속 이름을 입력해 주세요
+            </p>
+
+            <input
+              type="text"
+              placeholder="예: 팀 회식, 생일 파티..."
+              value={appointmentTitle}
+              onChange={(e) => setAppointmentTitle(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                fontSize: "14px",
+                border: "1px solid #ddd",
+                borderRadius: "10px",
+                boxSizing: "border-box",
+                marginBottom: "16px",
+              }}
+            />
+
+            <p
+              style={{
+                color: "#666",
+                fontSize: "13px",
+                textAlign: "center",
+                marginBottom: "12px",
+              }}
+            >
+              만날 일정을 지금 정하시겠어요?
+            </p>
+
+            <button
+              onClick={() => handleLocationConfirmedWithSchedule(true)}
+              style={{
+                width: "100%",
+                padding: "12px",
+                marginBottom: "8px",
+                backgroundColor: "#7c79ff",
+                color: "#fff",
+                border: "none",
+                borderRadius: "10px",
+                fontSize: "15px",
+                cursor: "pointer",
+              }}
+            >
+              일정 지금 정하기
+            </button>
+
+            <button
+              onClick={() => handleLocationConfirmedWithSchedule(false)}
+              style={{
+                width: "100%",
+                padding: "12px",
+                backgroundColor: "#f5f5f5",
+                color: "#333",
+                border: "none",
+                borderRadius: "10px",
+                fontSize: "15px",
+                cursor: "pointer",
+              }}
+            >
+              나중에 정하기
+            </button>
+          </div>
+        </div>
+      )}
+
       <div
         style={{
           height: "56px",
@@ -876,8 +1015,10 @@ function VoteDetailPage() {
               borderRadius: "8px",
             }}
           >
-            중간장소 투표는 투표 종료와 별개로, 생성자가
-            <strong> 중간장소 확정하기 </strong>
+            위치 투표는 투표 종료와 별개로, 생성자가
+            <strong>
+              {isMiddlePlaceVote ? " 중간위치 확정하기 " : " 추가장소 확정하기 "}
+            </strong>
             버튼을 눌러야 최종 확정됩니다.
           </p>
         )}
@@ -977,7 +1118,11 @@ function VoteDetailPage() {
             <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
               {vote.ismultiple && <span style={badgeStyle}>복수선택</span>}
               {vote.isanonymous && <span style={badgeStyle}>익명투표</span>}
-              {isLocationVote && <span style={badgeStyle}>중간장소 투표</span>}
+              {isLocationVote && (
+                <span style={badgeStyle}>
+                  {isMiddlePlaceVote ? "중간위치 투표" : "추가장소 투표"}
+                </span>
+              )}
             </div>
 
             {showVotingUI ? (
@@ -1289,8 +1434,12 @@ function VoteDetailPage() {
                             >
                               {isLocationVote
                                 ? isConfirmed
-                                  ? "중간장소 확정됨"
-                                  : "중간장소 확정하기"
+                                  ? isMiddlePlaceVote
+                                    ? "중간위치 확정됨"
+                                    : "추가장소 확정됨"
+                                  : isMiddlePlaceVote
+                                  ? "중간위치 확정하기"
+                                  : "추가장소 확정하기"
                                 : isConfirmed
                                 ? "확정됨"
                                 : "확정"}
@@ -1756,6 +1905,10 @@ function hasAnyMapInfo(option) {
   const hasAddress = hasValue(option.placeaddress);
 
   return hasValue(mapUrl) || hasCoords || hasAddress;
+}
+
+function isLocationVoteType(votetype) {
+  return ["location", "middle_location", "additional_location"].includes(votetype);
 }
 
 function hasPlaceCoordinates(option) {

@@ -20,6 +20,7 @@ function VoteCreatePage() {
     (location.state?.voteType === "date" ? "schedule" : "general");
 
   const returnTab = location.state?.returnTab || "vote";
+  const locationKind = location.state?.locationKind || null;
 
   const [currentUser, setCurrentUser] = useState(null);
   const [nickname, setNickname] = useState("");
@@ -110,9 +111,7 @@ function VoteCreatePage() {
 
   const currentOptionType = options[0]?.optiontype || "text";
 
-  const [votetype, setVotetype] = useState(
-    selectedPlaces.length > 0 ? "location" : initialVotePurpose
-  );
+  const [votetype, setVotetype] = useState(initialVotePurpose);
 
   const [ismultiple, setIsmultiple] = useState(false);
   const [isanonymous, setIsanonymous] = useState(false);
@@ -219,7 +218,7 @@ function VoteCreatePage() {
       return;
     }
 
-    if (votetype === "location") {
+    if (isLocationVoteType(votetype)) {
       const invalidPlaceOption = options.some((option) => {
         if (option.optiontype !== "place") return false;
 
@@ -277,6 +276,7 @@ function VoteCreatePage() {
         endtimeenabled,
         reminderenabled,
         votetype,
+        locationkind: votetype === "location" ? locationKind : null,
       });
 
       createdVoteId = result?.id || result?.data?.id || null;
@@ -361,7 +361,7 @@ function VoteCreatePage() {
           {[
             { value: "general", label: "일반 투표" },
             { value: "schedule", label: "일정 확정" },
-            { value: "location", label: "중간장소 확정" },
+            { value: "location", label: "위치 확정" },
           ].map((type) => (
             <button
               key={type.value}
@@ -371,12 +371,12 @@ function VoteCreatePage() {
                 padding: "8px 16px",
                 borderRadius: "24px",
                 border:
-                  votetype === type.value
+                  isSelectedVoteType(votetype, type.value)
                     ? "2px solid #7c79ff"
                     : "1px solid #ddd",
-                backgroundColor: votetype === type.value ? "#f0f0ff" : "#fff",
-                color: votetype === type.value ? "#7c79ff" : "#333",
-                fontWeight: votetype === type.value ? "bold" : "normal",
+                backgroundColor: isSelectedVoteType(votetype, type.value) ? "#f0f0ff" : "#fff",
+                color: isSelectedVoteType(votetype, type.value) ? "#7c79ff" : "#333",
+                fontWeight: isSelectedVoteType(votetype, type.value) ? "bold" : "normal",
                 cursor: "pointer",
               }}
             >
@@ -439,7 +439,7 @@ function VoteCreatePage() {
           </div>
         )}
 
-        {selectedPlaces.length > 0 && votetype === "location" && (
+        {selectedPlaces.length > 0 && isLocationVoteType(votetype) && (
           <p
             style={{
               padding: "10px",
@@ -736,6 +736,15 @@ function hasValue(value) {
   if (value === null || value === undefined) return false;
   if (typeof value === "string") return value.trim() !== "";
   return value !== "";
+}
+
+function isLocationVoteType(votetype) {
+  return ["location", "middle_location", "additional_location"].includes(votetype);
+}
+
+function isSelectedVoteType(votetype, buttonType) {
+  if (buttonType === "location") return isLocationVoteType(votetype);
+  return votetype === buttonType;
 }
 
 const inputStyle = {

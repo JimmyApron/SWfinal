@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
-import { getMyConfirmedSchedules } from "../../api/scheduleApi";
+import {
+  getAdditionalConfirmedLocations,
+  getMyConfirmedSchedules,
+} from "../../api/scheduleApi";
 import RoomListPage from "../room/RoomListPage";
 
 function getTodayStr() {
@@ -34,8 +37,22 @@ function HomePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       try {
-        const data = await getMyConfirmedSchedules(user.id);
-        setConfirmedSchedules(data);
+        const data = await getMyConfirmedSchedules(user.id, {
+          includeLocationOnly: true,
+        });
+        const additionalLocationEntries = await Promise.all(
+          [...new Set(data.map((schedule) => schedule.roomid))].map(async (roomid) => [
+            roomid,
+            await getAdditionalConfirmedLocations(roomid),
+          ])
+        );
+        const additionalLocationMap = new Map(additionalLocationEntries);
+        setConfirmedSchedules(
+          data.map((schedule) => ({
+            ...schedule,
+            additionalLocations: additionalLocationMap.get(schedule.roomid) || [],
+          }))
+        );
       } catch (error) {
         console.error("확정 일정 조회 실패:", error);
       }
@@ -49,11 +66,13 @@ function HomePage() {
 
       <div style={{ marginBottom: "20px" }}>
         <h3 style={{ marginBottom: "8px" }}>확정된 일정</h3>
-        {confirmedSchedules.filter((s) => s.date >= getTodayStr()).length === 0 ? (
+        {confirmedSchedules.filter((s) => !s.date || s.date >= getTodayStr()).length === 0 ? (
           <p style={{ color: "#aaa", fontSize: "14px" }}>확정된 일정이 없습니다</p>
         ) : (
-          confirmedSchedules.filter((s) => s.date >= getTodayStr()).map((s) => {
-            const dateLabel = s.isallday
+          confirmedSchedules.filter((s) => !s.date || s.date >= getTodayStr()).map((s) => {
+            const dateLabel = !s.date
+              ? null
+              : s.isallday
               ? `${s.date} (하루종일)`
               : `${s.date} ${s.starttime ?? ""} ~${s.endtime ? ` ${s.endtime}` : ""}`;
             return (
@@ -67,15 +86,25 @@ function HomePage() {
                 }}
               >
                 <p style={{ margin: 0, fontSize: "13px", color: "#888" }}>{s.roomname}</p>
-                <p style={{ margin: "4px 0 0", fontWeight: "bold" }}>{s.title || dateLabel}</p>
-                <p style={{ margin: "2px 0 0", fontSize: "13px", color: "#666" }}>{dateLabel}</p>
-                <p style={{ margin: "4px 0 0", fontSize: "12px", color: s.date === getTodayStr() ? "#7c79ff" : "#f90", fontWeight: s.date === getTodayStr() ? "bold" : "normal" }}>
-                  {getTimeUntil(s.date, s.starttime)}
-                </p>
+                <p style={{ margin: "4px 0 0", fontWeight: "bold" }}>{s.title || dateLabel || "일정 미정"}</p>
+                {dateLabel
+                  ? <p style={{ margin: "2px 0 0", fontSize: "13px", color: "#666" }}>{dateLabel}</p>
+                  : <p style={{ margin: "2px 0 0", fontSize: "13px", color: "#aaa" }}>일정 미정</p>
+                }
+                {s.date && (
+                  <p style={{ margin: "4px 0 0", fontSize: "12px", color: s.date === getTodayStr() ? "#7c79ff" : "#f90", fontWeight: s.date === getTodayStr() ? "bold" : "normal" }}>
+                    {getTimeUntil(s.date, s.starttime)}
+                  </p>
+                )}
                 {s.location
                   ? <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#7c79ff" }}>📍 {s.location}</p>
                   : <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#aaa" }}>위치 미정 (탭하여 설정)</p>
                 }
+                {s.additionalLocations?.map((place) => (
+                  <p key={place.id} style={{ margin: "4px 0 0", fontSize: "13px", color: "#666" }}>
+                    추가장소: {place.placename}
+                  </p>
+                ))}
               </div>
             );
           })

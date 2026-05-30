@@ -110,10 +110,11 @@ function App() {
 
   if (!googleClientId) {
     return (
-      <BrowserRouter>
-        <NotificationListener />
-        <Layout>
-          <Routes>
+      <GoogleOAuthProvider clientId="">
+        <BrowserRouter>
+          <NotificationListener />
+          <Layout>
+            <Routes>
             {/* 泥??臾??붾㈃ */}
             <Route path="/" element={<InviteCodePage />} />
 
@@ -160,9 +161,10 @@ function App() {
             {/* ?ㅼ젙 愿??湲곕뒫 */}
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/settings/edit" element={<SettingEditPage />} />
-          </Routes>
-        </Layout>
-      </BrowserRouter>
+            </Routes>
+          </Layout>
+        </BrowserRouter>
+      </GoogleOAuthProvider>
     );
   }
 

@@ -176,22 +176,6 @@ function MapPage({ roomId }) {
     }
   }
 
-  const buildKakaoMapUrl = (place) => {
-    const lat = place?.lat ?? place?.latitude
-    const lng = place?.lng ?? place?.longitude
-    const name = place?.name || place?.placename || '공유 위치'
-
-    if (place?.kakaoMapUrl || place?.kakaomapurl) {
-      return place.kakaoMapUrl || place.kakaomapurl
-    }
-
-    if (!lat || !lng) return null
-
-    return `https://map.kakao.com/link/map/${encodeURIComponent(
-      name
-    )},${lat},${lng}`
-  }
-
   const sendMapShareToChat = async ({ shareType, place }) => {
     if (!currentRoomId) {
       setMessage('방 정보를 찾을 수 없어 채팅에 공유할 수 없습니다.')
@@ -219,7 +203,6 @@ function MapPage({ roomId }) {
       address: place.address || place.placeaddress || '',
       lat,
       lng,
-      url: buildKakaoMapUrl(place),
       rating: place.rating ?? null,
       reviewcount: place.reviewCount ?? null,
     }
@@ -858,8 +841,43 @@ function MapPage({ roomId }) {
         voteType: 'place',
         votePurpose: 'location',
         votetype: 'location',
+        locationKind: 'middle',
         selectedPlaces: votePlaces,
         title: '중간 장소 투표',
+        returnTab: 'location',
+      },
+    })
+  }
+
+  const handleCreateAdditionalPlaceVote = (selectedPlaces) => {
+    if (!currentRoomId) {
+      setMessage('방 정보를 찾을 수 없어 추가장소 투표를 만들 수 없습니다.')
+      return
+    }
+
+    if (!selectedPlaces || selectedPlaces.length === 0) {
+      setMessage('투표로 만들 추가장소 후보를 1개 이상 선택해주세요.')
+      return
+    }
+
+    const votePlaces = selectedPlaces.map((place) => ({
+      id: place.id || null,
+      name: place.name || '이름 없는 장소',
+      address: place.address || '',
+      lat: place.lat,
+      lng: place.lng,
+      kakaomapurl: place.kakaomapurl || place.kakaoMapUrl || null,
+      kakaoMapUrl: place.kakaoMapUrl || place.kakaomapurl || null,
+    }))
+
+    navigate(`/rooms/${currentRoomId}/vote-create`, {
+      state: {
+        voteType: 'place',
+        votePurpose: 'location',
+        votetype: 'location',
+        locationKind: 'additional',
+        selectedPlaces: votePlaces,
+        title: '추가 장소 투표',
         returnTab: 'location',
       },
     })
@@ -1136,6 +1154,7 @@ function MapPage({ roomId }) {
           onSearchResult={setPlaces}
           onSelectPlace={handleSelectPlace}
           onSharePlace={handleShareNearbyPlace}
+          onCreateAdditionalPlaceVote={handleCreateAdditionalPlaceVote}
         />
       ) : (
         <section>

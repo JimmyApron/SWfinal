@@ -131,35 +131,89 @@ export async function createRoomNotifications({
   }
 }
 
-export async function getMyNotifications(userId) {
+async function getRoomParticipations(recipientId, isGuest) {
+  const table = isGuest ? "room_guests" : "room_members";
+  const idColumn = isGuest ? "id" : "userid";
+  const joinedAtColumn = isGuest ? "createdat" : "joinedat";
+
   const { data, error } = await supabase
+    .from(table)
+    .select(`roomid, ${joinedAtColumn}`)
+    .eq(idColumn, recipientId);
+
+  if (error) {
+    console.error("방 참여 정보 조회 실패:", error);
+    throw new Error("방 참여 정보 조회 실패");
+  }
+
+  return (data || []).map((participation) => ({
+    roomid: participation.roomid,
+    joinedat: participation[joinedAtColumn],
+  }));
+}
+
+function isNotificationAfterJoining(notification, participations) {
+  const participation = participations.find(
+    ({ roomid }) => Number(roomid) === Number(notification.roomid)
+  );
+
+  if (!participation) return false;
+  if (!participation.joinedat || !notification.createdat) return false;
+
+  return (
+    new Date(notification.createdat).getTime() >=
+    new Date(participation.joinedat).getTime()
+  );
+}
+
+async function getVisibleNotifications(recipientId, isGuest, unreadOnly = false) {
+  const participations = await getRoomParticipations(recipientId, isGuest);
+
+  if (participations.length === 0) return [];
+
+  let query = supabase
     .from("notifications")
     .select("*")
-    .eq("receiverid", userId)
+    .eq("receiverid", recipientId)
+    .in(
+      "roomid",
+      participations.map(({ roomid }) => roomid)
+    )
     .order("createdat", { ascending: false });
+
+  if (unreadOnly) {
+    query = query.eq("isread", false);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("알림 조회 실패:", error);
-    console.error("알림 조회 실패 상세:", JSON.stringify(error, null, 2));
     throw new Error("알림 조회 실패");
   }
 
-  return data || [];
+  return (data || []).filter((notification) =>
+    isNotificationAfterJoining(notification, participations)
+  );
+}
+
+export async function isNotificationVisibleToRecipient(
+  notification,
+  recipientId,
+  isGuest
+) {
+  const participations = await getRoomParticipations(recipientId, isGuest);
+  return isNotificationAfterJoining(notification, participations);
+}
+
+export async function getMyNotifications(userId) {
+  return getVisibleNotifications(userId, false);
 }
 
 export async function getMyGuestNotifications(guestId) {
-  const { data, error } = await supabase
-    .from("notifications")
-    .select("*")
-    .eq("receiverid", guestId)
-    .order("createdat", { ascending: false });
+  const data = await getVisibleNotifications(guestId, true);
 
-  if (error) {
-    console.error("게스트 알림 조회 실패:", error);
-    throw new Error("게스트 알림 조회 실패");
-  }
-
-  return (data || []).map((notification) => ({
+  return data.map((notification) => ({
     ...notification,
     source: "guest",
     title: notification.title || "알림",
@@ -195,33 +249,23 @@ export async function markGuestNotificationAsRead(notificationId) {
 }
 
 export async function getUnreadNotificationCount(userId) {
-  const { count, error } = await supabase
-    .from("notifications")
-    .select("*", { count: "exact", head: true })
-    .eq("receiverid", userId)
-    .eq("isread", false);
-
-  if (error) {
+  try {
+    const notifications = await getVisibleNotifications(userId, false, true);
+    return notifications.length;
+  } catch (error) {
     console.error("안 읽은 알림 개수 조회 실패:", error);
     return 0;
   }
-
-  return count || 0;
 }
 
 export async function getUnreadGuestNotificationCount(guestId) {
-  const { count, error } = await supabase
-    .from("notifications")
-    .select("*", { count: "exact", head: true })
-    .eq("receiverid", guestId)
-    .eq("isread", false);
-
-  if (error) {
+  try {
+    const notifications = await getVisibleNotifications(guestId, true, true);
+    return notifications.length;
+  } catch (error) {
     console.warn("읽지 않은 게스트 알림 수 조회 실패:", error);
     return 0;
   }
-
-  return count || 0;
 }
 
 export async function deleteNotification(notificationId) {
