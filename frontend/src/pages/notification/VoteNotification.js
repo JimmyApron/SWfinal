@@ -22,10 +22,10 @@ export const sendVoteNotification = async ({
 
     console.log(`🚀 [알림 준비] 방: ${rName}(${rId}), 투표: ${title}, 발송자: ${senderId}`);
 
-    // 1. 알림 대상 (회원 + 게스트) 싹 긁어오기
+    // 1. 알림 대상 (회원 + 게스트) 싹 긁어오기 (설정 여부 상관없이 모든 참여자에게 발송)
     const [ { data: members }, { data: guests } ] = await Promise.all([
-      supabase.from("room_members").select("userid").eq("roomid", rId).eq("votenotifenabled", true),
-      supabase.from("room_guests").select("id").eq("roomid", rId).eq("votenotifenabled", true)
+      supabase.from("room_members").select("userid").eq("roomid", rId),
+      supabase.from("room_guests").select("id").eq("roomid", rId)
     ]);
 
     const allReceivers = [
@@ -50,31 +50,8 @@ export const sendVoteNotification = async ({
       else console.log(`📢 새 투표 알림 발송 성공! (${allReceivers.length}명)`);
     }
 
-    // ⏰ 마감 임박 알림 추가 예약 (필요 시)
-    if (endtimeenabled && reminderenabled && endtime && allReceivers.length > 0) {
-      const formattedEndTime = endtime.includes("Z") || endtime.includes("+") 
-        ? endtime 
-        : `${endtime}:00+09:00`;
-
-      const now = new Date();
-      const end = new Date(formattedEndTime);
-      const diffInMinutes = (end.getTime() - now.getTime()) / (1000 * 60);
-
-      if (diffInMinutes > 0 && diffInMinutes <= 30) {
-        const reminders = allReceivers.map((receiverId) => ({
-          roomid: rId,
-          receiverid: receiverId, 
-          senderid: senderId,
-          type: "vote_reminder",     
-          title: "🗳️ 투표 마감 임박",  
-          message: `⚠️ [${rName}] 방의 [${title}] 투표 마감 시간이 ${Math.max(1, Math.round(diffInMinutes))}분 남았습니다! 서둘러 참여해 주세요!`,
-          isread: false,
-          link: createdVoteId ? `/rooms/${rId}/votes/${createdVoteId}` : `/rooms/${rId}?tab=vote`, 
-        }));
-        await supabase.from("notifications").insert(reminders);
-        console.log("⏱️ 마감 임박 알림 추가 적재 완료!");
-      }
-    }
+    // ⏰ 마감 임박 알림 추가 로직은 프론트엔드에서 완전히 제거되었습니다.
+    // 백엔드의 voteJob.js가 1분마다 순회하며 마감 30분 전 투표에 대해 알림을 발송합니다.
 
   } catch (error) {
     console.error("투표 알림 통합 연동 실패:", error);
@@ -101,10 +78,10 @@ export const sendVoteClosedNotification = async ({
 
     console.log(`🚀 [마감 알림 시작] 방: ${rName}(${rId}), 투표: ${title}`);
 
-    // 대상 조회 (회원 + 게스트)
+    // 대상 조회 (회원 + 게스트) (설정 여부 상관없이 모든 참여자에게 발송)
     const [ { data: members }, { data: guests } ] = await Promise.all([
-      supabase.from("room_members").select("userid").eq("roomid", rId).eq("votenotifenabled", true),
-      supabase.from("room_guests").select("id").eq("roomid", rId).eq("votenotifenabled", true)
+      supabase.from("room_members").select("userid").eq("roomid", rId),
+      supabase.from("room_guests").select("id").eq("roomid", rId)
     ]);
 
     const allReceivers = [
@@ -130,47 +107,5 @@ export const sendVoteClosedNotification = async ({
     }
   } catch (error) {
     console.error("‼️ 투표 마감 알림 발송 프로세스 전체 실패:", error);
-  }
-};
-
-// ========================================================
-// 🛡️ [무해한 프론트 체커] 은혜님 전용 투표 종료 알림 및 마감 처리 함수 🎯
-// ========================================================
-export const checkAndNotifyClosedVotes = async (roomid) => {
-  try {
-    if (!roomid) return;
-    
-    const nowIso = new Date().toISOString();
-
-    // 1. 🔍 마감 시간은 지났는데 아직 데이터베이스에 'isclosed'가 false인 투표 사냥하기
-    const { data: expiredVotes, error: fetchError } = await supabase
-      .from("votes")
-      .select("id, title")
-      .eq("roomid", Number(roomid))
-      .eq("endtimeenabled", true)
-      .lte("endtime", nowIso) // 마감일시 <= 현재시간
-      .eq("isclosed", false); // 🚀 은혜님 DB에 이미 있던 진짜 스키마 컬럼 매칭!
-
-    if (fetchError || !expiredVotes || expiredVotes.length === 0) return;
-
-    // 2. 📢 마감 투표가 발견되면 해당 방에 있는 사람들에게 알림 전송
-    for (const vote of expiredVotes) {
-      // 공통 알림 함수 호출 (회원 + 게스트)
-      await sendVoteClosedNotification({
-        roomid: roomid,
-        voteid: vote.id,
-        title: vote.title,
-      });
-
-      // 3. 🔒 [중요] 중복 알림이 가지 않도록, 알림 쏜 투표는 즉시 isclosed = true 처리!
-      await supabase
-        .from("votes")
-        .update({ isclosed: true })
-        .eq("id", vote.id);
-        
-      console.log(`🏁 [${vote.title}] 투표가 시간 만료되어 자동으로 마감 완료 처리되었습니다.`);
-    }
-  } catch (error) {
-    console.error("🔒 투표 자동 마감 체크 중 실패:", error);
   }
 };

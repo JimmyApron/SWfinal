@@ -38,57 +38,7 @@ function NotificationPage() {
       setCurrentUserId(userId);
 
       // ========================================================
-      // 🛡️ [무해한 안전 훅] 유저가 알림창을 열었을 때 배경에서 마감 투표 사냥하기
-      // ========================================================
-      try {
-        const nowIso = new Date().toISOString();
-        
-        // 내가 속한 방 번호들(회원 or 게스트) 싹 긁어오기
-        const [ { data: memberRooms }, { data: guestRooms } ] = await Promise.all([
-          supabase.from("room_members").select("roomid").eq("userid", userId),
-          supabase.from("room_guests").select("roomid").eq("id", userId)
-        ]);
-
-        const roomIds = [
-          ...(memberRooms || []).map((r) => r.roomid),
-          ...(guestRooms || []).map((r) => r.roomid)
-        ];
-
-        if (roomIds.length > 0) {
-          // 2. 그 방들 중에서 마감 시간은 지났는데 아직 안 닫힌(isclosed = false) 투표 싹 조회
-          const { data: expiredVotes } = await supabase
-            .from("votes")
-            .select("id, roomid, title")
-            .in("roomid", roomIds)
-            .eq("endtimeenabled", true)
-            .lte("endtime", nowIso)
-            .eq("isclosed", false);
-
-          if (expiredVotes && expiredVotes.length > 0) {
-            for (const vote of expiredVotes) {
-              // 📢 공통 마감 알림 함수 사용 (통합 notifications 테이블 저장)
-              await sendVoteClosedNotification({
-                roomid: vote.roomid,
-                voteid: vote.id,
-                title: vote.title,
-              });
-
-              // 3. 중복 방지를 위해 투표 쾅 닫기 (isclosed = true)
-              await supabase
-                .from("votes")
-                .update({ isclosed: true })
-                .eq("id", vote.id);
-
-              console.log(`🏁 [${vote.title}] 투표 마감 알림 처리 완료!`);
-            }
-          }
-        }
-      } catch (checkError) {
-        console.error("🔒 마감 투표 자동 체크 중 에러:", checkError);
-      }
-
-      // ========================================================
-      // 🟢 최신 알림 데이터 불러오기 (기존 로직 유지)
+      // 🟢 최신 알림 데이터 불러오기
       // ========================================================
       const data = await getMyNotifications(userId);
       console.log("불러온 알림 목록:", data);

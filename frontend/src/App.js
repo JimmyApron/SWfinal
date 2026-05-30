@@ -52,18 +52,21 @@ function Layout({ children }) {
 function NotificationListener() {
   const location = useLocation();
   const locationRef = useRef(location);
+  const channelRef = useRef(null);
 
   useEffect(() => {
     locationRef.current = location;
   }, [location]);
 
   useEffect(() => {
-    let channel = null;
+    let isMounted = true;
 
     const setupRealtimeNotification = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         
+        if (!isMounted) return;
+
         let myUserId = user?.id;
 
         if (!myUserId) {
@@ -72,9 +75,13 @@ function NotificationListener() {
 
         if (!myUserId) return;
 
-        const uniqueChannelName = `realtime-notifications-${myUserId}-${Date.now()}`;
+        // 기존 채널이 있다면 제거 (혹시 모를 중복 방지)
+        if (channelRef.current) {
+          supabase.removeChannel(channelRef.current);
+        }
 
-        channel = supabase.channel(uniqueChannelName);
+        const uniqueChannelName = `realtime-notifications-${myUserId}-${Date.now()}`;
+        const channel = supabase.channel(uniqueChannelName);
 
         channel.on(
           "postgres_changes",
@@ -90,8 +97,9 @@ function NotificationListener() {
         );
 
         channel.subscribe((status) => {
-          if (status === "SUBSCRIBED") {
+          if (status === "SUBSCRIBED" && isMounted) {
             console.log(`📡 [실시간 알림 연결 성공] 채널명: ${uniqueChannelName}`);
+            channelRef.current = channel;
           }
         });
       } catch (err) {
@@ -102,8 +110,10 @@ function NotificationListener() {
     setupRealtimeNotification();
 
     return () => {
-      if (channel) {
-        supabase.removeChannel(channel);
+      isMounted = false;
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
       }
     };
   }, []);

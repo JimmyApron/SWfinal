@@ -6,7 +6,6 @@ import ScheduleTab from "./ScheduleTab";
 import MapPage from "../../components/map/MapPage";
 import ChatTab from "../Chat/ChatTab";
 import VoteListPage from "../vote/VoteListPage";
-import { checkAndNotifyClosedVotes } from "../notification/VoteNotification";
 
 function RoomDetailPage() {
   const navigate = useNavigate();
@@ -141,9 +140,6 @@ function RoomDetailPage() {
 
   useEffect(() => {
     fetchRoomData();
-
-    // 🛡️ [무해한 안전 훅] 방에 들어왔을 때 마감된 투표가 있으면 자동으로 닫고 알림 쏘기
-    checkAndNotifyClosedVotes(roomId);
 
     // 실시간 구독 설정: 방 정보, 멤버, 게스트 변화 감지
     const channel = supabase
