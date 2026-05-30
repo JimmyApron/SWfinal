@@ -169,12 +169,31 @@ function isNotificationAfterJoining(notification, participations) {
 async function getVisibleNotifications(recipientId, isGuest, unreadOnly = false) {
   const participations = await getRoomParticipations(recipientId, isGuest);
 
-  if (participations.length === 0) return [];
+  // room_invite는 아직 방에 참여하지 않은 상태에서 수신되므로 별도 조회
+  let inviteQuery = supabase
+    .from("notifications")
+    .select("*")
+    .eq("receiverid", recipientId)
+    .eq("type", "room_invite");
+
+  if (unreadOnly) {
+    inviteQuery = inviteQuery.eq("isread", false);
+  }
+
+  const { data: inviteData } = await inviteQuery;
+  const inviteNotifications = inviteData || [];
+
+  if (participations.length === 0) {
+    return inviteNotifications.sort(
+      (a, b) => new Date(b.createdat) - new Date(a.createdat)
+    );
+  }
 
   let query = supabase
     .from("notifications")
     .select("*")
     .eq("receiverid", recipientId)
+    .neq("type", "room_invite")
     .in(
       "roomid",
       participations.map(({ roomid }) => roomid)
@@ -192,8 +211,12 @@ async function getVisibleNotifications(recipientId, isGuest, unreadOnly = false)
     throw new Error("알림 조회 실패");
   }
 
-  return (data || []).filter((notification) =>
+  const regularNotifications = (data || []).filter((notification) =>
     isNotificationAfterJoining(notification, participations)
+  );
+
+  return [...inviteNotifications, ...regularNotifications].sort(
+    (a, b) => new Date(b.createdat) - new Date(a.createdat)
   );
 }
 
