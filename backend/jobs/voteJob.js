@@ -158,7 +158,10 @@ async function sendReminderNotifications(vote) {
 
     if (allReceivers.length > 0) {
       // 남은 시간(분) 계산
-      const diffInMinutes = Math.max(1, Math.round((new Date(endtime).getTime() - new Date().getTime()) / (1000 * 60)));
+      // endtime은 'YYYY-MM-DDTHH:mm:ss' 형태의 KST 문자열이므로 +09:00을 붙여 명확한 시점으로 변환
+      const endTimestamp = new Date(endtime.replace(' ', 'T') + "+09:00").getTime();
+      const nowTimestamp = new Date().getTime();
+      const diffInMinutes = Math.max(1, Math.ceil((endTimestamp - nowTimestamp) / (1000 * 60)));
 
       const notifications = allReceivers.map((receiverId) => ({
         roomid: roomId,

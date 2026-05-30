@@ -28,26 +28,61 @@ export const sendVoteNotification = async ({
       supabase.from("room_guests").select("id").eq("roomid", rId)
     ]);
 
-    const allReceivers = [
+    const allReceivers = Array.from(new Set([
       ...(members || []).map(m => m.userid),
       ...(guests || []).map(g => g.id)
-    ].filter(id => id !== senderId); // 본인 제외
+    ]));
 
-    if (allReceivers.length > 0) {
-      const notifications = allReceivers.map((receiverId) => ({
+    // ⏰ 남은 시간 계산 (마감 임박 여부 확인)
+    let isUrgent = false;
+    let diffInMinutes = 0;
+    
+    if (endtimeenabled && endtime) {
+      const endTs = new Date(endtime).getTime();
+      const nowTs = new Date().getTime();
+      diffInMinutes = Math.ceil((endTs - nowTs) / (1000 * 60));
+      if (diffInMinutes > 0 && diffInMinutes < 30 && reminderenabled) {
+        isUrgent = true;
+      }
+    }
+
+    const notifications = [];
+
+    // 1. 타인에게 보내는 알림 (새 투표 등장)
+    const otherReceivers = allReceivers.filter(id => id !== senderId);
+    otherReceivers.forEach(receiverId => {
+      notifications.push({
         roomid: rId,
         receiverid: receiverId,
         senderid: senderId,
-        type: "vote_new", 
-        title: "🗳️ 새 투표 등장",
-        message: `🔔 [${rName}] 방에 새로운 투표 [${title}]이(가) 생성되었습니다! 지금 바로 참여해 주세요.`,
+        type: "vote_new",
+        title: isUrgent ? "⚠️ [긴급] 새 투표 & 마감 임박" : "🗳️ 새 투표 등장",
+        message: isUrgent 
+          ? `⚠️ [${rName}] 방에 마감이 ${diffInMinutes}분 남은 긴급 투표 [${title}]이(가) 생성되었습니다! 지금 바로 참여해 주세요!`
+          : `🔔 [${rName}] 방에 새로운 투표 [${title}]이(가) 생성되었습니다! 지금 바로 참여해 주세요.`,
         isread: false,
         link: createdVoteId ? `/rooms/${rId}/votes/${createdVoteId}` : `/rooms/${rId}?tab=vote`,
-      }));
+      });
+    });
 
+    // 2. 작성자 본인에게 보내는 알림 (마감 임박 긴급 알림)
+    if (isUrgent && senderId) {
+      notifications.push({
+        roomid: rId,
+        receiverid: senderId,
+        senderid: senderId,
+        type: "vote_reminder",
+        title: "⚠️ 투표 마감 임박",
+        message: `⚠️ 작성하신 [${title}] 투표의 마감 시간이 ${diffInMinutes}분 남았습니다!`,
+        isread: false,
+        link: createdVoteId ? `/rooms/${rId}/votes/${createdVoteId}` : `/rooms/${rId}?tab=vote`,
+      });
+    }
+
+    if (notifications.length > 0) {
       const { error } = await supabase.from("notifications").insert(notifications);
-      if (error) console.error("❌ 새 투표 알림 저장 실패:", error);
-      else console.log(`📢 새 투표 알림 발송 성공! (${allReceivers.length}명)`);
+      if (error) console.error("❌ 투표 알림 저장 실패:", error);
+      else console.log(`📢 투표 알림 발송 성공! (${notifications.length}건)`);
     }
 
     // ⏰ 마감 임박 알림 추가 로직은 프론트엔드에서 완전히 제거되었습니다.

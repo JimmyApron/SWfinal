@@ -635,6 +635,15 @@ function VoteCreatePage() {
 
         {(() => {
           const disabled = !endtimeenabled || !endtime;
+          
+          let labelText = "종료 30분 전 알림";
+          if (endtimeenabled && endtime) {
+            const diff = (new Date(endtime).getTime() - new Date().getTime()) / (1000 * 60);
+            if (diff > 0 && diff < 30) {
+              labelText = `마감 임박 알림 (현재 약 ${Math.ceil(diff)}분 남음)`;
+            }
+          }
+
           return (
             <label
               style={{
@@ -650,7 +659,7 @@ function VoteCreatePage() {
                 disabled={disabled}
                 onChange={(e) => setReminderenabled(e.target.checked)}
               />
-              종료 30분 전 알림
+              {labelText}
             </label>
           );
         })()}
