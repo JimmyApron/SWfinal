@@ -13,16 +13,21 @@ export const sendVoteNotification = async ({
   roomName,
   endtimeenabled,
   reminderenabled,
-  endtime
+  endtime,
+  votetype // 투표 타입 추가
 }) => {
   try {
     const rId = Number(roomid);
     const rName = roomName || "참여 중인 방";
     const senderId = currentUser?.id || null;
 
-    console.log(`🚀 [알림 준비] 방: ${rName}(${rId}), 투표: ${title}, 발송자: ${senderId}`);
+    // 투표 타입 한글 명칭 변환
+    const typeLabel = votetype === "schedule" ? "일정" : votetype === "location" ? "중간장소" : "일반";
+    const typeTitle = votetype === "schedule" ? "📅 일정 투표" : votetype === "location" ? "📍 중간장소 투표" : "🗳️ 일반 투표";
 
-    // 1. 알림 대상 (회원 + 게스트) 싹 긁어오기 (설정 여부 상관없이 모든 참여자에게 발송)
+    console.log(`🚀 [알림 준비] 방: ${rName}(${rId}), 투표: ${title}, 타입: ${typeLabel}`);
+
+    // 1. 알림 대상 (회원 + 게스트) 싹 긁어오기
     const [ { data: members }, { data: guests } ] = await Promise.all([
       supabase.from("room_members").select("userid").eq("roomid", rId),
       supabase.from("room_guests").select("id").eq("roomid", rId)
@@ -33,7 +38,7 @@ export const sendVoteNotification = async ({
       ...(guests || []).map(g => g.id)
     ]));
 
-    // ⏰ 남은 시간 계산 (마감 임박 여부 확인)
+    // ⏰ 남은 시간 계산
     let isUrgent = false;
     let diffInMinutes = 0;
     
@@ -56,10 +61,10 @@ export const sendVoteNotification = async ({
         receiverid: receiverId,
         senderid: senderId,
         type: "vote_new",
-        title: isUrgent ? "⚠️ [긴급] 새 투표 & 마감 임박" : "🗳️ 새 투표 등장",
+        title: isUrgent ? `⚠️ [긴급] ${typeLabel} 투표 마감 임박` : `${typeTitle} 등장`,
         message: isUrgent 
-          ? `⚠️ [${rName}] 방에 마감이 ${diffInMinutes}분 남은 긴급 투표 [${title}]이(가) 생성되었습니다! 지금 바로 참여해 주세요!`
-          : `🔔 [${rName}] 방에 새로운 투표 [${title}]이(가) 생성되었습니다! 지금 바로 참여해 주세요.`,
+          ? `⚠️ [${rName}] 방에 마감이 ${diffInMinutes}분 남은 긴급 ${typeLabel} 투표 [${title}]이(가) 생성되었습니다!`
+          : `🔔 [${rName}] 방에 새로운 ${typeLabel} 투표 [${title}]이(가) 생성되었습니다!`,
         isread: false,
         link: createdVoteId ? `/rooms/${rId}/votes/${createdVoteId}` : `/rooms/${rId}?tab=vote`,
       });
@@ -72,8 +77,8 @@ export const sendVoteNotification = async ({
         receiverid: senderId,
         senderid: senderId,
         type: "vote_reminder",
-        title: "⚠️ 투표 마감 임박",
-        message: `⚠️ 작성하신 [${title}] 투표의 마감 시간이 ${diffInMinutes}분 남았습니다!`,
+        title: `⚠️ ${typeLabel} 투표 마감 임박`,
+        message: `⚠️ 작성하신 [${title}] (${typeLabel} 투표)의 마감 시간이 ${diffInMinutes}분 남았습니다!`,
         isread: false,
         link: createdVoteId ? `/rooms/${rId}/votes/${createdVoteId}` : `/rooms/${rId}?tab=vote`,
       });

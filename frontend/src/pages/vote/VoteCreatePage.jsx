@@ -260,6 +260,7 @@ function VoteCreatePage() {
       endtimeenabled,
       reminderenabled,
       endtime,
+      votetype,
     });
 
     alert("투표가 성공적으로 생성되었습니다.");
