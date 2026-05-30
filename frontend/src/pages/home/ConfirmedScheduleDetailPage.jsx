@@ -368,7 +368,7 @@ function ConfirmedScheduleDetailPage() {
           cursor: "pointer",
         }}
       >
-        위치 추가하기
+        주변 위치 추가하기
       </button>
 
       {showAdditionalPicker && (
