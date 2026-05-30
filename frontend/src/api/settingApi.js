@@ -1,6 +1,32 @@
 import { supabase } from '../lib/supabaseClient'
 
 /**
+ * 1-1. 닉네임 중복 확인 전용 API
+ */
+export const checkNicknameDuplicateApi = async (nickname) => {
+  try {
+    const trimmedNickname = nickname.trim()
+    if (!trimmedNickname) throw new Error('닉네임을 입력해주세요.')
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('nickname')
+      .eq('nickname', trimmedNickname)
+
+    if (error) throw error
+
+    if (data.length > 0) {
+      return { success: false, message: '이미 사용 중인 닉네임입니다.' }
+    }
+
+    return { success: true, message: '사용 가능한 닉네임입니다.' }
+  } catch (error) {
+    console.error('닉네임 중복 확인 오류:', error.message)
+    throw error
+  }
+}
+
+/**
  * 1. 닉네임 변경/수정 API
  */
 export const updateNicknameApi = async (newNickname, userId) => {
@@ -56,6 +82,31 @@ export const updatePasswordApi = async (currentPassword, newPassword) => {
     }
   } catch (error) {
     console.error('비밀번호 변경 오류:', error.message)
+    throw error
+  }
+}
+
+/**
+ * 3-1. 이메일 중복 확인 전용 API
+ */
+export const checkEmailDuplicateApi = async (email) => {
+  try {
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail) throw new Error('이메일을 입력해주세요.')
+
+    const { data: isDuplicate, error } = await supabase.rpc('check_email_exists', {
+      email_to_check: trimmedEmail,
+    })
+
+    if (error) throw error
+
+    if (isDuplicate) {
+      return { success: false, message: '이미 사용 중인 이메일입니다.' }
+    }
+
+    return { success: true, message: '사용 가능한 이메일입니다.' }
+  } catch (error) {
+    console.error('이메일 중복 확인 오류:', error.message)
     throw error
   }
 }

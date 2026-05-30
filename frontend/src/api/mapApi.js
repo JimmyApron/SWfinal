@@ -249,3 +249,41 @@ export async function deleteRoomMiddlePlace(roomId) {
     throw new Error('중간장소 확정 취소 실패')
   }
 }
+
+/**
+ * 위치 상태 및 출발/도착 시간 업데이트
+ */
+export async function updateLocationStatus({ 
+  roomId, 
+  userId, 
+  guestId, 
+  status, 
+  isDeparted,
+  isArrived 
+}) {
+  const updateData = { locationstatus: status }
+  
+  if (isDeparted) {
+    updateData.isdeparted = true
+    updateData.departedat = new Date().toISOString()
+  }
+  
+  if (isArrived) {
+    updateData.arrivedat = new Date().toISOString()
+  }
+
+  const query = supabase.from('user_locations').update(updateData).eq('roomid', Number(roomId))
+
+  if (userId) {
+    query.eq('userid', userId)
+  } else if (guestId) {
+    query.eq('guestid', guestId)
+  } else {
+    return
+  }
+
+  const { error } = await query
+  if (error) {
+    console.error(`위치 상태(${status}) 업데이트 실패:`, error)
+  }
+}

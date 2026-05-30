@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { getCurrentUserApi } from '../../api/authApi'
 import { 
   updateNicknameApi, 
+  checkNicknameDuplicateApi,
   updateEmailApi,
+  checkEmailDuplicateApi,
   uploadAvatarApi,
   updatePasswordApi,
   deleteUserAccountApi 
@@ -17,6 +19,10 @@ function SettingEditPage() {
   const [profileImageUrl, setProfileImageUrl] = useState('')
   const [message, setMessage] = useState('')
   const [isUploading, setIsUploading] = useState(false)
+
+  // 중복 확인 여부 상태
+  const [isNicknameChecked, setIsNicknameChecked] = useState(false)
+  const [isEmailChecked, setIsEmailChecked] = useState(false)
   
   // 🔒 비밀번호 입력용 State
   const [currentPassword, setCurrentPassword] = useState('') 
@@ -40,6 +46,10 @@ function SettingEditPage() {
         setEmail(data.profile.email || '')
         setNickname(data.profile.nickname || '')
         setProfileImageUrl(data.profile.profileimageurl || '')
+        
+        // 데이터 로드 시 초기값은 중복 확인된 것으로 간주 (변경 전이므로)
+        setIsNicknameChecked(true)
+        setIsEmailChecked(true)
       } else {
         alert('로그인이 만료되었습니다.')
         navigate('/login')
@@ -100,15 +110,36 @@ function SettingEditPage() {
     }
   }
 
-  // 🏷️ 닉네임 변경
-  const handleUpdateNickname = async (e) => {
-    e.preventDefault()
+  // 닉네임 중복 확인
+  const handleCheckNickname = async () => {
     if (!nickname.trim()) {
       setMessage('⚠️ 닉네임을 입력해주세요.')
       return
     }
     try {
-      setMessage('닉네임 중복 및 수정 상태 체크 중...')
+      setMessage('닉네임 중복 체크 중...')
+      const res = await checkNicknameDuplicateApi(nickname)
+      if (res.success) {
+        setIsNicknameChecked(true)
+        setMessage(`✅ ${res.message}`)
+      } else {
+        setIsNicknameChecked(false)
+        setMessage(`❌ ${res.message}`)
+      }
+    } catch (error) {
+      setMessage(`❌ 중복 확인 실패: ${error.message}`)
+    }
+  }
+
+  // 🏷️ 닉네임 변경
+  const handleUpdateNickname = async (e) => {
+    e.preventDefault()
+    if (!isNicknameChecked) {
+      setMessage('⚠️ 먼저 닉네임 중복 확인을 해주세요.')
+      return
+    }
+    try {
+      setMessage('닉네임 수정 중...')
       const res = await updateNicknameApi(nickname, userId)
       if (res.success) {
         setMessage(`✅ ${res.message}`)
@@ -119,15 +150,36 @@ function SettingEditPage() {
     }
   }
 
-  // 📧 이메일 변경
-  const handleUpdateEmail = async (e) => {
-    e.preventDefault()
+  // 이메일 중복 확인
+  const handleCheckEmail = async () => {
     if (!email.trim()) {
       setMessage('⚠️ 이메일을 입력해주세요.')
       return
     }
     try {
-      setMessage('이메일 중복 및 수정 상태 체크 중...')
+      setMessage('이메일 중복 체크 중...')
+      const res = await checkEmailDuplicateApi(email)
+      if (res.success) {
+        setIsEmailChecked(true)
+        setMessage(`✅ ${res.message}`)
+      } else {
+        setIsEmailChecked(false)
+        setMessage(`❌ ${res.message}`)
+      }
+    } catch (error) {
+      setMessage(`❌ 중복 확인 실패: ${error.message}`)
+    }
+  }
+
+  // 📧 이메일 변경
+  const handleUpdateEmail = async (e) => {
+    e.preventDefault()
+    if (!isEmailChecked) {
+      setMessage('⚠️ 먼저 이메일 중복 확인을 해주세요.')
+      return
+    }
+    try {
+      setMessage('이메일 수정 중...')
       const res = await updateEmailApi(email, userId)
       if (res.success) {
         setMessage(`✅ ${res.message}`)
@@ -235,30 +287,38 @@ function SettingEditPage() {
       </div>
 
       {/* 🏷️ 2. 닉네임 변경 양식 */}
-      <form onSubmit={handleUpdateNickname} className="edit-form-group">
+      <div className="edit-form-group">
         <label>닉네임 변경</label>
         <div className="input-with-button">
           <input 
             type="text" 
             value={nickname} 
-            onChange={(e) => setNickname(e.target.value)} 
+            onChange={(e) => {
+              setNickname(e.target.value)
+              setIsNicknameChecked(false) // 값 변경 시 중복 확인 리셋
+            }} 
           />
-          <button type="submit">닉네임 저장</button>
+          <button type="button" onClick={handleCheckNickname}>중복 확인</button>
+          <button type="button" onClick={handleUpdateNickname}>닉네임 저장</button>
         </div>
-      </form>
+      </div>
 
       {/* 📧 3. 이메일 변경 양식 */}
-      <form onSubmit={handleUpdateEmail} className="edit-form-group">
+      <div className="edit-form-group">
         <label>이메일 변경</label>
         <div className="input-with-button">
           <input 
             type="email" 
             value={email} 
-            onChange={(e) => setEmail(e.target.value)} 
+            onChange={(e) => {
+              setEmail(e.target.value)
+              setIsEmailChecked(false) // 값 변경 시 중복 확인 리셋
+            }} 
           />
-          <button type="submit">이메일 저장</button>
+          <button type="button" onClick={handleCheckEmail}>중복 확인</button>
+          <button type="button" onClick={handleUpdateEmail}>이메일 저장</button>
         </div>
-      </form>
+      </div>
 
       {/* 🔒 4. 비밀번호 변경 양식 */}
       <div className="edit-form-group">

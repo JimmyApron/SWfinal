@@ -18,10 +18,12 @@ import {
   saveRoomMiddlePlace,
   getRoomMiddlePlace,
   deleteRoomMiddlePlace,
+  updateLocationStatus,
 } from '../../api/mapApi'
 
 function MapPage({ roomId }) {
   const navigate = useNavigate()
+  // ... rest of component
   const currentRoomId = Number(roomId)
 
   const [currentUserId, setCurrentUserId] = useState(null)
@@ -225,6 +227,8 @@ function MapPage({ roomId }) {
           mode,
         })
 
+        const durationMinutes = Math.round(timeResult.duration / 60)
+
         routeResults.push({
           userid: member.userid,
           guestid: member.guestid,
@@ -232,11 +236,56 @@ function MapPage({ roomId }) {
           mode,
           duration: timeResult.duration,
           distance: timeResult.distance,
-          durationMinutes: Math.round(timeResult.duration / 60),
+          durationMinutes,
           distanceKm: timeResult.distance
             ? (timeResult.distance / 1000).toFixed(1)
             : null,
         })
+
+        // 🔔 도착 알림 로직 추가
+        const isMe = member.userid === currentUserId || (currentGuestId && member.guestid === currentGuestId)
+        
+        if (isMe && currentRoomId) {
+          // 1. 도착 10분 전 알림 (현재 상태가 'departed'일 때만)
+          if (durationMinutes > 0 && durationMinutes <= 10 && member.locationstatus === 'departed') {
+            await updateLocationStatus({
+              roomId: currentRoomId,
+              userId: currentUserId,
+              guestId: currentGuestId,
+              status: 'approaching'
+            })
+            
+            await createRoomNotifications({
+              roomId: currentRoomId,
+              senderId: currentUserId || currentGuestId,
+              type: 'arrival_approaching',
+              title: '⚠️ 도착 10분 전!',
+              message: `${nickname}님이 약 10분 뒤에 목적지에 도착할 예정입니다.`,
+              link: `/rooms/${currentRoomId}?tab=location`,
+            })
+          }
+
+          // 2. 최종 도착 알람 (남은 거리가 50m 이하이거나 시간이 0분일 때)
+          const distanceValue = timeResult.distance || 9999
+          if (distanceValue <= 50 && member.locationstatus !== 'arrived') {
+            await updateLocationStatus({
+              roomId: currentRoomId,
+              userId: currentUserId,
+              guestId: currentGuestId,
+              status: 'arrived',
+              isArrived: true
+            })
+
+            await createRoomNotifications({
+              roomId: currentRoomId,
+              senderId: currentUserId || currentGuestId,
+              type: 'arrival_completed',
+              title: '✅ 도착 완료!',
+              message: `${nickname}님이 목적지에 도착했습니다!`,
+              link: `/rooms/${currentRoomId}?tab=location`,
+            })
+          }
+        }
 
         if (mode === 'car') {
           const pathResult = await getCarRoutePath({
