@@ -117,13 +117,36 @@ export async function joinRoomByInviteCode(inviteCode, userId, nickname) {
   };
 }
 
+export async function joinRoomById(roomId, userId, nickname) {
+  const { data: existing } = await supabase
+    .from("room_members")
+    .select("id")
+    .eq("roomid", Number(roomId))
+    .eq("userid", userId)
+    .maybeSingle();
+
+  if (existing) throw new Error("이미 참가한 방입니다.");
+
+  const { error } = await supabase
+    .from("room_members")
+    .insert([{ roomid: Number(roomId), userid: userId, nickname }]);
+
+  if (error) throw new Error("방 참가 실패");
+
+  await supabase
+    .from("rooms")
+    .update({ lastactivityat: new Date().toISOString() })
+    .eq("id", Number(roomId));
+}
+
 export async function getRooms(userId) {
   const { data, error } = await supabase
     .from("room_members")
     .select(`
       rooms (
         *,
-        room_members(count)
+        room_members(count),
+        room_guests(count)
       )
     `)
     .eq("userid", userId);

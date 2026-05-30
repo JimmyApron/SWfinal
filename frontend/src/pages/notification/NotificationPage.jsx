@@ -12,6 +12,8 @@ import {
   deleteMyGuestNotifications,
   isNotificationVisibleToRecipient,
 } from "../../api/notificationApi";
+import { joinRoomById } from "../../api/roomApi";
+import { acceptCalendarShare, rejectCalendarShare } from "../../api/calendarShareApi";
 
 function NotificationPage() {
   const navigate = useNavigate();
@@ -289,6 +291,64 @@ function NotificationPage() {
     }
   };
 
+  const handleAcceptInvite = async (e, notification) => {
+    e.stopPropagation();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("nickname")
+        .eq("id", user.id)
+        .single();
+      const nickname = profile?.nickname || user.user_metadata?.nickname || user.email;
+      await joinRoomById(notification.roomid, user.id, nickname);
+      await deleteNotification(notification.id);
+      setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+      alert("방에 참가했습니다!");
+      navigate(`/rooms/${notification.roomid}`);
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleRejectInvite = async (e, notification) => {
+    e.stopPropagation();
+    try {
+      await deleteNotification(notification.id);
+      setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAcceptCalendarShare = async (e, notification) => {
+    e.stopPropagation();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    try {
+      await acceptCalendarShare(user.id, notification.senderid);
+      await deleteNotification(notification.id);
+      setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+      alert("캘린더 공유가 수락되었습니다.");
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleRejectCalendarShare = async (e, notification) => {
+    e.stopPropagation();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    try {
+      await rejectCalendarShare(notification.senderid, user.id);
+      await deleteNotification(notification.id);
+      setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   if (!currentUserId) {
     return (
       <div style={{ padding: "20px", paddingBottom: "100px" }}>
@@ -380,6 +440,40 @@ function NotificationPage() {
               </strong>
 
               <p style={{ margin: "6px 0" }}>{notification.message}</p>
+
+              {notification.type === "room_invite" && (
+                <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                  <button
+                    onClick={(e) => handleAcceptInvite(e, notification)}
+                    style={{ flex: 1, padding: "8px", backgroundColor: "#7c79ff", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold", fontSize: "13px" }}
+                  >
+                    수락
+                  </button>
+                  <button
+                    onClick={(e) => handleRejectInvite(e, notification)}
+                    style={{ flex: 1, padding: "8px", backgroundColor: "#fff", color: "#999", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer", fontSize: "13px" }}
+                  >
+                    거절
+                  </button>
+                </div>
+              )}
+
+              {notification.type === "calendar_share_request" && (
+                <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                  <button
+                    onClick={(e) => handleAcceptCalendarShare(e, notification)}
+                    style={{ flex: 1, padding: "8px", backgroundColor: "#f90", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold", fontSize: "13px" }}
+                  >
+                    수락
+                  </button>
+                  <button
+                    onClick={(e) => handleRejectCalendarShare(e, notification)}
+                    style={{ flex: 1, padding: "8px", backgroundColor: "#fff", color: "#999", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer", fontSize: "13px" }}
+                  >
+                    거절
+                  </button>
+                </div>
+              )}
 
               <small style={{ color: "#777" }}>
                 {new Date(notification.createdat).toLocaleString()}

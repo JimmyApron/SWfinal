@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useGoogleLogin } from '@react-oauth/google'
-import { logoutApi } from '../../api/authApi'
-import { getCurrentUserApi } from '../../api/authApi'
+import { logoutApi, getCurrentUserApi } from '../../api/authApi'
+import { supabase } from '../../lib/supabaseClient'
 
 function Toggle({ value, onChange }) {
   return (
@@ -38,8 +38,10 @@ function Toggle({ value, onChange }) {
 function SettingsPage() {
   const navigate = useNavigate()
   const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID
+
   const [userProfile, setUserProfile] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [loginProvider, setLoginProvider] = useState(null)
 
   const [googleConnected, setGoogleConnected] = useState(
     !!localStorage.getItem('google_calendar_token')
@@ -60,7 +62,9 @@ function SettingsPage() {
       setGoogleConnected(true)
       alert('구글 캘린더가 연결되었습니다!')
     },
-    onError: () => alert('구글 캘린더 연결에 실패했습니다.'),
+    onError: () => {
+      alert('구글 캘린더 연결에 실패했습니다.')
+    },
   })
 
   const handleGoogleDisconnect = () => {
@@ -74,6 +78,7 @@ function SettingsPage() {
 
   const handleAutoSyncToggle = () => {
     const next = !googleAutoSync
+
     localStorage.setItem('google_calendar_auto_sync', String(next))
     setGoogleAutoSync(next)
   }
@@ -82,7 +87,7 @@ function SettingsPage() {
     if (!window.confirm('정말 로그아웃 하시겠습니까? 🥺')) return
 
     try {
-      logoutApi()
+      await logoutApi()
       window.location.href = '/'
     } catch (error) {
       window.location.href = '/'
@@ -92,14 +97,61 @@ function SettingsPage() {
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const data = await getCurrentUserApi()
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser()
 
-        if (data) {
-          setUserProfile(data.profile)
-        } else {
-          alert('로그인이 필요한 페이지입니다.')
+        if (!user || authError) {
           navigate('/')
+          setIsLoading(false)
+          return
         }
+
+        const provider = user.app_metadata?.provider
+
+        const lastSignedInIdentity = user.identities?.reduce(
+          (latest, identity) => {
+            if (!latest) return identity
+
+            return new Date(identity.last_sign_in_at) >
+              new Date(latest.last_sign_in_at)
+              ? identity
+              : latest
+          },
+          null
+        )
+
+        const actualProvider = lastSignedInIdentity?.provider || provider
+        setLoginProvider(actualProvider)
+
+        try {
+          const data = await getCurrentUserApi()
+
+          if (data?.profile) {
+            setUserProfile(data.profile)
+            setIsLoading(false)
+            return
+          }
+        } catch (profileError) {
+          console.error('프로필 조회 실패:', profileError)
+        }
+
+        setUserProfile({
+          id: user.id,
+          email: user.email,
+          nickname:
+            user.user_metadata?.full_name ||
+            user.user_metadata?.name ||
+            user.email?.split('@')[0] ||
+            '소셜유저',
+          profileimageurl:
+            user.user_metadata?.avatar_url ||
+            user.user_metadata?.picture ||
+            null,
+        })
+
+        setIsLoading(false)
       } catch (error) {
         console.error('유저 정보 로드 실패:', error)
 
@@ -110,13 +162,70 @@ function SettingsPage() {
           navigate('/')
           return
         }
-      } finally {
+
         setIsLoading(false)
       }
     }
 
     fetchUserData()
   }, [navigate])
+
+  const renderProviderBadge = () => {
+    if (loginProvider === 'google') {
+      return (
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            backgroundColor: '#fff',
+            border: '1px solid #e0e0e0',
+            borderRadius: '20px',
+            padding: '4px 12px',
+            fontSize: '13px',
+            color: '#444',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+            marginTop: '6px',
+          }}
+        >
+          <img
+            src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+            alt="Google"
+            width="16"
+          />
+          Google로 로그인 중
+        </div>
+      )
+    }
+
+    if (loginProvider === 'kakao') {
+      return (
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            backgroundColor: '#FEE500',
+            borderRadius: '20px',
+            padding: '4px 12px',
+            fontSize: '13px',
+            color: '#000',
+            fontWeight: 'bold',
+            marginTop: '6px',
+          }}
+        >
+          <img
+            src="https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_small.png"
+            alt="Kakao"
+            width="16"
+          />
+          카카오톡으로 로그인 중
+        </div>
+      )
+    }
+
+    return null
+  }
 
   if (isLoading) {
     return <div className="loading-container">로딩 중...</div>
@@ -148,6 +257,8 @@ function SettingsPage() {
         <p className="info-value">
           {userProfile?.email || '이메일 정보 없음'}
         </p>
+
+        {renderProviderBadge()}
       </div>
 
       <div className="profile-info-group">

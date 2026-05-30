@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { loginApi } from '../../api/authApi' // 👈 불필요한 방 연동 API 임포트 제거
+import { loginApi } from '../../api/authApi'
 import { FaEye, FaEyeSlash } from 'react-icons/fa'
-import { useNavigate } from 'react-router-dom' // 👈 라우터 이동용 훅 추가
+import { useNavigate } from 'react-router-dom'
+import { supabase } from '../../lib/supabaseClient'
 
 function LoginPage() {
   const navigate = useNavigate()
@@ -9,6 +10,27 @@ function LoginPage() {
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+
+  const handleGoogleLogin = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { 
+        redirectTo: `${window.location.origin}/home`
+         },
+    })
+  }
+
+  const handleKakaoLogin = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'kakao',
+      options: { 
+        redirectTo: `${window.location.origin}/home`,
+        scopes: 'profile_nickname',
+        queryParams: {
+          prompt: 'none',
+        }, },
+    })
+  }
 
   const handleLogin = async (event) => {
     event.preventDefault()
@@ -28,6 +50,7 @@ function LoginPage() {
 
       // 2. 가이드라인 미션 반영: 로컬스토리지에 유저 식별자 굽기
       localStorage.setItem('user_id', loggedInUserId)
+      localStorage.removeItem('guest_id')
 
       setMessage(`🎉 ${result.profile?.nickname || '회원'}님 환영합니다! 잠시 후 홈 화면으로 이동합니다.`)
       
@@ -80,7 +103,27 @@ function LoginPage() {
 
       {message && <p>{message}</p>}
 
-      <div>
+      <div style={{ margin: '16px 0', textAlign: 'center', color: '#aaa', fontSize: '13px' }}>── 또는 ──</div>
+
+      <button
+        type="button"
+        onClick={handleGoogleLogin}
+        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '14px', marginBottom: '8px' }}
+      >
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="18" />
+        Google로 로그인
+      </button>
+
+      <button
+        type="button"
+        onClick={handleKakaoLogin}
+        style={{ width: '100%', padding: '10px', border: 'none', borderRadius: '8px', backgroundColor: '#FEE500', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '14px', fontWeight: 'bold', color: '#000' }}
+      >
+        <img src="https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_small.png" alt="Kakao" width="18" />
+        카카오로 로그인
+      </button>
+
+      <div style={{ marginTop: '12px' }}>
         <button type="button" onClick={() => navigate('/')}>
           처음 화면으로 돌아가기
         </button>

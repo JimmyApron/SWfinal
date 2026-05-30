@@ -1,5 +1,5 @@
 import "./App.css";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { supabase } from "./lib/supabaseClient";
@@ -28,6 +28,8 @@ import VoteListPage from "./pages/vote/VoteListPage";
 import VoteDetailPage from "./pages/vote/VoteDetailPage";
 
 import CalendarPage from "./pages/calendar/CalendarPage";
+import FriendCalendarPage from "./pages/calendar/FriendCalendarPage";
+
 import NotificationPage from "./pages/notification/NotificationPage";
 
 import SettingsPage from "./pages/settings/SettingsPage";
@@ -44,61 +46,31 @@ function Layout({ children }) {
       <div className={showNav ? "app-content-with-bottom-nav" : ""}>
         {children}
       </div>
+
       {showNav && <BottomNav />}
     </>
   );
 }
 
 function NotificationListener() {
-  const location = useLocation();
-  const locationRef = useRef(location);
-
   useEffect(() => {
-    locationRef.current = location;
-  }, [location]);
-
-  useEffect(() => {
-    let channel = null;
-
-    const setupRealtimeNotification = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const myUserId = user.id;
-        const uniqueChannelName = `realtime-notifications-${myUserId}-${Date.now()}`;
-
-        channel = supabase.channel(uniqueChannelName);
-
-        channel.on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "notifications",
-            filter: `receiverid=eq.${myUserId}`,
-          },
-          async (payload) => {
-            console.log("🔔 [실시간 새 알림 도착 완료]:", payload.new.message);
-          }
-        );
-
-        channel.subscribe((status) => {
-          if (status === "SUBSCRIBED") {
-            console.log(`📡 [실시간 알림 연결 성공] 채널명: ${uniqueChannelName}`);
-          }
-        });
-      } catch (err) {
-        console.error("실시간 알림 세팅 중 오류 발생:", err);
-      }
-    };
-
-    setupRealtimeNotification();
+    const channel = supabase
+      .channel("notifications-listener")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+        },
+        (payload) => {
+          console.log("새 알림:", payload.new);
+        }
+      )
+      .subscribe();
 
     return () => {
-      if (channel) {
-        supabase.removeChannel(channel);
-      }
+      supabase.removeChannel(channel);
     };
   }, []);
 
@@ -106,72 +78,25 @@ function NotificationListener() {
 }
 
 function App() {
-  const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+  const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || "";
 
-  if (!googleClientId) {
-    return (
-      <GoogleOAuthProvider clientId="">
-        <BrowserRouter>
-          <NotificationListener />
-          <Layout>
-            <Routes>
-            {/* 泥??臾??붾㈃ */}
-            <Route path="/" element={<InviteCodePage />} />
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("auth event:", event, session);
+    });
 
-            {/* ?몄쬆 諛?吏꾩엯 ?뚯씠?꾨씪??*/}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignupPage />} />
-            <Route path="/guest" element={<GuestLoginPage />} />
-            <Route path="/home" element={<HomePage />} />
-
-            {/* 諛?愿??湲곕뒫 */}
-            <Route path="/rooms/create" element={<RoomCreatePage />} />
-            <Route path="/rooms/invite" element={<RoomInvitePage />} />
-            <Route path="/rooms/:roomId" element={<RoomDetailPage />} />
-
-            {/* 諛??대? ??湲곕뒫 */}
-            <Route path="/rooms/:roomid/schedule" element={<ScheduleTab />} />
-            <Route path="/rooms/:roomid/location" element={<LocationTab />} />
-            <Route path="/rooms/:roomid/votes" element={<VoteListPage />} />
-            <Route path="/rooms/:roomid/chat" element={<ChatTab />} />
-
-            <Route
-              path="/rooms/:roomid/available-result"
-              element={<AvailableResultPage />}
-            />
-            <Route
-              path="/rooms/:roomid/vote-create"
-              element={<VoteCreatePage />}
-            />
-            <Route
-              path="/rooms/:roomid/votes/:voteid"
-              element={<VoteDetailPage />}
-            />
-
-            {/* ?뺤젙 ?쇱젙 ?곸꽭 */}
-            <Route
-              path="/confirmed-schedule"
-              element={<ConfirmedScheduleDetailPage />}
-            />
-
-            {/* 罹섎┛??/ ?뚮┝ */}
-            <Route path="/calendar" element={<CalendarPage />} />
-            <Route path="/notifications" element={<NotificationPage />} />
-
-            {/* ?ㅼ젙 愿??湲곕뒫 */}
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/settings/edit" element={<SettingEditPage />} />
-            </Routes>
-          </Layout>
-        </BrowserRouter>
-      </GoogleOAuthProvider>
-    );
-  }
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   return (
     <GoogleOAuthProvider clientId={googleClientId}>
       <BrowserRouter>
         <NotificationListener />
+
         <Layout>
           <Routes>
             {/* 첫 대문 화면 */}
@@ -213,8 +138,12 @@ function App() {
               element={<ConfirmedScheduleDetailPage />}
             />
 
-            {/* 캘린더 / 알림 */}
+            {/* 캘린더 / 친구 캘린더 / 알림 */}
             <Route path="/calendar" element={<CalendarPage />} />
+            <Route
+              path="/calendar/friend/:friendId"
+              element={<FriendCalendarPage />}
+            />
             <Route path="/notifications" element={<NotificationPage />} />
 
             {/* 설정 관련 기능 */}

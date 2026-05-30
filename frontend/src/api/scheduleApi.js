@@ -23,6 +23,17 @@ export async function getRoomMembers(roomId) {
   return data;
 }
 
+export async function getRoomGuests(roomId) {
+  const { data, error } = await supabase
+    .from("room_guests")
+    .select("*")
+    .eq("roomid", Number(roomId));
+
+  if (error) throw new Error("게스트 조회 실패");
+
+  return data;
+}
+
 export async function getMemberAvailabilities(roomId) {
   const { data, error } = await supabase
     .from("member_availabilities")

@@ -1,8 +1,12 @@
 import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useGoogleLogin } from "@react-oauth/google";
 import { supabase } from "../../lib/supabaseClient";
 import { getMyConfirmedSchedules } from "../../api/scheduleApi";
 import { getPersonalEvents, createPersonalEvent, updatePersonalEvent, deletePersonalEvent } from "../../api/personalEventApi";
 import { addEventToGoogleCalendar } from "../../api/googleCalendarApi";
+import { getFriends } from "../../api/friendApi";
+import { sendCalendarShareRequest, getAcceptedShares, removeCalendarShare } from "../../api/calendarShareApi";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const MONTHS = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
@@ -101,6 +105,7 @@ const EMPTY_FORM = {
 };
 
 function CalendarPage() {
+  const navigate = useNavigate();
   const today = new Date();
   const [current, setCurrent] = useState({ year: today.getFullYear(), month: today.getMonth() });
   const [showPicker, setShowPicker] = useState(false);
@@ -120,11 +125,87 @@ function CalendarPage() {
   const [skipAltHoliday, setSkipAltHoliday] = useState(localStorage.getItem('notif_skip_alt_holiday') !== 'false');
   const [skipSaturday, setSkipSaturday] = useState(localStorage.getItem('notif_skip_saturday') !== 'false');
   const [skipSunday, setSkipSunday] = useState(localStorage.getItem('notif_skip_sunday') !== 'false');
+  const [showSidePanel, setShowSidePanel] = useState(false);
+  const [googleConnected, setGoogleConnected] = useState(!!localStorage.getItem("google_calendar_token"));
+  const [googleAutoSync, setGoogleAutoSync] = useState(localStorage.getItem("google_calendar_auto_sync") === "true");
+  const [sharingFriends, setSharingFriends] = useState([]);
+  const [friendListForShare, setFriendListForShare] = useState([]);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const toggleSkip = (key, value, setter) => {
     const next = !value;
     localStorage.setItem(key, String(next));
     setter(next);
+  };
+
+  const googleLogin = useGoogleLogin({
+    scope: "https://www.googleapis.com/auth/calendar.events",
+    onSuccess: (tokenResponse) => {
+      const expiry = Date.now() + tokenResponse.expires_in * 1000;
+      localStorage.setItem("google_calendar_token", tokenResponse.access_token);
+      localStorage.setItem("google_calendar_token_expiry", String(expiry));
+      setGoogleConnected(true);
+      alert("구글 캘린더가 연결되었습니다!");
+    },
+    onError: () => alert("구글 캘린더 연결에 실패했습니다."),
+  });
+
+  const handleGoogleDisconnect = () => {
+    localStorage.removeItem("google_calendar_token");
+    localStorage.removeItem("google_calendar_token_expiry");
+    localStorage.removeItem("google_calendar_auto_sync");
+    setGoogleConnected(false);
+    setGoogleAutoSync(false);
+  };
+
+  const handleAutoSyncToggle = () => {
+    const next = !googleAutoSync;
+    localStorage.setItem("google_calendar_auto_sync", String(next));
+    setGoogleAutoSync(next);
+  };
+
+  const handleOpenSidePanel = async () => {
+    setShowSidePanel(true);
+    if (!currentUser) return;
+    try {
+      const [sharing, friends] = await Promise.all([
+        getAcceptedShares(currentUser.id),
+        getFriends(currentUser.id),
+      ]);
+      setSharingFriends(sharing);
+      const sharingIds = new Set(sharing.map((s) => s.id));
+      setFriendListForShare(friends.filter((f) => !sharingIds.has(f.id)));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleShareRequest = async (friend) => {
+    if (!currentUser) return;
+    setShareLoading(true);
+    try {
+      const { data: profile } = await supabase.from("profiles").select("nickname").eq("id", currentUser.id).single();
+      const senderNickname = profile?.nickname || currentUser.email;
+      await sendCalendarShareRequest(currentUser.id, friend.id, senderNickname);
+      setFriendListForShare((prev) => prev.filter((f) => f.id !== friend.id));
+      alert(`${friend.nickname}님에게 캘린더 공유 요청을 보냈습니다.`);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const handleRemoveShare = async (friend) => {
+    if (!window.confirm(`${friend.nickname}님과의 캘린더 공유를 취소할까요?`)) return;
+    try {
+      await removeCalendarShare(currentUser.id, friend.id);
+      setSharingFriends((prev) => prev.filter((f) => f.id !== friend.id));
+      setFriendListForShare((prev) => [...prev, friend]);
+    } catch (e) {
+      alert(e.message);
+    }
   };
   const touchStartX = useRef(null);
 
@@ -145,8 +226,23 @@ function CalendarPage() {
   }, [currentUser]);
 
   useEffect(() => {
-    fetchGoogleCalendarEvents(year, month).then(setGoogleEvents);
-  }, [year, month]);
+    const loadAndSyncGoogle = async () => {
+      const events = await fetchGoogleCalendarEvents(year, month);
+      setGoogleEvents(events);
+      if (currentUser && events.length > 0) {
+        const rows = events.map((e) => ({
+          id: e.id,
+          userid: currentUser.id,
+          title: e.title,
+          date: e.date,
+          starttime: e.starttime || null,
+          endtime: e.endtime || null,
+        }));
+        await supabase.from("google_events").upsert(rows, { onConflict: "userid,id" });
+      }
+    };
+    loadAndSyncGoogle();
+  }, [year, month, currentUser]);
 
   const scheduleMap = {};
   schedules.forEach((s) => {
@@ -285,11 +381,15 @@ function CalendarPage() {
     <div style={{ minHeight: "100vh", backgroundColor: "#fff", paddingBottom: "80px" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid #eee" }}>
-        <button onClick={prevMonth} style={{ border: "none", background: "none", fontSize: "24px", cursor: "pointer", color: "#555" }}>‹</button>
-        <button onClick={() => { setPickerYear(year); setShowPicker(true); }} style={{ border: "none", background: "none", fontSize: "18px", fontWeight: "bold", cursor: "pointer" }}>
-          {year}년 {month + 1}월
-        </button>
-        <button onClick={nextMonth} style={{ border: "none", background: "none", fontSize: "24px", cursor: "pointer", color: "#555" }}>›</button>
+        <div style={{ width: "32px" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+          <button onClick={prevMonth} style={{ border: "none", background: "none", fontSize: "24px", cursor: "pointer", color: "#555" }}>‹</button>
+          <button onClick={() => { setPickerYear(year); setShowPicker(true); }} style={{ border: "none", background: "none", fontSize: "18px", fontWeight: "bold", cursor: "pointer" }}>
+            {year}년 {month + 1}월
+          </button>
+          <button onClick={nextMonth} style={{ border: "none", background: "none", fontSize: "24px", cursor: "pointer", color: "#555" }}>›</button>
+        </div>
+        <button onClick={handleOpenSidePanel} style={{ border: "none", background: "none", fontSize: "22px", cursor: "pointer", color: "#555", lineHeight: 1 }}>⋮</button>
       </div>
 
       {/* Weekday row */}
@@ -415,6 +515,119 @@ function CalendarPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Side panel */}
+      {showSidePanel && (
+        <>
+          <div onClick={() => setShowSidePanel(false)} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.3)", zIndex: 200 }} />
+          <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "280px", backgroundColor: "#fff", zIndex: 201, boxShadow: "-2px 0 12px rgba(0,0,0,0.15)", padding: "24px 20px", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "28px" }}>
+              <span style={{ fontSize: "16px", fontWeight: "bold" }}>캘린더 설정</span>
+              <button onClick={() => setShowSidePanel(false)} style={{ border: "none", background: "none", fontSize: "20px", cursor: "pointer", color: "#aaa" }}>✕</button>
+            </div>
+
+            {/* 캘린더 공개 */}
+            <p style={{ margin: "0 0 12px", fontSize: "14px", fontWeight: "600", color: "#333" }}>캘린더 공개</p>
+
+            {sharingFriends.length > 0 ? (
+              <div style={{ marginBottom: "12px" }}>
+                {sharingFriends.map((f) => (
+                  <div key={f.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 0", borderBottom: "1px solid #f5f5f5" }}>
+                    {f.profileimageurl ? (
+                      <img src={f.profileimageurl} alt={f.nickname} style={{ width: "32px", height: "32px", borderRadius: "50%", objectFit: "cover" }} />
+                    ) : (
+                      <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "#fff3e0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}>👤</div>
+                    )}
+                    <span
+                      onClick={() => navigate(`/calendar/friend/${f.id}`, { state: { nickname: f.nickname } })}
+                      style={{ flex: 1, fontSize: "13px", fontWeight: "600", color: "#7c79ff", cursor: "pointer", textDecoration: "underline" }}
+                    >
+                      {f.nickname}
+                    </span>
+                    <button
+                      onClick={() => handleRemoveShare(f)}
+                      style={{ fontSize: "11px", color: "#f44", border: "1px solid #f44", background: "none", borderRadius: "6px", padding: "3px 8px", cursor: "pointer" }}
+                    >
+                      공개 취소
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ fontSize: "13px", color: "#aaa", marginBottom: "8px" }}>공개 중인 친구가 없습니다</p>
+            )}
+
+            <button
+              onClick={() => setShowShareModal(true)}
+              style={{ width: "100%", padding: "9px", backgroundColor: "#7c79ff", color: "#fff", border: "none", borderRadius: "8px", fontSize: "13px", cursor: "pointer", marginBottom: "20px", fontWeight: "600" }}
+            >
+              공개 요청
+            </button>
+
+            <hr style={{ margin: "0 0 20px" }} />
+
+            {/* 구글 캘린더 연동 */}
+            <p style={{ margin: "0 0 10px", fontSize: "14px", fontWeight: "600", color: "#333" }}>구글 캘린더 연동</p>
+            {googleConnected ? (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                  <span style={{ fontSize: "14px", color: "#4CAF50" }}>✓ 연결됨</span>
+                  <button onClick={handleGoogleDisconnect} style={{ fontSize: "13px", color: "#f44", border: "1px solid #f44", background: "none", borderRadius: "8px", padding: "4px 12px", cursor: "pointer" }}>
+                    연결 해제
+                  </button>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "14px", color: "#333" }}>확정 일정 자동 추가</span>
+                  <div onClick={handleAutoSyncToggle} style={{ width: "44px", height: "24px", borderRadius: "12px", cursor: "pointer", backgroundColor: googleAutoSync ? "#7c79ff" : "#ccc", position: "relative", transition: "background-color 0.2s", flexShrink: 0 }}>
+                    <div style={{ width: "20px", height: "20px", borderRadius: "50%", backgroundColor: "#fff", position: "absolute", top: "2px", left: googleAutoSync ? "22px" : "2px", transition: "left 0.2s" }} />
+                  </div>
+                </div>
+                <p style={{ fontSize: "11px", color: "#aaa", margin: 0 }}>켜면 캘린더에 등록한 일정이 구글 캘린더에 자동으로 추가됩니다</p>
+              </div>
+            ) : (
+              <button onClick={() => googleLogin()} style={{ fontSize: "14px", color: "#fff", backgroundColor: "#4285F4", border: "none", borderRadius: "8px", padding: "8px 16px", cursor: "pointer" }}>
+                Google 캘린더 연결
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* 공개 요청 모달 */}
+      {showShareModal && (
+        <>
+          <div onClick={() => setShowShareModal(false)} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", zIndex: 400 }} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", backgroundColor: "#fff", borderRadius: "16px", padding: "24px", width: "300px", maxHeight: "70vh", display: "flex", flexDirection: "column", zIndex: 401, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <span style={{ fontSize: "16px", fontWeight: "bold" }}>공개 요청</span>
+              <button onClick={() => setShowShareModal(false)} style={{ border: "none", background: "none", fontSize: "20px", cursor: "pointer", color: "#aaa" }}>✕</button>
+            </div>
+            <div style={{ flex: 1, overflowY: "auto" }}>
+              {friendListForShare.length === 0 ? (
+                <p style={{ color: "#aaa", textAlign: "center", fontSize: "14px", marginTop: "20px" }}>요청할 수 있는 친구가 없습니다</p>
+              ) : (
+                friendListForShare.map((f) => (
+                  <div key={f.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 0", borderBottom: "1px solid #f5f5f5" }}>
+                    {f.profileimageurl ? (
+                      <img src={f.profileimageurl} alt={f.nickname} style={{ width: "36px", height: "36px", borderRadius: "50%", objectFit: "cover" }} />
+                    ) : (
+                      <div style={{ width: "36px", height: "36px", borderRadius: "50%", backgroundColor: "#e0e0ff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "17px" }}>👤</div>
+                    )}
+                    <span style={{ flex: 1, fontSize: "14px" }}>{f.nickname}</span>
+                    <button
+                      onClick={() => handleShareRequest(f)}
+                      disabled={shareLoading}
+                      style={{ padding: "5px 12px", backgroundColor: "#7c79ff", color: "#fff", border: "none", borderRadius: "8px", fontSize: "13px", cursor: "pointer" }}
+                    >
+                      요청
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       {/* Event form modal */}

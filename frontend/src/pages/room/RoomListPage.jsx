@@ -43,7 +43,7 @@ function RoomListPage() {
               key={room.id}
               onClick={() => navigate(`/rooms/${room.id}`)}
             >
-              {room.roomname} {room.room_members?.[0]?.count || 0}명
+              {room.roomname} {(room.room_members?.[0]?.count || 0) + (room.room_guests?.[0]?.count || 0)}명
             </li>
           ))}
         </ul>

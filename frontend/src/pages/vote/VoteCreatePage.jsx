@@ -249,7 +249,7 @@ function VoteCreatePage() {
       }
 
       if (option.optiontype === "date") {
-        return option.optiondate !== "" && option.starttime !== "";
+        return option.optiondate !== "" && (option.isallday || option.starttime !== "");
       }
 
       return false;
@@ -488,27 +488,59 @@ function VoteCreatePage() {
                     style={inputStyle}
                   />
 
-                  <input
-                    type="time"
-                    value={option.starttime}
-                    onChange={(e) =>
-                      handleChangeOption(index, "starttime", e.target.value)
-                    }
-                    style={inputStyle}
-                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newOptions = [...options];
+                      const isAllDay = !newOptions[index].isallday;
+                      newOptions[index].isallday = isAllDay;
+                      if (isAllDay) {
+                        newOptions[index].starttime = "";
+                        newOptions[index].endtime = "";
+                      }
+                      setOptions(newOptions);
+                    }}
+                    style={{
+                      padding: "0 12px",
+                      height: "36px",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      border: option.isallday ? "2px solid #333" : "1px solid #ddd",
+                      backgroundColor: option.isallday ? "#333" : "#fff",
+                      color: option.isallday ? "#fff" : "#333",
+                      fontWeight: option.isallday ? "bold" : "normal",
+                      fontSize: "13px",
+                      alignSelf: "flex-start",
+                    }}
+                  >
+                    하루종일
+                  </button>
 
-                  <input
-                    type="time"
-                    value={option.endtime}
-                    onChange={(e) =>
-                      handleChangeOption(index, "endtime", e.target.value)
-                    }
-                    style={inputStyle}
-                  />
+                  {!option.isallday && (
+                    <>
+                      <input
+                        type="time"
+                        value={option.starttime}
+                        onChange={(e) =>
+                          handleChangeOption(index, "starttime", e.target.value)
+                        }
+                        style={inputStyle}
+                      />
 
-                  <p style={{ margin: 0, fontSize: "11px", color: "#bbb" }}>
-                    종료시간은 선택사항입니다
-                  </p>
+                      <input
+                        type="time"
+                        value={option.endtime}
+                        onChange={(e) =>
+                          handleChangeOption(index, "endtime", e.target.value)
+                        }
+                        style={inputStyle}
+                      />
+
+                      <p style={{ margin: 0, fontSize: "11px", color: "#bbb" }}>
+                        종료시간은 선택사항입니다
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -723,6 +755,7 @@ function makeEmptyOption(optiontype) {
     optiondate: "",
     starttime: "",
     endtime: "",
+    isallday: false,
     availablecount: 0,
     placename: "",
     placeaddress: "",

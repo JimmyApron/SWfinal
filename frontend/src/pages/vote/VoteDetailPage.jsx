@@ -1414,7 +1414,7 @@ function VoteDetailPage() {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {isCreator && vote.votetype !== "general" && (
+                          {vote.votetype !== "general" && (
                             <button
                               onClick={() => !isConfirmed && handleConfirm(option)}
                               disabled={isConfirmed}
