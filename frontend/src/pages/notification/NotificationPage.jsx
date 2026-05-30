@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabaseClient";
 import {
   getMyNotifications,
   markNotificationAsRead,
+  markAllNotificationsAsRead,
   deleteNotification,
   deleteMyNotifications,
 } from "../../api/notificationApi";
@@ -16,6 +17,7 @@ function NotificationPage() {
 
   useEffect(() => {
     let channel = null;
+    // ... rest of useEffect
 
     const loadNotifications = async () => {
       const {
@@ -159,6 +161,26 @@ function NotificationPage() {
     }
   };
 
+  const handleMarkAllAsRead = async () => {
+    if (!currentUserId) return;
+
+    const unreadNotifications = notifications.filter((n) => !n.isread);
+    if (unreadNotifications.length === 0) {
+      alert("읽지 않은 알림이 없습니다.");
+      return;
+    }
+
+    try {
+      await markAllNotificationsAsRead(currentUserId);
+      setNotifications((prev) =>
+        prev.map((n) => ({ ...n, isread: true }))
+      );
+    } catch (error) {
+      console.error("전체 읽음 처리 실패:", error);
+      alert("전체 읽음 처리에 실패했습니다.");
+    }
+  };
+
   if (!currentUserId) {
     return (
       <div style={{ padding: "20px", paddingBottom: "100px" }}>
@@ -180,19 +202,34 @@ function NotificationPage() {
       >
         <h2 style={{ margin: 0 }}>알림</h2>
 
-        <button
-          type="button"
-          onClick={handleDeleteAllNotifications}
-          style={{
-            border: "none",
-            borderRadius: "8px",
-            padding: "8px 12px",
-            backgroundColor: "#f2f2f2",
-            cursor: "pointer",
-          }}
-        >
-          전체 삭제
-        </button>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button
+            type="button"
+            onClick={handleMarkAllAsRead}
+            style={{
+              border: "none",
+              borderRadius: "8px",
+              padding: "8px 12px",
+              backgroundColor: "#f2f2f2",
+              cursor: "pointer",
+            }}
+          >
+            전체 확인
+          </button>
+          <button
+            type="button"
+            onClick={handleDeleteAllNotifications}
+            style={{
+              border: "none",
+              borderRadius: "8px",
+              padding: "8px 12px",
+              backgroundColor: "#f2f2f2",
+              cursor: "pointer",
+            }}
+          >
+            전체 삭제
+          </button>
+        </div>
       </div>
 
       {notifications.length === 0 ? (

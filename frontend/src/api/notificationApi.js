@@ -128,6 +128,20 @@ export async function markNotificationAsRead(notificationId) {
   }
 }
 
+export async function markAllNotificationsAsRead(userId) {
+  const { error } = await supabase
+    .from("notifications")
+    .update({ isread: true })
+    .eq("receiverid", userId)
+    .eq("isread", false);
+
+  if (error) {
+    console.error("전체 알림 읽음 처리 실패:", error);
+    console.error("전체 알림 읽음 처리 실패 상세:", JSON.stringify(error, null, 2));
+    throw new Error("전체 알림 읽음 처리 실패");
+  }
+}
+
 export async function getUnreadNotificationCount(userId) {
   const { count, error } = await supabase
     .from("notifications")
