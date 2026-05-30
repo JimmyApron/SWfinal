@@ -77,6 +77,9 @@ export async function createVote({
     throw new Error("roomid가 없습니다. 투표를 생성할 방 정보가 필요합니다.");
   }
 
+  const isUrgent = endtimeenabled && endtime && 
+    (new Date(endtime).getTime() - new Date().getTime()) < 30 * 60 * 1000;
+
   const { data: vote, error: voteError } = await supabase
     .from("votes")
     .insert([
@@ -92,6 +95,7 @@ export async function createVote({
         endtime: endtimeenabled ? endtime : null,
         endtimeenabled,
         reminderenabled,
+        is_reminder_sent: isUrgent && reminderenabled,
         votetype: votetype || "general",
         locationkind: locationkind || null,
       },

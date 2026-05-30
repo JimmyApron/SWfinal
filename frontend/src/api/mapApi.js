@@ -274,11 +274,7 @@ export async function updateRoomLocationTransportModes(roomId, travelResults = [
   )
 }
 
-export async function saveRoomMiddlePlace({
-  roomId,
-  place,
-  confirmedBy,
-}) {
+export async function saveRoomMiddlePlace({ roomId, place, confirmedBy }) {
   if (!roomId) {
     throw new Error('roomId가 필요합니다.')
   }
@@ -365,5 +361,68 @@ export async function deleteRoomMiddlePlace(roomId) {
   if (error) {
     console.error('중간장소 확정 취소 실패:', error)
     throw new Error('중간장소 확정 취소 실패')
+  }
+}
+
+/**
+ * 위치 상태 및 출발/도착 시간 업데이트
+ *
+ * 새로 생긴 기능 유지:
+ * - 출발 상태 업데이트
+ * - 도착 임박 상태 업데이트
+ * - 도착 완료 상태 업데이트
+ * - 회원/게스트 둘 다 처리
+ */
+export async function updateLocationStatus({
+  roomId,
+  userId,
+  guestId,
+  status,
+  isDeparted,
+  isArrived,
+}) {
+  if (!roomId) {
+    throw new Error('roomId가 필요합니다.')
+  }
+
+  if (!userId && !guestId) {
+    console.warn('위치 상태 업데이트 생략: userId 또는 guestId가 필요합니다.')
+    return
+  }
+
+  const updateData = {
+    locationstatus: status,
+    lastlocationupdatedat: new Date().toISOString(),
+  }
+
+  if (typeof isDeparted === 'boolean') {
+    updateData.isdeparted = isDeparted
+  }
+
+  if (isDeparted) {
+    updateData.departedat = new Date().toISOString()
+  }
+
+  if (isArrived) {
+    updateData.isdeparted = false
+    updateData.arrivedat = new Date().toISOString()
+  }
+
+  let query = supabase
+    .from('user_locations')
+    .update(updateData)
+    .eq('roomid', Number(roomId))
+
+  if (userId) {
+    query = query.eq('userid', userId)
+  } else {
+    query = query.eq('guestid', guestId)
+  }
+
+  const { error } = await query
+
+  if (error) {
+    console.error(`위치 상태(${status}) 업데이트 실패:`, error)
+    throw error
   }
 }

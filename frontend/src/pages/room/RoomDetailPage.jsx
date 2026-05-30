@@ -1,11 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
+import { transferRoomOwnership } from "../../api/roomApi";
 import ScheduleTab from "./ScheduleTab";
 import MapPage from "../../components/map/MapPage";
 import ChatTab from "../Chat/ChatTab";
 import VoteListPage from "../vote/VoteListPage";
-import { getFriends, checkFriendStatus, sendFriendRequestById } from "../../api/friendApi";
+import {
+  getFriends,
+  checkFriendStatus,
+  sendFriendRequestById,
+} from "../../api/friendApi";
 import { createNotification } from "../../api/notificationApi";
 
 function RoomDetailPage() {
@@ -19,7 +24,9 @@ function RoomDetailPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
+
   const [currentUser, setCurrentUser] = useState(null);
+
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [friendList, setFriendList] = useState([]);
   const [invitingSending, setInvitingSending] = useState(false);
@@ -27,6 +34,7 @@ function RoomDetailPage() {
 
   const [members, setMembers] = useState([]);
   const [guests, setGuests] = useState([]);
+  const [selectedParticipantId, setSelectedParticipantId] = useState(null);
 
   const [notifSettings, setNotifSettings] = useState({
     schedule: true,
@@ -70,6 +78,7 @@ function RoomDetailPage() {
         id,
         nickname,
         userid,
+        joinedat,
         profiles (
           profileimageurl
         )
@@ -85,20 +94,22 @@ function RoomDetailPage() {
 
     const { data: guestData, error: guestError } = await supabase
       .from("room_guests")
-      .select("id, nickname")
+      .select("id, nickname, createdat")
       .eq("roomid", roomId);
 
     if (!guestError) {
       setGuests(guestData || []);
+    } else {
+      console.error("게스트 목록 조회 실패:", guestError);
     }
 
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (user) setCurrentUser(user);
-
     if (user && user.id) {
+      setCurrentUser({ ...user, type: "member" });
+
       const { data: myMemberData, error: myMemberError } = await supabase
         .from("room_members")
         .select(
@@ -117,16 +128,17 @@ function RoomDetailPage() {
         });
       }
     } else {
-      const guestNickname = sessionStorage.getItem("guestNickname");
+      const guestId = localStorage.getItem("guest_id");
 
-      if (guestNickname) {
+      if (guestId) {
+        setCurrentUser({ id: guestId, type: "guest" });
+
         const { data: myGuestData, error: myGuestError } = await supabase
           .from("room_guests")
           .select(
             "schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled"
           )
-          .eq("roomid", roomId)
-          .eq("nickname", guestNickname)
+          .eq("id", guestId)
           .single();
 
         if (!myGuestError && myGuestData) {
@@ -137,12 +149,65 @@ function RoomDetailPage() {
             chat: myGuestData.chatnotifenabled,
           });
         }
+      } else {
+        setCurrentUser(null);
       }
     }
   };
 
   useEffect(() => {
     fetchRoomData();
+
+    const channel = supabase
+      .channel(`room_detail_realtime_${roomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "rooms",
+          filter: `id=eq.${roomId}`,
+        },
+        (payload) => {
+          console.log("Room updated:", payload);
+          fetchRoomData();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "room_members",
+          filter: `roomid=eq.${roomId}`,
+        },
+        (payload) => {
+          console.log("Member changed:", payload);
+          fetchRoomData();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "room_guests",
+          filter: `roomid=eq.${roomId}`,
+        },
+        (payload) => {
+          console.log("Guest changed:", payload);
+          fetchRoomData();
+        }
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          console.log("Successfully subscribed to room changes");
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [roomId]);
 
   const handleChangeTab = (nextTab) => {
@@ -164,10 +229,16 @@ function RoomDetailPage() {
 
   const handleOpenInviteModal = async () => {
     if (!currentUser) return;
+
+    if (currentUser.type === "guest") {
+      alert("게스트는 친구 초대 기능을 사용할 수 없습니다.");
+      return;
+    }
+
     setShowInviteModal(true);
+
     try {
       const friends = await getFriends(currentUser.id);
-      // 이미 방에 있는 멤버 제외
       const memberIds = new Set(members.map((m) => m.userid));
       setFriendList(friends.filter((f) => !memberIds.has(f.id)));
     } catch (e) {
@@ -177,15 +248,22 @@ function RoomDetailPage() {
 
   const handleInviteFriend = async (friend) => {
     if (!currentUser || !room) return;
+
     setInvitingSending(true);
+
     try {
       const { data: senderProfile } = await supabase
         .from("profiles")
         .select("nickname")
         .eq("id", currentUser.id)
         .single();
+
       const senderNickname =
-        senderProfile?.nickname || currentUser.user_metadata?.nickname || currentUser.email;
+        senderProfile?.nickname ||
+        currentUser.user_metadata?.nickname ||
+        currentUser.email ||
+        "알 수 없음";
+
       await createNotification({
         roomId: Number(roomId),
         receiverId: friend.id,
@@ -195,6 +273,7 @@ function RoomDetailPage() {
         message: `${senderNickname}님이 [${room.roomname}]에 초대했습니다`,
         link: `/rooms/${roomId}`,
       });
+
       alert(`${friend.nickname}님에게 초대를 보냈습니다.`);
     } catch (e) {
       alert("초대 전송 실패: " + e.message);
@@ -204,14 +283,23 @@ function RoomDetailPage() {
   };
 
   const handleClickMember = async (member) => {
-    if (!currentUser || member.userid === currentUser.id) return;
+    if (!currentUser || currentUser.type === "guest") return;
+    if (member.userid === currentUser.id) return;
+
     setMemberPopup({ member, status: null, loading: true });
+
     const data = await checkFriendStatus(currentUser.id, member.userid);
-    setMemberPopup({ member, status: data?.status || null, loading: false });
+
+    setMemberPopup({
+      member,
+      status: data?.status || null,
+      loading: false,
+    });
   };
 
   const handleAddFriendFromRoom = async () => {
     if (!memberPopup || !currentUser) return;
+
     try {
       await sendFriendRequestById(currentUser.id, memberPopup.member.userid);
       setMemberPopup((prev) => ({ ...prev, status: "pending" }));
@@ -241,9 +329,7 @@ function RoomDetailPage() {
   };
 
   const handleToggleNotification = async (tabName) => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    if (!currentUser) return;
 
     const nextValue = !notifSettings[tabName];
 
@@ -256,12 +342,12 @@ function RoomDetailPage() {
 
     const columnName = dbColumnMap[tabName];
 
-    if (user && user.id) {
+    if (currentUser.type === "member") {
       const { error } = await supabase
         .from("room_members")
         .update({ [columnName]: nextValue })
         .eq("roomid", roomId)
-        .eq("userid", user.id);
+        .eq("userid", currentUser.id);
 
       if (error) {
         console.error("회원 알림 설정 저장 실패:", error);
@@ -269,18 +355,11 @@ function RoomDetailPage() {
         return;
       }
     } else {
-      const guestNickname = sessionStorage.getItem("guestNickname");
-
-      if (!guestNickname) {
-        alert("게스트 정보를 확인할 수 없어 설정을 변경할 수 없습니다.");
-        return;
-      }
-
       const { error } = await supabase
         .from("room_guests")
         .update({ [columnName]: nextValue })
         .eq("roomid", roomId)
-        .eq("nickname", guestNickname);
+        .eq("id", currentUser.id);
 
       if (error) {
         console.error("게스트 알림 설정 저장 실패:", error);
@@ -296,20 +375,46 @@ function RoomDetailPage() {
   };
 
   const handleLeaveRoom = async () => {
-    if (!window.confirm("정말 이 방을 나가시겠습니까? 나가면 내역이 삭제됩니다.")) {
+    if (
+      !window.confirm("정말 이 방을 나가시겠습니까? 나가면 내역이 삭제됩니다.")
+    ) {
       return;
     }
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const isHost = String(room?.createdby) === String(currentUser?.id);
 
-    if (user && user.id) {
+    if (isHost) {
+      const others = [
+        ...members.map((m) => ({ ...m, type: "member", joinDate: m.joinedat })),
+        ...guests.map((g) => ({ ...g, type: "guest", joinDate: g.createdat })),
+      ]
+        .filter((p) => {
+          const participantId = p.type === "member" ? p.userid : p.id;
+          return String(participantId) !== String(currentUser?.id);
+        })
+        .sort((a, b) => new Date(a.joinDate) - new Date(b.joinDate));
+
+      if (others.length > 0) {
+        const nextHost = others[0];
+        const nextHostId =
+          nextHost.type === "member" ? nextHost.userid : nextHost.id;
+
+        try {
+          await transferRoomOwnership(roomId, nextHostId);
+        } catch (error) {
+          console.error("방장 자동 위임 실패:", error);
+          alert("방장 위임 중 오류가 발생했습니다.");
+          return;
+        }
+      }
+    }
+
+    if (currentUser?.type === "member") {
       const { error } = await supabase
         .from("room_members")
         .delete()
         .eq("roomid", roomId)
-        .eq("userid", user.id);
+        .eq("userid", currentUser.id);
 
       if (error) {
         alert("방 나가기 실패!");
@@ -317,9 +422,7 @@ function RoomDetailPage() {
         return;
       }
     } else {
-      const guestNickname = sessionStorage.getItem("guestNickname");
-
-      if (!guestNickname) {
+      if (!currentUser?.id) {
         alert("게스트 정보를 찾을 수 없습니다.");
         return;
       }
@@ -328,7 +431,7 @@ function RoomDetailPage() {
         .from("room_guests")
         .delete()
         .eq("roomid", roomId)
-        .eq("nickname", guestNickname);
+        .eq("id", currentUser.id);
 
       if (error) {
         alert("게스트 퇴장 실패!");
@@ -341,9 +444,64 @@ function RoomDetailPage() {
     navigate("/home");
   };
 
+  const handleTransferHost = async (p) => {
+    const newHostId = p.type === "member" ? p.userid : p.id;
+    const confirmMessage = `방장 권한을 ${p.nickname}님에게 양도하시겠습니까?`;
+
+    if (window.confirm(confirmMessage)) {
+      try {
+        await transferRoomOwnership(roomId, newHostId);
+        alert("방장 권한이 양도되었습니다.");
+        setRoom({ ...room, createdby: String(newHostId) });
+        setSelectedParticipantId(null);
+      } catch (error) {
+        alert(error.message);
+      }
+    }
+  };
+
+  const handleClickParticipant = (p) => {
+    const participantUniqueId = p.type === "member" ? p.userid : p.id;
+    const isHost =
+      String(room?.createdby) === String(participantUniqueId);
+    const isSelected = selectedParticipantId === participantUniqueId;
+
+    if (isCurrentUserHost && !isHost) {
+      setSelectedParticipantId(isSelected ? null : participantUniqueId);
+      return;
+    }
+
+    if (
+      p.type === "member" &&
+      currentUser?.type === "member" &&
+      String(p.userid) !== String(currentUser.id)
+    ) {
+      handleClickMember(p);
+    }
+  };
+
   if (!room) {
     return <div>로딩 중...</div>;
   }
+
+  const sortedParticipants = [
+    ...members.map((m) => ({ ...m, type: "member", joinDate: m.joinedat })),
+    ...guests.map((g) => ({ ...g, type: "guest", joinDate: g.createdat })),
+  ].sort((a, b) => {
+    const idA = a.type === "member" ? a.userid : a.id;
+    const idB = b.type === "member" ? b.userid : b.id;
+
+    const isHostA = String(room?.createdby) === String(idA);
+    const isHostB = String(room?.createdby) === String(idB);
+
+    if (isHostA) return -1;
+    if (isHostB) return 1;
+
+    return new Date(a.joinDate) - new Date(b.joinDate);
+  });
+
+  const isCurrentUserHost =
+    String(room?.createdby) === String(currentUser?.id);
 
   return (
     <div
@@ -404,7 +562,13 @@ function RoomDetailPage() {
             : {}
         }
       >
-        {tab === "schedule" && <ScheduleTab roomId={roomId} ownerUserId={room?.createdby} roomName={room?.roomname} />}
+        {tab === "schedule" && (
+          <ScheduleTab
+            roomId={roomId}
+            ownerUserId={room?.createdby}
+            roomName={room?.roomname}
+          />
+        )}
         {tab === "location" && <MapPage roomId={roomId} />}
         {tab === "vote" && <VoteListPage roomid={roomId} />}
         {tab === "chat" && <ChatTab roomId={roomId} />}
@@ -518,7 +682,13 @@ function RoomDetailPage() {
             <div style={{ marginBottom: "25px" }}>
               <h4 style={{ margin: "0 0 10px 0" }}>🔔 탭별 알림 온/오프</h4>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                }}
+              >
                 {["schedule", "location", "vote", "chat"].map((t) => (
                   <div
                     key={t}
@@ -559,7 +729,17 @@ function RoomDetailPage() {
               <h4 style={{ margin: "0 0 10px 0" }}>👥 친구 초대</h4>
               <button
                 onClick={handleOpenInviteModal}
-                style={{ width: "100%", padding: "10px", backgroundColor: "#7c79ff", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold", fontSize: "14px" }}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  backgroundColor: "#7c79ff",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                  fontSize: "14px",
+                }}
               >
                 친구 초대하기
               </button>
@@ -567,9 +747,42 @@ function RoomDetailPage() {
 
             <div style={{ marginBottom: "25px" }}>
               <h4 style={{ margin: "0 0 10px 0" }}>🔗 초대코드</h4>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 12px", backgroundColor: "#f5f5f5", borderRadius: "8px" }}>
-                <span style={{ flex: 1, fontSize: "15px", fontWeight: "bold", letterSpacing: "2px", color: "#333" }}>{room.invitecode}</span>
-                <button onClick={handleCopyInviteCode} style={{ padding: "6px 12px", backgroundColor: "#7c79ff", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "13px", whiteSpace: "nowrap" }}>복사</button>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "10px 12px",
+                  backgroundColor: "#f5f5f5",
+                  borderRadius: "8px",
+                }}
+              >
+                <span
+                  style={{
+                    flex: 1,
+                    fontSize: "15px",
+                    fontWeight: "bold",
+                    letterSpacing: "2px",
+                    color: "#333",
+                  }}
+                >
+                  {room.invitecode}
+                </span>
+                <button
+                  onClick={handleCopyInviteCode}
+                  style={{
+                    padding: "6px 12px",
+                    backgroundColor: "#7c79ff",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  복사
+                </button>
               </div>
             </div>
 
@@ -580,7 +793,7 @@ function RoomDetailPage() {
 
               <div
                 style={{
-                  maxHeight: "230px",
+                  maxHeight: "350px",
                   overflowY: "auto",
                   border: "1px solid #eee",
                   padding: "10px",
@@ -588,121 +801,173 @@ function RoomDetailPage() {
                   backgroundColor: "#fafafa",
                 }}
               >
-                {members.map((m) => {
-                  const imageUrl = m.profiles?.profileimageurl;
-                  const isMe = currentUser && m.userid === currentUser.id;
+                {sortedParticipants.map((p) => {
+                  const participantUniqueId =
+                    p.type === "member" ? p.userid : p.id;
+                  const isHost =
+                    String(room?.createdby) === String(participantUniqueId);
+                  const isSelected =
+                    selectedParticipantId === participantUniqueId;
+                  const isMe =
+                    String(currentUser?.id) === String(participantUniqueId);
 
                   return (
                     <div
-                      key={m.id}
+                      key={`${p.type}-${p.id}`}
+                      onClick={() => handleClickParticipant(p)}
                       style={{
                         display: "flex",
-                        alignItems: "center",
-                        gap: "10px",
-                        padding: "6px 0",
+                        flexDirection: "column",
+                        padding: "8px 0",
                         borderBottom: "1px solid #f0f0f0",
+                        cursor:
+                          (isCurrentUserHost && !isHost) ||
+                          (p.type === "member" &&
+                            currentUser?.type === "member" &&
+                            !isMe)
+                            ? "pointer"
+                            : "default",
+                        backgroundColor: isSelected ? "#f0ebff" : "transparent",
+                        borderRadius: "5px",
+                        transition: "background-color 0.2s",
                       }}
                     >
-                      {imageUrl ? (
-                        <img
-                          src={imageUrl}
-                          alt="프로필"
-                          style={{
-                            width: "32px",
-                            height: "32px",
-                            borderRadius: "50%",
-                            objectFit: "cover",
-                            border: "1px solid #ddd",
-                          }}
-                        />
-                      ) : (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                          padding: "0 5px",
+                        }}
+                      >
+                        {p.type === "member" ? (
+                          p.profiles?.profileimageurl ? (
+                            <img
+                              src={p.profiles.profileimageurl}
+                              alt="프로필"
+                              style={{
+                                width: "32px",
+                                height: "32px",
+                                borderRadius: "50%",
+                                objectFit: "cover",
+                                border: "1px solid #ddd",
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: "32px",
+                                height: "32px",
+                                borderRadius: "50%",
+                                backgroundColor: "#e0e0e0",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "16px",
+                              }}
+                            >
+                              👤
+                            </div>
+                          )
+                        ) : (
+                          <div
+                            style={{
+                              width: "32px",
+                              height: "32px",
+                              borderRadius: "50%",
+                              backgroundColor: "#ffeaa7",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "16px",
+                            }}
+                          >
+                            🐱
+                          </div>
+                        )}
+
                         <div
                           style={{
-                            width: "32px",
-                            height: "32px",
-                            borderRadius: "50%",
-                            backgroundColor: "#e0e0e0",
                             display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "16px",
+                            flexDirection: "column",
                           }}
                         >
-                          👤
+                          {isHost && (
+                            <span
+                              style={{
+                                color: "#8366F4",
+                                fontSize: "11px",
+                                fontWeight: "bold",
+                                marginBottom: "-2px",
+                              }}
+                            >
+                              방장
+                            </span>
+                          )}
+
+                          <span
+                            style={{
+                              fontSize: "14px",
+                              fontWeight: "600",
+                              color:
+                                p.type === "member" &&
+                                currentUser?.type === "member" &&
+                                !isMe &&
+                                !isCurrentUserHost
+                                  ? "#7c79ff"
+                                  : "#333",
+                              textDecoration:
+                                p.type === "member" &&
+                                currentUser?.type === "member" &&
+                                !isMe &&
+                                !isCurrentUserHost
+                                  ? "underline"
+                                  : "none",
+                            }}
+                          >
+                            {p.nickname || "이름없음"}
+                            {isMe ? " (나)" : ""}
+                          </span>
+
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              color:
+                                p.type === "member" ? "#8366F4" : "#e67e22",
+                              fontWeight: "600",
+                            }}
+                          >
+                            {p.type === "member" ? "회원" : "게스트"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {isSelected && (
+                        <div style={{ marginTop: "8px", padding: "0 5px" }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTransferHost(p);
+                            }}
+                            style={{
+                              width: "100%",
+                              padding: "6px",
+                              background: "#8366F4",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "5px",
+                              fontSize: "12px",
+                              fontWeight: "bold",
+                              cursor: "pointer",
+                            }}
+                          >
+                            방장 권한 주기
+                          </button>
                         </div>
                       )}
-
-                      <div style={{ display: "flex", flexDirection: "column" }}>
-                        <span
-                          onClick={() => !isMe && handleClickMember(m)}
-                          style={{
-                            fontSize: "14px",
-                            fontWeight: "600",
-                            color: isMe ? "#333" : "#7c79ff",
-                            cursor: isMe ? "default" : "pointer",
-                            textDecoration: isMe ? "none" : "underline",
-                          }}
-                        >
-                          {m.nickname || "이름없음"}{isMe ? " (나)" : ""}
-                        </span>
-
-                        <span
-                          style={{
-                            fontSize: "11px",
-                            color: "#8366F4",
-                            fontWeight: "600",
-                          }}
-                        >
-                          회원
-                        </span>
-                      </div>
                     </div>
                   );
                 })}
-
-                {guests.map((g) => (
-                  <div
-                    key={g.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "10px",
-                      padding: "6px 0",
-                      borderBottom: "1px solid #f0f0f0",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "32px",
-                        height: "32px",
-                        borderRadius: "50%",
-                        backgroundColor: "#ffeaa7",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: "16px",
-                      }}
-                    >
-                      🐱
-                    </div>
-
-                    <div style={{ display: "flex", flexDirection: "column" }}>
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          fontWeight: "600",
-                          color: "#555",
-                        }}
-                      >
-                        {g.nickname}
-                      </span>
-
-                      <span style={{ fontSize: "11px", color: "#e67e22" }}>
-                        게스트
-                      </span>
-                    </div>
-                  </div>
-                ))}
 
                 {members.length === 0 && guests.length === 0 && (
                   <p
@@ -741,31 +1006,129 @@ function RoomDetailPage() {
           </div>
         </div>
       )}
-      {/* 친구 초대 모달 */}
+
       {showInviteModal && (
         <>
-          <div onClick={() => setShowInviteModal(false)} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", zIndex: 3000 }} />
-          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", backgroundColor: "#fff", borderRadius: "16px", padding: "24px", width: "300px", maxHeight: "70vh", display: "flex", flexDirection: "column", zIndex: 3001, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <span style={{ fontSize: "16px", fontWeight: "bold" }}>친구 초대</span>
-              <button onClick={() => setShowInviteModal(false)} style={{ border: "none", background: "none", fontSize: "20px", cursor: "pointer", color: "#aaa" }}>✕</button>
+          <div
+            onClick={() => setShowInviteModal(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              backgroundColor: "rgba(0,0,0,0.4)",
+              zIndex: 3000,
+            }}
+          />
+
+          <div
+            style={{
+              position: "fixed",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%,-50%)",
+              backgroundColor: "#fff",
+              borderRadius: "16px",
+              padding: "24px",
+              width: "300px",
+              maxHeight: "70vh",
+              display: "flex",
+              flexDirection: "column",
+              zIndex: 3001,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "16px",
+              }}
+            >
+              <span style={{ fontSize: "16px", fontWeight: "bold" }}>
+                친구 초대
+              </span>
+              <button
+                onClick={() => setShowInviteModal(false)}
+                style={{
+                  border: "none",
+                  background: "none",
+                  fontSize: "20px",
+                  cursor: "pointer",
+                  color: "#aaa",
+                }}
+              >
+                ✕
+              </button>
             </div>
+
             <div style={{ flex: 1, overflowY: "auto" }}>
               {friendList.length === 0 ? (
-                <p style={{ color: "#aaa", textAlign: "center", fontSize: "14px", marginTop: "20px" }}>초대할 수 있는 친구가 없습니다</p>
+                <p
+                  style={{
+                    color: "#aaa",
+                    textAlign: "center",
+                    fontSize: "14px",
+                    marginTop: "20px",
+                  }}
+                >
+                  초대할 수 있는 친구가 없습니다
+                </p>
               ) : (
                 friendList.map((friend) => (
-                  <div key={friend.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 0", borderBottom: "1px solid #f5f5f5" }}>
+                  <div
+                    key={friend.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      padding: "10px 0",
+                      borderBottom: "1px solid #f5f5f5",
+                    }}
+                  >
                     {friend.profileimageurl ? (
-                      <img src={friend.profileimageurl} alt={friend.nickname} style={{ width: "38px", height: "38px", borderRadius: "50%", objectFit: "cover" }} />
+                      <img
+                        src={friend.profileimageurl}
+                        alt={friend.nickname}
+                        style={{
+                          width: "38px",
+                          height: "38px",
+                          borderRadius: "50%",
+                          objectFit: "cover",
+                        }}
+                      />
                     ) : (
-                      <div style={{ width: "38px", height: "38px", borderRadius: "50%", backgroundColor: "#e0e0ff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px" }}>👤</div>
+                      <div
+                        style={{
+                          width: "38px",
+                          height: "38px",
+                          borderRadius: "50%",
+                          backgroundColor: "#e0e0ff",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "18px",
+                        }}
+                      >
+                        👤
+                      </div>
                     )}
-                    <span style={{ flex: 1, fontSize: "14px" }}>{friend.nickname}</span>
+
+                    <span style={{ flex: 1, fontSize: "14px" }}>
+                      {friend.nickname}
+                    </span>
+
                     <button
                       onClick={() => handleInviteFriend(friend)}
                       disabled={invitingSending}
-                      style={{ padding: "6px 14px", backgroundColor: "#7c79ff", color: "#fff", border: "none", borderRadius: "8px", fontSize: "13px", cursor: "pointer" }}
+                      style={{
+                        padding: "6px 14px",
+                        backgroundColor: "#7c79ff",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "8px",
+                        fontSize: "13px",
+                        cursor: "pointer",
+                      }}
                     >
                       초대
                     </button>
@@ -776,31 +1139,111 @@ function RoomDetailPage() {
           </div>
         </>
       )}
-      {/* 멤버 클릭 팝업 */}
+
       {memberPopup && (
         <>
-          <div onClick={() => setMemberPopup(null)} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", zIndex: 3000 }} />
-          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", backgroundColor: "#fff", borderRadius: "16px", padding: "24px", width: "260px", zIndex: 3001, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", textAlign: "center" }}>
+          <div
+            onClick={() => setMemberPopup(null)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              backgroundColor: "rgba(0,0,0,0.4)",
+              zIndex: 3000,
+            }}
+          />
+
+          <div
+            style={{
+              position: "fixed",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%,-50%)",
+              backgroundColor: "#fff",
+              borderRadius: "16px",
+              padding: "24px",
+              width: "260px",
+              zIndex: 3001,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+              textAlign: "center",
+            }}
+          >
             <div style={{ fontSize: "36px", marginBottom: "8px" }}>👤</div>
-            <p style={{ margin: "0 0 4px", fontSize: "16px", fontWeight: "bold" }}>{memberPopup.member.nickname}</p>
-            <p style={{ margin: "0 0 20px", fontSize: "12px", color: "#8366F4" }}>회원</p>
+
+            <p
+              style={{
+                margin: "0 0 4px",
+                fontSize: "16px",
+                fontWeight: "bold",
+              }}
+            >
+              {memberPopup.member.nickname}
+            </p>
+
+            <p
+              style={{
+                margin: "0 0 20px",
+                fontSize: "12px",
+                color: "#8366F4",
+              }}
+            >
+              회원
+            </p>
 
             {memberPopup.loading ? (
               <p style={{ fontSize: "13px", color: "#aaa" }}>확인 중...</p>
             ) : memberPopup.status === "accepted" ? (
-              <p style={{ fontSize: "13px", color: "#4CAF50", fontWeight: "600" }}>✓ 이미 친구입니다</p>
+              <p
+                style={{
+                  fontSize: "13px",
+                  color: "#4CAF50",
+                  fontWeight: "600",
+                }}
+              >
+                ✓ 이미 친구입니다
+              </p>
             ) : memberPopup.status === "pending" ? (
-              <p style={{ fontSize: "13px", color: "#f90", fontWeight: "600" }}>요청 대기 중</p>
+              <p
+                style={{
+                  fontSize: "13px",
+                  color: "#f90",
+                  fontWeight: "600",
+                }}
+              >
+                요청 대기 중
+              </p>
             ) : (
               <button
                 onClick={handleAddFriendFromRoom}
-                style={{ width: "100%", padding: "10px", backgroundColor: "#7c79ff", color: "#fff", border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "bold", cursor: "pointer" }}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  backgroundColor: "#7c79ff",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "10px",
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                }}
               >
                 친구 추가
               </button>
             )}
 
-            <button onClick={() => setMemberPopup(null)} style={{ marginTop: "10px", width: "100%", padding: "8px", backgroundColor: "#f5f5f5", color: "#555", border: "none", borderRadius: "10px", fontSize: "13px", cursor: "pointer" }}>
+            <button
+              onClick={() => setMemberPopup(null)}
+              style={{
+                marginTop: "10px",
+                width: "100%",
+                padding: "8px",
+                backgroundColor: "#f5f5f5",
+                color: "#555",
+                border: "none",
+                borderRadius: "10px",
+                fontSize: "13px",
+                cursor: "pointer",
+              }}
+            >
               닫기
             </button>
           </div>

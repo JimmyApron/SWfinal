@@ -1,5 +1,5 @@
 import "./App.css";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { supabase } from "./lib/supabaseClient";
@@ -53,24 +53,103 @@ function Layout({ children }) {
 }
 
 function NotificationListener() {
+  const location = useLocation();
+  const locationRef = useRef(location);
+  const channelRef = useRef(null);
+
   useEffect(() => {
-    const channel = supabase
-      .channel("notifications-listener")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-        },
-        (payload) => {
-          console.log("새 알림:", payload.new);
+    locationRef.current = location;
+  }, [location]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const setupRealtimeNotification = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!isMounted) return;
+
+        let myUserId = user?.id;
+
+        // 로그인 유저가 아니면 게스트 id로 알림 수신
+        if (!myUserId) {
+          myUserId = localStorage.getItem("guest_id");
         }
-      )
-      .subscribe();
+
+        if (!myUserId) {
+          console.log("알림 리스너 연결 생략: 로그인/게스트 정보 없음");
+          return;
+        }
+
+        // 기존 채널이 있다면 제거해서 중복 구독 방지
+        if (channelRef.current) {
+          supabase.removeChannel(channelRef.current);
+          channelRef.current = null;
+        }
+
+        const uniqueChannelName = `realtime-notifications-${myUserId}-${Date.now()}`;
+
+        const channel = supabase
+          .channel(uniqueChannelName)
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "notifications",
+              filter: `receiverid=eq.${myUserId}`,
+            },
+            async (payload) => {
+              const newNotification = payload.new;
+
+              // 기존 HEAD 기능: 새 알림 로그 확인
+              console.log("새 알림:", newNotification);
+
+              // notification-2 기능: 내가 받을 알림만 실시간 수신
+              console.log(
+                "🔔 [실시간 새 알림 도착 완료]:",
+                newNotification?.message
+              );
+
+              // 현재 위치가 필요할 때 사용할 수 있게 locationRef 유지
+              const currentPath = locationRef.current.pathname;
+              console.log("현재 페이지:", currentPath);
+            }
+          );
+
+        channel.subscribe((status) => {
+          if (!isMounted) return;
+
+          if (status === "SUBSCRIBED") {
+            console.log(`📡 [실시간 알림 연결 성공] 채널명: ${uniqueChannelName}`);
+            channelRef.current = channel;
+          }
+
+          if (status === "CHANNEL_ERROR") {
+            console.error("실시간 알림 채널 연결 실패");
+          }
+
+          if (status === "TIMED_OUT") {
+            console.error("실시간 알림 채널 연결 시간 초과");
+          }
+        });
+      } catch (err) {
+        console.error("실시간 알림 세팅 중 오류 발생:", err);
+      }
+    };
+
+    setupRealtimeNotification();
 
     return () => {
-      supabase.removeChannel(channel);
+      isMounted = false;
+
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
   }, []);
 

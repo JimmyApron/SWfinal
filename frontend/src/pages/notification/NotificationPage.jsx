@@ -6,6 +6,7 @@ import {
   getMyGuestNotifications,
   markNotificationAsRead,
   markGuestNotificationAsRead,
+  markAllNotificationsAsRead,
   deleteNotification,
   deleteGuestNotification,
   deleteMyNotifications,
@@ -13,7 +14,10 @@ import {
   isNotificationVisibleToRecipient,
 } from "../../api/notificationApi";
 import { joinRoomById } from "../../api/roomApi";
-import { acceptCalendarShare, rejectCalendarShare } from "../../api/calendarShareApi";
+import {
+  acceptCalendarShare,
+  rejectCalendarShare,
+} from "../../api/calendarShareApi";
 
 function NotificationPage() {
   const navigate = useNavigate();
@@ -33,6 +37,116 @@ function NotificationPage() {
 
   useEffect(() => {
     let channel = null;
+    let isMounted = true;
+
+    const checkExpiredVotesAndNotify = async (userId, isGuest) => {
+      try {
+        const nowIso = new Date().toISOString();
+
+        let roomIds = [];
+
+        if (isGuest) {
+          const { data: myGuestRooms, error: guestRoomError } = await supabase
+            .from("room_guests")
+            .select("roomid")
+            .eq("id", userId);
+
+          if (guestRoomError) throw guestRoomError;
+
+          roomIds = myGuestRooms?.map((room) => room.roomid) || [];
+        } else {
+          const { data: myRooms, error: roomError } = await supabase
+            .from("room_members")
+            .select("roomid")
+            .eq("userid", userId);
+
+          if (roomError) throw roomError;
+
+          roomIds = myRooms?.map((room) => room.roomid) || [];
+        }
+
+        if (roomIds.length === 0) return;
+
+        const { data: expiredVotes, error: voteError } = await supabase
+          .from("votes")
+          .select("id, roomid, title")
+          .in("roomid", roomIds)
+          .eq("endtimeenabled", true)
+          .lte("endtime", nowIso)
+          .eq("isclosed", false);
+
+        if (voteError) throw voteError;
+
+        if (!expiredVotes || expiredVotes.length === 0) return;
+
+        for (const vote of expiredVotes) {
+          const notificationsToInsert = [];
+
+          const { data: activeMembers, error: memberError } = await supabase
+            .from("room_members")
+            .select("userid")
+            .eq("roomid", vote.roomid)
+            .eq("votenotifenabled", true);
+
+          if (memberError) throw memberError;
+
+          if (activeMembers && activeMembers.length > 0) {
+            activeMembers.forEach((member) => {
+              notificationsToInsert.push({
+                roomid: vote.roomid,
+                receiverid: member.userid,
+                type: "vote_closed",
+                title: "🔒 투표 마감 완료",
+                message: `🏁 [${vote.title}] 투표가 마감되었습니다! 최종 결과를 확인해 보세요.`,
+                isread: false,
+                link: `/rooms/${vote.roomid}/votes/${vote.id}`,
+              });
+            });
+          }
+
+          const { data: activeGuests, error: guestError } = await supabase
+            .from("room_guests")
+            .select("id")
+            .eq("roomid", vote.roomid)
+            .eq("votenotifenabled", true);
+
+          if (guestError) throw guestError;
+
+          if (activeGuests && activeGuests.length > 0) {
+            activeGuests.forEach((guest) => {
+              notificationsToInsert.push({
+                roomid: vote.roomid,
+                receiverid: guest.id,
+                type: "vote_closed",
+                title: "투표 마감 완료",
+                message: `[${vote.title}] 투표가 마감되었습니다. 최종 결과를 확인해 보세요.`,
+                isread: false,
+                link: `/rooms/${vote.roomid}/votes/${vote.id}`,
+              });
+            });
+          }
+
+          if (notificationsToInsert.length > 0) {
+            const { error: insertError } = await supabase
+              .from("notifications")
+              .insert(notificationsToInsert);
+
+            if (insertError) throw insertError;
+          }
+
+          const { error: closeError } = await supabase
+            .from("votes")
+            .update({ isclosed: true })
+            .eq("id", vote.id);
+
+          if (closeError) throw closeError;
+
+          console.log(`🏁 [${vote.title}] 투표 마감 알림 처리 완료!`);
+        }
+      } catch (checkError) {
+        console.error("🔒 마감 투표 자동 체크 중 에러:", checkError);
+      }
+    };
 
     const loadNotifications = async () => {
       const {
@@ -54,101 +168,23 @@ function NotificationPage() {
         return;
       }
 
+      if (!isMounted) return;
+
       setCurrentUserId(userId);
       setIsGuestUser(isGuest);
 
-      // ========================================================
-      // 🛡️ [무해한 안전 훅] 유저가 알림창을 열었을 때 배경에서 마감 투표 사냥하기
-      // ========================================================
-      try {
-        const nowIso = new Date().toISOString();
+      // HEAD 기능 유지: 알림창 열었을 때 마감된 투표 자동 체크
+      await checkExpiredVotesAndNotify(userId, isGuest);
 
-        // 1. 내가 속한 방 번호들(roomid) 싹 긁어오기
-        const { data: myRooms } = await supabase
-          .from("room_members")
-          .select("roomid")
-          .eq("userid", userId);
-
-        if (myRooms && myRooms.length > 0) {
-          const roomIds = myRooms.map((r) => r.roomid);
-
-          // 2. 그 방들 중에서 마감 시간은 지났는데 아직 안 닫힌(isclosed = false) 투표 싹 조회
-          const { data: expiredVotes } = await supabase
-            .from("votes")
-            .select("id, roomid, title")
-            .in("roomid", roomIds)
-            .eq("endtimeenabled", true)
-            .lte("endtime", nowIso)
-            .eq("isclosed", false);
-
-          if (expiredVotes && expiredVotes.length > 0) {
-            for (const vote of expiredVotes) {
-              // 해당 방의 멤버들 중 알림 켠 사람들 다 찾기
-              const { data: activeMembers } = await supabase
-                .from("room_members")
-                .select("userid")
-                .eq("roomid", vote.roomid)
-                .eq("votenotifenabled", true);
-
-              if (activeMembers && activeMembers.length > 0) {
-                const closeNotifications = activeMembers.map((member) => ({
-                  roomid: vote.roomid,
-                  receiverid: member.userid,
-                  type: "vote_closed",
-                  title: "🔒 투표 마감 완료",
-                  message: `🏁 [${vote.title}] 투표가 마감되었습니다! 최종 결과를 확인해 보세요.`,
-                  isread: false,
-                  link: `/rooms/${vote.roomid}/votes/${vote.id}`,
-                }));
-
-                // 마감 알림 적재
-                await supabase.from("notifications").insert(closeNotifications);
-              }
-
-              const { data: activeGuests } = await supabase
-                .from("room_guests")
-                .select("id")
-                .eq("roomid", vote.roomid)
-                .eq("votenotifenabled", true);
-
-              if (activeGuests && activeGuests.length > 0) {
-                const closeGuestNotifications = activeGuests.map((guest) => ({
-                  roomid: vote.roomid,
-                  receiverid: guest.id,
-                  type: "vote_closed",
-                  title: "투표 마감 완료",
-                  message: `[${vote.title}] 투표가 마감되었습니다. 최종 결과를 확인해 보세요.`,
-                  isread: false,
-                  link: `/rooms/${vote.roomid}/votes/${vote.id}`,
-                }));
-
-                await supabase
-                  .from("notifications")
-                  .insert(closeGuestNotifications);
-              }
-
-              // 3. 중복 방지를 위해 투표 쾅 닫기 (isclosed = true)
-              await supabase
-                .from("votes")
-                .update({ isclosed: true })
-                .eq("id", vote.id);
-
-              console.log(`🏁 [${vote.title}] 투표 마감 알림 처리 완료!`);
-            }
-          }
-        }
-      } catch (checkError) {
-        console.error("🔒 마감 투표 자동 체크 중 에러:", checkError);
-      }
-
-      // ========================================================
-      // 🟢 최신 알림 데이터 불러오기 (기존 로직 유지)
-      // ========================================================
+      // origin/feature/notification-2 기준 유지: 최신 알림 조회
       const data = isGuest
         ? await getMyGuestNotifications(userId)
         : await getMyNotifications(userId);
+
+      if (!isMounted) return;
+
       console.log("불러온 알림 목록:", data);
-      setNotifications(data);
+      setNotifications((data || []).map(normalizeNotification));
 
       const channelName = `notification-page-${userId}-${Date.now()}`;
 
@@ -211,6 +247,8 @@ function NotificationPage() {
     loadNotifications();
 
     return () => {
+      isMounted = false;
+
       if (channel) {
         supabase.removeChannel(channel);
       }
@@ -227,9 +265,7 @@ function NotificationPage() {
 
       setNotifications((prev) =>
         prev.map((item) =>
-          item.id === notification.id
-            ? { ...item, isread: true }
-            : item
+          item.id === notification.id ? { ...item, isread: true } : item
         )
       );
 
@@ -284,6 +320,7 @@ function NotificationPage() {
       } else {
         await deleteMyNotifications(currentUserId);
       }
+
       setNotifications([]);
     } catch (error) {
       console.error("전체 알림 삭제 실패:", error);
@@ -291,20 +328,58 @@ function NotificationPage() {
     }
   };
 
+  const handleMarkAllAsRead = async () => {
+    if (!currentUserId) return;
+
+    const unreadNotifications = notifications.filter((n) => !n.isread);
+
+    if (unreadNotifications.length === 0) {
+      alert("읽지 않은 알림이 없습니다.");
+      return;
+    }
+
+    try {
+      // origin/feature/notification-2 기능 우선 유지
+      await markAllNotificationsAsRead(currentUserId);
+
+      setNotifications((prev) => prev.map((n) => ({ ...n, isread: true })));
+    } catch (error) {
+      console.error("전체 읽음 처리 실패:", error);
+      alert("전체 읽음 처리에 실패했습니다.");
+    }
+  };
+
   const handleAcceptInvite = async (e, notification) => {
     e.stopPropagation();
-    const { data: { user } } = await supabase.auth.getUser();
+
+    if (isGuestUser) {
+      alert("게스트는 방 초대 수락 기능을 사용할 수 없습니다.");
+      return;
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
     if (!user) return;
+
     try {
       const { data: profile } = await supabase
         .from("profiles")
         .select("nickname")
         .eq("id", user.id)
         .single();
-      const nickname = profile?.nickname || user.user_metadata?.nickname || user.email;
+
+      const nickname =
+        profile?.nickname || user.user_metadata?.nickname || user.email;
+
       await joinRoomById(notification.roomid, user.id, nickname);
       await deleteNotification(notification.id);
-      setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+
+      setNotifications((prev) =>
+        prev.filter((n) => n.id !== notification.id)
+      );
+
       alert("방에 참가했습니다!");
       navigate(`/rooms/${notification.roomid}`);
     } catch (err) {
@@ -314,9 +389,17 @@ function NotificationPage() {
 
   const handleRejectInvite = async (e, notification) => {
     e.stopPropagation();
+
     try {
-      await deleteNotification(notification.id);
-      setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+      if (notification.source === "guest" || isGuestUser) {
+        await deleteGuestNotification(notification.id);
+      } else {
+        await deleteNotification(notification.id);
+      }
+
+      setNotifications((prev) =>
+        prev.filter((n) => n.id !== notification.id)
+      );
     } catch (err) {
       console.error(err);
     }
@@ -324,12 +407,26 @@ function NotificationPage() {
 
   const handleAcceptCalendarShare = async (e, notification) => {
     e.stopPropagation();
-    const { data: { user } } = await supabase.auth.getUser();
+
+    if (isGuestUser) {
+      alert("게스트는 캘린더 공유 기능을 사용할 수 없습니다.");
+      return;
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
     if (!user) return;
+
     try {
       await acceptCalendarShare(user.id, notification.senderid);
       await deleteNotification(notification.id);
-      setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+
+      setNotifications((prev) =>
+        prev.filter((n) => n.id !== notification.id)
+      );
+
       alert("캘린더 공유가 수락되었습니다.");
     } catch (err) {
       alert(err.message);
@@ -338,12 +435,25 @@ function NotificationPage() {
 
   const handleRejectCalendarShare = async (e, notification) => {
     e.stopPropagation();
-    const { data: { user } } = await supabase.auth.getUser();
+
+    if (isGuestUser) {
+      alert("게스트는 캘린더 공유 기능을 사용할 수 없습니다.");
+      return;
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
     if (!user) return;
+
     try {
       await rejectCalendarShare(notification.senderid, user.id);
       await deleteNotification(notification.id);
-      setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+
+      setNotifications((prev) =>
+        prev.filter((n) => n.id !== notification.id)
+      );
     } catch (err) {
       console.error(err);
     }
@@ -359,7 +469,14 @@ function NotificationPage() {
   }
 
   return (
-    <div style={{ padding: "20px", paddingBottom: "100px", minHeight: "100vh", boxSizing: "border-box" }}>
+    <div
+      style={{
+        padding: "20px",
+        paddingBottom: "100px",
+        minHeight: "100vh",
+        boxSizing: "border-box",
+      }}
+    >
       <div
         style={{
           display: "flex",
@@ -370,19 +487,35 @@ function NotificationPage() {
       >
         <h2 style={{ margin: 0 }}>알림</h2>
 
-        <button
-          type="button"
-          onClick={handleDeleteAllNotifications}
-          style={{
-            border: "none",
-            borderRadius: "8px",
-            padding: "8px 12px",
-            backgroundColor: "#f2f2f2",
-            cursor: "pointer",
-          }}
-        >
-          전체 삭제
-        </button>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button
+            type="button"
+            onClick={handleMarkAllAsRead}
+            style={{
+              border: "none",
+              borderRadius: "8px",
+              padding: "8px 12px",
+              backgroundColor: "#f2f2f2",
+              cursor: "pointer",
+            }}
+          >
+            전체 확인
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDeleteAllNotifications}
+            style={{
+              border: "none",
+              borderRadius: "8px",
+              padding: "8px 12px",
+              backgroundColor: "#f2f2f2",
+              cursor: "pointer",
+            }}
+          >
+            전체 삭제
+          </button>
+        </div>
       </div>
 
       {notifications.length === 0 ? (
@@ -427,13 +560,13 @@ function NotificationPage() {
                 ×
               </button>
 
-              <strong 
-                style={{ 
-                  display: "block",       
-                  fontSize: "16px",       
-                  fontWeight: "800",      
-                  color: "#111111",       
-                  marginBottom: "4px"     
+              <strong
+                style={{
+                  display: "block",
+                  fontSize: "16px",
+                  fontWeight: "800",
+                  color: "#111111",
+                  marginBottom: "4px",
                 }}
               >
                 {notification.title}
@@ -442,16 +575,45 @@ function NotificationPage() {
               <p style={{ margin: "6px 0" }}>{notification.message}</p>
 
               {notification.type === "room_invite" && (
-                <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    marginTop: "10px",
+                  }}
+                >
                   <button
+                    type="button"
                     onClick={(e) => handleAcceptInvite(e, notification)}
-                    style={{ flex: 1, padding: "8px", backgroundColor: "#7c79ff", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold", fontSize: "13px" }}
+                    style={{
+                      flex: 1,
+                      padding: "8px",
+                      backgroundColor: "#7c79ff",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      fontWeight: "bold",
+                      fontSize: "13px",
+                    }}
                   >
                     수락
                   </button>
+
                   <button
+                    type="button"
                     onClick={(e) => handleRejectInvite(e, notification)}
-                    style={{ flex: 1, padding: "8px", backgroundColor: "#fff", color: "#999", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer", fontSize: "13px" }}
+                    style={{
+                      flex: 1,
+                      padding: "8px",
+                      backgroundColor: "#fff",
+                      color: "#999",
+                      border: "1px solid #ddd",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      fontSize: "13px",
+                    }}
                   >
                     거절
                   </button>
@@ -459,16 +621,49 @@ function NotificationPage() {
               )}
 
               {notification.type === "calendar_share_request" && (
-                <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    marginTop: "10px",
+                  }}
+                >
                   <button
-                    onClick={(e) => handleAcceptCalendarShare(e, notification)}
-                    style={{ flex: 1, padding: "8px", backgroundColor: "#f90", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold", fontSize: "13px" }}
+                    type="button"
+                    onClick={(e) =>
+                      handleAcceptCalendarShare(e, notification)
+                    }
+                    style={{
+                      flex: 1,
+                      padding: "8px",
+                      backgroundColor: "#f90",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      fontWeight: "bold",
+                      fontSize: "13px",
+                    }}
                   >
                     수락
                   </button>
+
                   <button
-                    onClick={(e) => handleRejectCalendarShare(e, notification)}
-                    style={{ flex: 1, padding: "8px", backgroundColor: "#fff", color: "#999", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer", fontSize: "13px" }}
+                    type="button"
+                    onClick={(e) =>
+                      handleRejectCalendarShare(e, notification)
+                    }
+                    style={{
+                      flex: 1,
+                      padding: "8px",
+                      backgroundColor: "#fff",
+                      color: "#999",
+                      border: "1px solid #ddd",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      fontSize: "13px",
+                    }}
                   >
                     거절
                   </button>
@@ -476,7 +671,9 @@ function NotificationPage() {
               )}
 
               <small style={{ color: "#777" }}>
-                {new Date(notification.createdat).toLocaleString()}
+                {notification.createdat
+                  ? new Date(notification.createdat).toLocaleString()
+                  : ""}
               </small>
             </div>
           ))}

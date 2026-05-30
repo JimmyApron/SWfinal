@@ -24,6 +24,7 @@ import {
   saveRoomMiddlePlace,
   getRoomMiddlePlace,
   deleteRoomMiddlePlace,
+  updateLocationStatus,
 } from '../../api/mapApi'
 
 function MapPage({ roomId }) {
@@ -39,6 +40,7 @@ function MapPage({ roomId }) {
 
   const [places, setPlaces] = useState([])
   const [selectedPlace, setSelectedPlace] = useState(null)
+  const [destination, setDestination] = useState(null)
 
   const [middlePlace, setMiddlePlace] = useState(null)
   const [memberRouteResults, setMemberRouteResults] = useState([])
@@ -128,7 +130,34 @@ function MapPage({ roomId }) {
       clearInterval(intervalId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isTracking, currentRoomId, currentUserId, currentGuestId])
+  }, [isTracking, currentRoomId, currentUserId, currentGuestId, middlePlace])
+
+  useEffect(() => {
+    if (!currentRoomId) return
+
+    const loadSavedMiddlePlace = async () => {
+      try {
+        const savedMiddlePlace = await getRoomMiddlePlace(currentRoomId)
+
+        if (!savedMiddlePlace) return
+
+        setMiddlePlace(savedMiddlePlace)
+        setSelectedPlace(savedMiddlePlace)
+        setDestination(savedMiddlePlace)
+        setPlaces([savedMiddlePlace])
+        setMemberRouteResults([])
+        setMemberRoutePaths([])
+        setMessage(`${savedMiddlePlace.name}이(가) 중간 장소로 확정되어 있습니다.`)
+
+        await calculateAllMemberRoutesToMiddlePlace(savedMiddlePlace)
+      } catch (error) {
+        console.error('확정 중간 장소 조회 오류:', error)
+      }
+    }
+
+    loadSavedMiddlePlace()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRoomId])
 
   const getMemberKey = (member) => {
     return member.userid || member.guestid || member.id
@@ -176,6 +205,62 @@ function MapPage({ roomId }) {
     }
   }
 
+  const loadRoomData = async () => {
+    await Promise.all([loadMemberLocations(), loadMembers()])
+  }
+
+  const loadMembers = async () => {
+    if (!currentRoomId) return []
+
+    try {
+      const memberData = await getRoomParticipants(currentRoomId)
+      setMembers(memberData || [])
+      return memberData || []
+    } catch (error) {
+      console.error('멤버 조회 오류:', error)
+      return []
+    }
+  }
+
+  const loadMemberLocations = async () => {
+    if (!currentRoomId) return []
+
+    try {
+      const locations = await getRoomMemberLocations(currentRoomId)
+      setMemberLocations(locations)
+      return locations
+    } catch (error) {
+      console.error('멤버 위치 조회 오류:', error)
+      setMessage('멤버 위치를 불러오지 못했습니다.')
+      return []
+    }
+  }
+
+  const saveCurrentUserLocation = async (location, statusFields = {}) => {
+    const savedAt = new Date().toISOString()
+
+    const payload = {
+      roomId: currentRoomId,
+      latitude: location?.lat ?? null,
+      longitude: location?.lng ?? null,
+      accuracy: location?.accuracy ?? null,
+      lastLocationUpdatedAt: savedAt,
+      ...statusFields,
+    }
+
+    if (currentGuestId) {
+      return saveMyGuestLocation({
+        ...payload,
+        guestId: currentGuestId,
+      })
+    }
+
+    return saveMyLocation({
+      ...payload,
+      userId: currentUserId,
+    })
+  }
+
   const sendMapShareToChat = async ({ shareType, place }) => {
     if (!currentRoomId) {
       setMessage('방 정보를 찾을 수 없어 채팅에 공유할 수 없습니다.')
@@ -196,6 +281,7 @@ function MapPage({ roomId }) {
     }
 
     const sender = getChatSenderProfile()
+
     const content = {
       __type: 'map_share',
       sharetype: shareType,
@@ -234,13 +320,16 @@ function MapPage({ roomId }) {
       try {
         location = await getCurrentPosition()
         setCurrentLocation(location)
+
         await saveCurrentUserLocation(location, {
           locationStatus: isTracking ? 'tracking' : 'idle',
           locationError: null,
         })
+
         await loadMemberLocations()
       } catch (error) {
         console.error('현재 위치 공유용 위치 조회 실패:', error)
+
         location =
           myLocationRecord && {
             lat: myLocationRecord.latitude,
@@ -275,61 +364,6 @@ function MapPage({ roomId }) {
     await sendMapShareToChat({
       shareType: 'nearby_place',
       place,
-    })
-  }
-
-  const loadRoomData = async () => {
-    await Promise.all([loadMemberLocations(), loadMembers()])
-  }
-
-  const loadMembers = async () => {
-    if (!currentRoomId) return []
-
-    try {
-      const memberData = await getRoomParticipants(currentRoomId)
-      setMembers(memberData || [])
-      return memberData || []
-    } catch (error) {
-      console.error('멤버 조회 오류:', error)
-      return []
-    }
-  }
-
-  const loadMemberLocations = async () => {
-    if (!currentRoomId) return []
-
-    try {
-      const locations = await getRoomMemberLocations(currentRoomId)
-      setMemberLocations(locations)
-      return locations
-    } catch (error) {
-      console.error('멤버 위치 조회 오류:', error)
-      setMessage('멤버 위치를 불러오지 못했습니다.')
-      return []
-    }
-  }
-
-  const saveCurrentUserLocation = async (location, statusFields = {}) => {
-    const savedAt = new Date().toISOString()
-    const payload = {
-      roomId: currentRoomId,
-      latitude: location?.lat,
-      longitude: location?.lng,
-      accuracy: location?.accuracy,
-      lastLocationUpdatedAt: savedAt,
-      ...statusFields,
-    }
-
-    if (currentGuestId) {
-      return saveMyGuestLocation({
-        ...payload,
-        guestId: currentGuestId,
-      })
-    }
-
-    return saveMyLocation({
-      ...payload,
-      userId: currentUserId,
     })
   }
 
@@ -422,6 +456,7 @@ function MapPage({ roomId }) {
       })
 
       await loadMemberLocations()
+
       if (middlePlace) {
         await calculateAllMemberRoutesToMiddlePlace(middlePlace)
       }
@@ -478,8 +513,21 @@ function MapPage({ roomId }) {
         locationError: null,
       })
 
+      try {
+        await updateLocationStatus({
+          roomId: currentRoomId,
+          userId: currentUserId,
+          guestId: currentGuestId,
+          status: 'tracking',
+          isDeparted: true,
+        })
+      } catch (statusError) {
+        console.warn('출발 상태 보조 업데이트 실패:', statusError)
+      }
+
       await loadMemberLocations()
       await notifyDeparture()
+
       if (middlePlace) {
         await calculateAllMemberRoutesToMiddlePlace(middlePlace)
       }
@@ -529,11 +577,25 @@ function MapPage({ roomId }) {
         locationError: null,
       })
 
+      try {
+        await updateLocationStatus({
+          roomId: currentRoomId,
+          userId: currentUserId,
+          guestId: currentGuestId,
+          status: 'arrived',
+          isArrived: true,
+        })
+      } catch (statusError) {
+        console.warn('도착 상태 보조 업데이트 실패:', statusError)
+      }
+
       setLocationUpdateError('')
       await loadMemberLocations()
+
       if (middlePlace) {
         await calculateAllMemberRoutesToMiddlePlace(middlePlace)
       }
+
       setMessage('도착 처리되었습니다. 위치 자동 갱신을 멈춥니다.')
     } catch (error) {
       console.error('도착 처리 실패:', error)
@@ -552,17 +614,20 @@ function MapPage({ roomId }) {
         await createGuestNotification({
           roomId: currentRoomId,
           guestId: member.guestid,
+          type: 'location_request',
+          title: '위치 등록 요청',
           message: '아직 위치를 등록하지 않았습니다. 위치를 등록해주세요!',
+          link: `/rooms/${currentRoomId}?tab=location`,
         })
       } else {
         await createNotification({
-        roomId: currentRoomId,
-        receiverId: member.userid,
-        senderId: currentUserId,
-        type: 'location_request',
-        title: '위치 등록 요청',
-        message: '아직 위치를 등록하지 않았습니다. 위치를 등록해주세요!',
-        link: `/rooms/${currentRoomId}?tab=location`,
+          roomId: currentRoomId,
+          receiverId: member.userid,
+          senderId: currentUserId,
+          type: 'location_request',
+          title: '위치 등록 요청',
+          message: '아직 위치를 등록하지 않았습니다. 위치를 등록해주세요!',
+          link: `/rooms/${currentRoomId}?tab=location`,
         })
       }
 
@@ -575,16 +640,92 @@ function MapPage({ roomId }) {
 
   const isMemberLocationRegistered = (member) => {
     return memberLocations.some((location) => {
-      if (member.userid) {
-        return location.userid === member.userid
-      }
-
-      if (member.guestid) {
-        return location.guestid === member.guestid
-      }
-
+      if (member.userid) return location.userid === member.userid
+      if (member.guestid) return location.guestid === member.guestid
       return false
     })
+  }
+
+  const maybeSendArrivalNotifications = async ({
+    member,
+    nickname,
+    durationMinutes,
+    distance,
+  }) => {
+    const isMe =
+      member.userid === currentUserId ||
+      (currentGuestId && member.guestid === currentGuestId)
+
+    if (!isMe || !currentRoomId) return
+
+    const status = member.locationstatus
+    const isAlreadyArrived = member.arrivedat || status === 'arrived'
+    const isAlreadyApproaching = status === 'approaching'
+    const isMoving =
+      member.isdeparted ||
+      status === 'tracking' ||
+      status === 'departed' ||
+      status === 'approaching'
+
+    if (!isMoving || isAlreadyArrived) return
+
+    if (
+      durationMinutes > 0 &&
+      durationMinutes <= 10 &&
+      !isAlreadyApproaching
+    ) {
+      try {
+        await updateLocationStatus({
+          roomId: currentRoomId,
+          userId: currentUserId,
+          guestId: currentGuestId,
+          status: 'approaching',
+        })
+
+        await createRoomNotifications({
+          roomId: currentRoomId,
+          senderId: currentUserId || currentGuestId,
+          type: 'arrival_approaching',
+          title: '⚠️ 도착 10분 전!',
+          message: `${nickname}님이 약 ${durationMinutes}분 뒤에 목적지에 도착할 예정입니다.`,
+          link: `/rooms/${currentRoomId}?tab=location`,
+        })
+      } catch (error) {
+        console.error('도착 10분 전 알림 처리 실패:', error)
+      }
+    }
+
+    const distanceValue = distance || 9999
+
+    if (distanceValue <= 50 && !isAlreadyArrived) {
+      try {
+        await updateLocationStatus({
+          roomId: currentRoomId,
+          userId: currentUserId,
+          guestId: currentGuestId,
+          status: 'arrived',
+          isArrived: true,
+        })
+
+        await saveCurrentUserLocation(currentLocation, {
+          isDeparted: false,
+          arrivedAt: new Date().toISOString(),
+          locationStatus: 'arrived',
+          locationError: null,
+        })
+
+        await createRoomNotifications({
+          roomId: currentRoomId,
+          senderId: currentUserId || currentGuestId,
+          type: 'arrival_completed',
+          title: '✅ 도착 완료!',
+          message: `${nickname}님이 목적지에 도착했습니다!`,
+          link: `/rooms/${currentRoomId}?tab=location`,
+        })
+      } catch (error) {
+        console.error('도착 완료 알림 처리 실패:', error)
+      }
+    }
   }
 
   const calculateAllMemberRoutesToMiddlePlace = async (place) => {
@@ -614,13 +755,15 @@ function MapPage({ roomId }) {
         const memberKey = getMemberKey(member)
         const nickname = getMemberNickname(member)
 
-        const previousResult = place.travelResults?.find((result) => {
-          const resultKey = result.userid || result.guestid || result.id
-          return resultKey === memberKey
-        }) || memberRouteResults.find((result) => {
-          const resultKey = result.userid || result.guestid || result.id
-          return resultKey === memberKey
-        })
+        const previousResult =
+          place.travelResults?.find((result) => {
+            const resultKey = result.userid || result.guestid || result.id
+            return resultKey === memberKey
+          }) ||
+          memberRouteResults.find((result) => {
+            const resultKey = result.userid || result.guestid || result.id
+            return resultKey === memberKey
+          })
 
         const mode = previousResult?.mode || member.transportmode || 'transit'
 
@@ -640,6 +783,8 @@ function MapPage({ roomId }) {
           mode,
         })
 
+        const durationMinutes = Math.round(timeResult.duration / 60)
+
         routeResults.push({
           userid: member.userid,
           guestid: member.guestid,
@@ -647,10 +792,17 @@ function MapPage({ roomId }) {
           mode,
           duration: timeResult.duration,
           distance: timeResult.distance,
-          durationMinutes: Math.round(timeResult.duration / 60),
+          durationMinutes,
           distanceKm: timeResult.distance
             ? (timeResult.distance / 1000).toFixed(1)
             : null,
+        })
+
+        await maybeSendArrivalNotifications({
+          member,
+          nickname,
+          durationMinutes,
+          distance: timeResult.distance,
         })
 
         if (mode === 'car') {
@@ -713,32 +865,6 @@ function MapPage({ roomId }) {
     setMessage('중간 장소까지 모든 멤버의 이동시간과 경로를 계산했습니다.')
   }
 
-  useEffect(() => {
-    if (!currentRoomId) return
-
-    const loadSavedMiddlePlace = async () => {
-      try {
-        const savedMiddlePlace = await getRoomMiddlePlace(currentRoomId)
-
-        if (!savedMiddlePlace) return
-
-        setMiddlePlace(savedMiddlePlace)
-        setSelectedPlace(savedMiddlePlace)
-        setPlaces([savedMiddlePlace])
-        setMemberRouteResults([])
-        setMemberRoutePaths([])
-        setMessage(`${savedMiddlePlace.name}이(가) 중간 장소로 확정되어 있습니다.`)
-
-        await calculateAllMemberRoutesToMiddlePlace(savedMiddlePlace)
-      } catch (error) {
-        console.error('확정 중간 장소 조회 오류:', error)
-      }
-    }
-
-    loadSavedMiddlePlace()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentRoomId])
-
   const getCarRoutePath = async ({ origin, destination }) => {
     const apiBaseUrl = process.env.REACT_APP_API_BASE_URL
 
@@ -785,6 +911,7 @@ function MapPage({ roomId }) {
 
       setMiddlePlace(confirmedPlace)
       setSelectedPlace(confirmedPlace)
+      setDestination(confirmedPlace)
       setPlaces([confirmedPlace])
       setMemberRouteResults(confirmedPlace.travelResults || [])
       setMemberRoutePaths([])
@@ -900,6 +1027,7 @@ function MapPage({ roomId }) {
 
       setMiddlePlace(null)
       setSelectedPlace(null)
+      setDestination(null)
       setPlaces([])
       setMemberRouteResults([])
       setMemberRoutePaths([])
@@ -913,6 +1041,7 @@ function MapPage({ roomId }) {
 
   const handleSelectPlace = (place) => {
     setSelectedPlace(place)
+    setDestination(place)
     setMessage(`${place.name}을(를) 목적지로 설정했습니다.`)
   }
 
@@ -938,20 +1067,24 @@ function MapPage({ roomId }) {
       <div className="location-box">
         <h3>출발 상태</h3>
         <p>{getLocationStatusLabel(myLocationRecord)}</p>
+
         {myLocationRecord?.transportmode && (
           <p>교통수단: {getModeLabel(myLocationRecord.transportmode)}</p>
         )}
+
         {myLocationRecord?.lastlocationupdatedat && (
           <p>
             마지막 갱신:{' '}
             {new Date(myLocationRecord.lastlocationupdatedat).toLocaleString()}
           </p>
         )}
+
         {(locationUpdateError || myLocationRecord?.locationerror) && (
           <p style={{ color: '#c2410c' }}>
             {locationUpdateError || myLocationRecord.locationerror}
           </p>
         )}
+
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <button
             type="button"
@@ -960,6 +1093,7 @@ function MapPage({ roomId }) {
           >
             출발하기
           </button>
+
           <button
             type="button"
             onClick={handleArrive}
@@ -996,7 +1130,11 @@ function MapPage({ roomId }) {
                 <span>👤</span>
                 <span>{member.nickname || '닉네임 없음'}</span>
                 <span>
-                  {isRegistered ? '위치 등록 완료' : isMe ? '내 위치 미등록' : '위치 등록 안 함'}
+                  {isRegistered
+                    ? '위치 등록 완료'
+                    : isMe
+                    ? '내 위치 미등록'
+                    : '위치 등록 안 함'}
                 </span>
 
                 {!isRegistered && !isMe && canRequestLocation && (
@@ -1034,15 +1172,18 @@ function MapPage({ roomId }) {
                 <span>
                   교통수단: {getModeLabel(memberLocation?.transportmode || 'transit')}
                 </span>
+
                 {middlePlace && (
                   <span>{getRemainingTimeLabel(memberLocation, routeResult)}</span>
                 )}
+
                 {memberLocation?.lastlocationupdatedat && (
                   <span>
                     마지막 갱신:{' '}
                     {new Date(memberLocation.lastlocationupdatedat).toLocaleString()}
                   </span>
                 )}
+
                 {memberLocation?.locationerror && (
                   <span style={{ color: '#c2410c' }}>
                     {memberLocation.locationerror}
@@ -1073,12 +1214,14 @@ function MapPage({ roomId }) {
               <p>위도: {location.latitude}</p>
               <p>경도: {location.longitude}</p>
               <p>출발 여부: {getLocationStatusLabel(location)}</p>
+
               {location.lastlocationupdatedat && (
                 <p>
                   마지막 갱신:{' '}
                   {new Date(location.lastlocationupdatedat).toLocaleString()}
                 </p>
               )}
+
               {location.locationerror && (
                 <p style={{ color: '#c2410c' }}>{location.locationerror}</p>
               )}
@@ -1136,6 +1279,7 @@ function MapPage({ roomId }) {
         memberLocations={memberLocations}
         places={places}
         selectedPlace={selectedPlace}
+        destination={destination}
         memberRoutePaths={memberRoutePaths}
       />
 
@@ -1180,22 +1324,34 @@ function getLocationStatusLabel(location) {
   if (location.locationstatus === 'denied') return '위치 권한 거부'
   if (location.locationstatus === 'error') return '위치 갱신 실패'
   if (location.arrivedat || location.locationstatus === 'arrived') return '도착 완료'
-  if (location.isdeparted || location.locationstatus === 'tracking') return '출발함'
+  if (location.locationstatus === 'approaching') return '도착 임박'
+  if (
+    location.isdeparted ||
+    location.locationstatus === 'tracking' ||
+    location.locationstatus === 'departed'
+  ) {
+    return '출발함'
+  }
   return '출발 전'
 }
 
 function getRemainingTimeLabel(location, routeResult) {
   if (!location) return '남은 시간: 위치 미등록'
+
   if (location.arrivedat || location.locationstatus === 'arrived') {
     return '남은 시간: 도착 완료'
   }
+
   if (location.locationstatus === 'denied') {
     return '남은 시간: 위치 권한 필요'
   }
+
   if (location.locationstatus === 'error') {
     return '남은 시간: 위치 갱신 실패'
   }
+
   if (!routeResult) return '남은 시간: 계산 전'
+
   if (routeResult.error || routeResult.durationMinutes === null) {
     return '남은 시간: 계산 실패'
   }

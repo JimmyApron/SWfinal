@@ -49,19 +49,20 @@ export async function createGuestNotification({
 
   const { error } = await supabase.from("notifications").insert([
     {
-      roomid: Number(roomId),
+      roomid: roomId != null ? Number(roomId) : null,
       receiverid: guestId,
       senderid: null,
       type,
       title,
       message,
-      link: link || `/rooms/${Number(roomId)}?tab=location`,
+      link: link || (roomId ? `/rooms/${Number(roomId)}?tab=location` : null),
       isread: false,
     },
   ]);
 
   if (error) {
     console.error("게스트 알림 생성 실패:", error);
+    console.error("게스트 알림 생성 실패 상세:", JSON.stringify(error, null, 2));
     throw new Error("게스트 알림 생성 실패");
   }
 }
@@ -75,43 +76,66 @@ export async function createRoomNotifications({
   link,
   targetUserIds,
 }) {
-  let targetMembers = [];
+  if (!roomId) {
+    throw new Error("roomId가 필요합니다.");
+  }
 
-  if (targetUserIds && targetUserIds.length > 0 ) {
-    targetMembers = targetUserIds.map((userid) => ({userid}));
+  let targetReceivers = [];
+
+  if (targetUserIds && targetUserIds.length > 0) {
+    targetReceivers = targetUserIds
+      .filter((id) => id && id !== senderId)
+      .map((receiverid) => ({ receiverid }));
   } else {
-    const { data: members, error: memberError } = await supabase
-    .from("room_members")
-    .select("userid")
-    .eq("roomid", Number(roomId));
+    const [{ data: members, error: memberError }, { data: guests, error: guestError }] =
+      await Promise.all([
+        supabase
+          .from("room_members")
+          .select("userid")
+          .eq("roomid", Number(roomId)),
+        supabase
+          .from("room_guests")
+          .select("id")
+          .eq("roomid", Number(roomId)),
+      ]);
 
     if (memberError) {
       console.error("방 멤버 조회 실패:", memberError);
-      console.error(
-        "방 멤버 조회 실패 상세:",
-        JSON.stringify(memberError, null, 2)
-      );
+      console.error("방 멤버 조회 실패 상세:", JSON.stringify(memberError, null, 2));
       throw new Error("방 멤버 조회 실패");
     }
 
-    console.log("알림 대상 조회 결과:", members);
-    console.log("알림 보낸 사람 senderId:", senderId);
+    if (guestError) {
+      console.error("방 게스트 조회 실패:", guestError);
+      console.error("방 게스트 조회 실패 상세:", JSON.stringify(guestError, null, 2));
+      throw new Error("방 게스트 조회 실패");
+    }
 
-    targetMembers = (members || []).filter(
-      (member) => member.userid && member.userid !== senderId
-    );
+    const memberReceivers = (members || [])
+      .filter((member) => member.userid && member.userid !== senderId)
+      .map((member) => ({ receiverid: member.userid }));
+
+    const guestReceivers = (guests || [])
+      .filter((guest) => guest.id && guest.id !== senderId)
+      .map((guest) => ({ receiverid: guest.id }));
+
+    targetReceivers = [...memberReceivers, ...guestReceivers];
   }
 
-  console.log("최종 알림 대상:", targetMembers);
+  const uniqueReceivers = Array.from(
+    new Map(targetReceivers.map((receiver) => [receiver.receiverid, receiver])).values()
+  );
 
-  if (targetMembers.length === 0) {
+  console.log("최종 알림 대상:", uniqueReceivers);
+
+  if (uniqueReceivers.length === 0) {
     console.warn("알림을 받을 대상이 없습니다.");
     return;
   }
 
-  const rows = targetMembers.map((member) => ({
+  const rows = uniqueReceivers.map((receiver) => ({
     roomid: Number(roomId),
-    receiverid: member.userid,
+    receiverid: receiver.receiverid,
     senderid: senderId || null,
     type,
     title,
@@ -169,7 +193,7 @@ function isNotificationAfterJoining(notification, participations) {
 async function getVisibleNotifications(recipientId, isGuest, unreadOnly = false) {
   const participations = await getRoomParticipations(recipientId, isGuest);
 
-  // room_invite는 아직 방에 참여하지 않은 상태에서 수신되므로 별도 조회
+  // room_invite는 방에 들어가기 전 받는 알림이라 참여 시간 필터에서 제외
   let inviteQuery = supabase
     .from("notifications")
     .select("*")
@@ -180,7 +204,13 @@ async function getVisibleNotifications(recipientId, isGuest, unreadOnly = false)
     inviteQuery = inviteQuery.eq("isread", false);
   }
 
-  const { data: inviteData } = await inviteQuery;
+  const { data: inviteData, error: inviteError } = await inviteQuery;
+
+  if (inviteError) {
+    console.error("초대 알림 조회 실패:", inviteError);
+    throw new Error("초대 알림 조회 실패");
+  }
+
   const inviteNotifications = inviteData || [];
 
   if (participations.length === 0) {
@@ -225,6 +255,16 @@ export async function isNotificationVisibleToRecipient(
   recipientId,
   isGuest
 ) {
+  if (!notification || !recipientId) return false;
+
+  // 방 초대는 아직 방 참여 정보가 없어도 보여야 함
+  if (
+    notification.type === "room_invite" &&
+    String(notification.receiverid) === String(recipientId)
+  ) {
+    return true;
+  }
+
   const participations = await getRoomParticipations(recipientId, isGuest);
   return isNotificationAfterJoining(notification, participations);
 }
@@ -268,6 +308,25 @@ export async function markGuestNotificationAsRead(notificationId) {
 
   if (error) {
     console.warn("게스트 알림 읽음 처리 실패:", error);
+    throw new Error("게스트 알림 읽음 처리 실패");
+  }
+}
+
+export async function markAllNotificationsAsRead(userId) {
+  if (!userId) {
+    throw new Error("userId가 필요합니다.");
+  }
+
+  const { error } = await supabase
+    .from("notifications")
+    .update({ isread: true })
+    .eq("receiverid", userId)
+    .eq("isread", false);
+
+  if (error) {
+    console.error("전체 알림 읽음 처리 실패:", error);
+    console.error("전체 알림 읽음 처리 실패 상세:", JSON.stringify(error, null, 2));
+    throw new Error("전체 알림 읽음 처리 실패");
   }
 }
 
