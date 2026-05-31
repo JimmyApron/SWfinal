@@ -82,8 +82,14 @@ function BottomNav() {
           table: "notifications",
           filter: `receiverid=eq.${currentUserId}`,
         },
-        () => {
-          reloadUnreadCount();
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            // [즉시 업데이트] 서버 통신 없이 리액트 상태만 즉시 +1
+            setUnreadCount((prev) => prev + 1);
+          } else {
+            // 읽음 처리나 삭제 시에는 서버와 동기화
+            reloadUnreadCount();
+          }
         }
       )
       .subscribe();

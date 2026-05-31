@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
+import { updateRoomLastActivity } from "./roomApi";
 
 export async function createNotification({
   roomId,
@@ -29,8 +30,11 @@ export async function createNotification({
 
   if (error) {
     console.error("알림 생성 실패:", error);
-    console.error("알림 생성 실패 상세:", JSON.stringify(error, null, 2));
     throw new Error("알림 생성 실패");
+  }
+
+  if (roomId) {
+    updateRoomLastActivity(roomId).catch(err => console.error("활동 시간 갱신 실패:", err));
   }
 }
 
@@ -62,8 +66,11 @@ export async function createGuestNotification({
 
   if (error) {
     console.error("게스트 알림 생성 실패:", error);
-    console.error("게스트 알림 생성 실패 상세:", JSON.stringify(error, null, 2));
     throw new Error("게스트 알림 생성 실패");
+  }
+
+  if (roomId) {
+    updateRoomLastActivity(roomId).catch(err => console.error("활동 시간 갱신 실패:", err));
   }
 }
 
@@ -99,16 +106,8 @@ export async function createRoomNotifications({
           .eq("roomid", Number(roomId)),
       ]);
 
-    if (memberError) {
-      console.error("방 멤버 조회 실패:", memberError);
-      console.error("방 멤버 조회 실패 상세:", JSON.stringify(memberError, null, 2));
-      throw new Error("방 멤버 조회 실패");
-    }
-
-    if (guestError) {
-      console.error("방 게스트 조회 실패:", guestError);
-      console.error("방 게스트 조회 실패 상세:", JSON.stringify(guestError, null, 2));
-      throw new Error("방 게스트 조회 실패");
+    if (memberError || guestError) {
+      throw new Error("방 멤버/게스트 조회 실패");
     }
 
     const memberReceivers = (members || [])
@@ -126,12 +125,7 @@ export async function createRoomNotifications({
     new Map(targetReceivers.map((receiver) => [receiver.receiverid, receiver])).values()
   );
 
-  console.log("최종 알림 대상:", uniqueReceivers);
-
-  if (uniqueReceivers.length === 0) {
-    console.warn("알림을 받을 대상이 없습니다.");
-    return;
-  }
+  if (uniqueReceivers.length === 0) return;
 
   const rows = uniqueReceivers.map((receiver) => ({
     roomid: Number(roomId),
@@ -144,15 +138,14 @@ export async function createRoomNotifications({
     isread: false,
   }));
 
-  console.log("notifications insert rows:", rows);
-
   const { error } = await supabase.from("notifications").insert(rows);
 
   if (error) {
     console.error("방 전체 알림 생성 실패:", error);
-    console.error("방 전체 알림 생성 실패 상세:", JSON.stringify(error, null, 2));
     throw new Error("방 전체 알림 생성 실패");
   }
+
+  updateRoomLastActivity(roomId).catch(err => console.error("활동 시간 갱신 실패:", err));
 }
 
 async function getRoomParticipations(recipientId, isGuest) {
@@ -190,13 +183,11 @@ function isNotificationAfterJoining(notification, participations) {
   );
 }
 
-// roomid 없이 receiverid 기준으로만 조회하는 알림 타입
 const NON_ROOM_NOTIFICATION_TYPES = ["room_invite", "room_invite_accepted", "friend_request", "friend_accepted", "calendar_share_accepted"];
 
-async function getVisibleNotifications(recipientId, isGuest, unreadOnly = false) {
+export async function getVisibleNotifications(recipientId, isGuest, unreadOnly = false) {
   const participations = await getRoomParticipations(recipientId, isGuest);
 
-  // room_invite, friend_accepted, calendar_share_accepted는 방 참여 필터 없이 조회
   let nonRoomQuery = supabase
     .from("notifications")
     .select("*")
@@ -264,9 +255,9 @@ export async function isNotificationVisibleToRecipient(
 ) {
   if (!notification || !recipientId) return false;
 
-  // room_invite, friend_accepted, calendar_share_accepted는 방 참여 정보 없이 수신자에게 항상 표시
+  // 비룸 알림이거나 채팅 알림은 수신자에게 항상 보임
   if (
-    NON_ROOM_NOTIFICATION_TYPES.includes(notification.type) &&
+    (NON_ROOM_NOTIFICATION_TYPES.includes(notification.type) || notification.type === "chat_new") &&
     String(notification.receiverid) === String(recipientId)
   ) {
     return true;
@@ -294,6 +285,21 @@ export async function getMyGuestNotifications(guestId) {
   }));
 }
 
+export async function markNotificationsAsReadInRoom(roomId, userId) {
+  if (!roomId || !userId) return;
+
+  const { error } = await supabase
+    .from("notifications")
+    .update({ isread: true })
+    .eq("roomid", Number(roomId))
+    .eq("receiverid", userId)
+    .eq("isread", false);
+
+  if (error) {
+    console.error("방 알림 읽음 처리 실패:", error);
+  }
+}
+
 export async function markNotificationAsRead(notificationId) {
   const { error } = await supabase
     .from("notifications")
@@ -302,7 +308,6 @@ export async function markNotificationAsRead(notificationId) {
 
   if (error) {
     console.error("알림 읽음 처리 실패:", error);
-    console.error("알림 읽음 처리 실패 상세:", JSON.stringify(error, null, 2));
     throw new Error("알림 읽음 처리 실패");
   }
 }
@@ -332,7 +337,6 @@ export async function markAllNotificationsAsRead(userId) {
 
   if (error) {
     console.error("전체 알림 읽음 처리 실패:", error);
-    console.error("전체 알림 읽음 처리 실패 상세:", JSON.stringify(error, null, 2));
     throw new Error("전체 알림 읽음 처리 실패");
   }
 }
@@ -365,7 +369,6 @@ export async function deleteNotification(notificationId) {
 
   if (error) {
     console.error("알림 삭제 실패:", error);
-    console.error("알림 삭제 실패 상세:", JSON.stringify(error, null, 2));
     throw new Error("알림 삭제 실패");
   }
 }
@@ -390,7 +393,6 @@ export async function deleteMyNotifications(userId) {
 
   if (error) {
     console.error("전체 알림 삭제 실패:", error);
-    console.error("전체 알림 삭제 실패 상세:", JSON.stringify(error, null, 2));
     throw new Error("전체 알림 삭제 실패");
   }
 }

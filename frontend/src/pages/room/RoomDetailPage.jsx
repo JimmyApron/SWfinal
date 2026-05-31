@@ -12,7 +12,11 @@ import {
   sendFriendRequestById,
   cancelFriendRequest,
 } from "../../api/friendApi";
-import { createNotification, deleteNotification } from "../../api/notificationApi";
+import { 
+  createNotification, 
+  deleteNotification, 
+  markNotificationsAsReadInRoom 
+} from "../../api/notificationApi";
 
 function RoomDetailPage() {
   const navigate = useNavigate();
@@ -111,6 +115,9 @@ function RoomDetailPage() {
 
     if (user && user.id) {
       setCurrentUser({ ...user, type: "member" });
+      
+      // 방에 들어왔으니 해당 방의 알림을 모두 읽음 처리
+      markNotificationsAsReadInRoom(roomId, user.id);
 
       const { data: myMemberData, error: myMemberError } = await supabase
         .from("room_members")
@@ -134,6 +141,9 @@ function RoomDetailPage() {
 
       if (guestId) {
         setCurrentUser({ id: guestId, type: "guest" });
+        
+        // 게스트도 방에 들어왔으니 해당 방의 알림을 모두 읽음 처리
+        markNotificationsAsReadInRoom(roomId, guestId);
 
         const { data: myGuestData, error: myGuestError } = await supabase
           .from("room_guests")
