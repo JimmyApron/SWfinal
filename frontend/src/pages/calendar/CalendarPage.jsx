@@ -15,6 +15,8 @@ import {
   sendCalendarShareRequest,
   getAcceptedShares,
   removeCalendarShare,
+  getSentPendingCalendarShares,
+  cancelCalendarShareRequest,
 } from "../../api/calendarShareApi";
 import LocationPicker from "../../components/map/LocationPicker";
 
@@ -215,6 +217,7 @@ function CalendarPage() {
 
   const [sharingFriends, setSharingFriends] = useState([]);
   const [friendListForShare, setFriendListForShare] = useState([]);
+  const [sentCalendarShareRequests, setSentCalendarShareRequests] = useState([]);
   const [shareLoading, setShareLoading] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
 
@@ -253,11 +256,55 @@ function CalendarPage() {
     setGoogleAutoSync(false);
   };
 
-  const handleAutoSyncToggle = () => {
+  const handleAutoSyncToggle = async () => {
     const next = !googleAutoSync;
-
     localStorage.setItem("google_calendar_auto_sync", String(next));
     setGoogleAutoSync(next);
+
+    if (!next || !currentUser) return;
+
+    // 켤 때 기존 일정 일괄 추가
+    try {
+      const [confirmedList, personalList] = await Promise.all([
+        getMyConfirmedSchedules(currentUser.id),
+        getPersonalEvents(currentUser.id),
+      ]);
+
+      const allEvents = [
+        ...confirmedList
+          .filter((s) => s.date)
+          .map((s) => ({
+            title: s.title || s.roomname || "확정 일정",
+            date: s.date,
+            starttime: s.starttime,
+            endtime: s.endtime,
+          })),
+        ...personalList
+          .filter((e) => e.date)
+          .map((e) => ({
+            title: e.title,
+            date: e.date,
+            starttime: e.starttime,
+            endtime: e.endtime,
+          })),
+      ];
+
+      if (allEvents.length === 0) return;
+
+      let successCount = 0;
+      for (const event of allEvents) {
+        try {
+          await addEventToGoogleCalendar(event);
+          successCount++;
+        } catch {
+          // 개별 실패는 스킵
+        }
+      }
+
+      alert(`기존 일정 ${successCount}개가 구글 캘린더에 추가됐습니다.`);
+    } catch (e) {
+      alert("기존 일정 동기화 실패: " + e.message);
+    }
   };
 
   const handleOpenSidePanel = async () => {
@@ -266,15 +313,18 @@ function CalendarPage() {
     if (!currentUser) return;
 
     try {
-      const [sharing, friends] = await Promise.all([
+      const [sharing, friends, sentPending] = await Promise.all([
         getAcceptedShares(currentUser.id),
         getFriends(currentUser.id),
+        getSentPendingCalendarShares(currentUser.id),
       ]);
 
       setSharingFriends(sharing);
+      setSentCalendarShareRequests(sentPending);
 
       const sharingIds = new Set(sharing.map((s) => s.id));
-      setFriendListForShare(friends.filter((f) => !sharingIds.has(f.id)));
+      const sentIds = new Set(sentPending.map((s) => s.receiverId));
+      setFriendListForShare(friends.filter((f) => !sharingIds.has(f.id) && !sentIds.has(f.id)));
     } catch (e) {
       console.error(e);
     }
@@ -294,15 +344,35 @@ function CalendarPage() {
 
       const senderNickname = profile?.nickname || currentUser.email;
 
-      await sendCalendarShareRequest(currentUser.id, friend.id, senderNickname);
+      const newShareId = await sendCalendarShareRequest(currentUser.id, friend.id, senderNickname);
 
       setFriendListForShare((prev) => prev.filter((f) => f.id !== friend.id));
+      setSentCalendarShareRequests((prev) => [
+        ...prev,
+        {
+          shareId: newShareId,
+          receiverId: friend.id,
+          id: friend.id,
+          nickname: friend.nickname,
+          profileimageurl: friend.profileimageurl,
+        },
+      ]);
 
       alert(`${friend.nickname}님에게 캘린더 공유 요청을 보냈습니다.`);
     } catch (e) {
       alert(e.message);
     } finally {
       setShareLoading(false);
+    }
+  };
+
+  const handleCancelCalendarShareRequest = async (req) => {
+    try {
+      await cancelCalendarShareRequest(req.shareId, currentUser.id, req.receiverId);
+      setSentCalendarShareRequests((prev) => prev.filter((r) => r.shareId !== req.shareId));
+      setFriendListForShare((prev) => [...prev, { id: req.receiverId, nickname: req.nickname, profileimageurl: req.profileimageurl }]);
+    } catch (e) {
+      alert(e.message);
     }
   };
 
@@ -1232,6 +1302,72 @@ function CalendarPage() {
               >
                 공개 중인 친구가 없습니다
               </p>
+            )}
+
+            {sentCalendarShareRequests.length > 0 && (
+              <div style={{ marginBottom: "12px" }}>
+                <p
+                  style={{
+                    margin: "0 0 8px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    color: "#888",
+                  }}
+                >
+                  보낸 공유 요청
+                </p>
+                {sentCalendarShareRequests.map((req) => (
+                  <div
+                    key={req.shareId}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "7px 0",
+                      borderBottom: "1px solid #f5f5f5",
+                    }}
+                  >
+                    {req.profileimageurl ? (
+                      <img
+                        src={req.profileimageurl}
+                        alt={req.nickname}
+                        style={{ width: "28px", height: "28px", borderRadius: "50%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: "28px",
+                          height: "28px",
+                          borderRadius: "50%",
+                          backgroundColor: "#e0e0ff",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "14px",
+                        }}
+                      >
+                        👤
+                      </div>
+                    )}
+                    <span style={{ flex: 1, fontSize: "13px" }}>{req.nickname}</span>
+                    <span style={{ fontSize: "11px", color: "#aaa" }}>대기 중</span>
+                    <button
+                      onClick={() => handleCancelCalendarShareRequest(req)}
+                      style={{
+                        fontSize: "11px",
+                        color: "#999",
+                        border: "1px solid #ddd",
+                        background: "none",
+                        borderRadius: "6px",
+                        padding: "3px 8px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      취소
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
 
             <button

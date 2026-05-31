@@ -9,10 +9,13 @@ import {
   sendFriendRequest,
   getFriends,
   getPendingRequests,
+  getSentRequests,
   acceptFriendRequest,
   rejectFriendRequest,
+  cancelFriendRequest,
   removeFriend,
 } from "../../api/friendApi";
+import { createNotification, deleteFriendRequestNotification } from "../../api/notificationApi";
 import RoomListPage from "../room/RoomListPage";
 import ConfirmedScheduleCard from "../../components/ConfirmedScheduleCard";
 
@@ -65,6 +68,7 @@ function HomePage() {
   const [showFriendPanel, setShowFriendPanel] = useState(false);
   const [friends, setFriends] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [sentRequests, setSentRequests] = useState([]);
   const [friendEmail, setFriendEmail] = useState("");
   const [friendLoading, setFriendLoading] = useState(false);
 
@@ -123,13 +127,15 @@ function HomePage() {
   }, []);
 
   const loadAll = useCallback(async (userId) => {
-    const [friendList, requestList] = await Promise.all([
+    const [friendList, requestList, sentList] = await Promise.all([
       getFriends(userId).catch(() => []),
       getPendingRequests(userId).catch(() => []),
+      getSentRequests(userId).catch(() => []),
     ]);
 
     setFriends(friendList);
     setPendingRequests(requestList);
+    setSentRequests(sentList);
   }, []);
 
   useEffect(() => {
@@ -200,7 +206,35 @@ function HomePage() {
   const handleAccept = async (request) => {
     try {
       await acceptFriendRequest(request.requestId, currentUser.id, request.id);
+
+      const { data: myProfile } = await supabase
+        .from("profiles")
+        .select("nickname")
+        .eq("id", currentUser.id)
+        .single();
+      const myNickname = myProfile?.nickname || "알 수 없음";
+
+      await createNotification({
+        receiverId: request.id,
+        senderId: currentUser.id,
+        type: "friend_accepted",
+        title: "친구 요청 수락",
+        message: `${myNickname}님이 친구 요청을 수락했습니다. 이제 친구입니다!`,
+      });
+
+      // 알림탭에서도 해당 friend_request 알림 삭제
+      await deleteFriendRequestNotification(request.id, currentUser.id);
+
       await loadAll(currentUser.id);
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
+  const handleCancelSentRequest = async (request) => {
+    try {
+      await cancelFriendRequest(request.requestId);
+      setSentRequests((prev) => prev.filter((r) => r.requestId !== request.requestId));
     } catch (error) {
       alert(error.message);
     }
@@ -209,6 +243,8 @@ function HomePage() {
   const handleReject = async (request) => {
     try {
       await rejectFriendRequest(request.requestId);
+      // 알림탭에서도 해당 friend_request 알림 삭제
+      await deleteFriendRequestNotification(request.id, currentUser.id);
 
       setPendingRequests((prev) =>
         prev.filter((item) => item.requestId !== request.requestId)
@@ -463,6 +499,86 @@ function HomePage() {
                         }}
                       >
                         거절
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {sentRequests.length > 0 && (
+                <div style={{ marginBottom: "24px" }}>
+                  <p
+                    style={{
+                      margin: "0 0 10px",
+                      fontSize: "13px",
+                      fontWeight: "600",
+                      color: "#555",
+                    }}
+                  >
+                    보낸 요청
+                    <span
+                      style={{
+                        marginLeft: "6px",
+                        backgroundColor: "#bbb",
+                        color: "#fff",
+                        borderRadius: "10px",
+                        padding: "1px 7px",
+                        fontSize: "11px",
+                      }}
+                    >
+                      {sentRequests.length}
+                    </span>
+                  </p>
+
+                  {sentRequests.map((request) => (
+                    <div
+                      key={request.requestId}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        padding: "10px 0",
+                        borderBottom: "1px solid #f5f5f5",
+                      }}
+                    >
+                      <Avatar
+                        url={request.profileimageurl}
+                        nickname={request.nickname}
+                      />
+
+                      <span
+                        style={{
+                          flex: 1,
+                          fontSize: "14px",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {request.nickname || "닉네임 없음"}
+                      </span>
+
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          color: "#aaa",
+                          marginRight: "4px",
+                        }}
+                      >
+                        대기 중
+                      </span>
+
+                      <button
+                        onClick={() => handleCancelSentRequest(request)}
+                        style={{
+                          padding: "5px 10px",
+                          backgroundColor: "#fff",
+                          color: "#999",
+                          border: "1px solid #ddd",
+                          borderRadius: "6px",
+                          fontSize: "12px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        취소
                       </button>
                     </div>
                   ))}

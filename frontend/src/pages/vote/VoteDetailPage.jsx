@@ -29,6 +29,11 @@ function VoteDetailPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [newOptionText, setNewOptionText] = useState("");
+  const [newOptionDate, setNewOptionDate] = useState("");
+  const [newOptionStarttime, setNewOptionStarttime] = useState("");
+  const [newOptionEndtime, setNewOptionEndtime] = useState("");
+  const [newOptionIsAllDay, setNewOptionIsAllDay] = useState(false);
+  const [showAddOptionForm, setShowAddOptionForm] = useState(false);
   const [isForceVoting, setIsForceVoting] = useState(false);
   const [showVotersForOption, setShowVotersForOption] = useState(null);
   const [showParticipants, setShowParticipants] = useState(false);
@@ -410,7 +415,24 @@ function VoteDetailPage() {
         setNewKakaoMapUrl("");
         setNewPickedPlace(null);
         setShowPickMap(false);
-        setShowAddPlaceForm(false);
+      } else if (vote.votetype === "schedule") {
+        if (!newOptionDate) {
+          alert("날짜를 선택하세요.");
+          return;
+        }
+
+        newOption = await addVoteOption(Number(voteid), {
+          optiontype: "date",
+          optiondate: newOptionDate,
+          starttime: newOptionIsAllDay ? null : newOptionStarttime || null,
+          endtime: newOptionIsAllDay ? null : newOptionEndtime || null,
+          optiontext: newOptionDate,
+        });
+
+        setNewOptionDate("");
+        setNewOptionStarttime("");
+        setNewOptionEndtime("");
+        setNewOptionIsAllDay(false);
       } else {
         if (!newOptionText.trim()) {
           alert("항목 내용을 입력하세요.");
@@ -425,6 +447,7 @@ function VoteDetailPage() {
         ...prev,
         voteoptions: [...prev.voteoptions, newOption],
       }));
+      setShowAddOptionForm(false);
     } catch (error) {
       alert("항목 추가 실패: " + (error.message || JSON.stringify(error)));
     }
@@ -1202,8 +1225,80 @@ function VoteDetailPage() {
                       전체 선택
                     </button>
 
-                    {isLocationVote ? (
-                      <>
+                    <button
+                      onClick={() => setShowAddOptionForm((v) => !v)}
+                      style={{
+                        width: "100%",
+                        padding: "10px",
+                        marginBottom: "8px",
+                        border: "1px dashed #bbb",
+                        borderRadius: "8px",
+                        backgroundColor: "#fafafa",
+                        color: "#555",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                      }}
+                    >
+                      {showAddOptionForm ? "항목 추가 닫기 ✕" : "항목 추가 +"}
+                    </button>
+
+                    {showAddOptionForm && isLocationVote && (
+                      <div
+                        style={{
+                          marginBottom: "16px",
+                          padding: "12px",
+                          border: "1px solid #eee",
+                          borderRadius: "8px",
+                        }}
+                      >
+                        <input
+                          value={newPlaceName}
+                          readOnly
+                          placeholder="추가할 장소명"
+                          style={editInputStyle}
+                        />
+
+                        <input
+                          value={newPlaceAddress}
+                          readOnly
+                          placeholder="주소 선택 입력"
+                          style={editInputStyle}
+                        />
+
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <input
+                            value={newPlaceLat}
+                            readOnly
+                            placeholder="위도 선택 입력"
+                            style={{ ...editInputStyle, flex: 1 }}
+                          />
+
+                          <input
+                            value={newPlaceLng}
+                            readOnly
+                            placeholder="경도 선택 입력"
+                            style={{ ...editInputStyle, flex: 1 }}
+                          />
+                        </div>
+
+                        <input
+                          value={newKakaoMapUrl}
+                          readOnly
+                          placeholder="카카오맵 URL 선택 입력"
+                          style={editInputStyle}
+                        />
+
+                        <p
+                          style={{
+                            fontSize: "12px",
+                            color: "#888",
+                            marginTop: 0,
+                          }}
+                        >
+                          장소명은 필수입니다. 주소, 위도/경도, 카카오맵 URL 중
+                          하나는 입력해야 합니다.
+                        </p>
+
                         <button
                           type="button"
                           onClick={() => {
@@ -1224,113 +1319,91 @@ function VoteDetailPage() {
                             ? "장소 검색 항목 추가 닫기"
                             : "장소 검색 항목 추가"}
                         </button>
+                      </div>
+                    )}
 
-                        {showAddPlaceForm && (
-                          <div
-                            style={{
-                              position: "relative",
-                              marginBottom: "16px",
-                              padding: "12px",
-                              paddingTop: "36px",
-                              border: "1px solid #eee",
-                              borderRadius: "8px",
-                              backgroundColor: "#fff",
+                    {showAddOptionForm && !isLocationVote && vote.votetype === "schedule" && (
+                      <div style={{ marginBottom: "16px" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", fontSize: "14px" }}>
+                          <input
+                            type="checkbox"
+                            checked={newOptionIsAllDay}
+                            onChange={(e) => {
+                              setNewOptionIsAllDay(e.target.checked);
+                              if (e.target.checked) {
+                                setNewOptionStarttime("");
+                                setNewOptionEndtime("");
+                              }
                             }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowAddPlaceForm(false);
-                                setShowPickMap(false);
-                              }}
+                          />
+                          하루종일
+                        </label>
+
+                        <input
+                          type="date"
+                          value={newOptionDate}
+                          onChange={(e) => setNewOptionDate(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "10px",
+                            marginBottom: "8px",
+                            border: "1px solid #ddd",
+                            borderRadius: "8px",
+                            boxSizing: "border-box",
+                          }}
+                        />
+
+                        {!newOptionIsAllDay && (
+                          <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                            <input
+                              type="time"
+                              value={newOptionStarttime}
+                              onChange={(e) => setNewOptionStarttime(e.target.value)}
+                              placeholder="시작 시간"
                               style={{
-                                position: "absolute",
-                                top: "8px",
-                                right: "8px",
-                                border: "none",
-                                background: "none",
-                                fontSize: "18px",
-                                cursor: "pointer",
-                                color: "#f44",
-                              }}
-                            >
-                              ×
-                            </button>
-
-                            <input
-                              value={newPlaceName}
-                              readOnly
-                              placeholder="장소명"
-                              style={editInputStyle}
-                            />
-
-                            <button
-                              type="button"
-                              onClick={() => setShowPickMap(!showPickMap)}
-                              style={placeSearchButtonStyle}
-                            >
-                              {showPickMap ? "장소 검색 닫기" : "카카오맵에서 장소 검색"}
-                            </button>
-
-                            {showPickMap && (
-                              <LocationPicker
-                                allowMapClick={false}
-                                onSelect={(name, address, place = {}) => {
-                                  setNewPlaceName(name || "");
-                                  setNewPlaceAddress(address || "");
-                                  setNewPlaceLat(place.lat ?? "");
-                                  setNewPlaceLng(place.lng ?? "");
-                                  setNewKakaoMapUrl(
-                                    place.kakaoMapUrl || place.kakaomapurl || ""
-                                  );
-                                  setNewPickedPlace(place);
-                                  setShowPickMap(false);
-                                }}
-                              />
-                            )}
-
-                            <input
-                              value={newPlaceAddress}
-                              readOnly
-                              placeholder="주소 선택 입력"
-                              style={editInputStyle}
-                            />
-
-                            <input
-                              value={newKakaoMapUrl}
-                              readOnly
-                              placeholder="카카오맵 URL 선택 입력"
-                              style={editInputStyle}
-                            />
-
-                            <button
-                              onClick={handleAddOption}
-                              style={{
-                                width: "100%",
-                                padding: "10px 16px",
+                                flex: 1,
+                                padding: "10px",
                                 border: "1px solid #ddd",
                                 borderRadius: "8px",
-                                backgroundColor: "#fff",
-                                cursor: "pointer",
                               }}
-                            >
-                              선택한 장소 항목 추가
-                            </button>
+                            />
+                            <input
+                              type="time"
+                              value={newOptionEndtime}
+                              onChange={(e) => setNewOptionEndtime(e.target.value)}
+                              placeholder="종료 시간"
+                              style={{
+                                flex: 1,
+                                padding: "10px",
+                                border: "1px solid #ddd",
+                                borderRadius: "8px",
+                              }}
+                            />
                           </div>
                         )}
-                      </>
-                    ) : (
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "8px",
-                          marginBottom: "16px",
-                        }}
-                      >
+
+                        <button
+                          onClick={handleAddOption}
+                          style={{
+                            width: "100%",
+                            padding: "10px",
+                            border: "1px solid #ddd",
+                            borderRadius: "8px",
+                            backgroundColor: "#fff",
+                            cursor: "pointer",
+                          }}
+                        >
+                          일정 항목 추가
+                        </button>
+                      </div>
+                    )}
+
+                    {showAddOptionForm && !isLocationVote && vote.votetype !== "schedule" && (
+                      <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
                         <input
                           value={newOptionText}
                           onChange={(e) => setNewOptionText(e.target.value)}
-                          placeholder="항목 추가"
+                          placeholder="항목 내용 입력"
                           style={{
                             flex: 1,
                             padding: "10px",
@@ -1346,6 +1419,7 @@ function VoteDetailPage() {
                             border: "1px solid #ddd",
                             borderRadius: "8px",
                             backgroundColor: "#fff",
+                            cursor: "pointer",
                           }}
                         >
                           추가

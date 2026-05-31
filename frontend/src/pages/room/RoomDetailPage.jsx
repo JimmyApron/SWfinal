@@ -10,8 +10,9 @@ import {
   getFriends,
   checkFriendStatus,
   sendFriendRequestById,
+  cancelFriendRequest,
 } from "../../api/friendApi";
-import { createNotification } from "../../api/notificationApi";
+import { createNotification, deleteNotification } from "../../api/notificationApi";
 
 function RoomDetailPage() {
   const navigate = useNavigate();
@@ -29,6 +30,7 @@ function RoomDetailPage() {
 
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [friendList, setFriendList] = useState([]);
+  const [sentInvites, setSentInvites] = useState([]);
   const [invitingSending, setInvitingSending] = useState(false);
   const [memberPopup, setMemberPopup] = useState(null);
 
@@ -238,9 +240,36 @@ function RoomDetailPage() {
     setShowInviteModal(true);
 
     try {
-      const friends = await getFriends(currentUser.id);
+      const [friends, { data: pendingNotifs }] = await Promise.all([
+        getFriends(currentUser.id),
+        supabase
+          .from("notifications")
+          .select("id, receiverid")
+          .eq("type", "room_invite")
+          .eq("roomid", Number(roomId))
+          .eq("senderid", currentUser.id),
+      ]);
+
       const memberIds = new Set(members.map((m) => m.userid));
-      setFriendList(friends.filter((f) => !memberIds.has(f.id)));
+
+      // 이미 초대한 사람들의 프로필 로드
+      const pendingRows = pendingNotifs || [];
+      const pendingReceiverIds = pendingRows.map((n) => n.receiverid);
+      let inviteProfiles = [];
+      if (pendingReceiverIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, nickname, profileimageurl")
+          .in("id", pendingReceiverIds);
+        inviteProfiles = pendingRows.map((n) => {
+          const profile = (profiles || []).find((p) => p.id === n.receiverid) || {};
+          return { notifId: n.id, ...profile };
+        });
+      }
+      setSentInvites(inviteProfiles);
+
+      const pendingSet = new Set(pendingReceiverIds);
+      setFriendList(friends.filter((f) => !memberIds.has(f.id) && !pendingSet.has(f.id)));
     } catch (e) {
       console.error(e);
     }
@@ -274,6 +303,21 @@ function RoomDetailPage() {
         link: `/rooms/${roomId}`,
       });
 
+      // 방금 생성된 알림 id를 가져와서 sentInvites에 추가
+      const { data: newNotif } = await supabase
+        .from("notifications")
+        .select("id")
+        .eq("type", "room_invite")
+        .eq("roomid", Number(roomId))
+        .eq("senderid", currentUser.id)
+        .eq("receiverid", friend.id)
+        .order("createdat", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      setSentInvites((prev) => [...prev, { notifId: newNotif?.id, ...friend }]);
+      setFriendList((prev) => prev.filter((f) => f.id !== friend.id));
+
       alert(`${friend.nickname}님에게 초대를 보냈습니다.`);
     } catch (e) {
       alert("초대 전송 실패: " + e.message);
@@ -282,17 +326,31 @@ function RoomDetailPage() {
     }
   };
 
+  const handleCancelInvite = async (invite) => {
+    try {
+      if (invite.notifId) {
+        await deleteNotification(invite.notifId);
+      }
+      setSentInvites((prev) => prev.filter((i) => i.notifId !== invite.notifId));
+      setFriendList((prev) => [...prev, { id: invite.id, nickname: invite.nickname, profileimageurl: invite.profileimageurl }]);
+    } catch (e) {
+      alert("초대 취소 실패: " + e.message);
+    }
+  };
+
   const handleClickMember = async (member) => {
     if (!currentUser || currentUser.type === "guest") return;
     if (member.userid === currentUser.id) return;
 
-    setMemberPopup({ member, status: null, loading: true });
+    setMemberPopup({ member, status: null, requestId: null, iSentRequest: false, loading: true });
 
     const data = await checkFriendStatus(currentUser.id, member.userid);
 
     setMemberPopup({
       member,
       status: data?.status || null,
+      requestId: data?.id || null,
+      iSentRequest: data ? data.userid === currentUser.id : false,
       loading: false,
     });
   };
@@ -302,8 +360,19 @@ function RoomDetailPage() {
 
     try {
       await sendFriendRequestById(currentUser.id, memberPopup.member.userid);
-      setMemberPopup((prev) => ({ ...prev, status: "pending" }));
+      setMemberPopup((prev) => ({ ...prev, status: "pending", iSentRequest: true }));
       alert(`${memberPopup.member.nickname}님에게 친구 요청을 보냈습니다.`);
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
+  const handleCancelFriendFromRoom = async () => {
+    if (!memberPopup?.requestId) return;
+
+    try {
+      await cancelFriendRequest(memberPopup.requestId);
+      setMemberPopup((prev) => ({ ...prev, status: null, requestId: null, iSentRequest: false }));
     } catch (e) {
       alert(e.message);
     }
@@ -1101,6 +1170,90 @@ function RoomDetailPage() {
             </div>
 
             <div style={{ flex: 1, overflowY: "auto" }}>
+              {sentInvites.length > 0 && (
+                <div style={{ marginBottom: "16px" }}>
+                  <p
+                    style={{
+                      margin: "0 0 8px",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      color: "#888",
+                    }}
+                  >
+                    초대 대기 중
+                    <span
+                      style={{
+                        marginLeft: "6px",
+                        backgroundColor: "#bbb",
+                        color: "#fff",
+                        borderRadius: "10px",
+                        padding: "1px 6px",
+                        fontSize: "11px",
+                      }}
+                    >
+                      {sentInvites.length}
+                    </span>
+                  </p>
+
+                  {sentInvites.map((invite) => (
+                    <div
+                      key={invite.notifId}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                        padding: "8px 0",
+                        borderBottom: "1px solid #f5f5f5",
+                      }}
+                    >
+                      {invite.profileimageurl ? (
+                        <img
+                          src={invite.profileimageurl}
+                          alt={invite.nickname}
+                          style={{ width: "34px", height: "34px", borderRadius: "50%", objectFit: "cover" }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: "34px",
+                            height: "34px",
+                            borderRadius: "50%",
+                            backgroundColor: "#e0e0ff",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: "16px",
+                          }}
+                        >
+                          👤
+                        </div>
+                      )}
+
+                      <span style={{ flex: 1, fontSize: "14px" }}>{invite.nickname}</span>
+
+                      <span style={{ fontSize: "11px", color: "#aaa", marginRight: "4px" }}>대기 중</span>
+
+                      <button
+                        onClick={() => handleCancelInvite(invite)}
+                        style={{
+                          padding: "4px 10px",
+                          backgroundColor: "#fff",
+                          color: "#999",
+                          border: "1px solid #ddd",
+                          borderRadius: "6px",
+                          fontSize: "12px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        취소
+                      </button>
+                    </div>
+                  ))}
+
+                  <hr style={{ margin: "12px 0", borderColor: "#f0f0f0" }} />
+                </div>
+              )}
+
               {friendList.length === 0 ? (
                 <p
                   style={{
@@ -1241,15 +1394,35 @@ function RoomDetailPage() {
                 ✓ 이미 친구입니다
               </p>
             ) : memberPopup.status === "pending" ? (
-              <p
-                style={{
-                  fontSize: "13px",
-                  color: "#f90",
-                  fontWeight: "600",
-                }}
-              >
-                요청 대기 중
-              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "13px",
+                    color: "#f90",
+                    fontWeight: "600",
+                  }}
+                >
+                  {memberPopup.iSentRequest ? "요청 대기 중" : "친구 요청을 받았습니다"}
+                </p>
+                {memberPopup.iSentRequest && (
+                  <button
+                    onClick={handleCancelFriendFromRoom}
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      backgroundColor: "#fff",
+                      color: "#999",
+                      border: "1px solid #ddd",
+                      borderRadius: "8px",
+                      fontSize: "13px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    요청 취소
+                  </button>
+                )}
+              </div>
             ) : (
               <button
                 onClick={handleAddFriendFromRoom}

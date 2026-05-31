@@ -13,9 +13,11 @@ export async function sendCalendarShareRequest(senderId, receiverId, senderNickn
     throw new Error("이미 공유 요청을 보냈거나 받은 상태입니다.");
   }
 
-  const { error } = await supabase
+  const { data: inserted, error } = await supabase
     .from("calendar_shares")
-    .insert([{ senderid: senderId, receiverid: receiverId, status: "pending" }]);
+    .insert([{ senderid: senderId, receiverid: receiverId, status: "pending" }])
+    .select("id")
+    .single();
 
   if (error) throw new Error("공유 요청 실패");
 
@@ -28,6 +30,8 @@ export async function sendCalendarShareRequest(senderId, receiverId, senderNickn
     message: `${senderNickname}님이 캘린더 공개를 요청했습니다`,
     link: null,
   });
+
+  return inserted?.id ?? null;
 }
 
 export async function getAcceptedShares(userId) {
@@ -63,6 +67,46 @@ export async function acceptCalendarShare(myId, friendId) {
     .eq("receiverid", myId);
 
   if (error) throw new Error("공유 수락 실패");
+}
+
+export async function getSentPendingCalendarShares(userId) {
+  const { data, error } = await supabase
+    .from("calendar_shares")
+    .select("id, receiverid")
+    .eq("senderid", userId)
+    .eq("status", "pending");
+
+  if (error) throw new Error("보낸 공유 요청 조회 실패");
+
+  const rows = data || [];
+  if (!rows.length) return [];
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, nickname, profileimageurl")
+    .in("id", rows.map((r) => r.receiverid));
+
+  return rows.map((row) => {
+    const profile = (profiles || []).find((p) => p.id === row.receiverid) || {};
+    return { shareId: row.id, receiverId: row.receiverid, ...profile };
+  });
+}
+
+export async function cancelCalendarShareRequest(shareId, senderId, receiverId) {
+  const { error } = await supabase
+    .from("calendar_shares")
+    .delete()
+    .eq("id", shareId);
+
+  if (error) throw new Error("공유 요청 취소 실패");
+
+  // 상대방에게 보낸 알림도 삭제
+  await supabase
+    .from("notifications")
+    .delete()
+    .eq("type", "calendar_share_request")
+    .eq("senderid", senderId)
+    .eq("receiverid", receiverId);
 }
 
 export async function rejectCalendarShare(friendId, myId) {
