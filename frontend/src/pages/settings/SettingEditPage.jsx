@@ -189,34 +189,6 @@ function SettingEditPage() {
     }
   }
 
-  // 닉네임 변경
-  const handleUpdateNickname = async (e) => {
-    e.preventDefault()
-
-    if (!nickname.trim()) {
-      setMessage('⚠️ 닉네임을 입력해주세요.')
-      return
-    }
-
-    if (!isNicknameChecked) {
-      setMessage('⚠️ 먼저 닉네임 중복 확인을 해주세요.')
-      return
-    }
-
-    try {
-      setMessage('닉네임 수정 중...')
-
-      const res = await updateNicknameApi(nickname, userId)
-
-      if (res.success) {
-        setMessage(`✅ ${res.message}`)
-        await refreshUserData()
-      }
-    } catch (error) {
-      setMessage(`❌ 닉네임 변경 실패: ${error.message}`)
-    }
-  }
-
   // 이메일 중복 확인
   const handleCheckEmail = async () => {
     if (isSocialUser) {
@@ -247,39 +219,47 @@ function SettingEditPage() {
     }
   }
 
-  // 이메일 변경
-  const handleUpdateEmail = async (e) => {
-    e.preventDefault()
-
-    if (isSocialUser) {
-      setMessage('⚠️ 소셜 로그인 계정은 이메일을 변경할 수 없어요.')
+  // 모든 정보 통합 저장
+  const handleSaveAll = async () => {
+    if (!nickname.trim()) {
+      setMessage('⚠️ 닉네임을 입력해주세요.')
       return
     }
 
-    if (!email.trim()) {
-      setMessage('⚠️ 이메일을 입력해주세요.')
+    if (!isNicknameChecked) {
+      setMessage('⚠️ 먼저 닉네임 중복 확인을 해주세요.')
       return
     }
 
-    if (!isEmailChecked) {
-      setMessage('⚠️ 먼저 이메일 중복 확인을 해주세요.')
-      return
+    if (!isSocialUser) {
+      if (!email.trim()) {
+        setMessage('⚠️ 이메일을 입력해주세요.')
+        return
+      }
+      if (!isEmailChecked) {
+        setMessage('⚠️ 먼저 이메일 중복 확인을 해주세요.')
+        return
+      }
     }
 
     try {
-      setMessage('이메일 수정 중...')
+      setMessage('🔄 정보를 저장 중입니다...')
 
-      const res = await updateEmailApi(email, userId)
+      // 1. 닉네임 업데이트 (API 내부에서 중복 체크를 한 번 더 수행함)
+      await updateNicknameApi(nickname, userId)
 
-      if (res.success) {
-        setMessage(`✅ ${res.message}`)
-        await refreshUserData()
+      // 2. 이메일 업데이트 (소셜 유저가 아닌 경우에만)
+      if (!isSocialUser) {
+        await updateEmailApi(email, userId)
       }
+
+      setMessage('✅ 모든 정보가 성공적으로 저장되었습니다.')
+      await refreshUserData()
     } catch (error) {
       if (error.message.includes('seconds')) {
         startRateLimitTimer(error.message)
       } else {
-        setMessage(`❌ 이메일 변경 실패: ${error.message}`)
+        setMessage(`❌ 저장 실패: ${error.message}`)
       }
     }
   }
@@ -417,10 +397,6 @@ function SettingEditPage() {
           <button type="button" onClick={handleCheckNickname}>
             중복 확인
           </button>
-
-          <button type="button" onClick={handleUpdateNickname}>
-            닉네임 저장
-          </button>
         </div>
       </div>
 
@@ -462,10 +438,6 @@ function SettingEditPage() {
 
             <button type="button" onClick={handleCheckEmail}>
               중복 확인
-            </button>
-
-            <button type="button" onClick={handleUpdateEmail}>
-              이메일 저장
             </button>
           </div>
         </div>
@@ -515,12 +487,8 @@ function SettingEditPage() {
 
       {/* 하단 버튼 */}
       <div className="bottom-button-group">
-        <button onClick={() => navigate('/settings')} className="back-button">
-          이전으로 돌아가기
-        </button>
-
-        <button onClick={() => navigate('/home')} className="home-button">
-          🏠 홈화면으로 이동
+        <button onClick={handleSaveAll} className="save-all-button">
+          저장하기
         </button>
       </div>
 

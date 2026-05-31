@@ -197,10 +197,6 @@ function SettingsPage() {
         </button>
 
         <div className="bottom-actions-wrapper">
-          <button onClick={() => navigate('/home')} className="home-button">
-            🏠 홈화면으로 이동
-          </button>
-
           <button onClick={handleLogout} className="logout-btn">
             🚪 로그아웃
           </button>

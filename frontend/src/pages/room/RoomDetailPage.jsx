@@ -532,12 +532,51 @@ function RoomDetailPage() {
           alignItems: "center",
           padding: "10px",
           backgroundColor: "#f5f5f5",
+          position: "relative",
+          minHeight: "44px",
         }}
       >
-        {currentUser && <button onClick={() => navigate("/home")}>←</button>}
-        <span>{room.roomname}</span>
-        <span>총 {members.length + guests.length}명</span>
-        <button onClick={() => setIsSidebarOpen(true)}>⚙</button>
+        <div style={{ flex: 1, display: "flex", alignItems: "center" }}>
+          {currentUser && currentUser.type === "member" && (
+            <button
+              onClick={() => navigate("/home")}
+              style={{
+                background: "none",
+                border: "none",
+                fontSize: "18px",
+                cursor: "pointer",
+                padding: "0",
+              }}
+            >
+              ←
+            </button>
+          )}
+        </div>
+        <span
+          style={{
+            position: "absolute",
+            left: "50%",
+            transform: "translateX(-50%)",
+            fontWeight: "bold",
+          }}
+        >
+          {room.roomname}
+        </span>
+        <div style={{ flex: 1, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "10px" }}>
+          <span style={{ fontSize: "14px" }}>총 {members.length + guests.length}명</span>
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            style={{
+              background: "none",
+              border: "none",
+              fontSize: "18px",
+              cursor: "pointer",
+              padding: "0",
+            }}
+          >
+            ⚙
+          </button>
+        </div>
       </header>
 
       <div>
