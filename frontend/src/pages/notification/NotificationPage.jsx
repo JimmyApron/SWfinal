@@ -603,7 +603,24 @@ function NotificationPage() {
           marginBottom: "16px",
         }}
       >
-        <h2 style={{ margin: 0 }}>알림</h2>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            aria-label="Back"
+            style={{
+              border: "none",
+              background: "none",
+              padding: 0,
+              fontSize: "24px",
+              cursor: "pointer",
+              color: "#555",
+            }}
+          >
+            &larr;
+          </button>
+          <h2 style={{ margin: 0 }}>알림</h2>
+        </div>
 
         <div style={{ display: "flex", gap: "8px" }}>
           <button

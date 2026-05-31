@@ -5,7 +5,6 @@ import { createRoomNotifications } from "../../api/notificationApi";
 import "./ChatTab.css";
 
 const CHAT_EDIT_LIMIT_MS = 10 * 60 * 1000;
-const PINNED_MESSAGE_COLLAPSE_LENGTH = 45;
 
 const WEEKDAY_KR = [
   "일요일",
@@ -505,6 +504,8 @@ function ChatTab({ roomId }) {
   const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
   const [announcementContent, setAnnouncementContent] = useState("");
   const [isPinnedMessageExpanded, setIsPinnedMessageExpanded] = useState(false);
+  const [isEditingPinnedMessage, setIsEditingPinnedMessage] = useState(false);
+  const [pinnedMessageDraft, setPinnedMessageDraft] = useState("");
 
   const bottomRef = useRef(null);
   const galleryInputRef = useRef(null);
@@ -748,7 +749,7 @@ function ChatTab({ roomId }) {
   const insertMetaMessage = async (meta) => {
     if (!currentUser || !currentProfile) return false;
 
-    const { error } = await supabase.from("room_messages").insert([
+    const { data, error } = await supabase.from("room_messages").insert([
       {
         roomid: Number(roomId),
         userid: currentUser.id === "guest" ? null : currentUser.id,
@@ -757,7 +758,7 @@ function ChatTab({ roomId }) {
         content: JSON.stringify(meta),
         imageurl: null,
       },
-    ]);
+    ]).select().single();
 
     if (error) {
       console.error("채팅 메타 메시지 저장 실패:", error);
@@ -765,7 +766,7 @@ function ChatTab({ roomId }) {
       return false;
     }
 
-    return true;
+    return data;
   };
 
   const pinMessage = async (message) => {
@@ -777,18 +778,19 @@ function ChatTab({ roomId }) {
     const announcementTitle = isMyMessage
       ? "공지가 등록되었습니다."
       : `${message.nickname || "익명"}님의 글을 공지로 등록하였습니다.`;
-    const announcementSaved = await insertMetaMessage({
+    const announcementMessage = await insertMetaMessage({
       __type: "announcement",
       text,
       title: announcementTitle,
     });
 
-    if (!announcementSaved) return;
+    if (!announcementMessage) return;
 
     const saved = await insertMetaMessage({
       __type: "pin_event",
       text,
       sourceMessageId: message.id,
+      announcementMessageId: announcementMessage.id,
     });
 
     if (saved) {
@@ -799,6 +801,85 @@ function ChatTab({ roomId }) {
 
   const unpinMessage = async () => {
     await insertMetaMessage({ __type: "pin_event", cleared: true });
+    setIsPinnedMessageExpanded(false);
+    setIsEditingPinnedMessage(false);
+  };
+
+  const findPinnedAnnouncementMessage = (pinMeta) => {
+    if (!pinMeta) return null;
+
+    if (pinMeta.announcementMessageId) {
+      return messages.find((message) => message.id === pinMeta.announcementMessageId);
+    }
+
+    return [...messages].reverse().find((message) => {
+      const meta = getMessageMeta(message.content);
+      return meta?.__type === "announcement" && meta.text === pinMeta.text;
+    });
+  };
+
+  const startEditingPinnedMessage = () => {
+    setPinnedMessageDraft(pinnedText);
+    setIsEditingPinnedMessage(true);
+  };
+
+  const savePinnedMessage = async () => {
+    const text = pinnedMessageDraft.trim();
+
+    if (!text) return;
+
+    const announcementMessage = findPinnedAnnouncementMessage(latestPin);
+    const announcementMeta = getMessageMeta(announcementMessage?.content);
+
+    if (announcementMessage) {
+      const { error } = await supabase
+        .from("room_messages")
+        .update({
+          content: JSON.stringify({
+            ...announcementMeta,
+            __type: "announcement",
+            text,
+          }),
+        })
+        .eq("id", announcementMessage.id);
+
+      if (error) {
+        alert("공지사항 수정에 실패했습니다.");
+        return;
+      }
+    }
+
+    await insertMetaMessage({
+      ...latestPin,
+      __type: "pin_event",
+      text,
+      announcementMessageId:
+        announcementMessage?.id || latestPin?.announcementMessageId,
+    });
+    setIsEditingPinnedMessage(false);
+  };
+
+  const deletePinnedMessage = async () => {
+    if (!window.confirm("공지사항을 삭제할까요?")) return;
+
+    const announcementMessage = findPinnedAnnouncementMessage(latestPin);
+
+    if (announcementMessage) {
+      const { error } = await supabase
+        .from("room_messages")
+        .update({
+          content: JSON.stringify({ __type: "deleted" }),
+          imageurl: null,
+        })
+        .eq("id", announcementMessage.id);
+
+      if (error) {
+        alert("공지사항 삭제에 실패했습니다.");
+        return;
+      }
+    }
+
+    await unpinMessage();
   };
 
   const createAnnouncement = async (event) => {
@@ -808,15 +889,20 @@ function ChatTab({ roomId }) {
 
     if (!text) return;
 
-    const saved = await insertMetaMessage({
+    const announcementMessage = await insertMetaMessage({
       __type: "announcement",
       text,
       title: "공지가 등록되었습니다.",
     });
 
-    if (!saved) return;
+    if (!announcementMessage) return;
 
-    await insertMetaMessage({ __type: "pin_event", text, announcement: true });
+    await insertMetaMessage({
+      __type: "pin_event",
+      text,
+      announcement: true,
+      announcementMessageId: announcementMessage.id,
+    });
     setAnnouncementContent("");
     setShowAnnouncementForm(false);
     await sendChatNotification();
@@ -979,50 +1065,84 @@ function ChatTab({ roomId }) {
     .map((message) => getMessageMeta(message.content))
     .find((meta) => meta?.__type === "pin_event");
   const pinnedText = latestPin && !latestPin.cleared ? latestPin.text : "";
-  const isPinnedMessageCollapsible =
-    pinnedText.length > PINNED_MESSAGE_COLLAPSE_LENGTH || pinnedText.includes("\n");
-
   useEffect(() => {
     setIsPinnedMessageExpanded(false);
+    setIsEditingPinnedMessage(false);
   }, [pinnedText]);
 
   return (
     <div className="chat-container">
       {pinnedText && (
-        <div className="chat-pinned-message">
-          <div>
+        <div
+          className="chat-pinned-message"
+          onClick={() => setIsPinnedMessageExpanded((value) => !value)}
+        >
+          <div className="chat-pinned-summary">
             <strong>공지</strong>
             <span className={isPinnedMessageExpanded ? "hidden" : ""}>
               {pinnedText}
             </span>
-            {isPinnedMessageCollapsible && (
-              <button
-                type="button"
-                className={`chat-pinned-toggle${
-                  isPinnedMessageExpanded ? " hidden" : ""
-                }`}
-                onClick={() => setIsPinnedMessageExpanded(true)}
-              >
-                펼치기
-              </button>
-            )}
             {isPinnedMessageExpanded && (
               <div className="chat-pinned-expanded">
-                <span>{pinnedText}</span>
-                <button
-                  type="button"
-                  className="chat-pinned-collapse"
-                  onClick={() => setIsPinnedMessageExpanded(false)}
+                {isEditingPinnedMessage ? (
+                  <textarea
+                    value={pinnedMessageDraft}
+                    onChange={(event) => {
+                      setPinnedMessageDraft(event.target.value);
+                      event.target.style.height = "auto";
+                      event.target.style.height = `${event.target.scrollHeight}px`;
+                    }}
+                    onClick={(event) => event.stopPropagation()}
+                    onFocus={(event) => {
+                      event.target.style.height = "auto";
+                      event.target.style.height = `${event.target.scrollHeight}px`;
+                    }}
+                    autoFocus
+                  />
+                ) : (
+                  <span>{pinnedText}</span>
+                )}
+                <div
+                  className="chat-pinned-actions"
+                  onClick={(event) => event.stopPropagation()}
                 >
-                  접기
-                </button>
+                  {isEditingPinnedMessage ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingPinnedMessage(false)}
+                      >
+                        취소
+                      </button>
+                      <button type="button" onClick={savePinnedMessage}>
+                        저장
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" onClick={startEditingPinnedMessage}>
+                        수정
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-pinned-delete"
+                        onClick={deletePinnedMessage}
+                      >
+                        삭제
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             )}
           </div>
           <button
             type="button"
             className="chat-pinned-close"
-            onClick={unpinMessage}
+            onClick={(event) => {
+              event.stopPropagation();
+              unpinMessage();
+            }}
             aria-label="고정 해제"
           >
             ×

@@ -145,6 +145,27 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     });
   };
 
+  const handleSelectAllCandidateSlots = (candidate) => {
+    if (!isSelectMode) return;
+
+    const candidateSlots = timeSlots
+      .filter((time) => isTimeSelectable(candidate, time))
+      .map((time) => ({
+        key: getSlotKey(candidate.id, time),
+        candidateId: candidate.id,
+        date: candidate.date,
+        starttime: time,
+        endtime: getNextTime(time),
+      }));
+
+    setSelectedSlots((prev) => {
+      const selectedKeys = new Set(prev.map((slot) => slot.key));
+      const newSlots = candidateSlots.filter((slot) => !selectedKeys.has(slot.key));
+
+      return [...prev, ...newSlots];
+    });
+  };
+
   const handleSaveAvailability = async () => {
     try {
       if (selectedSlots.length === 0) {
@@ -647,6 +668,14 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                   <button onClick={() => handleDeleteCandidate(candidate.id)}>
                     삭제
                   </button>
+                  {isSelectMode && (
+                    <button
+                      type="button"
+                      onClick={() => handleSelectAllCandidateSlots(candidate)}
+                    >
+                      일괄 선택하기
+                    </button>
+                  )}
                 </th>
               ))}
             </tr>

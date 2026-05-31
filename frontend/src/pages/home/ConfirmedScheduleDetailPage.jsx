@@ -7,13 +7,12 @@ import {
   createConfirmedScheduleForRoom,
   dismissConfirmedSchedule,
   getAdditionalConfirmedLocations,
+  updateConfirmedScheduleTiming,
   updateConfirmedScheduleLocation,
 } from "../../api/scheduleApi";
 import { createRoomNotifications } from "../../api/notificationApi";
 import {
   getRoomMemberLocations,
-  getRoomParticipants,
-  updateRoomLocationTransportModes,
 } from "../../api/mapApi";
 import { getRouteTime } from "../../api/routeTimeApi";
 import { decodePolyline } from "../../utils/decodePolyline";
@@ -30,6 +29,14 @@ function ConfirmedScheduleDetailPage() {
     schedule?.locationaddress || ""
   );
   const [saving, setSaving] = useState(false);
+  const [isEditingTiming, setIsEditingTiming] = useState(false);
+  const [scheduleTiming, setScheduleTiming] = useState({
+    date: schedule?.date || "",
+    starttime: schedule?.starttime || "",
+    endtime: schedule?.endtime || "",
+    isallday: Boolean(schedule?.isallday),
+  });
+  const [timingDraft, setTimingDraft] = useState(scheduleTiming);
   const [showMap, setShowMap] = useState(
     schedule?.locationlat != null && schedule?.locationlng != null
   );
@@ -58,12 +65,8 @@ function ConfirmedScheduleDetailPage() {
         }
       : null
   );
-  const [showTransportModes, setShowTransportModes] = useState(false);
-  const [roomParticipants, setRoomParticipants] = useState([]);
   const [memberLocations, setMemberLocations] = useState([]);
-  const [routeEstimates, setRouteEstimates] = useState([]);
   const [memberRoutePaths, setMemberRoutePaths] = useState([]);
-  const [refreshingRoutes, setRefreshingRoutes] = useState(false);
 
   useEffect(() => {
     if (!schedule) {
@@ -148,14 +151,8 @@ function ConfirmedScheduleDetailPage() {
   useEffect(() => {
     if (!schedule?.roomid) return;
 
-    Promise.all([
-      getRoomParticipants(schedule.roomid),
-      getRoomMemberLocations(schedule.roomid),
-    ])
-      .then(([participants, locations]) => {
-        setRoomParticipants(participants);
-        setMemberLocations(locations);
-      })
+    getRoomMemberLocations(schedule.roomid)
+      .then(setMemberLocations)
       .catch((error) => console.error("이동수단 정보 조회 실패:", error));
   }, [schedule]);
 
@@ -220,13 +217,48 @@ function ConfirmedScheduleDetailPage() {
   const isLocationOnly = Boolean(schedule.isLocationOnly);
   const isAbsent = currentUser?.id ? absentees.includes(currentUser.id) : false;
 
-  const dateLabel = !schedule.date
+  const dateLabel = !scheduleTiming.date
     ? "일정 미정"
-    : schedule.isallday
-    ? `${schedule.date} (하루종일)`
-    : `${schedule.date} ${schedule.starttime ?? ""} ~${
-        schedule.endtime ? ` ${schedule.endtime}` : ""
+    : scheduleTiming.isallday
+    ? `${scheduleTiming.date} (하루종일)`
+    : `${scheduleTiming.date} ${scheduleTiming.starttime ?? ""} ~${
+        scheduleTiming.endtime ? ` ${scheduleTiming.endtime}` : ""
       }`;
+
+  const handleSaveTiming = async () => {
+    if (!timingDraft.date) {
+      alert("날짜를 입력해주세요.");
+      return;
+    }
+
+    if (
+      !timingDraft.isallday &&
+      (!timingDraft.starttime || !timingDraft.endtime)
+    ) {
+      alert("시작 시간과 종료 시간을 입력해주세요.");
+      return;
+    }
+
+    if (
+      !timingDraft.isallday &&
+      timingDraft.starttime >= timingDraft.endtime
+    ) {
+      alert("종료 시간은 시작 시간보다 늦어야 합니다.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await updateConfirmedScheduleTiming(schedule.id, timingDraft);
+      setScheduleTiming(timingDraft);
+      setIsEditingTiming(false);
+      alert("일정 날짜와 시간을 수정했습니다.");
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!locationText.trim()) {
@@ -255,43 +287,21 @@ function ConfirmedScheduleDetailPage() {
     }
   };
 
-  const getParticipantKey = (participant) =>
-    participant.userid || participant.guestid || participant.id;
-
-  const hasSameId = (left, right) =>
-    left != null && right != null && String(left) === String(right);
-
-  const getParticipantLocation = (participant) =>
-    memberLocations.find((memberLocation) =>
-      participant.userid
-        ? hasSameId(memberLocation.userid, participant.userid)
-        : hasSameId(memberLocation.guestid, participant.guestid)
-    );
-
-  const refreshRouteEstimates = async (
-    place = selectedMeetingPlace,
-    changedParticipant = null,
-    changedMode = null
-  ) => {
+  const refreshRouteEstimates = async (place = selectedMeetingPlace) => {
     if (place?.lat == null || place?.lng == null) return;
 
     try {
-      setRefreshingRoutes(true);
-
       const pathResults = [];
-      const estimates = await Promise.all(
+      await Promise.all(
         memberLocations
           .filter(
             (memberLocation) =>
-              memberLocation.latitude != null && memberLocation.longitude != null
+              memberLocation.latitude != null &&
+              memberLocation.longitude != null &&
+              memberLocation.transportmode
           )
           .map(async (memberLocation) => {
-          const isChangedParticipant = changedParticipant?.userid
-            ? hasSameId(memberLocation.userid, changedParticipant.userid)
-            : hasSameId(memberLocation.guestid, changedParticipant?.guestid);
-          const mode = isChangedParticipant
-            ? changedMode
-            : memberLocation.transportmode || "transit";
+          const mode = memberLocation.transportmode;
           const result = await getRouteTime({
             origin: {
               lat: Number(memberLocation.latitude),
@@ -353,35 +363,10 @@ function ConfirmedScheduleDetailPage() {
           })
       );
 
-      setRouteEstimates(estimates);
       setMemberRoutePaths(pathResults);
     } catch (error) {
       console.error("경로 재검색 실패:", error);
-    } finally {
-      setRefreshingRoutes(false);
     }
-  };
-
-  const handleChangeTransportMode = async (participant, mode) => {
-    await updateRoomLocationTransportModes(schedule.roomid, [{
-      userid: participant.userid,
-      guestid: participant.guestid,
-      mode,
-    }]);
-
-    setMemberLocations((locations) =>
-      locations.map((memberLocation) => {
-        const isSameParticipant = participant.userid
-          ? hasSameId(memberLocation.userid, participant.userid)
-          : hasSameId(memberLocation.guestid, participant.guestid);
-
-        return isSameParticipant
-          ? { ...memberLocation, transportmode: mode }
-          : memberLocation;
-      })
-    );
-
-    await refreshRouteEstimates(selectedMeetingPlace, participant, mode);
   };
 
   const handleCancel = async () => {
@@ -540,9 +525,26 @@ function ConfirmedScheduleDetailPage() {
   const middlePlaceSection = (
     <>
       {schedule.location && (
-        <p style={{ color: "#7c79ff", marginBottom: "12px" }}>
-          📍 현재 위치: {schedule.location}
-        </p>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "8px",
+            marginBottom: "12px",
+          }}
+        >
+          <p style={{ color: "#7c79ff", margin: 0 }}>
+            📍 현재 위치: {schedule.location}
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate(`/rooms/${schedule.roomid}?tab=location`)}
+            style={shortcutButtonStyle}
+          >
+            위치탭 바로가기
+          </button>
+        </div>
       )}
 
       {canShowMiddlePlaceMap && (
@@ -753,7 +755,124 @@ function ConfirmedScheduleDetailPage() {
 
         {schedule.title && <h2 style={{ marginBottom: "2px" }}>{schedule.title}</h2>}
 
-        <p style={{ color: "#555", marginBottom: "16px" }}>{dateLabel}</p>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "8px",
+            marginBottom: "16px",
+          }}
+        >
+          <p style={{ color: "#555", margin: 0 }}>{dateLabel}</p>
+          <button
+            type="button"
+            onClick={() => navigate(`/rooms/${schedule.roomid}?tab=schedule`)}
+            style={shortcutButtonStyle}
+          >
+            일정탭 바로가기
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setTimingDraft(scheduleTiming);
+              setIsEditingTiming(true);
+            }}
+            style={shortcutButtonStyle}
+          >
+            수정하기
+          </button>
+        </div>
+
+        {isEditingTiming && (
+          <div
+            style={{
+              marginBottom: "16px",
+              padding: "12px",
+              border: "1px solid #e0e0ff",
+              borderRadius: "10px",
+              backgroundColor: "#f9f9ff",
+            }}
+          >
+            <input
+              type="date"
+              value={timingDraft.date}
+              onChange={(event) =>
+                setTimingDraft((draft) => ({
+                  ...draft,
+                  date: event.target.value,
+                }))
+              }
+              style={inputStyle}
+            />
+
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                marginBottom: "8px",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={timingDraft.isallday}
+                onChange={(event) =>
+                  setTimingDraft((draft) => ({
+                    ...draft,
+                    isallday: event.target.checked,
+                  }))
+                }
+              />
+              하루종일
+            </label>
+
+            {!timingDraft.isallday && (
+              <div style={{ display: "flex", gap: "8px" }}>
+                <input
+                  type="time"
+                  value={timingDraft.starttime}
+                  onChange={(event) =>
+                    setTimingDraft((draft) => ({
+                      ...draft,
+                      starttime: event.target.value,
+                    }))
+                  }
+                  style={{ ...inputStyle, width: "50%" }}
+                />
+                <input
+                  type="time"
+                  value={timingDraft.endtime}
+                  onChange={(event) =>
+                    setTimingDraft((draft) => ({
+                      ...draft,
+                      endtime: event.target.value,
+                    }))
+                  }
+                  style={{ ...inputStyle, width: "50%" }}
+                />
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={() => setIsEditingTiming(false)}
+                style={{ ...secondaryButtonStyle, marginBottom: 0 }}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveTiming}
+                disabled={saving}
+                style={{ ...primaryButtonStyle, marginBottom: 0 }}
+              >
+                {saving ? "등록 중..." : "등록"}
+              </button>
+            </div>
+          </div>
+        )}
 
         {attendees.length > 0 && (
           <div
@@ -813,36 +932,12 @@ function ConfirmedScheduleDetailPage() {
 
         {!locationAddress && <div style={{ marginBottom: "12px" }} />}
 
-        <button onClick={handleSave} disabled={saving} style={primaryButtonStyle}>
-          {saving ? "저장 중..." : "위치 저장"}
+        <button
+          onClick={() => setShowMap((prev) => !prev)}
+          style={secondaryButtonStyle}
+        >
+          {showMap ? "지도 닫기" : "지도에서 위치 선택하기"}
         </button>
-
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button
-            onClick={() => setShowMap((prev) => !prev)}
-            style={{ ...secondaryButtonStyle, flex: 1 }}
-          >
-            {showMap ? "지도 닫기" : "지도에서 위치 선택하기"}
-          </button>
-
-          <button
-            onClick={() => {
-              setShowTransportModes((visible) => {
-                if (!visible) refreshRouteEstimates();
-                return !visible;
-              });
-            }}
-            style={{
-              ...secondaryButtonStyle,
-              width: "auto",
-              padding: "12px 10px",
-              fontSize: "12px",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {showTransportModes ? "이동수단 접기" : "이동수단"}
-          </button>
-        </div>
 
         {showMap && (
           <LocationPicker
@@ -861,57 +956,9 @@ function ConfirmedScheduleDetailPage() {
           />
         )}
 
-        {showTransportModes && (
-          <div
-            style={{
-              marginBottom: "12px",
-              padding: "10px",
-              border: "1px solid #eee",
-              borderRadius: "10px",
-            }}
-          >
-            {roomParticipants.map((participant) => {
-              const participantLocation = getParticipantLocation(participant);
-              const estimate = routeEstimates.find((route) =>
-                participant.userid
-                  ? hasSameId(route.userid, participant.userid)
-                  : hasSameId(route.guestid, participant.guestid)
-              );
-
-              return (
-                <div
-                  key={`transport-${getParticipantKey(participant)}`}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "8px",
-                    marginBottom: "6px",
-                  }}
-                >
-                  <span style={{ fontSize: "13px" }}>
-                    {participant.nickname ||
-                      participant.profiles?.nickname ||
-                      "닉네임 없음"}
-                    {estimate ? ` · ${estimate.durationMinutes}분` : ""}
-                  </span>
-
-                  <select
-                    value={participantLocation?.transportmode || "transit"}
-                    disabled={!participantLocation || refreshingRoutes}
-                    onChange={(event) =>
-                      handleChangeTransportMode(participant, event.target.value)
-                    }
-                    style={{ padding: "3px 6px", fontSize: "12px" }}
-                  >
-                    <option value="transit">대중교통</option>
-                    <option value="car">자동차</option>
-                  </select>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <button onClick={handleSave} disabled={saving} style={primaryButtonStyle}>
+          {saving ? "저장 중..." : "위치 저장"}
+        </button>
 
         <div style={{ marginBottom: "24px" }} />
 
@@ -1019,6 +1066,17 @@ const secondaryButtonStyle = {
   borderRadius: "10px",
   fontSize: "15px",
   cursor: "pointer",
+};
+
+const shortcutButtonStyle = {
+  flexShrink: 0,
+  padding: "5px 8px",
+  border: "1px solid #d8d8ff",
+  borderRadius: "7px",
+  backgroundColor: "#f9f9ff",
+  color: "#5c58d8",
+  cursor: "pointer",
+  fontSize: "12px",
 };
 
 export default ConfirmedScheduleDetailPage;

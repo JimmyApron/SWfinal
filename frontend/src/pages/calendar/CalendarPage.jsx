@@ -672,7 +672,22 @@ function CalendarPage() {
           borderBottom: "1px solid #eee",
         }}
       >
-        <div style={{ width: "32px" }} />
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          aria-label="Back"
+          style={{
+            width: "32px",
+            border: "none",
+            background: "none",
+            padding: 0,
+            fontSize: "24px",
+            cursor: "pointer",
+            color: "#555",
+          }}
+        >
+          &larr;
+        </button>
 
         <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
           <button

@@ -21,7 +21,6 @@ import {
   saveMyGuestLocation,
   getRoomMemberLocations,
   getRoomParticipants,
-  updateRoomLocationTransportModes,
   saveRoomMiddlePlace,
   getRoomMiddlePlace,
   deleteRoomMiddlePlace,
@@ -57,6 +56,7 @@ function MapPage({ roomId }) {
   const [locationUpdateError, setLocationUpdateError] = useState('')
   const [pendingMiddleLocation, setPendingMiddleLocation] = useState(null)
   const [roomConfirmedSchedules, setRoomConfirmedSchedules] = useState([])
+  const [transportModePrompt, setTransportModePrompt] = useState(null)
 
   const myLocationRecord = memberLocations.find((location) => {
     if (currentUserId) return location.userid === currentUserId
@@ -67,6 +67,9 @@ function MapPage({ roomId }) {
   const isDeparted = Boolean(myLocationRecord?.isdeparted)
   const isArrived = Boolean(myLocationRecord?.arrivedat)
   const isTracking = isDeparted && !isArrived
+  const registeredMemberLocations = memberLocations.filter(
+    (location) => location.transportmode
+  )
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -439,20 +442,49 @@ function MapPage({ roomId }) {
       const location = await getCurrentPosition()
 
       setCurrentLocation(location)
-      setMessage('현재 위치를 가져왔습니다. DB에 저장하는 중입니다.')
-
-      await saveCurrentUserLocation(location, {
-        locationStatus: isTracking ? 'tracking' : 'idle',
-        locationError: null,
-      })
-
-      await loadMemberLocations()
-
-      setMessage('현재 위치를 저장했습니다.')
+      setTransportModePrompt({ location, isEdit: false })
+      setMessage('이동수단을 입력하세요.')
     } catch (error) {
       console.error('현재 위치 저장 오류:', error)
       setMessage('현재 위치를 가져오거나 저장하는 중 오류가 발생했습니다.')
     }
+  }
+
+  const handleSelectTransportMode = async (transportMode) => {
+    if (!transportModePrompt?.location) return
+
+    try {
+      await saveCurrentUserLocation(transportModePrompt.location, {
+        transportMode,
+        locationStatus: isTracking ? 'tracking' : 'idle',
+        locationError: null,
+      })
+
+      setCurrentLocation(transportModePrompt.location)
+      setTransportModePrompt(null)
+      await loadMemberLocations()
+      setMessage(
+        transportModePrompt.isEdit
+          ? '이동수단을 수정했습니다.'
+          : '현재 위치와 이동수단을 저장했습니다.'
+      )
+    } catch (error) {
+      console.error('이동수단 저장 오류:', error)
+      setMessage('이동수단을 저장하지 못했습니다.')
+    }
+  }
+
+  const handleEditTransportMode = () => {
+    if (!myLocationRecord) return
+
+    setTransportModePrompt({
+      isEdit: true,
+      location: {
+        lat: Number(myLocationRecord.latitude),
+        lng: Number(myLocationRecord.longitude),
+        accuracy: myLocationRecord.accuracy,
+      },
+    })
   }
 
   const updateDepartedLocation = async () => {
@@ -508,6 +540,16 @@ function MapPage({ roomId }) {
 
     if (!currentRoomId) {
       setMessage('방 정보를 찾을 수 없습니다.')
+      return
+    }
+
+    if (!myLocationRecord?.transportmode) {
+      setMessage('현재 위치와 이동수단을 먼저 등록해주세요.')
+      return
+    }
+
+    if (!middlePlace) {
+      setMessage('중간위치를 확정해주세요.')
       return
     }
 
@@ -655,6 +697,7 @@ function MapPage({ roomId }) {
 
   const isMemberLocationRegistered = (member) => {
     return memberLocations.some((location) => {
+      if (!location.transportmode) return false
       if (member.userid) return location.userid === member.userid
       if (member.guestid) return location.guestid === member.guestid
       return false
@@ -767,20 +810,13 @@ function MapPage({ roomId }) {
           continue
         }
 
-        const memberKey = getMemberKey(member)
         const nickname = getMemberNickname(member)
 
-        const previousResult =
-          place.travelResults?.find((result) => {
-            const resultKey = result.userid || result.guestid || result.id
-            return resultKey === memberKey
-          }) ||
-          memberRouteResults.find((result) => {
-            const resultKey = result.userid || result.guestid || result.id
-            return resultKey === memberKey
-          })
+        const mode = member.transportmode
 
-        const mode = previousResult?.mode || member.transportmode || 'transit'
+        if (!mode) {
+          continue
+        }
 
         const origin = {
           lat: Number(member.latitude),
@@ -859,7 +895,7 @@ function MapPage({ roomId }) {
           userid: member.userid,
           guestid: member.guestid,
           nickname,
-          mode: 'transit',
+          mode: member.transportmode || null,
           duration: null,
           distance: null,
           durationMinutes: null,
@@ -918,11 +954,6 @@ function MapPage({ roomId }) {
         lat: savedMiddlePlace.lat,
         lng: savedMiddlePlace.lng,
       }
-
-      await updateRoomLocationTransportModes(
-        currentRoomId,
-        confirmedPlace.travelResults || []
-      )
 
       setMiddlePlace(confirmedPlace)
       setSelectedPlace(confirmedPlace)
@@ -1161,6 +1192,37 @@ function MapPage({ roomId }) {
         </div>
       )}
 
+      {transportModePrompt && (
+        <div className="transport-mode-overlay">
+          <div className="transport-mode-dialog">
+            <h3>이동수단을 입력하세요</h3>
+            <div>
+              <button
+                type="button"
+                onClick={() => handleSelectTransportMode('transit')}
+              >
+                대중교통
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectTransportMode('car')}
+              >
+                자동차
+              </button>
+            </div>
+            {transportModePrompt.isEdit && (
+              <button
+                type="button"
+                className="transport-mode-cancel"
+                onClick={() => setTransportModePrompt(null)}
+              >
+                취소
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <h2>위치 기능</h2>
 
       <CurrentLocationButton onClick={handleCurrentLocation} />
@@ -1174,10 +1236,16 @@ function MapPage({ roomId }) {
         <p>{getLocationStatusLabel(myLocationRecord)}</p>
 
         {myLocationRecord?.transportmode && (
-          <p>교통수단: {getModeLabel(myLocationRecord.transportmode)}</p>
+          <p>
+            교통수단: {getModeLabel(myLocationRecord.transportmode)}{' '}
+            <button type="button" onClick={handleEditTransportMode}>
+              수정하기
+            </button>
+          </p>
         )}
 
-        {myLocationRecord?.lastlocationupdatedat && (
+        {myLocationRecord?.transportmode &&
+          myLocationRecord?.lastlocationupdatedat && (
           <p>
             마지막 갱신:{' '}
             {new Date(myLocationRecord.lastlocationupdatedat).toLocaleString()}
@@ -1194,7 +1262,7 @@ function MapPage({ roomId }) {
           <button
             type="button"
             onClick={handleStartDeparture}
-            disabled={isTracking || isArrived}
+            disabled={isTracking || isArrived || !middlePlace}
           >
             출발하기
           </button>
@@ -1207,6 +1275,7 @@ function MapPage({ roomId }) {
             도착
           </button>
         </div>
+        {!middlePlace && <p>중간위치를 확정해주세요.</p>}
       </div>
 
       {message && <p>{message}</p>}
@@ -1260,6 +1329,7 @@ function MapPage({ roomId }) {
           {members.map((member) => {
             const memberLocation = getMemberLocationRecord(member)
             const routeResult = getMemberRouteResult(member)
+            const isRegistered = Boolean(memberLocation?.transportmode)
 
             return (
               <div
@@ -1274,22 +1344,24 @@ function MapPage({ roomId }) {
               >
                 <span>{member.nickname || '닉네임 없음'}</span>
                 <strong>{getLocationStatusLabel(memberLocation)}</strong>
-                <span>
-                  교통수단: {getModeLabel(memberLocation?.transportmode || 'transit')}
-                </span>
+                {isRegistered && (
+                  <span>
+                    교통수단: {getModeLabel(memberLocation.transportmode)}
+                  </span>
+                )}
 
-                {middlePlace && (
+                {middlePlace && isRegistered && (
                   <span>{getRemainingTimeLabel(memberLocation, routeResult)}</span>
                 )}
 
-                {memberLocation?.lastlocationupdatedat && (
+                {isRegistered && memberLocation?.lastlocationupdatedat && (
                   <span>
                     마지막 갱신:{' '}
                     {new Date(memberLocation.lastlocationupdatedat).toLocaleString()}
                   </span>
                 )}
 
-                {memberLocation?.locationerror && (
+                {isRegistered && memberLocation?.locationerror && (
                   <span style={{ color: '#c2410c' }}>
                     {memberLocation.locationerror}
                   </span>
@@ -1316,14 +1388,14 @@ function MapPage({ roomId }) {
               <p>닉네임: {getMemberNickname(location)}</p>
               <p>출발 여부: {getLocationStatusLabel(location)}</p>
 
-              {location.lastlocationupdatedat && (
+              {location.transportmode && location.lastlocationupdatedat && (
                 <p>
                   마지막 갱신:{' '}
                   {new Date(location.lastlocationupdatedat).toLocaleString()}
                 </p>
               )}
 
-              {location.locationerror && (
+              {location.transportmode && location.locationerror && (
                 <p style={{ color: '#c2410c' }}>{location.locationerror}</p>
               )}
             </div>
@@ -1390,7 +1462,7 @@ function MapPage({ roomId }) {
 
       <KakaoMapView
         currentLocation={currentLocation}
-        memberLocations={memberLocations}
+        memberLocations={registeredMemberLocations}
         places={places}
         selectedPlace={selectedPlace}
         destination={destination}
@@ -1399,7 +1471,7 @@ function MapPage({ roomId }) {
 
       {!middlePlace && (
         <FamousMiddlePlacePanel
-          memberLocations={memberLocations}
+          memberLocations={registeredMemberLocations}
           onRecommendPlaces={setPlaces}
           onSelectMiddlePlace={handleSelectMiddlePlace}
           onCreateMiddlePlaceVote={handleCreateMiddlePlaceVote}
@@ -1434,7 +1506,7 @@ function getModeLabel(mode) {
 }
 
 function getLocationStatusLabel(location) {
-  if (!location) return '위치 미등록'
+  if (!location?.transportmode) return '위치 미등록'
   if (location.locationstatus === 'denied') return '위치 권한 거부'
   if (location.locationstatus === 'error') return '위치 갱신 실패'
   if (location.arrivedat || location.locationstatus === 'arrived') return '도착 완료'
