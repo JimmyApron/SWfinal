@@ -554,7 +554,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "16px 0 10px" }}>
         <h2 style={{ margin: 0 }}>일정 후보</h2>
         <div style={{ display: "flex", border: "1px solid #ddd", borderRadius: "8px", overflow: "hidden" }}>
-          {["calendar", "timetable"].map((v) => (
+          {["timetable", "calendar"].map((v) => (
             <button
               key={v}
               onClick={() => setCandidateViewMode(v)}
@@ -800,6 +800,129 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   );
 }
 
+function MemberTimeline({ candidate, availabilities, members }) {
+  const COLORS = ["#7c79ff", "#ff8a80", "#4dd0e1", "#81c784", "#ffd54f", "#ba68c8", "#ffb74d"];
+
+  const getColor = (uid) => {
+    const idx = members.findIndex((m) => (m.userid || m.id) === uid);
+    return COLORS[idx >= 0 ? idx % COLORS.length : 0];
+  };
+
+  const toDecimalHour = (timeStr) => {
+    if (!timeStr) return 0;
+    const [h, m] = timeStr.split(":").map(Number);
+    return h + m / 60;
+  };
+
+  const startH = candidate.isallday ? 0 : toDecimalHour(candidate.starttime?.slice(0, 5));
+  const endH = candidate.isallday ? 24 : toDecimalHour(candidate.endtime?.slice(0, 5));
+  const range = endH - startH || 1;
+
+  const slotsByMember = {};
+  availabilities
+    .filter((a) => a.candidateid === candidate.id)
+    .forEach((a) => {
+      if (!slotsByMember[a.userid]) slotsByMember[a.userid] = [];
+      slotsByMember[a.userid].push(a);
+    });
+
+  const ticks = [];
+  for (let h = Math.ceil(startH); h <= Math.floor(endH); h++) {
+    ticks.push(h);
+  }
+
+  return (
+    <div style={{ marginTop: "12px" }}>
+      <div style={{ fontSize: "12px", fontWeight: "600", color: "#666", marginBottom: "8px" }}>
+        멤버별 가능 시간
+        <span style={{ fontWeight: "normal", color: "#aaa", marginLeft: "6px" }}>
+          {candidate.isallday ? "00:00 ~ 24:00" : `${candidate.starttime?.slice(0, 5)} ~ ${candidate.endtime?.slice(0, 5)}`}
+        </span>
+      </div>
+
+      {/* 시간 축 */}
+      <div style={{ marginLeft: "72px", position: "relative", height: "16px", marginBottom: "2px" }}>
+        {ticks.map((h) => (
+          <div
+            key={h}
+            style={{
+              position: "absolute",
+              left: `${((h - startH) / range) * 100}%`,
+              transform: "translateX(-50%)",
+              fontSize: "9px",
+              color: "#bbb",
+            }}
+          >
+            {h}
+          </div>
+        ))}
+      </div>
+
+      {/* 멤버 행 */}
+      {members.map((member) => {
+        const uid = member.userid || member.id;
+        const slots = slotsByMember[uid] || [];
+        const color = getColor(uid);
+
+        return (
+          <div key={uid} style={{ display: "flex", alignItems: "center", marginBottom: "5px" }}>
+            <div
+              style={{
+                width: "64px",
+                fontSize: "11px",
+                color: "#555",
+                textAlign: "right",
+                paddingRight: "8px",
+                flexShrink: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {member.nickname || "?"}
+            </div>
+            <div
+              style={{
+                flex: 1,
+                height: "22px",
+                backgroundColor: "#eeeeee",
+                borderRadius: "4px",
+                position: "relative",
+                overflow: "hidden",
+              }}
+            >
+              {slots.length === 0 && (
+                <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", color: "#ccc" }}>
+                  미등록
+                </div>
+              )}
+              {slots.map((slot, si) => {
+                const s = toDecimalHour(slot.starttime?.slice(0, 5));
+                const e = toDecimalHour(slot.endtime?.slice(0, 5));
+                const left = Math.max(0, ((s - startH) / range) * 100);
+                const width = Math.min(100 - left, ((e - s) / range) * 100);
+                return (
+                  <div
+                    key={si}
+                    style={{
+                      position: "absolute",
+                      left: `${left}%`,
+                      width: `${width}%`,
+                      height: "100%",
+                      backgroundColor: color,
+                      opacity: 0.85,
+                    }}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function CandidateCalendar({ candidates, availabilities, calYear, calMonth, onPrevMonth, onNextMonth, members }) {
   const [selectedDate, setSelectedDate] = useState(null);
 
@@ -824,6 +947,8 @@ function CandidateCalendar({ candidates, availabilities, calYear, calMonth, onPr
     if (!availMap[date]) availMap[date] = new Set();
     availMap[date].add(userid);
   });
+
+  const COLORS = ["#7c79ff", "#ff8a80", "#4dd0e1", "#81c784", "#ffd54f", "#ba68c8", "#ffb74d"];
 
   const pad = (n) => String(n).padStart(2, "0");
   const dateKey = (d) => `${calYear}-${pad(calMonth + 1)}-${pad(d)}`;
@@ -856,8 +981,11 @@ function CandidateCalendar({ candidates, availabilities, calYear, calMonth, onPr
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px" }}>
         {cells.map((d, i) => {
           const key = d ? dateKey(d) : null;
-          const availCount = key ? (availMap[key]?.size || 0) : 0;
+          const availUsers = key ? [...(availMap[key] || [])] : [];
+          const availCount = availUsers.length;
           const hasAvail = availCount > 0;
+          const hasCandidate = key ? !!candidateMap[key] : false;
+          const isClickable = hasAvail || hasCandidate;
           const isToday = key === todayStr;
           const isSelected = key === selectedDate;
           const col = i % 7;
@@ -865,14 +993,14 @@ function CandidateCalendar({ candidates, availabilities, calYear, calMonth, onPr
           return (
             <div
               key={i}
-              onClick={() => d && hasAvail && setSelectedDate(isSelected ? null : key)}
+              onClick={() => d && isClickable && setSelectedDate(isSelected ? null : key)}
               style={{
                 minHeight: "52px",
                 padding: "4px",
                 borderRadius: "8px",
-                backgroundColor: isSelected ? "#f0f0ff" : hasAvail ? "#fafaff" : "transparent",
-                border: hasAvail ? "1px solid #e0e0ff" : "1px solid transparent",
-                cursor: hasAvail ? "pointer" : "default",
+                backgroundColor: isSelected ? "#f0f0ff" : hasCandidate ? "#fafaff" : "transparent",
+                border: hasCandidate ? "1px solid #e0e0ff" : "1px solid transparent",
+                cursor: isClickable ? "pointer" : "default",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
@@ -889,10 +1017,38 @@ function CandidateCalendar({ candidates, availabilities, calYear, calMonth, onPr
                   }}>
                     {d}
                   </div>
-                  {hasAvail && (
-                    <div style={{ display: "flex", gap: "2px", marginTop: "2px", alignItems: "center", justifyContent: "center" }}>
-                      <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#7c79ff" }} />
-                      <span style={{ fontSize: "9px", color: "#7c79ff", fontWeight: "600" }}>{availCount}명</span>
+                  {hasCandidate && (
+                    <div style={{ alignSelf: "stretch", display: "flex", flexDirection: "column", gap: "1px", marginTop: "2px" }}>
+                      {availUsers.slice(0, 3).map((uid) => {
+                        const member = members.find((m) => (m.userid || m.id) === uid);
+                        const colorIdx = members.findIndex((m) => (m.userid || m.id) === uid);
+                        const color = COLORS[colorIdx >= 0 ? colorIdx % COLORS.length : 0];
+                        return (
+                          <div
+                            key={uid}
+                            style={{
+                              height: "13px",
+                              backgroundColor: color,
+                              borderRadius: "3px",
+                              fontSize: "9px",
+                              color: "#fff",
+                              paddingLeft: "3px",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              lineHeight: "13px",
+                            }}
+                          >
+                            {member?.nickname || ""}
+                          </div>
+                        );
+                      })}
+                      {availCount > 3 && (
+                        <div style={{ fontSize: "9px", color: "#888", paddingLeft: "2px" }}>+{availCount - 3}명 더</div>
+                      )}
+                      {availCount === 0 && (
+                        <div style={{ fontSize: "9px", color: "#bbb", textAlign: "center" }}>후보</div>
+                      )}
                     </div>
                   )}
                 </>
@@ -902,18 +1058,25 @@ function CandidateCalendar({ candidates, availabilities, calYear, calMonth, onPr
         })}
       </div>
 
-      {/* 선택된 날짜 상세 */}
-      {selectedDate && selectedAvailCount > 0 && (
+      {/* 선택된 날짜 상세 - 타임라인 뷰 */}
+      {selectedDate && (candidateMap[selectedDate] || selectedAvailCount > 0) && (
         <div style={{ marginTop: "12px", padding: "12px", backgroundColor: "#f5f5ff", borderRadius: "10px" }}>
-          <p style={{ margin: "0 0 8px", fontWeight: "bold", fontSize: "14px", color: "#555" }}>{selectedDate}</p>
-          <p style={{ margin: "0 0 6px", fontSize: "13px", color: "#7c79ff" }}>👥 {selectedAvailCount}명 가능</p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-            {selectedAvailNicknames.map((nick, idx) => (
-              <span key={idx} style={{ fontSize: "12px", backgroundColor: "#e8e8ff", color: "#555", borderRadius: "8px", padding: "2px 8px" }}>
-                {nick}
+          <p style={{ margin: "0 0 4px", fontWeight: "bold", fontSize: "14px", color: "#555" }}>
+            {selectedDate}
+            {selectedAvailCount > 0 && (
+              <span style={{ marginLeft: "8px", fontSize: "12px", color: "#7c79ff", fontWeight: "normal" }}>
+                👥 {selectedAvailCount}명 가능
               </span>
-            ))}
-          </div>
+            )}
+          </p>
+          {(candidateMap[selectedDate] || []).map((candidate) => (
+            <MemberTimeline
+              key={candidate.id}
+              candidate={candidate}
+              availabilities={availabilities}
+              members={members}
+            />
+          ))}
         </div>
       )}
     </div>
