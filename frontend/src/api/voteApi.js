@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
+import { createRoomNotifications } from "./notificationApi";
 import { updateRoomLocationTransportModes } from "./mapApi";
 
 function hasValue(value) {
@@ -289,6 +290,21 @@ export async function confirmVote(
     if (error) {
       console.error("일정 확정 저장 실패:", error);
       throw error;
+    }
+
+    // 알림 생성
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      await createRoomNotifications({
+        roomId: roomid,
+        senderId: userData.user?.id,
+        type: "schedule_confirmed",
+        title: "🗓️ 일정 확정",
+        message: "확정된 일정이 추가되었습니다.",
+        link: `/rooms/${roomid}?tab=schedule`,
+      });
+    } catch (notifError) {
+      console.error("일정 확정 알림 생성 실패:", notifError);
     }
 
     return { hasConfirmedSchedule: true };

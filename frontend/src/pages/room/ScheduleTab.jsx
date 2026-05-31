@@ -6,14 +6,14 @@ import {
   getRoomGuests,
   getMemberAvailabilities,
   saveMemberAvailabilities,
-  updateRoomLastActivity,
   addScheduleCandidate,
   updateScheduleCandidate,
   deleteScheduleCandidate,
   getAdditionalConfirmedLocations,
 } from "../../api/scheduleApi";
+import { updateRoomLastActivity } from "../../api/roomApi";
 import { supabase } from "../../lib/supabaseClient";
-import { createNotification } from "../../api/notificationApi";
+import { createNotification, createRoomNotifications } from "../../api/notificationApi";
 import ConfirmedScheduleCard from "../../components/ConfirmedScheduleCard";
 
 function ScheduleTab({ roomId, ownerUserId, roomName }) {
@@ -369,6 +369,21 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     }]);
 
     if (error) { alert("확정 일정 추가 실패"); return; }
+
+    // 알림 생성
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      await createRoomNotifications({
+        roomId,
+        senderId: userData.user?.id,
+        type: "schedule_confirmed",
+        title: "🗓️ 일정 확정",
+        message: "확정된 일정이 추가되었습니다.",
+        link: `/rooms/${roomId}?tab=schedule`,
+      });
+    } catch (notifError) {
+      console.error("일정 확정 알림 생성 실패:", notifError);
+    }
 
     await updateRoomLastActivity(roomId);
     setConfirmedTitle("");

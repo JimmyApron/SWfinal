@@ -1,4 +1,6 @@
 import { supabase } from "../lib/supabaseClient";
+import { createRoomNotifications } from "./notificationApi";
+import { updateRoomLastActivity } from "./roomApi";
 
 export async function getScheduleCandidates(roomId) {
   const { data, error } = await supabase
@@ -59,18 +61,6 @@ export async function saveMemberAvailabilities(roomId, userId, rows) {
     .insert(rows);
 
   if (insertError) throw new Error("가능 일정 저장 실패");
-}
-export async function updateRoomLastActivity(roomId) {
-  const { error } = await supabase
-    .from("rooms")
-    .update({
-      lastactivityat: new Date().toISOString(),
-    })
-    .eq("id", Number(roomId));
-
-  if (error) {
-    console.error("방 활동 시간 갱신 실패:", error);
-  }
 }
 export async function addScheduleCandidate(candidate) {
   const { error } = await supabase
@@ -162,6 +152,9 @@ export async function getMyConfirmedSchedules(userId, { includeLocationOnly = fa
 }
 
 export async function createConfirmedScheduleForRoom(roomId, schedule) {
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id;
+
   const { error } = await supabase.from("confirmed_schedules").insert([
     {
       roomid: Number(roomId),
@@ -178,6 +171,20 @@ export async function createConfirmedScheduleForRoom(roomId, schedule) {
   if (error) {
     console.error("확정 일정 저장 실패:", error);
     throw new Error("확정 일정 저장 실패");
+  }
+
+  // 알림 생성
+  try {
+    await createRoomNotifications({
+      roomId,
+      senderId: userId,
+      type: "schedule_confirmed",
+      title: "🗓️ 일정 확정",
+      message: "확정된 일정이 추가되었습니다.",
+      link: `/rooms/${roomId}?tab=schedule`,
+    });
+  } catch (notifError) {
+    console.error("일정 확정 알림 생성 실패:", notifError);
   }
 }
 
@@ -304,6 +311,21 @@ export async function createLocationOnlyConfirmedSchedule(location, isMiddlePlac
 
   if (!isMiddlePlace) {
     await applyConfirmedLocationToSchedule(data.id, location, false);
+  }
+
+  // 알림 생성
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    await createRoomNotifications({
+      roomId: location.roomid,
+      senderId: userData.user?.id,
+      type: "schedule_confirmed",
+      title: "🗓️ 일정 확정",
+      message: "확정된 일정이 추가되었습니다.",
+      link: `/rooms/${location.roomid}?tab=schedule`,
+    });
+  } catch (notifError) {
+    console.error("일정 확정 알림 생성 실패:", notifError);
   }
 
   return data;
