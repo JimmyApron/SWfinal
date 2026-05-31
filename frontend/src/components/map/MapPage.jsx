@@ -5,6 +5,7 @@ import KakaoMapView from './KakaoMapView'
 import CurrentLocationButton from './CurrentLocationButton'
 import PlaceSearchPanel from './PlaceSearchPanel'
 import FamousMiddlePlacePanel from './FamousMiddlePlacePanel'
+import LocationPicker from './LocationPicker'
 
 import { getCurrentPosition } from '../../services/geolocationService'
 import { getRouteTime } from '../../api/routeTimeApi'
@@ -26,6 +27,11 @@ import {
   deleteRoomMiddlePlace,
   updateLocationStatus,
 } from '../../api/mapApi'
+import {
+  applyConfirmedLocationToSchedule,
+  createLocationOnlyConfirmedSchedule,
+  getRoomConfirmedSchedules,
+} from '../../api/scheduleApi'
 
 function MapPage({ roomId }) {
   const navigate = useNavigate()
@@ -48,6 +54,8 @@ function MapPage({ roomId }) {
 
   const [message, setMessage] = useState('')
   const [locationUpdateError, setLocationUpdateError] = useState('')
+  const [pendingMiddleLocation, setPendingMiddleLocation] = useState(null)
+  const [roomConfirmedSchedules, setRoomConfirmedSchedules] = useState([])
 
   const myLocationRecord = memberLocations.find((location) => {
     if (currentUserId) return location.userid === currentUserId
@@ -917,6 +925,16 @@ function MapPage({ roomId }) {
       setMemberRoutePaths([])
       setMessage(`${confirmedPlace.name}을(를) 중간 장소로 확정했습니다. 멤버별 경로를 계산합니다.`)
 
+      setPendingMiddleLocation({
+        roomid: currentRoomId,
+        voteid: null,
+        placename: confirmedPlace.name,
+        placeaddress: confirmedPlace.address || null,
+        placelat: confirmedPlace.lat,
+        placelng: confirmedPlace.lng,
+      })
+      setRoomConfirmedSchedules(await getRoomConfirmedSchedules(currentRoomId))
+
       try {
         if (currentUserId && currentRoomId) {
           await createRoomNotifications({
@@ -936,6 +954,26 @@ function MapPage({ roomId }) {
     } catch (error) {
       console.error('중간 장소 확정 저장 오류:', error)
       setMessage('중간 장소 확정 중 오류가 발생했습니다.')
+    }
+  }
+
+  const handleApplyMiddlePlaceToSchedule = async (scheduleId) => {
+    try {
+      await applyConfirmedLocationToSchedule(scheduleId, pendingMiddleLocation, true)
+      setPendingMiddleLocation(null)
+      setMessage('선택한 일정에 중간 장소를 추가했습니다.')
+    } catch (error) {
+      setMessage(`일정 위치 저장 실패: ${error.message}`)
+    }
+  }
+
+  const handleCreateScheduleFromMiddlePlace = async () => {
+    try {
+      await createLocationOnlyConfirmedSchedule(pendingMiddleLocation, true)
+      setPendingMiddleLocation(null)
+      navigate(`/rooms/${currentRoomId}?tab=schedule`)
+    } catch (error) {
+      setMessage(`일정 생성 실패: ${error.message}`)
     }
   }
 
@@ -1056,6 +1094,47 @@ function MapPage({ roomId }) {
 
   return (
     <section className="map-section">
+      {pendingMiddleLocation && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+        >
+          <div style={{ width: '300px', padding: '24px', borderRadius: '16px', backgroundColor: '#fff' }}>
+            <h3 style={{ marginTop: 0 }}>위치가 확정되었습니다!</h3>
+            <p style={{ color: '#666', fontSize: '13px' }}>
+              위치를 추가할 일정을 선택하거나 새 일정을 만들어 주세요.
+            </p>
+
+            {roomConfirmedSchedules.length > 0 && (
+              <div style={{ marginBottom: '12px' }}>
+                <strong style={{ fontSize: '13px' }}>1. 확정된 일정에서 정하기</strong>
+                {roomConfirmedSchedules.map((schedule) => (
+                  <button
+                    key={schedule.id}
+                    type="button"
+                    onClick={() => handleApplyMiddlePlaceToSchedule(schedule.id)}
+                    style={{ width: '100%', marginTop: '6px', padding: '10px', textAlign: 'left' }}
+                  >
+                    {schedule.title || schedule.date || '날짜 미정 일정'}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <button type="button" onClick={handleCreateScheduleFromMiddlePlace} style={{ width: '100%', padding: '12px' }}>
+              2. 일정 정하러 가기
+            </button>
+          </div>
+        </div>
+      )}
+
       <h2>위치 기능</h2>
 
       <CurrentLocationButton onClick={handleCurrentLocation} />
@@ -1198,8 +1277,6 @@ function MapPage({ roomId }) {
       {currentLocation && (
         <div className="location-box">
           <h3>브라우저 현재 위치</h3>
-          <p>위도: {currentLocation.lat}</p>
-          <p>경도: {currentLocation.lng}</p>
           <p>정확도: {Math.round(currentLocation.accuracy)}m</p>
         </div>
       )}
@@ -1211,8 +1288,6 @@ function MapPage({ roomId }) {
           {memberLocations.map((location) => (
             <div key={getMemberKey(location)}>
               <p>닉네임: {getMemberNickname(location)}</p>
-              <p>위도: {location.latitude}</p>
-              <p>경도: {location.longitude}</p>
               <p>출발 여부: {getLocationStatusLabel(location)}</p>
 
               {location.lastlocationupdatedat && (
@@ -1235,8 +1310,6 @@ function MapPage({ roomId }) {
           <h3>확정된 중간 장소</h3>
           <p>장소명: {middlePlace.name}</p>
           <p>주소: {middlePlace.address || '주소 정보 없음'}</p>
-          <p>위도: {middlePlace.lat}</p>
-          <p>경도: {middlePlace.lng}</p>
 
           <button type="button" onClick={handleShareMiddlePlace}>
             확정된 중간장소 채팅에 공유
@@ -1273,6 +1346,21 @@ function MapPage({ roomId }) {
           </p>
         </div>
       )}
+
+      <LocationPicker
+        allowMapClick={false}
+        showMap={false}
+        onSelect={(name, address, place = {}) => {
+          const selected = {
+            ...place,
+            name,
+            address: address || place.address || '',
+          }
+
+          handleSelectPlace(selected)
+          setPlaces([selected])
+        }}
+      />
 
       <KakaoMapView
         currentLocation={currentLocation}

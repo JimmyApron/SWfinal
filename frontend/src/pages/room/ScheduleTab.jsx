@@ -10,9 +10,11 @@ import {
   addScheduleCandidate,
   updateScheduleCandidate,
   deleteScheduleCandidate,
+  getAdditionalConfirmedLocations,
 } from "../../api/scheduleApi";
 import { supabase } from "../../lib/supabaseClient";
 import { createNotification } from "../../api/notificationApi";
+import ConfirmedScheduleCard from "../../components/ConfirmedScheduleCard";
 
 function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const navigate = useNavigate();
@@ -32,6 +34,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const [editingCandidateId, setEditingCandidateId] = useState(null);
 
   const [confirmedSchedules, setConfirmedSchedules] = useState([]);
+  const [additionalLocations, setAdditionalLocations] = useState([]);
   const [showConfirmedForm, setShowConfirmedForm] = useState(false);
   const [confirmedTitle, setConfirmedTitle] = useState("");
   const [confirmedDate, setConfirmedDate] = useState("");
@@ -327,12 +330,24 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   };
 
   const loadConfirmedSchedules = async () => {
-    const { data } = await supabase
-      .from("confirmed_schedules")
-      .select("*")
-      .eq("roomid", roomId)
-      .order("date", { ascending: true });
+    const now = new Date();
+    const today = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0"),
+    ].join("-");
+
+    const [{ data }, locations] = await Promise.all([
+      supabase
+        .from("confirmed_schedules")
+        .select("*")
+        .eq("roomid", roomId)
+        .or(`date.gte.${today},date.is.null`)
+        .order("date", { ascending: true }),
+      getAdditionalConfirmedLocations(roomId),
+    ]);
     setConfirmedSchedules(data || []);
+    setAdditionalLocations(locations || []);
   };
 
   const handleAddConfirmedSchedule = async () => {
@@ -491,39 +506,42 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
               const isAbsent = (s.absentees || []).includes(currentUser?.id);
               const isOwner = currentUser?.id && currentUser.id === ownerUserId;
               return (
-                <div key={s.id} onClick={() => navigate("/confirmed-schedule", { state: { schedule: { ...s, roomname: roomName } } })} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#f0f0ff", borderRadius: "10px", padding: "10px 14px", cursor: "pointer" }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
-                    <span style={{ color: "#7c79ff", fontSize: "16px", marginTop: "1px" }}>📌</span>
-                    <div>
-                      <div style={{ fontWeight: "600", fontSize: "14px", color: "#333" }}>
-                        {s.title || "(제목 없음)"}
-                        {isAbsent && <span style={{ marginLeft: "6px", fontSize: "11px", color: "#fff", backgroundColor: "#bbb", borderRadius: "4px", padding: "1px 5px" }}>불참</span>}
-                      </div>
-                      <div style={{ color: "#888", fontSize: "12px", marginTop: "2px" }}>
-                        {formatDateWithDay(s.date)}
-                        {s.isallday ? " · 하루종일" : (s.starttime ? ` · ${s.starttime.slice(0, 5)}${s.endtime ? ` ~ ${s.endtime.slice(0, 5)}` : ""}` : "")}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: "6px" }}>
-                    {currentUser && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleToggleAbsence(s); }}
-                        style={{ background: "none", border: `1px solid ${isAbsent ? "#7c79ff" : "#ddd"}`, color: isAbsent ? "#7c79ff" : "#999", cursor: "pointer", fontSize: "12px", padding: "3px 8px", borderRadius: "6px" }}
-                      >
-                        {isAbsent ? "참석으로 변경" : "일정 취소"}
-                      </button>
-                    )}
-                    {isOwner && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDeleteConfirmedSchedule(s.id); }}
-                        style={{ background: "none", border: "1px solid #ffcccc", color: "#e57373", cursor: "pointer", fontSize: "12px", padding: "3px 8px", borderRadius: "6px" }}
-                      >
-                        일정 삭제
-                      </button>
-                    )}
-                  </div>
-                </div>
+                <ConfirmedScheduleCard
+                  key={s.id}
+                  schedule={{
+                    ...s,
+                    roomname: roomName,
+                    additionalLocations: additionalLocations.filter(
+                      (location) => Number(location.scheduleid) === Number(s.id)
+                    ),
+                    isAbsent,
+                  }}
+                  onClick={() =>
+                    navigate("/confirmed-schedule", {
+                      state: { schedule: { ...s, roomname: roomName } },
+                    })
+                  }
+                  actions={
+                    <>
+                      {currentUser && (
+                        <button
+                          onClick={() => handleToggleAbsence(s)}
+                          style={{ background: "none", border: `1px solid ${isAbsent ? "#7c79ff" : "#ddd"}`, color: isAbsent ? "#7c79ff" : "#999", cursor: "pointer", fontSize: "12px", padding: "3px 8px", borderRadius: "6px" }}
+                        >
+                          {isAbsent ? "참석으로 변경" : "일정 취소"}
+                        </button>
+                      )}
+                      {isOwner && (
+                        <button
+                          onClick={() => handleDeleteConfirmedSchedule(s.id)}
+                          style={{ background: "none", border: "1px solid #ffcccc", color: "#e57373", cursor: "pointer", fontSize: "12px", padding: "3px 8px", borderRadius: "6px" }}
+                        >
+                          일정 삭제
+                        </button>
+                      )}
+                    </>
+                  }
+                />
               );
             })}
           </div>

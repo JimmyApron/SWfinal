@@ -226,7 +226,7 @@ function VoteMessageCard({ meta, navigate }) {
   );
 }
 
-function InlineKakaoMap({ lat, lng, name }) {
+function InlineKakaoMap({ lat, lng, name, address }) {
   const mapRef = useRef(null);
 
   useEffect(() => {
@@ -243,6 +243,7 @@ function InlineKakaoMap({ lat, lng, name }) {
     }
 
     let marker = null;
+    let infoWindow = null;
 
     const createMap = () => {
       if (!mapRef.current) return;
@@ -258,6 +259,21 @@ function InlineKakaoMap({ lat, lng, name }) {
         position,
         title: name || "공유 위치",
       });
+
+      infoWindow = new window.kakao.maps.InfoWindow({
+        content: `
+          <div style="padding:10px; font-size:13px; line-height:1.5;">
+            <strong>${escapeMapHtml(name || "공유 위치")}</strong>
+            <p style="margin:4px 0;">${escapeMapHtml(
+              address || "주소 정보 없음"
+            )}</p>
+          </div>
+        `,
+      });
+
+      window.kakao.maps.event.addListener(marker, "click", () => {
+        infoWindow.open(map, marker);
+      });
     };
 
     if (window.kakao.maps.load) {
@@ -267,9 +283,10 @@ function InlineKakaoMap({ lat, lng, name }) {
     }
 
     return () => {
+      infoWindow?.close();
       marker?.setMap(null);
     };
-  }, [lat, lng, name]);
+  }, [address, lat, lng, name]);
 
   return (
     <div
@@ -285,6 +302,15 @@ function InlineKakaoMap({ lat, lng, name }) {
       }}
     />
   );
+}
+
+function escapeMapHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function MapShareMessageCard({ meta }) {
@@ -329,13 +355,12 @@ function MapShareMessageCard({ meta }) {
       )}
 
       {meta.lat && meta.lng && (
-        <div style={{ fontSize: "11px", color: "#777", marginBottom: "8px" }}>
-          {meta.lat}, {meta.lng}
-        </div>
-      )}
-
-      {meta.lat && meta.lng && (
-        <InlineKakaoMap lat={meta.lat} lng={meta.lng} name={meta.name} />
+        <InlineKakaoMap
+          lat={meta.lat}
+          lng={meta.lng}
+          name={meta.name}
+          address={meta.address}
+        />
       )}
     </div>
   );

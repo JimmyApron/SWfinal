@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
+import { updateRoomLocationTransportModes } from "./mapApi";
 
 function hasValue(value) {
   if (value === null || value === undefined) return false;
@@ -52,6 +53,7 @@ function normalizeVoteOption(option) {
     placelat: normalizeCoordinate(option.placelat, option.lat),
     placelng: normalizeCoordinate(option.placelng, option.lng),
     kakaomapurl: option.kakaomapurl || option.kakaoMapUrl || null,
+    travelresults: option.travelresults || option.travelResults || null,
   };
 }
 
@@ -270,12 +272,6 @@ export async function confirmVote(
       .delete()
       .eq("voteid", Number(voteid));
 
-    const { data: middlePlace } = await supabase
-      .from("room_middle_places")
-      .select("name, address")
-      .eq("roomid", Number(roomid))
-      .maybeSingle();
-
     const { error } = await supabase.from("confirmed_schedules").insert([
       {
         roomid: Number(roomid),
@@ -285,8 +281,8 @@ export async function confirmVote(
         starttime: option.starttime || null,
         endtime: option.endtime || null,
         isallday: !option.starttime,
-        location: middlePlace?.name || null,
-        locationaddress: middlePlace?.address || null,
+        location: null,
+        locationaddress: null,
       },
     ]);
 
@@ -324,19 +320,6 @@ export async function confirmVote(
       .from("confirmed_locations")
       .delete()
       .eq("voteid", Number(voteid));
-
-    const { error } = await supabase.from("confirmed_locations").insert([
-      {
-        roomid: Number(roomid),
-        voteid: Number(voteid),
-        placename: placeName,
-      },
-    ]);
-
-    if (error) {
-      console.error("중간장소 확정 저장 실패:", error);
-      throw error;
-    }
 
     const { data: locationVote, error: voteError } = await supabase
       .from("votes")
@@ -383,38 +366,22 @@ export async function confirmVote(
         console.error("room_middle_places 저장 실패:", middlePlaceError);
         throw middlePlaceError;
       }
-    }
 
-    const { data: confirmedSchedules, error: scheduleError } = await supabase
-      .from("confirmed_schedules")
-      .select("id")
-      .eq("roomid", Number(roomid))
-      .gte("date", new Date().toISOString().slice(0, 10));
-
-    if (scheduleError) {
-      console.error("확정 일정 조회 실패:", scheduleError);
-      throw scheduleError;
-    }
-
-    if (isMiddlePlaceVote && confirmedSchedules?.length > 0) {
-      const { error: scheduleLocationError } = await supabase
-        .from("confirmed_schedules")
-        .update({
-          location: placeName,
-          locationaddress: placeAddress,
-        })
-        .eq("roomid", Number(roomid))
-        .gte("date", new Date().toISOString().slice(0, 10));
-
-      if (scheduleLocationError) {
-        console.error("확정 일정 위치 저장 실패:", scheduleLocationError);
-        throw scheduleLocationError;
+      if (option.travelresults?.length > 0) {
+        await updateRoomLocationTransportModes(roomid, option.travelresults);
       }
     }
 
     return {
-      hasConfirmedSchedule: Boolean(confirmedSchedules?.length),
       isMiddlePlaceVote,
+      confirmedLocation: {
+        roomid: Number(roomid),
+        voteid: Number(voteid),
+        placename: placeName,
+        placeaddress: placeAddress,
+        placelat: placeLat,
+        placelng: placeLng,
+      },
     };
   }
 }
