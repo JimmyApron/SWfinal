@@ -267,28 +267,50 @@ export async function confirmVote(
         ? extraValue.trim()
         : null;
 
-    await supabase
+    const { data: existing } = await supabase
       .from("confirmed_schedules")
-      .delete()
-      .eq("voteid", Number(voteid));
+      .select("id")
+      .eq("voteid", Number(voteid))
+      .maybeSingle();
 
-    const { error } = await supabase.from("confirmed_schedules").insert([
-      {
-        roomid: Number(roomid),
-        voteid: Number(voteid),
-        title: appointmentTitle,
+    if (existing) {
+      // 기존 일정이 있으면 날짜/시간만 업데이트 (absentees, location 등 보존)
+      const updatePayload = {
         date: option.optiondate,
         starttime: option.starttime || null,
         endtime: option.endtime || null,
         isallday: !option.starttime,
-        location: null,
-        locationaddress: null,
-      },
-    ]);
+      };
+      if (appointmentTitle) updatePayload.title = appointmentTitle;
 
-    if (error) {
-      console.error("일정 확정 저장 실패:", error);
-      throw error;
+      const { error } = await supabase
+        .from("confirmed_schedules")
+        .update(updatePayload)
+        .eq("id", existing.id);
+
+      if (error) {
+        console.error("일정 확정 업데이트 실패:", error);
+        throw error;
+      }
+    } else {
+      const { error } = await supabase.from("confirmed_schedules").insert([
+        {
+          roomid: Number(roomid),
+          voteid: Number(voteid),
+          title: appointmentTitle,
+          date: option.optiondate,
+          starttime: option.starttime || null,
+          endtime: option.endtime || null,
+          isallday: !option.starttime,
+          location: null,
+          locationaddress: null,
+        },
+      ]);
+
+      if (error) {
+        console.error("일정 확정 저장 실패:", error);
+        throw error;
+      }
     }
 
     return { hasConfirmedSchedule: true };

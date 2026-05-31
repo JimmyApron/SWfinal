@@ -65,6 +65,9 @@ function VoteDetailPage() {
   const [pendingOption, setPendingOption] = useState(null);
   const [appointmentTitle, setAppointmentTitle] = useState("");
   const [pendingConfirmedLocation, setPendingConfirmedLocation] = useState(null);
+  const [isReconfirmation, setIsReconfirmation] = useState(false);
+  const [existingHasLocation, setExistingHasLocation] = useState(false);
+  const [showShareToast, setShowShareToast] = useState(false);
   const [roomConfirmedSchedules, setRoomConfirmedSchedules] = useState([]);
 
   useEffect(() => {
@@ -500,8 +503,16 @@ function VoteDetailPage() {
     }
 
     if (vote.votetype === "schedule") {
+      const { data: existingSchedule } = await supabase
+        .from("confirmed_schedules")
+        .select("id, title, location")
+        .eq("voteid", Number(voteid))
+        .maybeSingle();
+
+      setIsReconfirmation(Boolean(existingSchedule));
+      setExistingHasLocation(Boolean(existingSchedule?.location));
       setPendingOption(option);
-      setAppointmentTitle("");
+      setAppointmentTitle(existingSchedule?.title || "");
       setShowLocationModal(true);
       return;
     }
@@ -557,11 +568,6 @@ function VoteDetailPage() {
   const handleConfirmWithLocation = async (goToLocation) => {
     if (!pendingOption) {
       alert("확정할 일정을 찾을 수 없습니다.");
-      return;
-    }
-
-    if (!appointmentTitle.trim()) {
-      alert("약속 이름을 입력하세요.");
       return;
     }
 
@@ -741,7 +747,8 @@ function VoteDetailPage() {
       return;
     }
 
-    navigate(`/rooms/${roomid}?tab=chat`);
+    setShowShareToast(true);
+    setTimeout(() => setShowShareToast(false), 2500);
   };
 
   return (
@@ -789,7 +796,7 @@ function VoteDetailPage() {
             </button>
 
             <h3 style={{ marginBottom: "4px", textAlign: "center" }}>
-              일정이 확정되었습니다!
+              {isReconfirmation ? "일정이 변경되었습니다!" : "일정이 확정되었습니다!"}
             </h3>
 
             <p
@@ -800,41 +807,77 @@ function VoteDetailPage() {
                 marginBottom: "12px",
               }}
             >
-              만날 위치를 지금 정하시겠어요?
+              {existingHasLocation ? "기존 위치가 유지됩니다." : "만날 위치를 지금 정하시겠어요?"}
             </p>
 
-            <button
-              onClick={() => handleConfirmWithLocation(true)}
+            <input
+              type="text"
+              placeholder="약속 이름 (선택)"
+              value={appointmentTitle}
+              onChange={(e) => setAppointmentTitle(e.target.value)}
               style={{
                 width: "100%",
-                padding: "12px",
-                marginBottom: "8px",
-                backgroundColor: "#7c79ff",
-                color: "#fff",
-                border: "none",
+                padding: "10px 12px",
+                fontSize: "14px",
+                border: "1px solid #ddd",
                 borderRadius: "10px",
-                fontSize: "15px",
-                cursor: "pointer",
+                boxSizing: "border-box",
+                marginBottom: "12px",
               }}
-            >
-              위치 지금 정하기
-            </button>
+            />
 
-            <button
-              onClick={() => handleConfirmWithLocation(false)}
-              style={{
-                width: "100%",
-                padding: "12px",
-                backgroundColor: "#f5f5f5",
-                color: "#333",
-                border: "none",
-                borderRadius: "10px",
-                fontSize: "15px",
-                cursor: "pointer",
-              }}
-            >
-              나중에 정하기
-            </button>
+            {existingHasLocation ? (
+              <button
+                onClick={() => handleConfirmWithLocation(false)}
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  backgroundColor: "#7c79ff",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "10px",
+                  fontSize: "15px",
+                  cursor: "pointer",
+                }}
+              >
+                확인
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => handleConfirmWithLocation(true)}
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    marginBottom: "8px",
+                    backgroundColor: "#7c79ff",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "10px",
+                    fontSize: "15px",
+                    cursor: "pointer",
+                  }}
+                >
+                  위치 지금 정하기
+                </button>
+
+                <button
+                  onClick={() => handleConfirmWithLocation(false)}
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    backgroundColor: "#f5f5f5",
+                    color: "#333",
+                    border: "none",
+                    borderRadius: "10px",
+                    fontSize: "15px",
+                    cursor: "pointer",
+                  }}
+                >
+                  나중에 정하기
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1664,22 +1707,6 @@ function VoteDetailPage() {
                   )}
                 </div>
 
-                <button
-                  onClick={handleShareToChat}
-                  style={{
-                    width: "100%",
-                    marginTop: "12px",
-                    padding: "12px",
-                    border: "1px solid #7c79ff",
-                    borderRadius: "8px",
-                    backgroundColor: "#fff",
-                    color: "#7c79ff",
-                    fontSize: "15px",
-                    cursor: "pointer",
-                  }}
-                >
-                  💬 채팅에 공유
-                </button>
 
                 <div
                   style={{
@@ -1736,6 +1763,43 @@ function VoteDetailPage() {
               </>
             )}
           </>
+        )}
+
+        <button
+          onClick={handleShareToChat}
+          style={{
+            width: "100%",
+            marginTop: "16px",
+            padding: "12px",
+            border: "1px solid #7c79ff",
+            borderRadius: "8px",
+            backgroundColor: "#fff",
+            color: "#7c79ff",
+            fontSize: "15px",
+            cursor: "pointer",
+          }}
+        >
+          💬 채팅에 공유
+        </button>
+
+        {showShareToast && (
+          <div
+            style={{
+              position: "fixed",
+              bottom: "80px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              backgroundColor: "rgba(0,0,0,0.75)",
+              color: "#fff",
+              padding: "10px 20px",
+              borderRadius: "20px",
+              fontSize: "14px",
+              zIndex: 9999,
+              pointerEvents: "none",
+            }}
+          >
+            채팅에 공유되었습니다
+          </div>
         )}
       </div>
     </div>

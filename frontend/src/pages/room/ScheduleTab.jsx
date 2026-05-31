@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import DatePicker from "react-multi-date-picker";
 import { useNavigate } from "react-router-dom";
 import {
   getScheduleCandidates,
@@ -28,6 +29,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const [dragMode, setDragMode] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [newDate, setNewDate] = useState("");
+  const [newDates, setNewDates] = useState([]);
   const [newStartTime, setNewStartTime] = useState("");
   const [newEndTime, setNewEndTime] = useState("");
   const [newIsAllDay, setNewIsAllDay] = useState(false);
@@ -36,6 +38,9 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const [confirmedSchedules, setConfirmedSchedules] = useState([]);
   const [additionalLocations, setAdditionalLocations] = useState([]);
   const [showConfirmedForm, setShowConfirmedForm] = useState(false);
+  const [candidateViewMode, setCandidateViewMode] = useState("timetable"); // "timetable" | "calendar"
+  const [calYear, setCalYear] = useState(new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [confirmedTitle, setConfirmedTitle] = useState("");
   const [confirmedDate, setConfirmedDate] = useState("");
   const [confirmedStartTime, setConfirmedStartTime] = useState("");
@@ -210,52 +215,69 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
 
   const handleAddOrUpdateCandidate = async () => {
     try {
-      if (!newDate) {
-        alert("날짜를 선택하세요.");
-        return;
-      }
-
       if (!newIsAllDay) {
         if (!newStartTime || !newEndTime) {
           alert("시작 시간과 종료 시간을 선택하세요.");
           return;
         }
-
         if (newStartTime >= newEndTime) {
           alert("시작 시간은 종료 시간보다 빨라야 합니다.");
           return;
         }
       }
 
-      const candidateData = {
-        roomid: Number(roomId),
-        date: newDate,
-        starttime: newIsAllDay ? null : newStartTime,
-        endtime: newIsAllDay ? null : newEndTime,
-        isallday: newIsAllDay,
-      };
-
       if (editingCandidateId) {
-        await updateScheduleCandidate(editingCandidateId, candidateData);
+        // 수정 모드: 단일 날짜
+        if (!newDate) {
+          alert("날짜를 선택하세요.");
+          return;
+        }
+        await updateScheduleCandidate(editingCandidateId, {
+          roomid: Number(roomId),
+          date: newDate,
+          starttime: newIsAllDay ? null : newStartTime,
+          endtime: newIsAllDay ? null : newEndTime,
+          isallday: newIsAllDay,
+        });
         alert("후보 일정이 수정되었습니다.");
       } else {
-        const duplicated = candidates.some(
-          (candidate) => candidate.date === newDate
-        );
-
-        if (duplicated) {
-          alert("이미 추가된 날짜입니다.");
+        // 추가 모드: 여러 날짜
+        if (!newDates || newDates.length === 0) {
+          alert("날짜를 1개 이상 선택하세요.");
           return;
         }
 
-        await addScheduleCandidate(candidateData);
-        alert("후보 일정이 추가되었습니다.");
+        const dateStrings = newDates.map((d) =>
+          d.format ? d.format("YYYY-MM-DD") : String(d)
+        );
+
+        const duplicates = dateStrings.filter((ds) =>
+          candidates.some((c) => c.date === ds)
+        );
+
+        if (duplicates.length > 0) {
+          alert(`이미 추가된 날짜가 있습니다: ${duplicates.join(", ")}`);
+          return;
+        }
+
+        for (const dateStr of dateStrings) {
+          await addScheduleCandidate({
+            roomid: Number(roomId),
+            date: dateStr,
+            starttime: newIsAllDay ? null : newStartTime,
+            endtime: newIsAllDay ? null : newEndTime,
+            isallday: newIsAllDay,
+          });
+        }
+
+        alert(`후보 일정 ${dateStrings.length}개가 추가되었습니다.`);
       }
 
       await updateRoomLastActivity(roomId);
       await reloadScheduleData();
 
       setNewDate("");
+      setNewDates([]);
       setNewStartTime("");
       setNewEndTime("");
       setNewIsAllDay(false);
@@ -325,6 +347,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     navigate(`/rooms/${roomId}/available-result`, {
       state: {
         availabilities: availabilities,
+        candidates: candidates,
       },
     });
   };
@@ -521,26 +544,6 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                       state: { schedule: { ...s, roomname: roomName } },
                     })
                   }
-                  actions={
-                    <>
-                      {currentUser && (
-                        <button
-                          onClick={() => handleToggleAbsence(s)}
-                          style={{ background: "none", border: `1px solid ${isAbsent ? "#7c79ff" : "#ddd"}`, color: isAbsent ? "#7c79ff" : "#999", cursor: "pointer", fontSize: "12px", padding: "3px 8px", borderRadius: "6px" }}
-                        >
-                          {isAbsent ? "참석으로 변경" : "일정 취소"}
-                        </button>
-                      )}
-                      {isOwner && (
-                        <button
-                          onClick={() => handleDeleteConfirmedSchedule(s.id)}
-                          style={{ background: "none", border: "1px solid #ffcccc", color: "#e57373", cursor: "pointer", fontSize: "12px", padding: "3px 8px", borderRadius: "6px" }}
-                        >
-                          일정 삭제
-                        </button>
-                      )}
-                    </>
-                  }
                 />
               );
             })}
@@ -548,280 +551,371 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
         )}
       </div>
 
-      <h2>일정 후보</h2>
-
-      <div>
-        <input
-          type="date"
-          value={newDate}
-          onChange={(e) => setNewDate(e.target.value)}
-        />
-
-        <label>
-          <input
-            type="checkbox"
-            checked={newIsAllDay}
-            onChange={(e) => setNewIsAllDay(e.target.checked)}
-          />
-          하루종일
-        </label>
-
-        {!newIsAllDay && (
-          <>
-            <select
-              value={newStartTime}
-              onChange={(e) => setNewStartTime(e.target.value)}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "16px 0 10px" }}>
+        <h2 style={{ margin: 0 }}>일정 후보</h2>
+        <div style={{ display: "flex", border: "1px solid #ddd", borderRadius: "8px", overflow: "hidden" }}>
+          {["calendar", "timetable"].map((v) => (
+            <button
+              key={v}
+              onClick={() => setCandidateViewMode(v)}
+              style={{
+                padding: "6px 14px",
+                border: "none",
+                backgroundColor: candidateViewMode === v ? "#7c79ff" : "#fff",
+                color: candidateViewMode === v ? "#fff" : "#666",
+                fontSize: "13px",
+                cursor: "pointer",
+                fontWeight: candidateViewMode === v ? "600" : "normal",
+              }}
             >
-              <option value="">시작 시간</option>
-
-              {timeSlots.map((time) => (
-                <option key={time} value={time}>
-                  {time}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={newEndTime}
-              onChange={(e) => setNewEndTime(e.target.value)}
-            >
-              <option value="">종료 시간</option>
-
-              {timeSlots.map((time) => (
-                <option key={time} value={time}>
-                  {time}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
-
-        <button onClick={handleAddOrUpdateCandidate}>
-          {editingCandidateId ? "후보 수정 완료" : "후보 추가"}
-        </button>
-
-        {editingCandidateId && (
-          <button
-            onClick={() => {
-              setEditingCandidateId(null);
-              setNewDate("");
-              setNewStartTime("");
-              setNewEndTime("");
-              setNewIsAllDay(false);
-            }}
-          >
-            수정 취소
-          </button>
-        )}
-      </div>
-
-      <div
-        style={{ overflowX: "auto", maxWidth: "100%" }}
-        onMouseLeave={() => {
-          setIsDragging(false);
-          setDragMode(null);
-        }}
-        onMouseUp={() => {
-          setIsDragging(false);
-          setDragMode(null);
-        }}
-      >
-        <table style={{ borderCollapse: "collapse", minWidth: "800px" }}>
-          <thead>
-            <tr>
-              <th style={headerCellStyle}>시간</th>
-
-              {candidates.map((candidate) => (
-                <th key={candidate.id} style={headerCellStyle}>
-                  <div>{formatDateWithDay(candidate.date)}</div>
-
-                  <div>
-                    {candidate.isallday
-                      ? "하루종일"
-                      : `${candidate.starttime?.slice(0, 5)} ~ ${candidate.endtime?.slice(0, 5)}`}
-                  </div>
-
-                  <button onClick={() => handleEditCandidate(candidate)}>
-                    수정
-                  </button>
-                  <button onClick={() => handleDeleteCandidate(candidate.id)}>
-                    삭제
-                  </button>
-                </th>
-              ))}
-            </tr>
-          </thead>
-
-          <tbody>
-            {timeSlots.map((time) => (
-              <tr key={time}>
-                <td style={timeCellStyle}>{time}</td>
-
-                {candidates.map((candidate) => {
-                  const key = getSlotKey(candidate.id, time);
-                  const selectable = isTimeSelectable(candidate, time);
-                  const isSelected = selectedSlots.some(
-                    (slot) => slot.key === key
-                  );
-
-                  const slotMembers = getSlotAvailabilities(candidate.id, time);
-
-                  const mySaved = slotMembers.some(
-                    (member) => member.userid === currentUser?.id
-                  );
-
-                  return (
-                    <td
-                      key={key}
-                      onMouseDown={() => {
-                        if (!isSelectMode || !selectable) return;
-
-                        const mode = isSelected ? "remove" : "add";
-
-                        setDragMode(mode);
-                        setIsDragging(true);
-                        handleSelectSlot(candidate, time, mode);
-                      }}
-                      onMouseEnter={() => {
-                        if (isDragging && dragMode && selectable) {
-                          handleSelectSlot(candidate, time, dragMode);
-                        }
-                      }}
-                      onMouseUp={() => {
-                        setIsDragging(false);
-                        setDragMode(null);
-                      }}
-                      style={{
-                        ...slotCellStyle,
-                        backgroundColor: !selectable
-                          ? "#f1f1f1"
-                          : isSelectMode
-                          ? isSelected
-                            ? "#dcdcff"
-                            : "white"
-                          : mySaved
-                          ? "#7c79ff"
-                          : "white",
-                        cursor:
-                          isSelectMode && selectable ? "pointer" : "not-allowed",
-                      }}
-                    >
-                      {!isSelectMode && (
-                        <div style={{ display: "flex", height: "100%" }}>
-                          {slotMembers.map((member) => (
-                            <div
-                              key={member.id}
-                              title={member.nickname}
-                              style={{
-                                flex: 1,
-                                backgroundColor: getMemberColor(member.userid),
-                              }}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {!isSelectMode ? (
-        <button
-          onClick={() => {
-            const mySaveSlots = availabilities
-              .filter((item) => item.userid === myUserId)
-              .map((item) => ({
-                key: getSlotKey(item.candidateid, item.starttime.slice(0, 5)),
-                candidateId: item.candidateid,
-                date: item.date,
-                starttime: item.starttime.slice(0, 5),
-                endtime: item.endtime.slice(0, 5),
-              }));
-
-            setSelectedSlots(mySaveSlots);
-            setIsSelectMode(true);
-          }}
-        >
-          {myAvailability ? "내 일정 수정하기" : "내 일정 등록하기"}
-        </button>
-      ) : (
-        <div>
-          <button onClick={handleSaveAvailability}>저장하기</button>
-          <button
-            onClick={() => {
-              setSelectedSlots([]);
-              setIsSelectMode(false);
-            }}
-          >
-            취소
-          </button>
+              {v === "calendar" ? "달력" : "타임테이블"}
+            </button>
+          ))}
         </div>
+      </div>
+
+      {/* 타임테이블 모드 */}
+      {candidateViewMode === "timetable" && (
+        <>
+          {/* 후보 추가 폼 */}
+          <div>
+            {editingCandidateId ? (
+              <input
+                type="date"
+                value={newDate}
+                onChange={(e) => setNewDate(e.target.value)}
+                style={{ padding: "8px", border: "1px solid #ddd", borderRadius: "8px", marginBottom: "8px" }}
+              />
+            ) : (
+              <DatePicker
+                multiple
+                value={newDates}
+                onChange={setNewDates}
+                format="YYYY-MM-DD"
+                minDate={new Date()}
+                placeholder="날짜 여러 개 선택 가능"
+                style={{ padding: "8px", border: "1px solid #ddd", borderRadius: "8px", width: "100%", marginBottom: "8px" }}
+              />
+            )}
+
+            <label style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+              <input
+                type="checkbox"
+                checked={newIsAllDay}
+                onChange={(e) => setNewIsAllDay(e.target.checked)}
+              />
+              하루종일
+            </label>
+
+            {!newIsAllDay && (
+              <>
+                <select value={newStartTime} onChange={(e) => setNewStartTime(e.target.value)}>
+                  <option value="">시작 시간</option>
+                  {timeSlots.map((time) => <option key={time} value={time}>{time}</option>)}
+                </select>
+                <select value={newEndTime} onChange={(e) => setNewEndTime(e.target.value)}>
+                  <option value="">종료 시간</option>
+                  {timeSlots.map((time) => <option key={time} value={time}>{time}</option>)}
+                </select>
+              </>
+            )}
+
+            <button onClick={handleAddOrUpdateCandidate}>
+              {editingCandidateId ? "후보 수정 완료" : "후보 추가"}
+            </button>
+
+            {editingCandidateId && (
+              <button
+                onClick={() => {
+                  setEditingCandidateId(null);
+                  setNewDate("");
+                  setNewDates([]);
+                  setNewStartTime("");
+                  setNewEndTime("");
+                  setNewIsAllDay(false);
+                }}
+              >
+                수정 취소
+              </button>
+            )}
+          </div>
+
+          {/* 타임테이블 */}
+          <div
+            style={{ overflowX: "auto", maxWidth: "100%" }}
+            onMouseLeave={() => { setIsDragging(false); setDragMode(null); }}
+            onMouseUp={() => { setIsDragging(false); setDragMode(null); }}
+          >
+            <table style={{ borderCollapse: "collapse", minWidth: "800px" }}>
+              <thead>
+                <tr>
+                  <th style={headerCellStyle}>시간</th>
+                  {candidates.map((candidate) => (
+                    <th key={candidate.id} style={headerCellStyle}>
+                      <div>{formatDateWithDay(candidate.date)}</div>
+                      <div>
+                        {candidate.isallday
+                          ? "하루종일"
+                          : `${candidate.starttime?.slice(0, 5)} ~ ${candidate.endtime?.slice(0, 5)}`}
+                      </div>
+                      <button onClick={() => handleEditCandidate(candidate)}>수정</button>
+                      <button onClick={() => handleDeleteCandidate(candidate.id)}>삭제</button>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {timeSlots.map((time) => (
+                  <tr key={time}>
+                    <td style={timeCellStyle}>{time}</td>
+                    {candidates.map((candidate) => {
+                      const key = getSlotKey(candidate.id, time);
+                      const selectable = isTimeSelectable(candidate, time);
+                      const isSelected = selectedSlots.some((slot) => slot.key === key);
+                      const slotMembers = getSlotAvailabilities(candidate.id, time);
+                      const mySaved = slotMembers.some((member) => member.userid === currentUser?.id);
+                      return (
+                        <td
+                          key={key}
+                          onMouseDown={() => {
+                            if (!isSelectMode || !selectable) return;
+                            const mode = isSelected ? "remove" : "add";
+                            setDragMode(mode);
+                            setIsDragging(true);
+                            handleSelectSlot(candidate, time, mode);
+                          }}
+                          onMouseEnter={() => {
+                            if (isDragging && dragMode && selectable) {
+                              handleSelectSlot(candidate, time, dragMode);
+                            }
+                          }}
+                          onMouseUp={() => { setIsDragging(false); setDragMode(null); }}
+                          style={{
+                            ...slotCellStyle,
+                            backgroundColor: !selectable ? "#f1f1f1" : isSelectMode ? isSelected ? "#dcdcff" : "white" : mySaved ? "#7c79ff" : "white",
+                            cursor: isSelectMode && selectable ? "pointer" : "not-allowed",
+                          }}
+                        >
+                          {!isSelectMode && (
+                            <div style={{ display: "flex", height: "100%" }}>
+                              {slotMembers.map((member) => (
+                                <div
+                                  key={member.id}
+                                  title={member.nickname}
+                                  style={{ flex: 1, backgroundColor: getMemberColor(member.userid) }}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 일정 등록 버튼 */}
+          {!isSelectMode ? (
+            <button
+              onClick={() => {
+                const mySaveSlots = availabilities
+                  .filter((item) => item.userid === myUserId)
+                  .map((item) => ({
+                    key: getSlotKey(item.candidateid, item.starttime.slice(0, 5)),
+                    candidateId: item.candidateid,
+                    date: item.date,
+                    starttime: item.starttime.slice(0, 5),
+                    endtime: item.endtime.slice(0, 5),
+                  }));
+                setSelectedSlots(mySaveSlots);
+                setIsSelectMode(true);
+              }}
+            >
+              {myAvailability ? "내 일정 수정하기" : "내 일정 등록하기"}
+            </button>
+          ) : (
+            <div>
+              <button onClick={handleSaveAvailability}>저장하기</button>
+              <button onClick={() => { setSelectedSlots([]); setIsSelectMode(false); }}>취소</button>
+            </div>
+          )}
+
+          {/* 멤버 등록 현황 */}
+          <h3>멤버 일정 등록 현황</h3>
+          {members.map((member) => {
+            const isRegistered = availabilities.some((item) => item.userid === member.userid);
+            const isMe = !!currentUser?.id && member.userid === currentUser.id;
+            return (
+              <div key={member.id} style={{ display: "flex", gap: "10px" }}>
+                <span>👤</span>
+                <span>{member.nickname || "닉네임 없음"}</span>
+                <span>{isRegistered ? "등록 완료" : isMe ? "내 일정 미등록" : "일정 등록 안 함"}</span>
+                {!isRegistered && !isMe && (
+                  <button onClick={() => handleRequestSchedule(member)}>일정 등록 요청</button>
+                )}
+              </div>
+            );
+          })}
+          {guests.map((guest) => {
+            const isRegistered = availabilities.some((item) => item.userid === guest.id);
+            const guestId = localStorage.getItem("guest_id");
+            const isMe = !!guestId && guest.id === guestId;
+            return (
+              <div key={guest.id} style={{ display: "flex", gap: "10px" }}>
+                <span>👤</span>
+                <span>{guest.nickname || "닉네임 없음"}</span>
+                <span>{isRegistered ? "등록 완료" : isMe ? "내 일정 미등록" : "일정 등록 안 함"}</span>
+                {!isRegistered && !isMe && (
+                  <button onClick={() => handleRequestSchedule(guest)}>일정 등록 요청</button>
+                )}
+              </div>
+            );
+          })}
+        </>
       )}
 
-      <h3>멤버 일정 등록 현황</h3>
-
-      {members.map((member) => {
-        const isRegistered = availabilities.some(
-          (item) => item.userid === member.userid
-        );
-
-        const isMe = !!currentUser?.id && member.userid === currentUser.id;
-
-        return (
-          <div key={member.id} style={{ display: "flex", gap: "10px" }}>
-            <span>👤</span>
-            <span>{member.nickname || "닉네임 없음"}</span>
-            <span>
-              {isRegistered
-                ? "등록 완료"
-                : isMe
-                ? "내 일정 미등록"
-                : "일정 등록 안 함"}
-            </span>
-
-            {!isRegistered && !isMe && (
-              <button onClick={() => handleRequestSchedule(member)}>
-                일정 등록 요청
-              </button>
-            )}
-          </div>
-        );
-      })}
-
-      {guests.map((guest) => {
-        const isRegistered = availabilities.some(
-          (item) => item.userid === guest.id
-        );
-
-        const guestId = localStorage.getItem("guest_id");
-        const isMe = !!guestId && guest.id === guestId;
-
-        return (
-          <div key={guest.id} style={{ display: "flex", gap: "10px" }}>
-            <span>👤</span>
-            <span>{guest.nickname || "닉네임 없음"}</span>
-            <span>
-              {isRegistered
-                ? "등록 완료"
-                : isMe
-                ? "내 일정 미등록"
-                : "일정 등록 안 함"}
-            </span>
-
-            {!isRegistered && !isMe && (
-              <button onClick={() => handleRequestSchedule(guest)}>
-                일정 등록 요청
-              </button>
-            )}
-          </div>
-        );
-      })}
+      {/* 달력 모드 */}
+      {candidateViewMode === "calendar" && (
+        <CandidateCalendar
+          candidates={candidates}
+          availabilities={availabilities}
+          calYear={calYear}
+          calMonth={calMonth}
+          onPrevMonth={() => {
+            if (calMonth === 0) { setCalYear((y) => y - 1); setCalMonth(11); }
+            else setCalMonth((m) => m - 1);
+          }}
+          onNextMonth={() => {
+            if (calMonth === 11) { setCalYear((y) => y + 1); setCalMonth(0); }
+            else setCalMonth((m) => m + 1);
+          }}
+          members={[...members, ...guests]}
+        />
+      )}
 
       <button onClick={handleShowAvailableResult}>가능한 시간 보기</button>
+    </div>
+  );
+}
+
+function CandidateCalendar({ candidates, availabilities, calYear, calMonth, onPrevMonth, onNextMonth, members }) {
+  const [selectedDate, setSelectedDate] = useState(null);
+
+  const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const cells = [...Array(firstDay).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+
+  // 날짜별 후보 맵
+  const candidateMap = {};
+  candidates.forEach((c) => {
+    if (!candidateMap[c.date]) candidateMap[c.date] = [];
+    candidateMap[c.date].push(c);
+  });
+
+  // 날짜별 가능 인원 맵
+  const availMap = {};
+  availabilities.forEach(({ date, userid }) => {
+    if (!availMap[date]) availMap[date] = new Set();
+    availMap[date].add(userid);
+  });
+
+  const pad = (n) => String(n).padStart(2, "0");
+  const dateKey = (d) => `${calYear}-${pad(calMonth + 1)}-${pad(d)}`;
+
+  const selectedAvailUsers = selectedDate ? [...(availMap[selectedDate] || [])] : [];
+  const selectedAvailCount = selectedAvailUsers.length;
+  // 선택 날짜의 가능 멤버 닉네임
+  const selectedAvailNicknames = selectedAvailUsers.map((uid) => {
+    const m = members.find((m) => (m.userid || m.id) === uid);
+    return m?.nickname || uid;
+  });
+
+  return (
+    <div style={{ marginTop: "8px" }}>
+      {/* 월 네비게이션 - 날짜 바로 옆에 버튼 */}
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "6px", marginBottom: "12px" }}>
+        <button onClick={onPrevMonth} style={{ border: "none", background: "none", fontSize: "20px", cursor: "pointer", lineHeight: 1, padding: "0 2px" }}>‹</button>
+        <span style={{ fontWeight: "bold", fontSize: "16px" }}>{calYear}년 {calMonth + 1}월</span>
+        <button onClick={onNextMonth} style={{ border: "none", background: "none", fontSize: "20px", cursor: "pointer", lineHeight: 1, padding: "0 2px" }}>›</button>
+      </div>
+
+      {/* 요일 헤더 */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", marginBottom: "4px" }}>
+        {WEEKDAYS.map((d, i) => (
+          <div key={d} style={{ textAlign: "center", fontSize: "12px", fontWeight: "600", color: i === 0 ? "#f44" : i === 6 ? "#7c79ff" : "#555", padding: "4px 0" }}>{d}</div>
+        ))}
+      </div>
+
+      {/* 날짜 그리드 */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px" }}>
+        {cells.map((d, i) => {
+          const key = d ? dateKey(d) : null;
+          const availCount = key ? (availMap[key]?.size || 0) : 0;
+          const hasAvail = availCount > 0;
+          const isToday = key === todayStr;
+          const isSelected = key === selectedDate;
+          const col = i % 7;
+
+          return (
+            <div
+              key={i}
+              onClick={() => d && hasAvail && setSelectedDate(isSelected ? null : key)}
+              style={{
+                minHeight: "52px",
+                padding: "4px",
+                borderRadius: "8px",
+                backgroundColor: isSelected ? "#f0f0ff" : hasAvail ? "#fafaff" : "transparent",
+                border: hasAvail ? "1px solid #e0e0ff" : "1px solid transparent",
+                cursor: hasAvail ? "pointer" : "default",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+              }}
+            >
+              {d && (
+                <>
+                  <div style={{
+                    width: "24px", height: "24px", borderRadius: "50%",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    backgroundColor: isToday ? "#7c79ff" : "transparent",
+                    color: isToday ? "#fff" : col === 0 ? "#f44" : col === 6 ? "#7c79ff" : "#222",
+                    fontSize: "12px", fontWeight: isToday ? "bold" : "normal",
+                  }}>
+                    {d}
+                  </div>
+                  {hasAvail && (
+                    <div style={{ display: "flex", gap: "2px", marginTop: "2px", alignItems: "center", justifyContent: "center" }}>
+                      <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#7c79ff" }} />
+                      <span style={{ fontSize: "9px", color: "#7c79ff", fontWeight: "600" }}>{availCount}명</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 선택된 날짜 상세 */}
+      {selectedDate && selectedAvailCount > 0 && (
+        <div style={{ marginTop: "12px", padding: "12px", backgroundColor: "#f5f5ff", borderRadius: "10px" }}>
+          <p style={{ margin: "0 0 8px", fontWeight: "bold", fontSize: "14px", color: "#555" }}>{selectedDate}</p>
+          <p style={{ margin: "0 0 6px", fontSize: "13px", color: "#7c79ff" }}>👥 {selectedAvailCount}명 가능</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+            {selectedAvailNicknames.map((nick, idx) => (
+              <span key={idx} style={{ fontSize: "12px", backgroundColor: "#e8e8ff", color: "#555", borderRadius: "8px", padding: "2px 8px" }}>
+                {nick}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

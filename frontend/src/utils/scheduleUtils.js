@@ -82,18 +82,90 @@ export function getTopAvailableTimes(availabilities) {
     if (currentBlock) allBlocks.push(currentBlock);
   });
 
-  // 가능 인원 내림차순 → 겹치는 시간 길이 내림차순
-  return allBlocks
-    .map((block) => ({
-      date: block.date,
-      starttime: block.starttime,
-      endtime: block.endtime,
-      availableCount: block.users.size,
-      duration: timeToMinutes(block.endtime) - timeToMinutes(block.starttime),
-    }))
+  return allBlocks.map((block) => ({
+    date: block.date,
+    starttime: block.starttime,
+    endtime: block.endtime,
+    availableCount: block.users.size,
+    duration: timeToMinutes(block.endtime) - timeToMinutes(block.starttime),
+  }));
+}
+
+/**
+ * 정렬 방식에 따라 당일 결과를 정렬해서 반환
+ * sortBy: "count" | "duration"
+ */
+export function sortAvailableTimes(blocks, sortBy = "count") {
+  return [...blocks]
     .sort((a, b) => {
+      if (sortBy === "duration") {
+        if (b.duration !== a.duration) return b.duration - a.duration;
+        return b.availableCount - a.availableCount;
+      }
+      // default: count
       if (b.availableCount !== a.availableCount) return b.availableCount - a.availableCount;
       return b.duration - a.duration;
     })
+    .slice(0, 10);
+}
+
+/**
+ * N일 연속 조합 중 가능 인원이 많은 순으로 반환
+ * candidates: [{ date, ... }]
+ * availabilities: [{ date, userid, ... }]
+ * nDays: 연속 일수
+ */
+export function getTopConsecutiveDays(availabilities, candidates, nDays) {
+  if (!availabilities || !candidates || nDays < 1) return [];
+
+  // 후보 날짜 목록 (중복 제거 후 정렬)
+  const candidateDates = [...new Set(candidates.map((c) => c.date).filter(Boolean))].sort();
+
+  if (candidateDates.length < nDays) return [];
+
+  // 사용자별 가능 날짜 Set
+  const userDates = {};
+  availabilities.forEach(({ date, userid }) => {
+    if (!date || !userid) return;
+    if (!userDates[userid]) userDates[userid] = new Set();
+    userDates[userid].add(date);
+  });
+
+  const results = [];
+
+  for (let i = 0; i <= candidateDates.length - nDays; i++) {
+    const sequence = candidateDates.slice(i, i + nDays);
+
+    // 실제 날짜가 연속(하루 간격)인지 확인
+    let isConsecutive = true;
+    for (let j = 1; j < sequence.length; j++) {
+      const prev = new Date(sequence[j - 1] + "T00:00:00");
+      const curr = new Date(sequence[j] + "T00:00:00");
+      const diffDays = Math.round((curr - prev) / (1000 * 60 * 60 * 24));
+      if (diffDays !== 1) { isConsecutive = false; break; }
+    }
+    if (!isConsecutive) continue;
+
+    // 모든 날에 가능한 인원 계산
+    let availableCount = 0;
+    const availableUsers = [];
+    Object.entries(userDates).forEach(([userId, dates]) => {
+      if (sequence.every((d) => dates.has(d))) {
+        availableCount++;
+        availableUsers.push(userId);
+      }
+    });
+
+    results.push({
+      dates: sequence,
+      startDate: sequence[0],
+      endDate: sequence[sequence.length - 1],
+      availableCount,
+      availableUsers,
+    });
+  }
+
+  return results
+    .sort((a, b) => b.availableCount - a.availableCount)
     .slice(0, 10);
 }

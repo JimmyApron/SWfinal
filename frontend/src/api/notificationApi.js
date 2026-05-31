@@ -191,7 +191,7 @@ function isNotificationAfterJoining(notification, participations) {
 }
 
 // roomid 없이 receiverid 기준으로만 조회하는 알림 타입
-const NON_ROOM_NOTIFICATION_TYPES = ["room_invite", "room_invite_accepted", "friend_request", "friend_accepted", "calendar_share_accepted"];
+const NON_ROOM_NOTIFICATION_TYPES = ["room_invite", "room_invite_accepted", "friend_request", "friend_accepted", "calendar_share_request", "calendar_share_accepted"];
 
 async function getVisibleNotifications(recipientId, isGuest, unreadOnly = false) {
   const participations = await getRoomParticipations(recipientId, isGuest);
@@ -230,6 +230,7 @@ async function getVisibleNotifications(recipientId, isGuest, unreadOnly = false)
     .neq("type", "room_invite_accepted")
     .neq("type", "friend_request")
     .neq("type", "friend_accepted")
+    .neq("type", "calendar_share_request")
     .neq("type", "calendar_share_accepted")
     .in(
       "roomid",

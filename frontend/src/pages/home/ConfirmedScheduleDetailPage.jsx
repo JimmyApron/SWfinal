@@ -20,6 +20,25 @@ import { decodePolyline } from "../../utils/decodePolyline";
 import KakaoMapView from "../../components/map/KakaoMapView";
 import LocationPicker from "../../components/map/LocationPicker";
 
+function getTodayStr() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function getTimeUntil(date, starttime) {
+  const today = getTodayStr();
+  if (date === today) return "오늘 약속입니다";
+  const target = new Date(`${date}T${starttime || "00:00:00"}`);
+  const diff = target - new Date();
+  if (diff < 0) return "지난 일정입니다";
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  if (days > 0) return `일정 ${days}일 ${hours}시간 전입니다`;
+  if (hours > 0) return `일정 ${hours}시간 ${minutes}분 전입니다`;
+  return `일정 ${minutes}분 전입니다`;
+}
+
 function ConfirmedScheduleDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -753,7 +772,20 @@ function ConfirmedScheduleDetailPage() {
 
         {schedule.title && <h2 style={{ marginBottom: "2px" }}>{schedule.title}</h2>}
 
-        <p style={{ color: "#555", marginBottom: "16px" }}>{dateLabel}</p>
+        <p style={{ color: "#555", marginBottom: schedule.date ? "4px" : "16px" }}>{dateLabel}</p>
+
+        {schedule.date && (
+          <p
+            style={{
+              margin: "0 0 16px",
+              fontSize: "13px",
+              fontWeight: schedule.date === getTodayStr() ? "bold" : "normal",
+              color: schedule.date === getTodayStr() ? "#7c79ff" : "#f90",
+            }}
+          >
+            {getTimeUntil(schedule.date, schedule.starttime)}
+          </p>
+        )}
 
         {attendees.length > 0 && (
           <div
@@ -965,24 +997,6 @@ function ConfirmedScheduleDetailPage() {
           </>
         )}
 
-        {currentUser && (
-          <button
-            onClick={handleDismiss}
-            style={{
-              width: "100%",
-              padding: "12px",
-              marginTop: "8px",
-              backgroundColor: "#f5f5f5",
-              color: "#555",
-              border: "none",
-              borderRadius: "10px",
-              fontSize: "15px",
-              cursor: "pointer",
-            }}
-          >
-            내 홈에서 숨기기
-          </button>
-        )}
       </div>
     </div>
   );

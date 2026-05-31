@@ -11,6 +11,7 @@ import {
 } from "../../api/personalEventApi";
 import { addEventToGoogleCalendar } from "../../api/googleCalendarApi";
 import { getFriends } from "../../api/friendApi";
+import { getTodos, createTodo, toggleTodo, updateTodo, deleteTodo } from "../../api/todoApi";
 import {
   sendCalendarShareRequest,
   getAcceptedShares,
@@ -174,9 +175,12 @@ function CalendarPage() {
   const navigate = useNavigate();
   const today = new Date();
 
-  const [current, setCurrent] = useState({
-    year: today.getFullYear(),
-    month: today.getMonth(),
+  const [current, setCurrent] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem("calendar_current");
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return { year: today.getFullYear(), month: today.getMonth() };
   });
   const [showPicker, setShowPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(today.getFullYear());
@@ -188,6 +192,20 @@ function CalendarPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [showFabMenu, setShowFabMenu] = useState(false);
+  const [showTodoModal, setShowTodoModal] = useState(false);
+  const [todoTitle, setTodoTitle] = useState("");
+  const [todoDueDate, setTodoDueDate] = useState("");
+  const [todoDueTime, setTodoDueTime] = useState("");
+  const [todoNoDeadline, setTodoNoDeadline] = useState(false);
+  const [todoReminder, setTodoReminder] = useState("none");
+  const [todos, setTodos] = useState([]);
+  const [editingTodo, setEditingTodo] = useState(null);
+  const [editTodoTitle, setEditTodoTitle] = useState("");
+  const [editTodoDueDate, setEditTodoDueDate] = useState("");
+  const [editTodoDueTime, setEditTodoDueTime] = useState("");
+  const [editTodoReminder, setEditTodoReminder] = useState("none");
+  const [editTodoNoDeadline, setEditTodoNoDeadline] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -394,8 +412,15 @@ function CalendarPage() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       setCurrentUser(user);
+      if (user) {
+        getTodos(user.id).then(setTodos).catch(() => {});
+      }
     });
   }, []);
+
+  useEffect(() => {
+    sessionStorage.setItem("calendar_current", JSON.stringify(current));
+  }, [current]);
 
   useEffect(() => {
     fetchHolidays(year, month).then(setHolidays);
@@ -405,7 +430,19 @@ function CalendarPage() {
     if (!currentUser) return;
 
     getMyConfirmedSchedules(currentUser.id)
-      .then(setSchedules)
+      .then(async (data) => {
+        if (!data || !data.length) { setSchedules([]); return; }
+        const roomIds = [...new Set(data.map((s) => s.roomid))];
+        const { data: members } = await supabase
+          .from("room_members")
+          .select("roomid")
+          .in("roomid", roomIds);
+        const countMap = {};
+        (members || []).forEach((m) => {
+          countMap[m.roomid] = (countMap[m.roomid] || 0) + 1;
+        });
+        setSchedules(data.map((s) => ({ ...s, memberCount: countMap[s.roomid] || 0 })));
+      })
       .catch(() => {});
 
     getPersonalEvents(currentUser.id)
@@ -442,6 +479,15 @@ function CalendarPage() {
   schedules.forEach((s) => {
     if (!scheduleMap[s.date]) scheduleMap[s.date] = [];
     scheduleMap[s.date].push(s);
+  });
+
+  const todoMap = {};
+
+  todos.forEach((t) => {
+    if (t.duedate) {
+      if (!todoMap[t.duedate]) todoMap[t.duedate] = [];
+      todoMap[t.duedate].push(t);
+    }
   });
 
   const personalMap = {};
@@ -507,6 +553,87 @@ function CalendarPage() {
       enddate: dateStr || "",
     });
     setShowForm(true);
+  };
+
+  const handleTodoCreate = async () => {
+    if (!todoTitle.trim() || !currentUser) return;
+    try {
+      const newTodo = await createTodo({
+        userId: currentUser.id,
+        title: todoTitle.trim(),
+        duedate: todoNoDeadline ? null : todoDueDate || null,
+        duetime: todoNoDeadline ? null : todoDueTime || null,
+        reminder: todoNoDeadline ? "none" : todoReminder,
+      });
+      setTodos((prev) => [newTodo, ...prev]);
+      setTodoTitle("");
+      setTodoDueDate("");
+      setTodoDueTime("");
+      setTodoNoDeadline(false);
+      setTodoReminder("none");
+      setShowTodoModal(false);
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
+  const handleTodoToggle = async (todo) => {
+    try {
+      await toggleTodo(todo.id, !todo.iscompleted);
+      setTodos((prev) =>
+        prev.map((t) => (t.id === todo.id ? { ...t, iscompleted: !t.iscompleted } : t))
+      );
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
+  const handleTodoDelete = async (id) => {
+    if (!window.confirm("할일을 삭제할까요?")) return;
+    try {
+      await deleteTodo(id);
+      setTodos((prev) => prev.filter((t) => t.id !== id));
+      setEditingTodo(null);
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
+  const openEditTodo = (todo) => {
+    setEditingTodo(todo);
+    setEditTodoTitle(todo.title);
+    setEditTodoDueDate(todo.duedate || "");
+    setEditTodoDueTime(todo.duetime || "");
+    setEditTodoReminder(todo.reminder || "none");
+    setEditTodoNoDeadline(!todo.duedate);
+  };
+
+  const handleTodoUpdate = async () => {
+    if (!editTodoTitle.trim() || !editingTodo) return;
+    try {
+      await updateTodo(editingTodo.id, {
+        title: editTodoTitle.trim(),
+        duedate: editTodoNoDeadline ? null : editTodoDueDate || null,
+        duetime: editTodoNoDeadline ? null : editTodoDueTime || null,
+        reminder: editTodoNoDeadline ? "none" : editTodoReminder,
+      });
+      setTodos((prev) =>
+        prev.map((t) =>
+          t.id === editingTodo.id
+            ? {
+                ...t,
+                title: editTodoTitle.trim(),
+                duedate: editTodoNoDeadline ? null : editTodoDueDate || null,
+                duetime: editTodoNoDeadline ? null : editTodoDueTime || null,
+                reminder: editTodoNoDeadline ? "none" : editTodoReminder,
+              }
+            : t
+        )
+      );
+      setEditingTodo(null);
+    } catch (e) {
+      alert(e.message);
+    }
   };
 
   const openEditForm = (event) => {
@@ -646,13 +773,15 @@ function CalendarPage() {
   const selectedSchedules = selectedKey ? scheduleMap[selectedKey] || [] : [];
   const selectedPersonal = selectedKey ? personalMap[selectedKey] || [] : [];
   const selectedGoogle = selectedKey ? googleMap[selectedKey] || [] : [];
+  const selectedTodos = selectedKey ? todoMap[selectedKey] || [] : [];
   const selectedHoliday = selectedKey ? holidays[selectedKey] : null;
 
   const hasSelectedContent =
     selectedHoliday ||
     selectedSchedules.length > 0 ||
     selectedPersonal.length > 0 ||
-    selectedGoogle.length > 0;
+    selectedGoogle.length > 0 ||
+    selectedTodos.length > 0;
 
   return (
     <div
@@ -773,6 +902,7 @@ function CalendarPage() {
           const daySchedules = key ? scheduleMap[key] || [] : [];
           const dayPersonal = key ? personalMap[key] || [] : [];
           const dayGoogle = key ? googleMap[key] || [] : [];
+          const dayTodos = key ? todoMap[key] || [] : [];
           const isSun = col === 0;
           const isSat = col === 6;
           const isSelected = selectedDay === d;
@@ -880,6 +1010,18 @@ function CalendarPage() {
                         }}
                       />
                     ))}
+
+                    {dayTodos.slice(0, 1).map((_, ti) => (
+                      <div
+                        key={`t${ti}`}
+                        style={{
+                          width: "5px",
+                          height: "5px",
+                          borderRadius: "50%",
+                          backgroundColor: "#f90",
+                        }}
+                      />
+                    ))}
                   </div>
                 </>
               )}
@@ -921,32 +1063,52 @@ function CalendarPage() {
             </p>
           )}
 
-          {selectedSchedules.map((s) => (
-            <div
-              key={s.id}
-              style={{
-                margin: "4px 0 0",
-                fontSize: "13px",
-                color: "#7c79ff",
-              }}
-            >
-              📌 {s.title || s.date}{" "}
-              {s.starttime
-                ? `${s.starttime} ~${s.endtime ? ` ${s.endtime}` : ""}`
-                : "(하루종일)"}
-              {s.roomname && (
-                <span style={{ color: "#aaa", fontSize: "12px" }}>
-                  {" "}
-                  · {s.roomname}
-                </span>
-              )}
-              {s.location && (
-                <div style={{ fontSize: "12px", color: "#aaa" }}>
-                  📍 {s.location}
+          {selectedSchedules.map((s) => {
+            const attendees = (s.memberCount || 0) - (s.absentees?.length || 0);
+            return (
+              <div
+                key={s.id}
+                onClick={() =>
+                  navigate("/confirmed-schedule", {
+                    state: { schedule: s },
+                  })
+                }
+                style={{
+                  margin: "4px 0 0",
+                  padding: "8px 10px",
+                  fontSize: "13px",
+                  color: "#7c79ff",
+                  backgroundColor: "#f0f0ff",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                }}
+              >
+                <div style={{ fontWeight: "600" }}>
+                  📌 {s.title || s.date}{" "}
+                  {s.starttime
+                    ? `${s.starttime}~${s.endtime ? s.endtime : ""}`
+                    : "(하루종일)"}
                 </div>
-              )}
-            </div>
-          ))}
+                <div style={{ display: "flex", gap: "8px", marginTop: "3px", flexWrap: "wrap" }}>
+                  {s.roomname && (
+                    <span style={{ color: "#aaa", fontSize: "12px" }}>
+                      🏠 {s.roomname}
+                    </span>
+                  )}
+                  {s.location && (
+                    <span style={{ fontSize: "12px", color: "#888" }}>
+                      📍 {s.location}
+                    </span>
+                  )}
+                  {s.memberCount > 0 && (
+                    <span style={{ fontSize: "12px", color: "#888" }}>
+                      👥 {attendees}명 참여
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
 
           {selectedPersonal.map((e) => (
             <div
@@ -1009,14 +1171,149 @@ function CalendarPage() {
                 : "(하루종일)"}
             </p>
           ))}
+
+          {selectedTodos.map((t) => (
+            <div
+              key={t.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                margin: "6px 0 0",
+              }}
+            >
+              <button
+                onClick={() => handleTodoToggle(t)}
+                style={{
+                  width: "20px",
+                  height: "20px",
+                  borderRadius: "50%",
+                  border: `2px solid ${t.iscompleted ? "#f90" : "#ddd"}`,
+                  backgroundColor: t.iscompleted ? "#f90" : "transparent",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  padding: 0,
+                }}
+              >
+                {t.iscompleted && <span style={{ color: "#fff", fontSize: "11px", lineHeight: 1 }}>✓</span>}
+              </button>
+
+              <span
+                onClick={() => openEditTodo(t)}
+                style={{
+                  flex: 1,
+                  fontSize: "13px",
+                  color: t.iscompleted ? "#bbb" : "#333",
+                  textDecoration: t.iscompleted ? "line-through" : "none",
+                  cursor: "pointer",
+                }}
+              >
+                {t.title}
+                {t.duetime && !t.iscompleted && (
+                  <span style={{ marginLeft: "5px", fontSize: "11px", color: "#aaa" }}>{t.duetime}</span>
+                )}
+                {t.reminder && t.reminder !== "none" && !t.iscompleted && (
+                  <span style={{ marginLeft: "3px", fontSize: "11px", color: "#f90" }}>🔔</span>
+                )}
+              </span>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* + FAB */}
+      {/* FAB 메뉴 */}
+      {showFabMenu && (
+        <>
+          <div
+            onClick={() => setShowFabMenu(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 99 }}
+          />
+          {/* 일정 버튼 */}
+          <div
+            style={{
+              position: "fixed",
+              bottom: "210px",
+              right: "20px",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              zIndex: 101,
+            }}
+          >
+            <span style={{ fontSize: "13px", color: "#555", backgroundColor: "#fff", padding: "3px 8px", borderRadius: "10px", boxShadow: "0 2px 6px rgba(0,0,0,0.1)" }}>일정</span>
+            <button
+              onClick={() => {
+                setShowFabMenu(false);
+                openCreateForm(selectedDay ? dateKey(year, month, selectedDay) : "");
+              }}
+              style={{
+                width: "46px",
+                height: "46px",
+                borderRadius: "50%",
+                backgroundColor: "#7c79ff",
+                color: "#fff",
+                border: "none",
+                fontSize: "22px",
+                cursor: "pointer",
+                boxShadow: "0 3px 10px rgba(124,121,255,0.4)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              📅
+            </button>
+          </div>
+          {/* 할일 버튼 */}
+          <div
+            style={{
+              position: "fixed",
+              bottom: "148px",
+              right: "20px",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              zIndex: 101,
+            }}
+          >
+            <span style={{ fontSize: "13px", color: "#555", backgroundColor: "#fff", padding: "3px 8px", borderRadius: "10px", boxShadow: "0 2px 6px rgba(0,0,0,0.1)" }}>할일</span>
+            <button
+              onClick={() => {
+                setShowFabMenu(false);
+                setTodoTitle("");
+                setTodoDueDate(selectedDay ? dateKey(year, month, selectedDay) : "");
+                setTodoDueTime("");
+                setTodoNoDeadline(false);
+                setTodoReminder("none");
+                setShowTodoModal(true);
+              }}
+              style={{
+                width: "46px",
+                height: "46px",
+                borderRadius: "50%",
+                backgroundColor: "#f90",
+                color: "#fff",
+                border: "none",
+                fontSize: "22px",
+                cursor: "pointer",
+                boxShadow: "0 3px 10px rgba(255,153,0,0.4)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              ✓
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* + / X FAB */}
       <button
-        onClick={() =>
-          openCreateForm(selectedDay ? dateKey(year, month, selectedDay) : "")
-        }
+        onClick={() => setShowFabMenu((v) => !v)}
         style={{
           position: "fixed",
           bottom: "80px",
@@ -1024,19 +1321,20 @@ function CalendarPage() {
           width: "52px",
           height: "52px",
           borderRadius: "50%",
-          backgroundColor: "#7c79ff",
+          backgroundColor: showFabMenu ? "#555" : "#7c79ff",
           color: "#fff",
           border: "none",
-          fontSize: "28px",
+          fontSize: showFabMenu ? "22px" : "28px",
           cursor: "pointer",
-          boxShadow: "0 4px 12px rgba(124,121,255,0.4)",
-          zIndex: 100,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+          zIndex: 102,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          transition: "background-color 0.2s",
         }}
       >
-        +
+        {showFabMenu ? "✕" : "+"}
       </button>
 
       {/* Year/Month picker modal */}
@@ -1626,6 +1924,257 @@ function CalendarPage() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* 할일 모달 */}
+      {showTodoModal && (
+        <>
+          <div
+            onClick={() => setShowTodoModal(false)}
+            style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", zIndex: 200 }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              backgroundColor: "#fff",
+              borderRadius: "20px 20px 0 0",
+              padding: "24px 20px 88px",
+              zIndex: 201,
+              boxShadow: "0 -4px 20px rgba(0,0,0,0.12)",
+            }}
+          >
+            {/* 헤더 */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <span style={{ fontSize: "16px", fontWeight: "bold" }}>할일 추가</span>
+              <button
+                onClick={() => setShowTodoModal(false)}
+                style={{ border: "none", background: "none", fontSize: "20px", cursor: "pointer", color: "#aaa" }}
+              >✕</button>
+            </div>
+
+            {/* 할일 제목 */}
+            <input
+              type="text"
+              placeholder="할일 내용을 입력하세요"
+              value={todoTitle}
+              onChange={(e) => setTodoTitle(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleTodoCreate()}
+              autoFocus
+              style={{
+                width: "100%",
+                padding: "12px",
+                fontSize: "15px",
+                border: "1px solid #ddd",
+                borderRadius: "10px",
+                boxSizing: "border-box",
+                marginBottom: "12px",
+                outline: "none",
+              }}
+            />
+
+            {/* 마감일/시간 + 기한없음 */}
+            <div style={{ marginBottom: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                <span style={{ fontSize: "13px", fontWeight: "600", color: "#555" }}>마감</span>
+                <button
+                  onClick={() => {
+                    setTodoNoDeadline((v) => !v);
+                    if (!todoNoDeadline) {
+                      setTodoDueDate("");
+                      setTodoDueTime("");
+                      setTodoReminder("none");
+                    }
+                  }}
+                  style={{
+                    padding: "3px 12px",
+                    border: `1px solid ${todoNoDeadline ? "#f90" : "#ddd"}`,
+                    borderRadius: "20px",
+                    backgroundColor: todoNoDeadline ? "#fff8ee" : "#fff",
+                    color: todoNoDeadline ? "#f90" : "#aaa",
+                    fontSize: "12px",
+                    cursor: "pointer",
+                    fontWeight: todoNoDeadline ? "600" : "normal",
+                  }}
+                >
+                  기한없음
+                </button>
+              </div>
+
+              {!todoNoDeadline && (
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <input
+                    type="date"
+                    value={todoDueDate}
+                    onChange={(e) => setTodoDueDate(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: "9px 10px",
+                      fontSize: "14px",
+                      border: "1px solid #ddd",
+                      borderRadius: "8px",
+                      outline: "none",
+                    }}
+                  />
+                  <input
+                    type="time"
+                    value={todoDueTime}
+                    onChange={(e) => setTodoDueTime(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: "9px 10px",
+                      fontSize: "14px",
+                      border: "1px solid #ddd",
+                      borderRadius: "8px",
+                      outline: "none",
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* 알림 */}
+            {!todoNoDeadline && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+                <span style={{ fontSize: "13px", fontWeight: "600", color: "#555", whiteSpace: "nowrap" }}>알림</span>
+                <select
+                  value={todoReminder}
+                  onChange={(e) => setTodoReminder(e.target.value)}
+                  style={{
+                    flex: 1,
+                    padding: "9px 10px",
+                    fontSize: "14px",
+                    border: "1px solid #ddd",
+                    borderRadius: "8px",
+                    outline: "none",
+                    backgroundColor: "#fff",
+                  }}
+                >
+                  <option value="none">알림 없음</option>
+                  <option value="0">마감 정시</option>
+                  <option value="10">10분 전</option>
+                  <option value="60">1시간 전</option>
+                  <option value="1440">1일 전</option>
+                </select>
+              </div>
+            )}
+
+            {todoNoDeadline && <div style={{ marginBottom: "16px" }} />}
+
+            {/* 추가 버튼 */}
+            <button
+              onClick={handleTodoCreate}
+              disabled={!todoTitle.trim()}
+              style={{
+                width: "100%",
+                padding: "13px",
+                backgroundColor: todoTitle.trim() ? "#f90" : "#eee",
+                color: todoTitle.trim() ? "#fff" : "#aaa",
+                border: "none",
+                borderRadius: "10px",
+                fontSize: "15px",
+                fontWeight: "bold",
+                cursor: todoTitle.trim() ? "pointer" : "default",
+              }}
+            >
+              추가
+            </button>
+
+          </div>
+        </>
+      )}
+
+      {/* 할일 수정 모달 */}
+      {editingTodo && (
+        <>
+          <div
+            onClick={() => setEditingTodo(null)}
+            style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", zIndex: 300 }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              backgroundColor: "#fff",
+              borderRadius: "20px 20px 0 0",
+              padding: "24px 20px 88px",
+              zIndex: 301,
+              boxShadow: "0 -4px 20px rgba(0,0,0,0.12)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <span style={{ fontSize: "16px", fontWeight: "bold" }}>할일 수정</span>
+              <button onClick={() => setEditingTodo(null)} style={{ border: "none", background: "none", fontSize: "20px", cursor: "pointer", color: "#aaa" }}>✕</button>
+            </div>
+
+            <input
+              type="text"
+              value={editTodoTitle}
+              onChange={(e) => setEditTodoTitle(e.target.value)}
+              autoFocus
+              style={{ width: "100%", padding: "12px", fontSize: "15px", border: "1px solid #ddd", borderRadius: "10px", boxSizing: "border-box", marginBottom: "12px", outline: "none" }}
+            />
+
+            <div style={{ marginBottom: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                <span style={{ fontSize: "13px", fontWeight: "600", color: "#555" }}>마감</span>
+                <button
+                  onClick={() => {
+                    setEditTodoNoDeadline((v) => !v);
+                    if (!editTodoNoDeadline) { setEditTodoDueDate(""); setEditTodoDueTime(""); setEditTodoReminder("none"); }
+                  }}
+                  style={{
+                    padding: "3px 12px",
+                    border: `1px solid ${editTodoNoDeadline ? "#f90" : "#ddd"}`,
+                    borderRadius: "20px",
+                    backgroundColor: editTodoNoDeadline ? "#fff8ee" : "#fff",
+                    color: editTodoNoDeadline ? "#f90" : "#aaa",
+                    fontSize: "12px",
+                    cursor: "pointer",
+                    fontWeight: editTodoNoDeadline ? "600" : "normal",
+                  }}
+                >기한없음</button>
+              </div>
+              {!editTodoNoDeadline && (
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <input type="date" value={editTodoDueDate} onChange={(e) => setEditTodoDueDate(e.target.value)} style={{ flex: 1, padding: "9px 10px", fontSize: "14px", border: "1px solid #ddd", borderRadius: "8px", outline: "none" }} />
+                  <input type="time" value={editTodoDueTime} onChange={(e) => setEditTodoDueTime(e.target.value)} style={{ flex: 1, padding: "9px 10px", fontSize: "14px", border: "1px solid #ddd", borderRadius: "8px", outline: "none" }} />
+                </div>
+              )}
+            </div>
+
+            {!editTodoNoDeadline && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+                <span style={{ fontSize: "13px", fontWeight: "600", color: "#555", whiteSpace: "nowrap" }}>알림</span>
+                <select value={editTodoReminder} onChange={(e) => setEditTodoReminder(e.target.value)} style={{ flex: 1, padding: "9px 10px", fontSize: "14px", border: "1px solid #ddd", borderRadius: "8px", outline: "none", backgroundColor: "#fff" }}>
+                  <option value="none">알림 없음</option>
+                  <option value="0">마감 정시</option>
+                  <option value="10">10분 전</option>
+                  <option value="60">1시간 전</option>
+                  <option value="1440">1일 전</option>
+                </select>
+              </div>
+            )}
+
+            {editTodoNoDeadline && <div style={{ marginBottom: "16px" }} />}
+
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                onClick={() => handleTodoDelete(editingTodo.id)}
+                style={{ flex: 1, padding: "13px", backgroundColor: "#fff", color: "#f44", border: "1px solid #f44", borderRadius: "10px", fontSize: "15px", cursor: "pointer" }}
+              >삭제</button>
+              <button
+                onClick={handleTodoUpdate}
+                disabled={!editTodoTitle.trim()}
+                style={{ flex: 2, padding: "13px", backgroundColor: editTodoTitle.trim() ? "#f90" : "#eee", color: editTodoTitle.trim() ? "#fff" : "#aaa", border: "none", borderRadius: "10px", fontSize: "15px", fontWeight: "bold", cursor: editTodoTitle.trim() ? "pointer" : "default" }}
+              >저장</button>
             </div>
           </div>
         </>
