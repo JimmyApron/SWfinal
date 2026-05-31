@@ -74,47 +74,29 @@ function ConfirmedScheduleDetailPage() {
         setAbsentees(scheduleData.absentees || []);
       }
 
-      if (!schedule.voteid) return;
+      const { data: memberData } = await supabase
+        .from("room_members")
+        .select("userid")
+        .eq("roomid", schedule.roomid);
 
-      const { data: vote } = await supabase
-        .from("votes")
-        .select("confirmedoptionid")
-        .eq("id", schedule.voteid)
-        .maybeSingle();
+      const memberIds = (memberData || []).map((m) => m.userid).filter(Boolean);
+      if (memberIds.length === 0) return;
 
-      if (vote?.confirmedoptionid) {
-        const { data: responses } = await supabase
-          .from("voteresponses")
-          .select("userid")
-          .eq("optionid", vote.confirmedoptionid);
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, nickname")
+        .in("id", memberIds);
 
-        if (responses) {
-          const uniqueIds = [...new Set(responses.map((r) => r.userid))].filter(
-            Boolean
-          );
+      const profileMap = Object.fromEntries(
+        (profiles || []).map((p) => [p.id, p.nickname])
+      );
 
-          if (uniqueIds.length === 0) {
-            setAttendees([]);
-            return;
-          }
-
-          const { data: profiles } = await supabase
-            .from("profiles")
-            .select("id, nickname")
-            .in("id", uniqueIds);
-
-          const profileMap = Object.fromEntries(
-            (profiles || []).map((p) => [p.id, p.nickname])
-          );
-
-          setAttendees(
-            uniqueIds.map((uid) => ({
-              userid: uid,
-              nickname: profileMap[uid] || uid,
-            }))
-          );
-        }
-      }
+      setAttendees(
+        memberIds.map((uid) => ({
+          userid: uid,
+          nickname: profileMap[uid] || uid,
+        }))
+      );
     };
 
     fetchData();

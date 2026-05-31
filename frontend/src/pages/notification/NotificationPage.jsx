@@ -18,6 +18,8 @@ import {
   acceptCalendarShare,
   rejectCalendarShare,
 } from "../../api/calendarShareApi";
+import { acceptFriendRequest, rejectFriendRequest } from "../../api/friendApi";
+import { createNotification } from "../../api/notificationApi";
 
 function NotificationPage() {
   const navigate = useNavigate();
@@ -374,6 +376,25 @@ function NotificationPage() {
         profile?.nickname || user.user_metadata?.nickname || user.email;
 
       await joinRoomById(notification.roomid, user.id, nickname);
+
+      // 초대한 사람에게 수락 알림 전송
+      if (notification.senderid) {
+        const { data: roomData } = await supabase
+          .from("rooms")
+          .select("roomname")
+          .eq("id", notification.roomid)
+          .maybeSingle();
+        const roomName = roomData?.roomname || "방";
+
+        await createNotification({
+          receiverId: notification.senderid,
+          senderId: user.id,
+          type: "room_invite_accepted",
+          title: "🏠 초대 수락",
+          message: `${nickname}님이 [${roomName}]에 참가했습니다.`,
+        });
+      }
+
       await deleteNotification(notification.id);
 
       setNotifications((prev) =>
@@ -405,6 +426,87 @@ function NotificationPage() {
     }
   };
 
+  const handleAcceptFriendRequest = async (e, notification) => {
+    e.stopPropagation();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return;
+
+    try {
+      const { data: friendRow } = await supabase
+        .from("friends")
+        .select("id")
+        .eq("userid", notification.senderid)
+        .eq("friendid", user.id)
+        .eq("status", "pending")
+        .maybeSingle();
+
+      if (!friendRow) {
+        alert("이미 처리된 요청입니다.");
+        setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+        return;
+      }
+
+      await acceptFriendRequest(friendRow.id, user.id, notification.senderid);
+
+      const { data: myProfile } = await supabase
+        .from("profiles")
+        .select("nickname")
+        .eq("id", user.id)
+        .single();
+      const myNickname = myProfile?.nickname || "알 수 없음";
+
+      await createNotification({
+        receiverId: notification.senderid,
+        senderId: user.id,
+        type: "friend_accepted",
+        title: "친구 요청 수락",
+        message: `${myNickname}님이 친구 요청을 수락했습니다. 이제 친구입니다!`,
+      });
+
+      await deleteNotification(notification.id);
+
+      setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+
+      alert("친구 요청을 수락했습니다!");
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleRejectFriendRequest = async (e, notification) => {
+    e.stopPropagation();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return;
+
+    try {
+      const { data: friendRow } = await supabase
+        .from("friends")
+        .select("id")
+        .eq("userid", notification.senderid)
+        .eq("friendid", user.id)
+        .eq("status", "pending")
+        .maybeSingle();
+
+      if (friendRow) {
+        await rejectFriendRequest(friendRow.id);
+      }
+
+      await deleteNotification(notification.id);
+
+      setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleAcceptCalendarShare = async (e, notification) => {
     e.stopPropagation();
 
@@ -421,6 +523,22 @@ function NotificationPage() {
 
     try {
       await acceptCalendarShare(user.id, notification.senderid);
+
+      const { data: myProfile } = await supabase
+        .from("profiles")
+        .select("nickname")
+        .eq("id", user.id)
+        .single();
+      const myNickname = myProfile?.nickname || "알 수 없음";
+
+      await createNotification({
+        receiverId: notification.senderid,
+        senderId: user.id,
+        type: "calendar_share_accepted",
+        title: "📅 캘린더 공개 수락",
+        message: `${myNickname}님이 캘린더 공개 요청을 수락했습니다.`,
+      });
+
       await deleteNotification(notification.id);
 
       setNotifications((prev) =>
@@ -617,6 +735,79 @@ function NotificationPage() {
                   >
                     거절
                   </button>
+                </div>
+              )}
+
+              {notification.type === "friend_request" && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    marginTop: "10px",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => handleAcceptFriendRequest(e, notification)}
+                    style={{
+                      flex: 1,
+                      padding: "8px",
+                      backgroundColor: "#7c79ff",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      fontWeight: "bold",
+                      fontSize: "13px",
+                    }}
+                  >
+                    수락
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => handleRejectFriendRequest(e, notification)}
+                    style={{
+                      flex: 1,
+                      padding: "8px",
+                      backgroundColor: "#fff",
+                      color: "#999",
+                      border: "1px solid #ddd",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      fontSize: "13px",
+                    }}
+                  >
+                    거절
+                  </button>
+                </div>
+              )}
+
+              {(notification.type === "friend_accepted" ||
+                notification.type === "calendar_share_accepted") && (
+                <div style={{ marginTop: "6px" }}>
+                  <span
+                    style={{
+                      display: "inline-block",
+                      padding: "3px 10px",
+                      backgroundColor:
+                        notification.type === "friend_accepted"
+                          ? "#e8f5e9"
+                          : "#fff8e1",
+                      color:
+                        notification.type === "friend_accepted"
+                          ? "#388e3c"
+                          : "#f57c00",
+                      borderRadius: "12px",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                    }}
+                  >
+                    {notification.type === "friend_accepted"
+                      ? "✓ 친구 완료"
+                      : "✓ 공유 완료"}
+                  </span>
                 </div>
               )}
 

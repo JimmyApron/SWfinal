@@ -190,31 +190,34 @@ function isNotificationAfterJoining(notification, participations) {
   );
 }
 
+// roomid 없이 receiverid 기준으로만 조회하는 알림 타입
+const NON_ROOM_NOTIFICATION_TYPES = ["room_invite", "room_invite_accepted", "friend_request", "friend_accepted", "calendar_share_accepted"];
+
 async function getVisibleNotifications(recipientId, isGuest, unreadOnly = false) {
   const participations = await getRoomParticipations(recipientId, isGuest);
 
-  // room_invite는 방에 들어가기 전 받는 알림이라 참여 시간 필터에서 제외
-  let inviteQuery = supabase
+  // room_invite, friend_accepted, calendar_share_accepted는 방 참여 필터 없이 조회
+  let nonRoomQuery = supabase
     .from("notifications")
     .select("*")
     .eq("receiverid", recipientId)
-    .eq("type", "room_invite");
+    .in("type", NON_ROOM_NOTIFICATION_TYPES);
 
   if (unreadOnly) {
-    inviteQuery = inviteQuery.eq("isread", false);
+    nonRoomQuery = nonRoomQuery.eq("isread", false);
   }
 
-  const { data: inviteData, error: inviteError } = await inviteQuery;
+  const { data: nonRoomData, error: nonRoomError } = await nonRoomQuery;
 
-  if (inviteError) {
-    console.error("초대 알림 조회 실패:", inviteError);
-    throw new Error("초대 알림 조회 실패");
+  if (nonRoomError) {
+    console.error("비룸 알림 조회 실패:", nonRoomError);
+    throw new Error("비룸 알림 조회 실패");
   }
 
-  const inviteNotifications = inviteData || [];
+  const nonRoomNotifications = nonRoomData || [];
 
   if (participations.length === 0) {
-    return inviteNotifications.sort(
+    return nonRoomNotifications.sort(
       (a, b) => new Date(b.createdat) - new Date(a.createdat)
     );
   }
@@ -224,6 +227,10 @@ async function getVisibleNotifications(recipientId, isGuest, unreadOnly = false)
     .select("*")
     .eq("receiverid", recipientId)
     .neq("type", "room_invite")
+    .neq("type", "room_invite_accepted")
+    .neq("type", "friend_request")
+    .neq("type", "friend_accepted")
+    .neq("type", "calendar_share_accepted")
     .in(
       "roomid",
       participations.map(({ roomid }) => roomid)
@@ -245,7 +252,7 @@ async function getVisibleNotifications(recipientId, isGuest, unreadOnly = false)
     isNotificationAfterJoining(notification, participations)
   );
 
-  return [...inviteNotifications, ...regularNotifications].sort(
+  return [...nonRoomNotifications, ...regularNotifications].sort(
     (a, b) => new Date(b.createdat) - new Date(a.createdat)
   );
 }
@@ -257,9 +264,9 @@ export async function isNotificationVisibleToRecipient(
 ) {
   if (!notification || !recipientId) return false;
 
-  // 방 초대는 아직 방 참여 정보가 없어도 보여야 함
+  // room_invite, friend_accepted, calendar_share_accepted는 방 참여 정보 없이 수신자에게 항상 표시
   if (
-    notification.type === "room_invite" &&
+    NON_ROOM_NOTIFICATION_TYPES.includes(notification.type) &&
     String(notification.receiverid) === String(recipientId)
   ) {
     return true;
@@ -386,6 +393,15 @@ export async function deleteMyNotifications(userId) {
     console.error("전체 알림 삭제 실패 상세:", JSON.stringify(error, null, 2));
     throw new Error("전체 알림 삭제 실패");
   }
+}
+
+export async function deleteFriendRequestNotification(senderId, receiverId) {
+  await supabase
+    .from("notifications")
+    .delete()
+    .eq("type", "friend_request")
+    .eq("senderid", senderId)
+    .eq("receiverid", receiverId);
 }
 
 export async function deleteMyGuestNotifications(guestId) {

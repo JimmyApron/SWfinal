@@ -24,6 +24,11 @@ function VoteDetailPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [newOptionText, setNewOptionText] = useState("");
+  const [newOptionDate, setNewOptionDate] = useState("");
+  const [newOptionStarttime, setNewOptionStarttime] = useState("");
+  const [newOptionEndtime, setNewOptionEndtime] = useState("");
+  const [newOptionIsAllDay, setNewOptionIsAllDay] = useState(false);
+  const [showAddOptionForm, setShowAddOptionForm] = useState(false);
   const [isForceVoting, setIsForceVoting] = useState(false);
   const [showVotersForOption, setShowVotersForOption] = useState(null);
   const [showParticipants, setShowParticipants] = useState(false);
@@ -400,6 +405,24 @@ function VoteDetailPage() {
         setNewKakaoMapUrl("");
         setNewPickedPlace(null);
         setShowPickMap(false);
+      } else if (vote.votetype === "schedule") {
+        if (!newOptionDate) {
+          alert("날짜를 선택하세요.");
+          return;
+        }
+
+        newOption = await addVoteOption(Number(voteid), {
+          optiontype: "date",
+          optiondate: newOptionDate,
+          starttime: newOptionIsAllDay ? null : newOptionStarttime || null,
+          endtime: newOptionIsAllDay ? null : newOptionEndtime || null,
+          optiontext: newOptionDate,
+        });
+
+        setNewOptionDate("");
+        setNewOptionStarttime("");
+        setNewOptionEndtime("");
+        setNewOptionIsAllDay(false);
       } else {
         if (!newOptionText.trim()) {
           alert("항목 내용을 입력하세요.");
@@ -414,6 +437,7 @@ function VoteDetailPage() {
         ...prev,
         voteoptions: [...prev.voteoptions, newOption],
       }));
+      setShowAddOptionForm(false);
     } catch (error) {
       alert("항목 추가 실패: " + (error.message || JSON.stringify(error)));
     }
@@ -1201,7 +1225,24 @@ function VoteDetailPage() {
                       전체 선택
                     </button>
 
-                    {isLocationVote ? (
+                    <button
+                      onClick={() => setShowAddOptionForm((v) => !v)}
+                      style={{
+                        width: "100%",
+                        padding: "10px",
+                        marginBottom: "8px",
+                        border: "1px dashed #bbb",
+                        borderRadius: "8px",
+                        backgroundColor: "#fafafa",
+                        color: "#555",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                      }}
+                    >
+                      {showAddOptionForm ? "항목 추가 닫기 ✕" : "항목 추가 +"}
+                    </button>
+
+                    {showAddOptionForm && isLocationVote && (
                       <div
                         style={{
                           marginBottom: "16px",
@@ -1304,18 +1345,90 @@ function VoteDetailPage() {
                           장소 검색 항목 추가
                         </button>
                       </div>
-                    ) : (
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "8px",
-                          marginBottom: "16px",
-                        }}
-                      >
+                    )}
+
+                    {showAddOptionForm && !isLocationVote && vote.votetype === "schedule" && (
+                      <div style={{ marginBottom: "16px" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", fontSize: "14px" }}>
+                          <input
+                            type="checkbox"
+                            checked={newOptionIsAllDay}
+                            onChange={(e) => {
+                              setNewOptionIsAllDay(e.target.checked);
+                              if (e.target.checked) {
+                                setNewOptionStarttime("");
+                                setNewOptionEndtime("");
+                              }
+                            }}
+                          />
+                          하루종일
+                        </label>
+
+                        <input
+                          type="date"
+                          value={newOptionDate}
+                          onChange={(e) => setNewOptionDate(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "10px",
+                            marginBottom: "8px",
+                            border: "1px solid #ddd",
+                            borderRadius: "8px",
+                            boxSizing: "border-box",
+                          }}
+                        />
+
+                        {!newOptionIsAllDay && (
+                          <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                            <input
+                              type="time"
+                              value={newOptionStarttime}
+                              onChange={(e) => setNewOptionStarttime(e.target.value)}
+                              placeholder="시작 시간"
+                              style={{
+                                flex: 1,
+                                padding: "10px",
+                                border: "1px solid #ddd",
+                                borderRadius: "8px",
+                              }}
+                            />
+                            <input
+                              type="time"
+                              value={newOptionEndtime}
+                              onChange={(e) => setNewOptionEndtime(e.target.value)}
+                              placeholder="종료 시간"
+                              style={{
+                                flex: 1,
+                                padding: "10px",
+                                border: "1px solid #ddd",
+                                borderRadius: "8px",
+                              }}
+                            />
+                          </div>
+                        )}
+
+                        <button
+                          onClick={handleAddOption}
+                          style={{
+                            width: "100%",
+                            padding: "10px",
+                            border: "1px solid #ddd",
+                            borderRadius: "8px",
+                            backgroundColor: "#fff",
+                            cursor: "pointer",
+                          }}
+                        >
+                          일정 항목 추가
+                        </button>
+                      </div>
+                    )}
+
+                    {showAddOptionForm && !isLocationVote && vote.votetype !== "schedule" && (
+                      <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
                         <input
                           value={newOptionText}
                           onChange={(e) => setNewOptionText(e.target.value)}
-                          placeholder="항목 추가"
+                          placeholder="항목 내용 입력"
                           style={{
                             flex: 1,
                             padding: "10px",
@@ -1331,6 +1444,7 @@ function VoteDetailPage() {
                             border: "1px solid #ddd",
                             borderRadius: "8px",
                             backgroundColor: "#fff",
+                            cursor: "pointer",
                           }}
                         >
                           추가

@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
+import { createNotification } from "./notificationApi";
 
 async function getProfiles(userIds) {
   if (!userIds.length) return [];
@@ -38,6 +39,21 @@ export async function sendFriendRequest(userId, email) {
     .insert([{ userid: userId, friendid: profile.id, status: "pending" }]);
 
   if (error) throw new Error("친구 요청 실패");
+
+  const { data: senderProfile } = await supabase
+    .from("profiles")
+    .select("nickname")
+    .eq("id", userId)
+    .maybeSingle();
+  const senderNickname = senderProfile?.nickname || "알 수 없음";
+
+  await createNotification({
+    receiverId: profile.id,
+    senderId: userId,
+    type: "friend_request",
+    title: "친구 요청",
+    message: `${senderNickname}님이 친구 요청을 보냈습니다.`,
+  });
 }
 
 export async function getFriends(userId) {
@@ -104,11 +120,39 @@ export async function removeFriend(userId, friendId) {
 export async function checkFriendStatus(userId, friendId) {
   const { data } = await supabase
     .from("friends")
-    .select("id, status")
+    .select("id, status, userid")
     .or(`and(userid.eq.${userId},friendid.eq.${friendId}),and(userid.eq.${friendId},friendid.eq.${userId})`)
     .limit(1)
     .maybeSingle();
-  return data; // null | { id, status: 'pending' | 'accepted' }
+  return data; // null | { id, status: 'pending' | 'accepted', userid }
+}
+
+export async function getSentRequests(userId) {
+  const { data, error } = await supabase
+    .from("friends")
+    .select("id, friendid")
+    .eq("userid", userId)
+    .eq("status", "pending");
+
+  if (error) throw new Error("보낸 요청 조회 실패");
+
+  const rows = data || [];
+  if (!rows.length) return [];
+
+  const profiles = await getProfiles(rows.map((r) => r.friendid));
+  return rows.map((row) => {
+    const profile = profiles.find((p) => p.id === row.friendid) || {};
+    return { requestId: row.id, ...profile };
+  });
+}
+
+export async function cancelFriendRequest(requestId) {
+  const { error } = await supabase
+    .from("friends")
+    .delete()
+    .eq("id", requestId);
+
+  if (error) throw new Error("친구 요청 취소 실패");
 }
 
 export async function sendFriendRequestById(userId, friendId) {
@@ -131,4 +175,19 @@ export async function sendFriendRequestById(userId, friendId) {
     .insert([{ userid: userId, friendid: friendId, status: "pending" }]);
 
   if (error) throw new Error("친구 요청 실패");
+
+  const { data: senderProfile } = await supabase
+    .from("profiles")
+    .select("nickname")
+    .eq("id", userId)
+    .maybeSingle();
+  const senderNickname = senderProfile?.nickname || "알 수 없음";
+
+  await createNotification({
+    receiverId: friendId,
+    senderId: userId,
+    type: "friend_request",
+    title: "친구 요청",
+    message: `${senderNickname}님이 친구 요청을 보냈습니다.`,
+  });
 }
