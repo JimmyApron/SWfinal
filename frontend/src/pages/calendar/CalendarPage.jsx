@@ -658,7 +658,7 @@ function CalendarPage() {
     <div
       style={{
         minHeight: "100vh",
-        backgroundColor: "#fff",
+        backgroundColor: "var(--bg-color)",
         paddingBottom: "80px",
       }}
     >
@@ -669,7 +669,7 @@ function CalendarPage() {
           alignItems: "center",
           justifyContent: "space-between",
           padding: "16px 20px",
-          borderBottom: "1px solid #eee",
+          borderBottom: "1px solid var(--border-color)",
         }}
       >
         <div style={{ width: "32px" }} />
@@ -682,7 +682,7 @@ function CalendarPage() {
               background: "none",
               fontSize: "24px",
               cursor: "pointer",
-              color: "#555",
+              color: "var(--secondary-text)",
             }}
           >
             ‹
@@ -711,7 +711,7 @@ function CalendarPage() {
               background: "none",
               fontSize: "24px",
               cursor: "pointer",
-              color: "#555",
+              color: "var(--secondary-text)",
             }}
           >
             ›
@@ -725,7 +725,7 @@ function CalendarPage() {
             background: "none",
             fontSize: "22px",
             cursor: "pointer",
-            color: "#555",
+            color: "var(--secondary-text)",
             lineHeight: 1,
           }}
         >
@@ -748,7 +748,7 @@ function CalendarPage() {
               textAlign: "center",
               fontSize: "12px",
               fontWeight: "bold",
-              color: i === 0 ? "#f44" : i === 6 ? "#7c79ff" : "#888",
+              color: i === 0 ? "#f44" : i === 6 ? "#7c79ff" : "var(--secondary-text)",
             }}
           >
             {d}
@@ -783,7 +783,7 @@ function CalendarPage() {
             ? "#f44"
             : isSat
             ? "#7c79ff"
-            : "#222";
+            : "var(--text-color)";
 
           return (
             <div
@@ -1171,7 +1171,7 @@ function CalendarPage() {
               right: 0,
               bottom: 0,
               width: "280px",
-              backgroundColor: "#fff",
+              backgroundColor: "var(--bg-color)",
               zIndex: 201,
               boxShadow: "-2px 0 12px rgba(0,0,0,0.15)",
               padding: "24px 20px",
@@ -1197,7 +1197,7 @@ function CalendarPage() {
                   background: "none",
                   fontSize: "20px",
                   cursor: "pointer",
-                  color: "#aaa",
+                  color: "var(--secondary-text)",
                 }}
               >
                 ✕
@@ -1210,7 +1210,7 @@ function CalendarPage() {
                 margin: "0 0 12px",
                 fontSize: "14px",
                 fontWeight: "600",
-                color: "#333",
+                color: "var(--text-color)",
               }}
             >
               캘린더 공개
@@ -1226,7 +1226,7 @@ function CalendarPage() {
                       alignItems: "center",
                       gap: "10px",
                       padding: "8px 0",
-                      borderBottom: "1px solid #f5f5f5",
+                      borderBottom: "1px solid var(--border-color)",
                     }}
                   >
                     {f.profileimageurl ? (
@@ -1296,7 +1296,7 @@ function CalendarPage() {
               <p
                 style={{
                   fontSize: "13px",
-                  color: "#aaa",
+                  color: "var(--secondary-text)",
                   marginBottom: "8px",
                 }}
               >
@@ -1311,7 +1311,7 @@ function CalendarPage() {
                     margin: "0 0 8px",
                     fontSize: "12px",
                     fontWeight: "600",
-                    color: "#888",
+                    color: "var(--secondary-text)",
                   }}
                 >
                   보낸 공유 요청
@@ -1324,7 +1324,7 @@ function CalendarPage() {
                       alignItems: "center",
                       gap: "8px",
                       padding: "7px 0",
-                      borderBottom: "1px solid #f5f5f5",
+                      borderBottom: "1px solid var(--border-color)",
                     }}
                   >
                     {req.profileimageurl ? (
@@ -1350,13 +1350,13 @@ function CalendarPage() {
                       </div>
                     )}
                     <span style={{ flex: 1, fontSize: "13px" }}>{req.nickname}</span>
-                    <span style={{ fontSize: "11px", color: "#aaa" }}>대기 중</span>
+                    <span style={{ fontSize: "11px", color: "var(--secondary-text)" }}>대기 중</span>
                     <button
                       onClick={() => handleCancelCalendarShareRequest(req)}
                       style={{
                         fontSize: "11px",
-                        color: "#999",
-                        border: "1px solid #ddd",
+                        color: "var(--secondary-text)",
+                        border: "1px solid var(--border-color)",
                         background: "none",
                         borderRadius: "6px",
                         padding: "3px 8px",
@@ -1396,7 +1396,7 @@ function CalendarPage() {
                 margin: "0 0 10px",
                 fontSize: "14px",
                 fontWeight: "600",
-                color: "#333",
+                color: "var(--text-color)",
               }}
             >
               구글 캘린더 연동
@@ -1440,7 +1440,7 @@ function CalendarPage() {
                     marginBottom: "6px",
                   }}
                 >
-                  <span style={{ fontSize: "14px", color: "#333" }}>
+                  <span style={{ fontSize: "14px", color: "var(--text-color)" }}>
                     확정 일정 자동 추가
                   </span>
 
@@ -1451,7 +1451,7 @@ function CalendarPage() {
                       height: "24px",
                       borderRadius: "12px",
                       cursor: "pointer",
-                      backgroundColor: googleAutoSync ? "#7c79ff" : "#ccc",
+                      backgroundColor: googleAutoSync ? "#7c79ff" : "var(--btn-bg)",
                       position: "relative",
                       transition: "background-color 0.2s",
                       flexShrink: 0,
@@ -1462,7 +1462,7 @@ function CalendarPage() {
                         width: "20px",
                         height: "20px",
                         borderRadius: "50%",
-                        backgroundColor: "#fff",
+                        backgroundColor: "white",
                         position: "absolute",
                         top: "2px",
                         left: googleAutoSync ? "22px" : "2px",
@@ -1472,7 +1472,7 @@ function CalendarPage() {
                   </div>
                 </div>
 
-                <p style={{ fontSize: "11px", color: "#aaa", margin: 0 }}>
+                <p style={{ fontSize: "11px", color: "var(--secondary-text)", margin: 0 }}>
                   켜면 캘린더에 등록한 일정이 구글 캘린더에 자동으로 추가됩니다
                 </p>
               </div>
@@ -1515,7 +1515,7 @@ function CalendarPage() {
               top: "50%",
               left: "50%",
               transform: "translate(-50%,-50%)",
-              backgroundColor: "#fff",
+              backgroundColor: "var(--bg-color)",
               borderRadius: "16px",
               padding: "24px",
               width: "300px",
@@ -1545,7 +1545,7 @@ function CalendarPage() {
                   background: "none",
                   fontSize: "20px",
                   cursor: "pointer",
-                  color: "#aaa",
+                  color: "var(--secondary-text)",
                 }}
               >
                 ✕
@@ -1556,7 +1556,7 @@ function CalendarPage() {
               {friendListForShare.length === 0 ? (
                 <p
                   style={{
-                    color: "#aaa",
+                    color: "var(--secondary-text)",
                     textAlign: "center",
                     fontSize: "14px",
                     marginTop: "20px",
@@ -1573,7 +1573,7 @@ function CalendarPage() {
                       alignItems: "center",
                       gap: "12px",
                       padding: "10px 0",
-                      borderBottom: "1px solid #f5f5f5",
+                      borderBottom: "1px solid var(--border-color)",
                     }}
                   >
                     {f.profileimageurl ? (
@@ -1646,7 +1646,7 @@ function CalendarPage() {
         >
           <div
             style={{
-              backgroundColor: "#fff",
+              backgroundColor: "var(--bg-color)",
               borderRadius: "20px 20px 0 0",
               width: "100%",
               maxHeight: "90vh",
@@ -1672,7 +1672,7 @@ function CalendarPage() {
                   border: "none",
                   background: "none",
                   fontSize: "20px",
-                  color: "#aaa",
+                  color: "var(--secondary-text)",
                   cursor: "pointer",
                 }}
               >
@@ -1699,12 +1699,14 @@ function CalendarPage() {
                 outline: "none",
                 boxSizing: "border-box",
                 marginBottom: "16px",
+                backgroundColor: "transparent",
+                color: "var(--text-color)",
               }}
             />
 
             {/* 색상 */}
             <div style={{ marginBottom: "16px" }}>
-              <p style={{ margin: "0 0 8px", fontSize: "13px", color: "#888" }}>
+              <p style={{ margin: "0 0 8px", fontSize: "13px", color: "var(--secondary-text)" }}>
                 색상
               </p>
 
@@ -1726,7 +1728,7 @@ function CalendarPage() {
                       cursor: "pointer",
                       border:
                         form.color === c
-                          ? "3px solid #333"
+                          ? "3px solid var(--text-color)"
                           : "3px solid transparent",
                     }}
                   />
@@ -1756,7 +1758,7 @@ function CalendarPage() {
                   height: "24px",
                   borderRadius: "12px",
                   cursor: "pointer",
-                  backgroundColor: form.isallday ? "#7c79ff" : "#ccc",
+                  backgroundColor: form.isallday ? "#7c79ff" : "var(--btn-bg)",
                   position: "relative",
                   transition: "background-color 0.2s",
                   flexShrink: 0,
@@ -1767,7 +1769,7 @@ function CalendarPage() {
                     width: "20px",
                     height: "20px",
                     borderRadius: "50%",
-                    backgroundColor: "#fff",
+                    backgroundColor: "white",
                     position: "absolute",
                     top: "2px",
                     left: form.isallday ? "22px" : "2px",
@@ -1785,7 +1787,7 @@ function CalendarPage() {
                   style={{
                     margin: "0 0 6px",
                     fontSize: "13px",
-                    color: "#888",
+                    color: "var(--secondary-text)",
                   }}
                 >
                   시작 날짜
@@ -1805,10 +1807,12 @@ function CalendarPage() {
                   style={{
                     width: "100%",
                     padding: "10px",
-                    border: "1px solid #ddd",
+                    border: "1px solid var(--border-color)",
                     borderRadius: "10px",
                     fontSize: "15px",
                     boxSizing: "border-box",
+                    backgroundColor: "var(--bg-color)",
+                    color: "var(--text-color)",
                   }}
                 />
               </div>
@@ -1818,7 +1822,7 @@ function CalendarPage() {
                   style={{
                     margin: "0 0 6px",
                     fontSize: "13px",
-                    color: "#888",
+                    color: "var(--secondary-text)",
                   }}
                 >
                   종료 날짜
@@ -1837,10 +1841,12 @@ function CalendarPage() {
                   style={{
                     width: "100%",
                     padding: "10px",
-                    border: "1px solid #ddd",
+                    border: "1px solid var(--border-color)",
                     borderRadius: "10px",
                     fontSize: "15px",
                     boxSizing: "border-box",
+                    backgroundColor: "var(--bg-color)",
+                    color: "var(--text-color)",
                   }}
                 />
               </div>
@@ -1860,7 +1866,7 @@ function CalendarPage() {
                     style={{
                       margin: "0 0 6px",
                       fontSize: "13px",
-                      color: "#888",
+                      color: "var(--secondary-text)",
                     }}
                   >
                     시작 시간
@@ -1878,10 +1884,12 @@ function CalendarPage() {
                     style={{
                       width: "100%",
                       padding: "10px",
-                      border: "1px solid #ddd",
+                      border: "1px solid var(--border-color)",
                       borderRadius: "10px",
                       fontSize: "15px",
                       boxSizing: "border-box",
+                      backgroundColor: "var(--bg-color)",
+                      color: "var(--text-color)",
                     }}
                   />
                 </div>
@@ -1891,7 +1899,7 @@ function CalendarPage() {
                     style={{
                       margin: "0 0 6px",
                       fontSize: "13px",
-                      color: "#888",
+                      color: "var(--secondary-text)",
                     }}
                   >
                     종료 시간
@@ -1909,10 +1917,12 @@ function CalendarPage() {
                     style={{
                       width: "100%",
                       padding: "10px",
-                      border: "1px solid #ddd",
+                      border: "1px solid var(--border-color)",
                       borderRadius: "10px",
                       fontSize: "15px",
                       boxSizing: "border-box",
+                      backgroundColor: "var(--bg-color)",
+                      color: "var(--text-color)",
                     }}
                   />
                 </div>
@@ -1921,7 +1931,7 @@ function CalendarPage() {
 
             {/* 장소 */}
             <div style={{ marginBottom: "16px" }}>
-              <p style={{ margin: "0 0 6px", fontSize: "13px", color: "#888" }}>
+              <p style={{ margin: "0 0 6px", fontSize: "13px", color: "var(--secondary-text)" }}>
                 장소
               </p>
 
@@ -1937,10 +1947,12 @@ function CalendarPage() {
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "1px solid #ddd",
+                  border: "1px solid var(--border-color)",
                   borderRadius: "10px",
                   fontSize: "15px",
                   boxSizing: "border-box",
+                  backgroundColor: "var(--bg-color)",
+                  color: "var(--text-color)",
                 }}
               />
 
@@ -1956,7 +1968,7 @@ function CalendarPage() {
 
             {/* 알림 */}
             <div style={{ marginBottom: "16px" }}>
-              <p style={{ margin: "0 0 6px", fontSize: "13px", color: "#888" }}>
+              <p style={{ margin: "0 0 6px", fontSize: "13px", color: "var(--secondary-text)" }}>
                 알림
               </p>
 
@@ -1971,10 +1983,11 @@ function CalendarPage() {
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "1px solid #ddd",
+                  border: "1px solid var(--border-color)",
                   borderRadius: "10px",
                   fontSize: "15px",
-                  backgroundColor: "#fff",
+                  backgroundColor: "var(--bg-color)",
+                  color: "var(--text-color)",
                 }}
               >
                 {REMINDER_OPTIONS.map((o) => (
@@ -1999,9 +2012,11 @@ function CalendarPage() {
                     style={{
                       flex: 1,
                       padding: "10px",
-                      border: "1px solid #ddd",
+                      border: "1px solid var(--border-color)",
                       borderRadius: "10px",
                       fontSize: "15px",
+                      backgroundColor: "var(--bg-color)",
+                      color: "var(--text-color)",
                     }}
                   />
 
@@ -2016,10 +2031,11 @@ function CalendarPage() {
                     style={{
                       flex: 1,
                       padding: "10px",
-                      border: "1px solid #ddd",
+                      border: "1px solid var(--border-color)",
                       borderRadius: "10px",
                       fontSize: "15px",
-                      backgroundColor: "#fff",
+                      backgroundColor: "var(--bg-color)",
+                      color: "var(--text-color)",
                     }}
                   >
                     <option value="min">분 전</option>
@@ -2040,7 +2056,7 @@ function CalendarPage() {
                   marginBottom: "6px",
                 }}
               >
-                <span style={{ fontSize: "14px", color: "#333" }}>
+                <span style={{ fontSize: "14px", color: "var(--text-color)" }}>
                   알림 받지 않는 날 설정
                 </span>
 
@@ -2053,7 +2069,7 @@ function CalendarPage() {
                     height: "24px",
                     borderRadius: "12px",
                     cursor: "pointer",
-                    backgroundColor: skipEnabled ? "#7c79ff" : "#ccc",
+                    backgroundColor: skipEnabled ? "#7c79ff" : "var(--btn-bg)",
                     position: "relative",
                     transition: "background-color 0.2s",
                     flexShrink: 0,
@@ -2064,7 +2080,7 @@ function CalendarPage() {
                       width: "20px",
                       height: "20px",
                       borderRadius: "50%",
-                      backgroundColor: "#fff",
+                      backgroundColor: "white",
                       position: "absolute",
                       top: "2px",
                       left: skipEnabled ? "22px" : "2px",
@@ -2077,7 +2093,7 @@ function CalendarPage() {
               {skipEnabled && (
                 <div
                   style={{
-                    backgroundColor: "#f9f9ff",
+                    backgroundColor: "var(--card-bg)",
                     borderRadius: "10px",
                     padding: "12px",
                     display: "flex",
@@ -2119,7 +2135,7 @@ function CalendarPage() {
                         justifyContent: "space-between",
                       }}
                     >
-                      <span style={{ fontSize: "14px", color: "#555" }}>
+                      <span style={{ fontSize: "14px", color: "var(--secondary-text)" }}>
                         {label}
                       </span>
 
@@ -2130,7 +2146,7 @@ function CalendarPage() {
                           height: "24px",
                           borderRadius: "12px",
                           cursor: "pointer",
-                          backgroundColor: value ? "#7c79ff" : "#ccc",
+                          backgroundColor: value ? "#7c79ff" : "var(--btn-bg)",
                           position: "relative",
                           transition: "background-color 0.2s",
                           flexShrink: 0,
@@ -2141,7 +2157,7 @@ function CalendarPage() {
                             width: "20px",
                             height: "20px",
                             borderRadius: "50%",
-                            backgroundColor: "#fff",
+                            backgroundColor: "white",
                             position: "absolute",
                             top: "2px",
                             left: value ? "22px" : "2px",
@@ -2157,7 +2173,7 @@ function CalendarPage() {
 
             {/* 반복 */}
             <div style={{ marginBottom: "16px" }}>
-              <p style={{ margin: "0 0 6px", fontSize: "13px", color: "#888" }}>
+              <p style={{ margin: "0 0 6px", fontSize: "13px", color: "var(--secondary-text)" }}>
                 반복
               </p>
 
@@ -2172,10 +2188,11 @@ function CalendarPage() {
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "1px solid #ddd",
+                  border: "1px solid var(--border-color)",
                   borderRadius: "10px",
                   fontSize: "15px",
-                  backgroundColor: "#fff",
+                  backgroundColor: "var(--bg-color)",
+                  color: "var(--text-color)",
                 }}
               >
                 {REPEAT_OPTIONS.map((o) => (
@@ -2188,7 +2205,7 @@ function CalendarPage() {
 
             {/* 메모 */}
             <div style={{ marginBottom: "24px" }}>
-              <p style={{ margin: "0 0 6px", fontSize: "13px", color: "#888" }}>
+              <p style={{ margin: "0 0 6px", fontSize: "13px", color: "var(--secondary-text)" }}>
                 메모
               </p>
 
@@ -2205,11 +2222,13 @@ function CalendarPage() {
                 style={{
                   width: "100%",
                   padding: "10px",
-                  border: "1px solid #ddd",
+                  border: "1px solid var(--border-color)",
                   borderRadius: "10px",
                   fontSize: "15px",
                   boxSizing: "border-box",
                   resize: "none",
+                  backgroundColor: "var(--bg-color)",
+                  color: "var(--text-color)",
                 }}
               />
             </div>
@@ -2238,7 +2257,7 @@ function CalendarPage() {
                 style={{
                   width: "100%",
                   padding: "12px",
-                  backgroundColor: "#fff",
+                  backgroundColor: "var(--bg-color)",
                   color: "#f44",
                   border: "1px solid #f44",
                   borderRadius: "12px",

@@ -5,8 +5,8 @@
   bottom: 0;
 
   height: 64px;
-  background-color: white;
-  border-top: 1px solid #ddd;
+  background-color: var(--nav-bg);
+  border-top: 1px solid var(--border-color);
 
   display: flex;
   justify-content: space-around;
@@ -25,7 +25,7 @@
   align-items: center;
 
   text-decoration: none;
-  color: #777;
+  color: var(--secondary-text);
   font-size: 12px;
   gap: 4px;
 }
@@ -35,7 +35,7 @@
 }
 
 .bottom-nav-item.active {
-  color: #111;
+  color: var(--accent-color);
   font-weight: bold;
 }
 

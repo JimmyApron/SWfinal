@@ -174,3 +174,96 @@
 .edit-navigation-button:hover, .logout-btn:hover {
   opacity: 0.9;
 }
+
+/* 내 정보 수정 페이지 추가 스타일 */
+.edit-form-group {
+  margin-bottom: 24px;
+  text-align: left;
+}
+
+.edit-form-group label {
+  display: block;
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: var(--secondary-text);
+}
+
+.input-with-button, .input-with-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.input-with-button input, .input-with-buttons input {
+  flex: 1;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background-color: var(--input-bg);
+  color: var(--text-color);
+}
+
+.dual-button-group {
+  display: flex;
+  gap: 8px;
+}
+
+.input-with-button button, .dual-button-group button {
+  padding: 0 16px;
+  border-radius: 8px;
+  border: none;
+  background-color: var(--btn-bg);
+  color: var(--btn-text);
+  font-weight: bold;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.edit-avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.edit-avatar-preview, .edit-avatar-default {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  margin-bottom: 12px;
+  object-fit: cover;
+  background-color: var(--btn-bg);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 50px;
+  border: 3px solid var(--border-color);
+}
+
+.avatar-upload-btn-label {
+  padding: 8px 16px;
+  background-color: var(--btn-bg);
+  color: var(--btn-text);
+  border-radius: 20px;
+  font-size: 14px;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+}
+
+.save-all-button {
+  width: 100%;
+  padding: 16px;
+  background-color: var(--accent-color);
+  color: var(--accent-text);
+  border: none;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.status-message {
+  margin: 16px 0;
+  font-size: 14px;
+  text-align: center;
+}

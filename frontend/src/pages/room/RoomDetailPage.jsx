@@ -610,7 +610,7 @@ function RoomDetailPage() {
           justifyContent: "space-between",
           alignItems: "center",
           padding: "10px",
-          backgroundColor: "#f5f5f5",
+          backgroundColor: "var(--btn-bg)",
           position: "relative",
           minHeight: "44px",
         }}
@@ -700,7 +700,7 @@ function RoomDetailPage() {
             right: 0,
             width: "270px",
             height: "calc(100vh - 64px)",
-            backgroundColor: "white",
+            backgroundColor: "var(--bg-color)",
             boxShadow: "-2px 0 5px rgba(0,0,0,0.2)",
             zIndex: 2000,
             padding: "20px",
@@ -734,7 +734,7 @@ function RoomDetailPage() {
                     style={{
                       flex: 1,
                       padding: "6px",
-                      border: "1px solid #ddd",
+                      border: "1px solid var(--border-color)",
                       borderRadius: "5px",
                     }}
                   />
@@ -757,8 +757,8 @@ function RoomDetailPage() {
                   <button
                     onClick={() => setIsEditingTitle(false)}
                     style={{
-                      background: "#F1F1F1",
-                      color: "#333",
+                      background: "var(--btn-bg)",
+                      color: "var(--text-color)",
                       border: "none",
                       borderRadius: "5px",
                       padding: "6px 10px",
@@ -827,7 +827,7 @@ function RoomDetailPage() {
                       onClick={() => handleToggleNotification(t)}
                       style={{
                         background: notifSettings[t] ? "#8366F4" : "#E0E0E0",
-                        color: notifSettings[t] ? "white" : "#666",
+                        color: notifSettings[t] ? "white" : "var(--secondary-text)",
                         border: "none",
                         borderRadius: "20px",
                         padding: "4px 12px",
@@ -871,7 +871,7 @@ function RoomDetailPage() {
                   alignItems: "center",
                   gap: "8px",
                   padding: "10px 12px",
-                  backgroundColor: "#f5f5f5",
+                  backgroundColor: "var(--btn-bg)",
                   borderRadius: "8px",
                 }}
               >
@@ -881,7 +881,7 @@ function RoomDetailPage() {
                     fontSize: "15px",
                     fontWeight: "bold",
                     letterSpacing: "2px",
-                    color: "#333",
+                    color: "var(--text-color)",
                   }}
                 >
                   {room.invitecode}
@@ -913,10 +913,10 @@ function RoomDetailPage() {
                 style={{
                   maxHeight: "350px",
                   overflowY: "auto",
-                  border: "1px solid #eee",
+                  border: "1px solid var(--border-color)",
                   padding: "10px",
                   borderRadius: "5px",
-                  backgroundColor: "#fafafa",
+                  backgroundColor: "var(--card-bg)",
                 }}
               >
                 {sortedParticipants.map((p) => {
@@ -937,7 +937,7 @@ function RoomDetailPage() {
                         display: "flex",
                         flexDirection: "column",
                         padding: "8px 0",
-                        borderBottom: "1px solid #f0f0f0",
+                        borderBottom: "1px solid var(--border-color)",
                         cursor:
                           (isCurrentUserHost && !isHost) ||
                           (p.type === "member" &&
@@ -968,7 +968,7 @@ function RoomDetailPage() {
                                 height: "32px",
                                 borderRadius: "50%",
                                 objectFit: "cover",
-                                border: "1px solid #ddd",
+                                border: "1px solid var(--border-color)",
                               }}
                             />
                           ) : (
@@ -977,7 +977,7 @@ function RoomDetailPage() {
                                 width: "32px",
                                 height: "32px",
                                 borderRadius: "50%",
-                                backgroundColor: "#e0e0e0",
+                                backgroundColor: "var(--btn-bg)",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
@@ -1033,7 +1033,7 @@ function RoomDetailPage() {
                                 !isMe &&
                                 !isCurrentUserHost
                                   ? "#7c79ff"
-                                  : "#333",
+                                  : "var(--text-color)",
                               textDecoration:
                                 p.type === "member" &&
                                 currentUser?.type === "member" &&
@@ -1091,7 +1091,7 @@ function RoomDetailPage() {
                   <p
                     style={{
                       fontSize: "13px",
-                      color: "#999",
+                      color: "var(--secondary-text)",
                       textAlign: "center",
                     }}
                   >
@@ -1143,7 +1143,7 @@ function RoomDetailPage() {
               top: "50%",
               left: "50%",
               transform: "translate(-50%,-50%)",
-              backgroundColor: "#fff",
+              backgroundColor: "var(--bg-color)",
               borderRadius: "16px",
               padding: "24px",
               width: "300px",
@@ -1172,7 +1172,7 @@ function RoomDetailPage() {
                   background: "none",
                   fontSize: "20px",
                   cursor: "pointer",
-                  color: "#aaa",
+                  color: "var(--secondary-text)",
                 }}
               >
                 ✕
@@ -1187,7 +1187,7 @@ function RoomDetailPage() {
                       margin: "0 0 8px",
                       fontSize: "12px",
                       fontWeight: "600",
-                      color: "#888",
+                      color: "var(--secondary-text)",
                     }}
                   >
                     초대 대기 중
@@ -1213,7 +1213,7 @@ function RoomDetailPage() {
                         alignItems: "center",
                         gap: "12px",
                         padding: "8px 0",
-                        borderBottom: "1px solid #f5f5f5",
+                        borderBottom: "1px solid var(--border-color)",
                       }}
                     >
                       {invite.profileimageurl ? (
@@ -1241,15 +1241,15 @@ function RoomDetailPage() {
 
                       <span style={{ flex: 1, fontSize: "14px" }}>{invite.nickname}</span>
 
-                      <span style={{ fontSize: "11px", color: "#aaa", marginRight: "4px" }}>대기 중</span>
+                      <span style={{ fontSize: "11px", color: "var(--secondary-text)", marginRight: "4px" }}>대기 중</span>
 
                       <button
                         onClick={() => handleCancelInvite(invite)}
                         style={{
                           padding: "4px 10px",
-                          backgroundColor: "#fff",
-                          color: "#999",
-                          border: "1px solid #ddd",
+                          backgroundColor: "var(--bg-color)",
+                          color: "var(--secondary-text)",
+                          border: "1px solid var(--border-color)",
                           borderRadius: "6px",
                           fontSize: "12px",
                           cursor: "pointer",
@@ -1260,14 +1260,14 @@ function RoomDetailPage() {
                     </div>
                   ))}
 
-                  <hr style={{ margin: "12px 0", borderColor: "#f0f0f0" }} />
+                  <hr style={{ margin: "12px 0", borderColor: "var(--border-color)" }} />
                 </div>
               )}
 
               {friendList.length === 0 ? (
                 <p
                   style={{
-                    color: "#aaa",
+                    color: "var(--secondary-text)",
                     textAlign: "center",
                     fontSize: "14px",
                     marginTop: "20px",
@@ -1284,7 +1284,7 @@ function RoomDetailPage() {
                       alignItems: "center",
                       gap: "12px",
                       padding: "10px 0",
-                      borderBottom: "1px solid #f5f5f5",
+                      borderBottom: "1px solid var(--border-color)",
                     }}
                   >
                     {friend.profileimageurl ? (
@@ -1360,7 +1360,7 @@ function RoomDetailPage() {
               top: "50%",
               left: "50%",
               transform: "translate(-50%,-50%)",
-              backgroundColor: "#fff",
+              backgroundColor: "var(--bg-color)",
               borderRadius: "16px",
               padding: "24px",
               width: "260px",
@@ -1392,7 +1392,7 @@ function RoomDetailPage() {
             </p>
 
             {memberPopup.loading ? (
-              <p style={{ fontSize: "13px", color: "#aaa" }}>확인 중...</p>
+              <p style={{ fontSize: "13px", color: "var(--secondary-text)" }}>확인 중...</p>
             ) : memberPopup.status === "accepted" ? (
               <p
                 style={{
@@ -1421,9 +1421,9 @@ function RoomDetailPage() {
                     style={{
                       width: "100%",
                       padding: "8px",
-                      backgroundColor: "#fff",
-                      color: "#999",
-                      border: "1px solid #ddd",
+                      backgroundColor: "var(--bg-color)",
+                      color: "var(--secondary-text)",
+                      border: "1px solid var(--border-color)",
                       borderRadius: "8px",
                       fontSize: "13px",
                       cursor: "pointer",
@@ -1458,8 +1458,8 @@ function RoomDetailPage() {
                 marginTop: "10px",
                 width: "100%",
                 padding: "8px",
-                backgroundColor: "#f5f5f5",
-                color: "#555",
+                backgroundColor: "var(--btn-bg)",
+                color: "var(--secondary-text)",
                 border: "none",
                 borderRadius: "10px",
                 fontSize: "13px",

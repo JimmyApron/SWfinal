@@ -561,7 +561,7 @@ function ConfirmedScheduleDetailPage() {
           <p style={{ fontWeight: "bold", marginBottom: "8px" }}>추가 위치</p>
 
           {additionalLocations.map((place) => (
-            <p key={place.id} style={{ margin: "4px 0", color: "#555" }}>
+            <p key={place.id} style={{ margin: "4px 0", color: "var(--secondary-text)" }}>
               📍 {place.placename}
             </p>
           ))}
@@ -574,8 +574,8 @@ function ConfirmedScheduleDetailPage() {
           width: "100%",
           padding: "12px",
           marginBottom: "8px",
-          backgroundColor: "#f5f5f5",
-          color: "#333",
+          backgroundColor: "var(--btn-bg)",
+          color: "var(--text-color)",
           border: "none",
           borderRadius: "10px",
           fontSize: "15px",
@@ -623,14 +623,14 @@ function ConfirmedScheduleDetailPage() {
 
   if (isLocationOnly) {
     return (
-      <div style={{ minHeight: "100vh", backgroundColor: "#fff" }}>
+      <div style={{ minHeight: "100vh", backgroundColor: "var(--bg-color)" }}>
         <div
           style={{
             height: "56px",
             display: "flex",
             alignItems: "center",
             padding: "0 16px",
-            borderBottom: "1px solid #eee",
+            borderBottom: "1px solid var(--border-color)",
             gap: "12px",
           }}
         >
@@ -645,13 +645,13 @@ function ConfirmedScheduleDetailPage() {
         </div>
 
         <div style={{ padding: "20px" }}>
-          <p style={{ color: "#888", fontSize: "13px", marginBottom: "4px" }}>
+          <p style={{ color: "var(--secondary-text)", fontSize: "13px", marginBottom: "4px" }}>
             {schedule.roomname}
           </p>
 
           <h2 style={{ marginBottom: "2px" }}>일정 미정</h2>
 
-          <p style={{ color: "#aaa", marginBottom: "16px" }}>
+          <p style={{ color: "var(--secondary-text)", marginBottom: "16px" }}>
             아직 확정된 일정이 없습니다.
           </p>
 
@@ -725,14 +725,14 @@ function ConfirmedScheduleDetailPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#fff" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: "var(--bg-color)" }}>
       <div
         style={{
           height: "56px",
           display: "flex",
           alignItems: "center",
           padding: "0 16px",
-          borderBottom: "1px solid #eee",
+          borderBottom: "1px solid var(--border-color)",
           gap: "12px",
         }}
       >
@@ -747,20 +747,20 @@ function ConfirmedScheduleDetailPage() {
       </div>
 
       <div style={{ padding: "20px" }}>
-        <p style={{ color: "#888", fontSize: "13px", marginBottom: "4px" }}>
+        <p style={{ color: "var(--secondary-text)", fontSize: "13px", marginBottom: "4px" }}>
           {schedule.roomname}
         </p>
 
         {schedule.title && <h2 style={{ marginBottom: "2px" }}>{schedule.title}</h2>}
 
-        <p style={{ color: "#555", marginBottom: "16px" }}>{dateLabel}</p>
+        <p style={{ color: "var(--secondary-text)", marginBottom: "16px" }}>{dateLabel}</p>
 
         {attendees.length > 0 && (
           <div
             style={{
               marginBottom: "20px",
               padding: "12px 14px",
-              backgroundColor: "#f9f9ff",
+              backgroundColor: "var(--card-bg)",
               borderRadius: "12px",
             }}
           >
@@ -771,7 +771,7 @@ function ConfirmedScheduleDetailPage() {
             {attendees.map((attendee) => (
               <p
                 key={attendee.userid}
-                style={{ margin: "4px 0", fontSize: "14px", color: "#333" }}
+                style={{ margin: "4px 0", fontSize: "14px", color: "var(--text-color)" }}
               >
                 · {attendee.nickname || attendee.userid}
                 {absentees.includes(attendee.userid) && (
@@ -802,7 +802,7 @@ function ConfirmedScheduleDetailPage() {
           <p
             style={{
               fontSize: "12px",
-              color: "#888",
+              color: "var(--secondary-text)",
               marginBottom: "12px",
               paddingLeft: "4px",
             }}
@@ -866,7 +866,7 @@ function ConfirmedScheduleDetailPage() {
             style={{
               marginBottom: "12px",
               padding: "10px",
-              border: "1px solid #eee",
+              border: "1px solid var(--border-color)",
               borderRadius: "10px",
             }}
           >
@@ -922,7 +922,7 @@ function ConfirmedScheduleDetailPage() {
               width: "100%",
               padding: "12px",
               marginBottom: "8px",
-              backgroundColor: "#fff",
+              backgroundColor: "var(--bg-color)",
               color: isAbsent ? "#7c79ff" : "#f44",
               border: `1px solid ${isAbsent ? "#7c79ff" : "#f44"}`,
               borderRadius: "10px",
@@ -941,7 +941,7 @@ function ConfirmedScheduleDetailPage() {
               style={{
                 width: "100%",
                 padding: "12px",
-                backgroundColor: "#fff",
+                backgroundColor: "var(--bg-color)",
                 color: "#f44",
                 border: "1px solid #f44",
                 borderRadius: "10px",
@@ -956,7 +956,7 @@ function ConfirmedScheduleDetailPage() {
               style={{
                 textAlign: "center",
                 fontSize: "12px",
-                color: "#aaa",
+                color: "var(--secondary-text)",
                 marginTop: "6px",
               }}
             >
@@ -972,8 +972,8 @@ function ConfirmedScheduleDetailPage() {
               width: "100%",
               padding: "12px",
               marginTop: "8px",
-              backgroundColor: "#f5f5f5",
-              color: "#555",
+              backgroundColor: "var(--btn-bg)",
+              color: "var(--secondary-text)",
               border: "none",
               borderRadius: "10px",
               fontSize: "15px",
@@ -992,9 +992,11 @@ const inputStyle = {
   width: "100%",
   padding: "12px",
   marginBottom: "8px",
-  border: "1px solid #ddd",
+  border: "1px solid var(--border-color)",
   borderRadius: "10px",
   boxSizing: "border-box",
+  backgroundColor: "var(--bg-color)",
+  color: "var(--text-color)",
 };
 
 const primaryButtonStyle = {
@@ -1013,8 +1015,8 @@ const secondaryButtonStyle = {
   width: "100%",
   padding: "12px",
   marginBottom: "8px",
-  backgroundColor: "#f5f5f5",
-  color: "#333",
+  backgroundColor: "var(--btn-bg)",
+  color: "var(--text-color)",
   border: "none",
   borderRadius: "10px",
   fontSize: "15px",

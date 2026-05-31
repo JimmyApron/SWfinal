@@ -171,19 +171,19 @@ function RoomListPage() {
   }
 
   return (
-    <div style={{ padding: "0", backgroundColor: "#fff", minHeight: "100vh", position: "relative" }}>
+    <div style={{ padding: "0", backgroundColor: "var(--bg-color)", minHeight: "100vh", position: "relative" }}>
       <header style={{ 
         padding: "20px", 
-        borderBottom: "1px solid #eee",
+        borderBottom: "1px solid var(--border-color)",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center"
       }}>
-        <h1 style={{ margin: 0, fontSize: "24px" }}>방 목록</h1>
+        <h1 style={{ margin: 0, fontSize: "24px", color: "var(--text-color)" }}>방 목록</h1>
       </header>
 
       {sortedRooms.length === 0 ? (
-        <div style={{ padding: "40px 20px", textAlign: "center", color: "#888" }}>
+        <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--secondary-text)" }}>
           <p>참여 중인 방이 없습니다.</p>
         </div>
       ) : (
@@ -201,21 +201,21 @@ function RoomListPage() {
                 }}
                 style={{
                   padding: "16px 20px",
-                  borderBottom: "1px solid #f5f5f5",
+                  borderBottom: "1px solid var(--border-color)",
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   transition: "background-color 0.2s",
-                  backgroundColor: isPinned ? "#fcfcff" : "transparent"
+                  backgroundColor: isPinned ? "rgba(124, 121, 255, 0.05)" : "transparent"
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isPinned ? "#f5f5ff" : "#f9f9f9"}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isPinned ? "#fcfcff" : "transparent"}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = isPinned ? "rgba(124, 121, 255, 0.1)" : "var(--btn-bg)"}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isPinned ? "rgba(124, 121, 255, 0.05)" : "transparent"}
               >
                 <div style={{
                   width: "50px",
                   height: "50px",
                   borderRadius: "18px",
-                  backgroundColor: isPinned ? "#7c79ff" : "#e0e0ff",
+                  backgroundColor: isPinned ? "var(--accent-color)" : "var(--btn-bg)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -230,7 +230,7 @@ function RoomListPage() {
                       position: "absolute",
                       bottom: "-2px",
                       right: "-2px",
-                      backgroundColor: "#fff",
+                      backgroundColor: "var(--card-bg)",
                       borderRadius: "50%",
                       width: "18px",
                       height: "18px",
@@ -253,11 +253,12 @@ function RoomListPage() {
                         fontSize: "16px", 
                         overflow: "hidden", 
                         textOverflow: "ellipsis", 
-                        whiteSpace: "nowrap" 
+                        whiteSpace: "nowrap",
+                        color: "var(--text-color)"
                       }}>
                         {room.roomname}
                       </span>
-                      <span style={{ marginLeft: "6px", color: "#bbb", fontSize: "14px", flexShrink: 0 }}>
+                      <span style={{ marginLeft: "6px", color: "var(--secondary-text)", fontSize: "14px", flexShrink: 0 }}>
                         {(room.room_members?.[0]?.count || 0) + (room.room_guests?.[0]?.count || 0)}
                       </span>
                       
@@ -279,13 +280,13 @@ function RoomListPage() {
                         </div>
                       )}
                     </div>
-                    <span style={{ fontSize: "12px", color: "#aaa", flexShrink: 0 }}>
+                    <span style={{ fontSize: "12px", color: "var(--secondary-text)", flexShrink: 0 }}>
                       {formatRelativeTime(room.lastactivityat)}
                     </span>
                   </div>
                   
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "14px", color: "#888", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span style={{ fontSize: "14px", color: "var(--secondary-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {room.unreadCount > 0 ? "새로운 알림이 있습니다." : "최근 활동 없음"}
                     </span>
                   </div>
@@ -302,12 +303,13 @@ function RoomListPage() {
           position: "fixed",
           top: contextMenu.y,
           left: contextMenu.x,
-          backgroundColor: "#fff",
-          boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
+          backgroundColor: "var(--card-bg)",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
           borderRadius: "8px",
           padding: "4px 0",
           zIndex: 1000,
-          minWidth: "120px"
+          minWidth: "120px",
+          border: "1px solid var(--border-color)"
         }} onClick={(e) => e.stopPropagation()}>
           <button 
             onClick={() => togglePin(contextMenu.roomId)}
@@ -321,9 +323,10 @@ function RoomListPage() {
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              gap: "8px"
+              gap: "8px",
+              color: "var(--text-color)"
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f5f5f5"}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "var(--btn-bg)"}
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
           >
             {pinnedRooms[contextMenu.roomId] ? "📌 고정 해제" : "📌 상단 고정"}
