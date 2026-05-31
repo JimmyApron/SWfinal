@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getCurrentUserApi } from '../../api/authApi'
 import { supabase } from '../../lib/supabaseClient'
@@ -19,13 +19,19 @@ function SettingEditPage() {
   const [email, setEmail] = useState('')
   const [nickname, setNickname] = useState('')
   const [profileImageUrl, setProfileImageUrl] = useState('')
+  const [selectedFile, setSelectedFile] = useState(null) // 실제 업로드할 파일 객체
+  const [previewUrl, setPreviewUrl] = useState('') // 화면에 보여줄 미리보기 URL
   const [message, setMessage] = useState('')
   const [isUploading, setIsUploading] = useState(false)
 
-  // HEAD 기능 유지: 소셜 로그인 여부
+  // 변경 여부 확인을 위한 초기값 보관 State
+  const [initialNickname, setInitialNickname] = useState('')
+  const [initialEmail, setInitialEmail] = useState('')
+
+  // 소셜 로그인 여부
   const [isSocialUser, setIsSocialUser] = useState(false)
 
-  // feature/notification-2 기능 유지: 중복 확인과 저장 버튼 분리
+  // 중복 확인 상태
   const [isNicknameChecked, setIsNicknameChecked] = useState(false)
   const [isEmailChecked, setIsEmailChecked] = useState(false)
 
@@ -42,8 +48,15 @@ function SettingEditPage() {
   const [countdown, setCountdown] = useState(0)
   const timerRef = useRef(null)
 
+  // 컴포넌트 언마운트 시 미리보기 URL 메모리 해제
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+    }
+  }, [previewUrl])
+
   // 최신 데이터 새로고침 함수
-  const refreshUserData = async () => {
+  const refreshUserData = useCallback(async () => {
     try {
       const {
         data: { user: authUser },
@@ -64,14 +77,19 @@ function SettingEditPage() {
 
         if (data) {
           setUserId(data.user.id)
-          setEmail(data.profile.email || authUser?.email || '')
-          setNickname(
-            data.profile.nickname ||
-              authUser.user_metadata?.full_name ||
-              authUser.user_metadata?.name ||
-              authUser.email?.split('@')[0] ||
-              ''
-          )
+          
+          const currentEmail = data.profile.email || authUser?.email || ''
+          const currentNickname = data.profile.nickname ||
+            authUser.user_metadata?.full_name ||
+            authUser.user_metadata?.name ||
+            authUser.email?.split('@')[0] ||
+            ''
+          
+          setEmail(currentEmail)
+          setInitialEmail(currentEmail)
+          setNickname(currentNickname)
+          setInitialNickname(currentNickname)
+          
           setProfileImageUrl(
             data.profile.profileimageurl ||
               authUser.user_metadata?.avatar_url ||
@@ -79,7 +97,6 @@ function SettingEditPage() {
               ''
           )
 
-          // 처음 불러온 기존 값은 이미 사용 중인 본인 값이므로 확인 완료로 간주
           setIsNicknameChecked(true)
           setIsEmailChecked(true)
           return
@@ -88,15 +105,18 @@ function SettingEditPage() {
         console.error('프로필 조회 실패, 메타데이터 폴백:', err)
       }
 
-      // 소셜 유저 등 profiles 조회가 실패하는 경우 auth 메타데이터로 폴백
       setUserId(authUser.id)
-      setEmail(authUser.email || '')
-      setNickname(
-        authUser.user_metadata?.full_name ||
-          authUser.user_metadata?.name ||
-          authUser.email?.split('@')[0] ||
-          ''
-      )
+      const fbEmail = authUser.email || ''
+      const fbNickname = authUser.user_metadata?.full_name ||
+        authUser.user_metadata?.name ||
+        authUser.email?.split('@')[0] ||
+        ''
+
+      setEmail(fbEmail)
+      setInitialEmail(fbEmail)
+      setNickname(fbNickname)
+      setInitialNickname(fbNickname)
+      
       setProfileImageUrl(
         authUser.user_metadata?.avatar_url ||
           authUser.user_metadata?.picture ||
@@ -108,7 +128,7 @@ function SettingEditPage() {
     } catch (error) {
       console.error('데이터 동기화 실패:', error)
     }
-  }
+  }, [navigate])
 
   useEffect(() => {
     refreshUserData()
@@ -116,8 +136,7 @@ function SettingEditPage() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigate])
+  }, [refreshUserData])
 
   // Rate limit 타이머
   const startRateLimitTimer = (errorMessage) => {
@@ -142,26 +161,17 @@ function SettingEditPage() {
     }, 1000)
   }
 
-  // 프로필 사진 변경
-  const handleAvatarChange = async (e) => {
+  // 프로필 사진 선택 (미리보기만 처리)
+  const handleAvatarChange = (e) => {
     const file = e.target.files[0]
     if (!file) return
 
-    try {
-      setIsUploading(true)
-      setMessage('📸 프로필 이미지를 서버에 업로드 중입니다...')
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
 
-      const res = await uploadAvatarApi(file, userId)
-
-      if (res.success) {
-        setProfileImageUrl(res.publicUrl)
-        setMessage(`✅ ${res.message}`)
-      }
-    } catch (error) {
-      setMessage(`❌ 사진 변경 실패: ${error.message}`)
-    } finally {
-      setIsUploading(false)
-    }
+    const url = URL.createObjectURL(file)
+    setPreviewUrl(url)
+    setSelectedFile(file)
+    setMessage('📸 사진이 선택되었습니다. "저장하기"를 누르면 반영됩니다.')
   }
 
   // 닉네임 중복 확인
@@ -171,9 +181,14 @@ function SettingEditPage() {
       return
     }
 
+    if (nickname === initialNickname) {
+      setIsNicknameChecked(true)
+      setMessage('✅ 현재 사용 중인 닉네임입니다.')
+      return
+    }
+
     try {
       setMessage('닉네임 중복 체크 중...')
-
       const res = await checkNicknameDuplicateApi(nickname)
 
       if (res.success) {
@@ -201,9 +216,14 @@ function SettingEditPage() {
       return
     }
 
+    if (email === initialEmail) {
+      setIsEmailChecked(true)
+      setMessage('✅ 현재 사용 중인 이메일입니다.')
+      return
+    }
+
     try {
       setMessage('이메일 중복 체크 중...')
-
       const res = await checkEmailDuplicateApi(email)
 
       if (res.success) {
@@ -226,8 +246,9 @@ function SettingEditPage() {
       return
     }
 
-    if (!isNicknameChecked) {
-      setMessage('⚠️ 먼저 닉네임 중복 확인을 해주세요.')
+    // 닉네임이 변경되었는데 중복 확인을 안 한 경우에만 차단
+    if (nickname !== initialNickname && !isNicknameChecked) {
+      setMessage('⚠️ 변경된 닉네임의 중복 확인을 해주세요.')
       return
     }
 
@@ -236,24 +257,42 @@ function SettingEditPage() {
         setMessage('⚠️ 이메일을 입력해주세요.')
         return
       }
-      if (!isEmailChecked) {
-        setMessage('⚠️ 먼저 이메일 중복 확인을 해주세요.')
+      // 이메일이 변경되었는데 중복 확인을 안 한 경우에만 차단
+      if (email !== initialEmail && !isEmailChecked) {
+        setMessage('⚠️ 변경된 이메일의 중복 확인을 해주세요.')
         return
       }
     }
 
     try {
+      setIsUploading(true)
       setMessage('🔄 정보를 저장 중입니다...')
 
-      // 1. 닉네임 업데이트 (API 내부에서 중복 체크를 한 번 더 수행함)
-      await updateNicknameApi(nickname, userId)
+      // 1. 이미지 파일이 선택되어 있다면 먼저 업로드
+      if (selectedFile) {
+        setMessage('📸 프로필 이미지를 서버에 업로드 중입니다...')
+        const uploadRes = await uploadAvatarApi(selectedFile, userId)
+        if (!uploadRes.success) {
+          throw new Error('사진 업로드 중 오류가 발생했습니다.')
+        }
+      }
 
-      // 2. 이메일 업데이트 (소셜 유저가 아닌 경우에만)
-      if (!isSocialUser) {
+      // 2. 닉네임 업데이트 (변경된 경우에만)
+      if (nickname !== initialNickname) {
+        await updateNicknameApi(nickname, userId)
+      }
+
+      // 3. 이메일 업데이트 (변경된 경우에만)
+      if (!isSocialUser && email !== initialEmail) {
         await updateEmailApi(email, userId)
       }
 
       setMessage('✅ 모든 정보가 성공적으로 저장되었습니다.')
+      setSelectedFile(null)
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
+        setPreviewUrl('')
+      }
       await refreshUserData()
     } catch (error) {
       if (error.message.includes('seconds')) {
@@ -261,6 +300,8 @@ function SettingEditPage() {
       } else {
         setMessage(`❌ 저장 실패: ${error.message}`)
       }
+    } finally {
+      setIsUploading(false)
     }
   }
 
@@ -295,7 +336,6 @@ function SettingEditPage() {
 
     try {
       setMessage('비밀번호 변경 여부 검증 중...')
-
       const res = await updatePasswordApi(currentPassword, newPassword)
 
       if (res.success) {
@@ -304,9 +344,7 @@ function SettingEditPage() {
         setNewPassword('')
       }
     } catch (error) {
-      setMessage(
-        '❌ 비밀번호 변경 실패: 현재 비밀번호가 일치하지 않거나 오류가 발생했습니다.'
-      )
+      setMessage('❌ 비밀번호 변경 실패: 현재 비밀번호가 일치하지 않거나 오류가 발생했습니다.')
     }
   }
 
@@ -324,25 +362,16 @@ function SettingEditPage() {
       return
     }
 
-    if (
-      !window.confirm(
-        '🚨 [최종 경고] 정말 탈퇴하시겠습니까? 이 작업은 절대 되돌릴 수 없습니다.'
-      )
-    ) {
+    if (!window.confirm('🚨 [최종 경고] 정말 탈퇴하시겠습니까? 이 작업은 절대 되돌릴 수 없습니다.')) {
       return
     }
 
     try {
       setMessage('회원 탈퇴 요청 중...')
-
-      const res = await deleteUserAccountApi(
-        isSocialUser ? undefined : deletePassword
-      )
+      const res = await deleteUserAccountApi(isSocialUser ? undefined : deletePassword)
 
       if (res.success) {
-        alert(
-          '👋 회원 탈퇴가 성공적으로 완료되었습니다. 그동안 이용해 주셔서 감사합니다.'
-        )
+        alert('👋 회원 탈퇴가 성공적으로 완료되었습니다. 그동안 이용해 주셔서 감사합니다.')
         window.location.href = '/'
       }
     } catch (error) {
@@ -356,9 +385,9 @@ function SettingEditPage() {
 
       {/* 프로필 사진 변경 */}
       <div className="edit-avatar-section">
-        {profileImageUrl ? (
+        {previewUrl || profileImageUrl ? (
           <img
-            src={profileImageUrl}
+            src={previewUrl || profileImageUrl}
             alt="프로필"
             className="edit-avatar-preview"
           />
@@ -389,8 +418,10 @@ function SettingEditPage() {
             type="text"
             value={nickname}
             onChange={(e) => {
-              setNickname(e.target.value)
-              setIsNicknameChecked(false)
+              const val = e.target.value
+              setNickname(val)
+              // 입력값이 초기값과 같으면 체크 완료 상태로 유지, 다르면 체크 해제
+              setIsNicknameChecked(val === initialNickname)
             }}
           />
 
@@ -431,8 +462,9 @@ function SettingEditPage() {
               type="email"
               value={email}
               onChange={(e) => {
-                setEmail(e.target.value)
-                setIsEmailChecked(false)
+                const val = e.target.value
+                setEmail(val)
+                setIsEmailChecked(val === initialEmail)
               }}
             />
 
