@@ -88,17 +88,32 @@ export const updatePasswordApi = async (currentPassword, newPassword) => {
 
 /**
  * 3-1. 이메일 중복 확인 전용 API
+ * RPC 대신 직접 조회를 시도하여 부수 효과를 차단합니다.
  */
 export const checkEmailDuplicateApi = async (email) => {
   try {
     const trimmedEmail = email.trim()
     if (!trimmedEmail) throw new Error('이메일을 입력해주세요.')
 
-    const { data: isDuplicate, error } = await supabase.rpc('check_email_exists', {
+    // 1. profiles 테이블 확인
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('email', trimmedEmail)
+    
+    if (profileError) throw profileError
+
+    if (profileData.length > 0) {
+      return { success: false, message: '이미 사용 중인 이메일입니다.' }
+    }
+
+    // 2. 만약 RPC가 필요하다면 (Auth 유저까지 확인 위해) 사용하되, 
+    // updateEmailApi가 아닌 이 전용 함수만 호출되는지 확인합니다.
+    const { data: isDuplicate, error: rpcError } = await supabase.rpc('check_email_exists', {
       email_to_check: trimmedEmail,
     })
 
-    if (error) throw error
+    if (rpcError) throw rpcError
 
     if (isDuplicate) {
       return { success: false, message: '이미 사용 중인 이메일입니다.' }
@@ -107,48 +122,6 @@ export const checkEmailDuplicateApi = async (email) => {
     return { success: true, message: '사용 가능한 이메일입니다.' }
   } catch (error) {
     console.error('이메일 중복 확인 오류:', error.message)
-    throw error
-  }
-}
-
-/**
- * 3. 이메일 변경 기능 API
- */
-export const updateEmailApi = async (newEmail, userId) => {
-  try {
-    const trimmedEmail = newEmail.trim()
-
-    const { data: isDuplicate, error: checkError } =
-      await supabase.rpc('check_email_exists', {
-        email_to_check: trimmedEmail,
-      })
-
-    if (checkError) throw checkError
-
-    if (isDuplicate) {
-      throw new Error('이미 사용 중인 이메일입니다.')
-    }
-
-    const { data, error } = await supabase.auth.updateUser({
-      email: trimmedEmail,
-    })
-
-    if (error) throw error
-
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update({ email: trimmedEmail })
-      .eq('id', userId)
-
-    if (profileError) throw profileError
-
-    return {
-      success: true,
-      user: data.user,
-      message: '이메일 변경 요청 완료!',
-    }
-  } catch (error) {
-    console.error('이메일 변경 중 오류 발생:', error.message)
     throw error
   }
 }
