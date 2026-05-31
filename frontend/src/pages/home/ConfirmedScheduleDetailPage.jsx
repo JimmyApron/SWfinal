@@ -10,6 +10,13 @@ import {
   updateConfirmedScheduleLocation,
 } from "../../api/scheduleApi";
 import { createRoomNotifications } from "../../api/notificationApi";
+import {
+  getRoomMemberLocations,
+  getRoomParticipants,
+  updateRoomLocationTransportModes,
+} from "../../api/mapApi";
+import { getRouteTime } from "../../api/routeTimeApi";
+import { decodePolyline } from "../../utils/decodePolyline";
 import KakaoMapView from "../../components/map/KakaoMapView";
 import LocationPicker from "../../components/map/LocationPicker";
 
@@ -23,7 +30,9 @@ function ConfirmedScheduleDetailPage() {
     schedule?.locationaddress || ""
   );
   const [saving, setSaving] = useState(false);
-  const [showMap, setShowMap] = useState(false);
+  const [showMap, setShowMap] = useState(
+    schedule?.locationlat != null && schedule?.locationlng != null
+  );
   const [currentUser, setCurrentUser] = useState(null);
   const [roomOwnerId, setRoomOwnerId] = useState(null);
   const [attendees, setAttendees] = useState([]);
@@ -39,6 +48,22 @@ function ConfirmedScheduleDetailPage() {
   const [additionalLocations, setAdditionalLocations] = useState([]);
   const [additionalPlace, setAdditionalPlace] = useState(null);
   const [showAdditionalPicker, setShowAdditionalPicker] = useState(false);
+  const [selectedMeetingPlace, setSelectedMeetingPlace] = useState(
+    schedule?.locationlat != null && schedule?.locationlng != null
+      ? {
+          name: schedule.location,
+          address: schedule.locationaddress || "",
+          lat: schedule.locationlat,
+          lng: schedule.locationlng,
+        }
+      : null
+  );
+  const [showTransportModes, setShowTransportModes] = useState(false);
+  const [roomParticipants, setRoomParticipants] = useState([]);
+  const [memberLocations, setMemberLocations] = useState([]);
+  const [routeEstimates, setRouteEstimates] = useState([]);
+  const [memberRoutePaths, setMemberRoutePaths] = useState([]);
+  const [refreshingRoutes, setRefreshingRoutes] = useState(false);
 
   useEffect(() => {
     if (!schedule) {
@@ -123,7 +148,7 @@ function ConfirmedScheduleDetailPage() {
   useEffect(() => {
     if (!schedule?.roomid) return;
 
-    getAdditionalConfirmedLocations(schedule.roomid)
+    getAdditionalConfirmedLocations(schedule.roomid, schedule.id)
       .then(setAdditionalLocations)
       .catch((error) => console.error("추가 위치 조회 실패:", error));
 
@@ -137,6 +162,75 @@ function ConfirmedScheduleDetailPage() {
       }
     }
   }, [schedule]);
+
+  useEffect(() => {
+    if (!schedule?.roomid) return;
+
+    Promise.all([
+      getRoomParticipants(schedule.roomid),
+      getRoomMemberLocations(schedule.roomid),
+    ])
+      .then(([participants, locations]) => {
+        setRoomParticipants(participants);
+        setMemberLocations(locations);
+      })
+      .catch((error) => console.error("이동수단 정보 조회 실패:", error));
+  }, [schedule]);
+
+  useEffect(() => {
+    if (selectedMeetingPlace && memberLocations.length > 0) {
+      refreshRouteEstimates(selectedMeetingPlace);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memberLocations]);
+
+  useEffect(() => {
+    if (selectedMeetingPlace || !schedule?.location) return;
+
+    let isCancelled = false;
+
+    const findSavedMeetingPlace = () => {
+      if (!window.kakao?.maps?.services) {
+        setTimeout(findSavedMeetingPlace, 100);
+        return;
+      }
+
+      const placesService = new window.kakao.maps.services.Places();
+
+      placesService.keywordSearch(schedule.location, (data, status) => {
+        if (
+          isCancelled ||
+          status !== window.kakao.maps.services.Status.OK ||
+          !data?.[0]
+        ) {
+          return;
+        }
+
+        const place = data[0];
+        const resolvedPlace = {
+          name: place.place_name || schedule.location,
+          address:
+            place.road_address_name ||
+            place.address_name ||
+            schedule.locationaddress ||
+            "",
+          lat: Number(place.y),
+          lng: Number(place.x),
+        };
+
+        setSelectedMeetingPlace(resolvedPlace);
+        setLocationText(resolvedPlace.name);
+        setLocationAddress(resolvedPlace.address);
+        setShowMap(true);
+      });
+    };
+
+    findSavedMeetingPlace();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [schedule, selectedMeetingPlace]);
 
   if (!schedule) return null;
 
@@ -164,16 +258,148 @@ function ConfirmedScheduleDetailPage() {
       await updateConfirmedScheduleLocation(
         schedule.id,
         locationText.trim(),
-        locationAddress
+        locationAddress,
+        selectedMeetingPlace?.lat ?? null,
+        selectedMeetingPlace?.lng ?? null
       );
 
+      await refreshRouteEstimates(selectedMeetingPlace);
+
       alert("위치가 저장되었습니다.");
-      navigate(-1);
     } catch (error) {
       alert("위치 저장 실패: " + error.message);
     } finally {
       setSaving(false);
     }
+  };
+
+  const getParticipantKey = (participant) =>
+    participant.userid || participant.guestid || participant.id;
+
+  const hasSameId = (left, right) =>
+    left != null && right != null && String(left) === String(right);
+
+  const getParticipantLocation = (participant) =>
+    memberLocations.find((memberLocation) =>
+      participant.userid
+        ? hasSameId(memberLocation.userid, participant.userid)
+        : hasSameId(memberLocation.guestid, participant.guestid)
+    );
+
+  const refreshRouteEstimates = async (
+    place = selectedMeetingPlace,
+    changedParticipant = null,
+    changedMode = null
+  ) => {
+    if (place?.lat == null || place?.lng == null) return;
+
+    try {
+      setRefreshingRoutes(true);
+
+      const pathResults = [];
+      const estimates = await Promise.all(
+        memberLocations
+          .filter(
+            (memberLocation) =>
+              memberLocation.latitude != null && memberLocation.longitude != null
+          )
+          .map(async (memberLocation) => {
+          const isChangedParticipant = changedParticipant?.userid
+            ? hasSameId(memberLocation.userid, changedParticipant.userid)
+            : hasSameId(memberLocation.guestid, changedParticipant?.guestid);
+          const mode = isChangedParticipant
+            ? changedMode
+            : memberLocation.transportmode || "transit";
+          const result = await getRouteTime({
+            origin: {
+              lat: Number(memberLocation.latitude),
+              lng: Number(memberLocation.longitude),
+            },
+            destination: {
+              lat: Number(place.lat),
+              lng: Number(place.lng),
+            },
+            mode,
+          });
+
+          if (mode === "transit" && result.encodedPolyline) {
+            pathResults.push({
+              userid: memberLocation.userid,
+              guestid: memberLocation.guestid,
+              mode,
+              path: decodePolyline(result.encodedPolyline),
+            });
+          }
+
+          if (mode === "car") {
+            const apiBaseUrl = process.env.REACT_APP_API_BASE_URL;
+            const response = await fetch(`${apiBaseUrl}/kakao/route`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                origin: {
+                  lat: Number(memberLocation.latitude),
+                  lng: Number(memberLocation.longitude),
+                },
+                destination: {
+                  lat: Number(place.lat),
+                  lng: Number(place.lng),
+                },
+              }),
+            });
+
+            if (response.ok) {
+              const pathResult = await response.json();
+
+              if (pathResult.path?.length > 0) {
+                pathResults.push({
+                  userid: memberLocation.userid,
+                  guestid: memberLocation.guestid,
+                  mode,
+                  path: pathResult.path,
+                });
+              }
+            }
+          }
+
+          return {
+            userid: memberLocation.userid,
+            guestid: memberLocation.guestid,
+            mode,
+            durationMinutes: Math.round(result.duration / 60),
+          };
+          })
+      );
+
+      setRouteEstimates(estimates);
+      setMemberRoutePaths(pathResults);
+    } catch (error) {
+      console.error("경로 재검색 실패:", error);
+    } finally {
+      setRefreshingRoutes(false);
+    }
+  };
+
+  const handleChangeTransportMode = async (participant, mode) => {
+    await updateRoomLocationTransportModes(schedule.roomid, [{
+      userid: participant.userid,
+      guestid: participant.guestid,
+      mode,
+    }]);
+
+    setMemberLocations((locations) =>
+      locations.map((memberLocation) => {
+        const isSameParticipant = participant.userid
+          ? hasSameId(memberLocation.userid, participant.userid)
+          : hasSameId(memberLocation.guestid, participant.guestid);
+
+        return isSameParticipant
+          ? { ...memberLocation, transportmode: mode }
+          : memberLocation;
+      })
+    );
+
+    await refreshRouteEstimates(selectedMeetingPlace, participant, mode);
   };
 
   const handleCancel = async () => {
@@ -306,6 +532,7 @@ function ConfirmedScheduleDetailPage() {
 
       const savedLocation = await addAdditionalConfirmedLocation(
         schedule.roomid,
+        schedule.id,
         additionalPlace.name
       );
 
@@ -321,7 +548,7 @@ function ConfirmedScheduleDetailPage() {
     }
   };
 
-  const middlePlace = schedule.middlePlace;
+  const middlePlace = schedule.middlePlace || selectedMeetingPlace;
 
   const canShowMiddlePlaceMap =
     middlePlace &&
@@ -332,13 +559,18 @@ function ConfirmedScheduleDetailPage() {
     <>
       {schedule.location && (
         <p style={{ color: "#7c79ff", marginBottom: "12px" }}>
-          📍 {middlePlace ? "중간위치" : "현재 위치"}: {schedule.location}
+          📍 현재 위치: {schedule.location}
         </p>
       )}
 
       {canShowMiddlePlaceMap && (
         <div style={{ marginBottom: "20px" }}>
-          <KakaoMapView places={[middlePlace]} selectedPlace={middlePlace} />
+          <KakaoMapView
+            memberLocations={memberLocations}
+            places={[middlePlace]}
+            selectedPlace={middlePlace}
+            memberRoutePaths={memberRoutePaths}
+          />
         </div>
       )}
 
@@ -578,12 +810,9 @@ function ConfirmedScheduleDetailPage() {
 
         <input
           type="text"
-          placeholder="위치를 직접 입력하세요 (예: 홍대입구역 2번 출구)"
+          placeholder="지도에서 위치를 선택하세요"
           value={locationText}
-          onChange={(event) => {
-            setLocationText(event.target.value);
-            setLocationAddress("");
-          }}
+          readOnly
           style={inputStyle}
         />
 
@@ -606,21 +835,100 @@ function ConfirmedScheduleDetailPage() {
           {saving ? "저장 중..." : "위치 저장"}
         </button>
 
-        <button
-          onClick={() => setShowMap((prev) => !prev)}
-          style={secondaryButtonStyle}
-        >
-          {showMap ? "지도 닫기" : "지도에서 위치 선택하기"}
-        </button>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button
+            onClick={() => setShowMap((prev) => !prev)}
+            style={{ ...secondaryButtonStyle, flex: 1 }}
+          >
+            {showMap ? "지도 닫기" : "지도에서 위치 선택하기"}
+          </button>
+
+          <button
+            onClick={() => {
+              setShowTransportModes((visible) => {
+                if (!visible) refreshRouteEstimates();
+                return !visible;
+              });
+            }}
+            style={{
+              ...secondaryButtonStyle,
+              width: "auto",
+              padding: "12px 10px",
+              fontSize: "12px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {showTransportModes ? "이동수단 접기" : "이동수단"}
+          </button>
+        </div>
 
         {showMap && (
           <LocationPicker
-            onSelect={(name, address) => {
+            initialPlace={selectedMeetingPlace}
+            onSelect={(name, address, place = {}) => {
               setLocationText(name);
-              setLocationAddress(address || "");
-              setShowMap(false);
+              setLocationAddress(address || place.address || "");
+              setSelectedMeetingPlace({
+                name,
+                address: address || place.address || "",
+                lat: place.lat,
+                lng: place.lng,
+              });
+              refreshRouteEstimates(place);
             }}
           />
+        )}
+
+        {showTransportModes && (
+          <div
+            style={{
+              marginBottom: "12px",
+              padding: "10px",
+              border: "1px solid #eee",
+              borderRadius: "10px",
+            }}
+          >
+            {roomParticipants.map((participant) => {
+              const participantLocation = getParticipantLocation(participant);
+              const estimate = routeEstimates.find((route) =>
+                participant.userid
+                  ? hasSameId(route.userid, participant.userid)
+                  : hasSameId(route.guestid, participant.guestid)
+              );
+
+              return (
+                <div
+                  key={`transport-${getParticipantKey(participant)}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "8px",
+                    marginBottom: "6px",
+                  }}
+                >
+                  <span style={{ fontSize: "13px" }}>
+                    {participant.nickname ||
+                      participant.profiles?.nickname ||
+                      "닉네임 없음"}
+                    {estimate ? ` · ${estimate.durationMinutes}분` : ""}
+                  </span>
+
+                  <select
+                    value={participantLocation?.transportmode || "transit"}
+                    disabled={!participantLocation || refreshingRoutes}
+                    onChange={(event) =>
+                      handleChangeTransportMode(participant, event.target.value)
+                    }
+                    style={{ padding: "3px 6px", fontSize: "12px" }}
+                  >
+                    <option value="transit">대중교통</option>
+                    <option value="car">자동차</option>
+                  </select>
+                </div>
+              );
+            })}
+          </div>
         )}
 
         <div style={{ marginBottom: "24px" }} />

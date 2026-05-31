@@ -4,6 +4,9 @@ import { supabase } from "../../lib/supabaseClient";
 import { createRoomNotifications } from "../../api/notificationApi";
 import "./ChatTab.css";
 
+const CHAT_EDIT_LIMIT_MS = 10 * 60 * 1000;
+const PINNED_MESSAGE_COLLAPSE_LENGTH = 45;
+
 const WEEKDAY_KR = [
   "일요일",
   "월요일",
@@ -44,6 +47,47 @@ function isDeletedMsg(content) {
   } catch {
     return false;
   }
+}
+
+function getTextMessage(content) {
+  try {
+    const meta = JSON.parse(content);
+
+    if (meta?.__type === "edited_text") return meta.text;
+  } catch {
+    // 일반 텍스트 메시지
+  }
+
+  return content;
+}
+
+function isEditedMsg(content) {
+  try {
+    return JSON.parse(content)?.__type === "edited_text";
+  } catch {
+    return false;
+  }
+}
+
+function getMessageMeta(content) {
+  try {
+    return JSON.parse(content);
+  } catch {
+    return null;
+  }
+}
+
+function getPinnableText(message) {
+  if (message.imageurl) return "사진";
+
+  const meta = getMessageMeta(message.content);
+
+  if (!meta) return message.content;
+  if (meta.__type === "edited_text" || meta.__type === "announcement") {
+    return meta.text;
+  }
+
+  return "";
 }
 
 function VoteMessageCard({ meta, navigate }) {
@@ -226,7 +270,7 @@ function VoteMessageCard({ meta, navigate }) {
   );
 }
 
-function InlineKakaoMap({ lat, lng, name }) {
+function KakaoLocationMap({ lat, lng, name, address, style, onClick }) {
   const mapRef = useRef(null);
 
   useEffect(() => {
@@ -243,6 +287,7 @@ function InlineKakaoMap({ lat, lng, name }) {
     }
 
     let marker = null;
+    let infoWindow = null;
 
     const createMap = () => {
       if (!mapRef.current) return;
@@ -258,6 +303,21 @@ function InlineKakaoMap({ lat, lng, name }) {
         position,
         title: name || "공유 위치",
       });
+
+      infoWindow = new window.kakao.maps.InfoWindow({
+        content: `
+          <div style="padding:10px; font-size:13px; line-height:1.5;">
+            <strong>${escapeMapHtml(name || "공유 위치")}</strong>
+            <p style="margin:4px 0;">${escapeMapHtml(
+              address || "주소 정보 없음"
+            )}</p>
+          </div>
+        `,
+      });
+
+      window.kakao.maps.event.addListener(marker, "click", () => {
+        infoWindow.open(map, marker);
+      });
     };
 
     if (window.kakao.maps.load) {
@@ -267,24 +327,114 @@ function InlineKakaoMap({ lat, lng, name }) {
     }
 
     return () => {
+      infoWindow?.close();
       marker?.setMap(null);
     };
-  }, [lat, lng, name]);
+  }, [address, lat, lng, name]);
 
   return (
     <div
       ref={mapRef}
-      style={{
-        width: "260px",
-        maxWidth: "100%",
-        height: "180px",
-        marginTop: "8px",
-        borderRadius: "8px",
-        overflow: "hidden",
-        backgroundColor: "#f2f2f2",
-      }}
+      onClick={onClick}
+      style={style}
     />
   );
+}
+
+function InlineKakaoMap({ lat, lng, name, address }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <>
+      <KakaoLocationMap
+        lat={lat}
+        lng={lng}
+        name={name}
+        address={address}
+        onClick={() => setIsExpanded(true)}
+        style={{
+          width: "260px",
+          maxWidth: "100%",
+          height: "180px",
+          marginTop: "8px",
+          borderRadius: "8px",
+          overflow: "hidden",
+          backgroundColor: "#f2f2f2",
+          cursor: "pointer",
+        }}
+      />
+
+      {isExpanded && (
+        <div
+          onClick={() => setIsExpanded(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1200,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            backgroundColor: "rgba(0, 0, 0, 0.55)",
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              position: "relative",
+              width: "min(92vw, 760px)",
+              height: "min(75vh, 560px)",
+            }}
+          >
+            <button
+              type="button"
+              aria-label="지도 닫기"
+              onClick={() => setIsExpanded(false)}
+              style={{
+                position: "absolute",
+                top: "10px",
+                right: "10px",
+                zIndex: 2,
+                width: "34px",
+                height: "34px",
+                border: "none",
+                borderRadius: "50%",
+                color: "#333",
+                backgroundColor: "rgba(255, 255, 255, 0.92)",
+                fontSize: "24px",
+                lineHeight: 1,
+                cursor: "pointer",
+              }}
+            >
+              ×
+            </button>
+            <KakaoLocationMap
+              lat={lat}
+              lng={lng}
+              name={name}
+              address={address}
+              style={{
+                width: "100%",
+                height: "100%",
+                borderRadius: "12px",
+                overflow: "hidden",
+                backgroundColor: "#f2f2f2",
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function escapeMapHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function MapShareMessageCard({ meta }) {
@@ -329,13 +479,12 @@ function MapShareMessageCard({ meta }) {
       )}
 
       {meta.lat && meta.lng && (
-        <div style={{ fontSize: "11px", color: "#777", marginBottom: "8px" }}>
-          {meta.lat}, {meta.lng}
-        </div>
-      )}
-
-      {meta.lat && meta.lng && (
-        <InlineKakaoMap lat={meta.lat} lng={meta.lng} name={meta.name} />
+        <InlineKakaoMap
+          lat={meta.lat}
+          lng={meta.lng}
+          name={meta.name}
+          address={meta.address}
+        />
       )}
     </div>
   );
@@ -352,6 +501,10 @@ function ChatTab({ roomId }) {
   const [uploading, setUploading] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [selectedMsgId, setSelectedMsgId] = useState(null);
+  const [editingMsgId, setEditingMsgId] = useState(null);
+  const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
+  const [announcementContent, setAnnouncementContent] = useState("");
+  const [isPinnedMessageExpanded, setIsPinnedMessageExpanded] = useState(false);
 
   const bottomRef = useRef(null);
   const galleryInputRef = useRef(null);
@@ -510,7 +663,23 @@ function ChatTab({ roomId }) {
       // 일반 텍스트 메시지
     }
 
-    return Date.now() - new Date(message.createdat).getTime() < 10 * 60 * 1000;
+    return Date.now() - new Date(message.createdat).getTime() < CHAT_EDIT_LIMIT_MS;
+  };
+
+  const canEdit = (message) => {
+    if (!canDelete(message) || message.imageurl) return false;
+
+    try {
+      return JSON.parse(message.content)?.__type === "edited_text";
+    } catch {
+      return true;
+    }
+  };
+
+  const canPin = (message) => {
+    if (isDeletedMsg(message.content)) return false;
+
+    return !!getPinnableText(message).trim();
   };
 
   const deleteMessage = async (messageId) => {
@@ -528,6 +697,129 @@ function ChatTab({ roomId }) {
     }
 
     setSelectedMsgId(null);
+  };
+
+  const startEditingMessage = (message) => {
+    setEditingMsgId(message.id);
+    setContent(getTextMessage(message.content));
+    setSelectedMsgId(null);
+    setShowMediaOptions(false);
+  };
+
+  const cancelEditingMessage = () => {
+    setEditingMsgId(null);
+    setContent("");
+  };
+
+  const editMessage = async () => {
+    const trimmedContent = content.trim();
+
+    if (!editingMsgId || !trimmedContent || !currentUser) return false;
+
+    const editableSince = new Date(Date.now() - CHAT_EDIT_LIMIT_MS).toISOString();
+    const { data, error } = await supabase
+      .from("room_messages")
+      .update({
+        content: JSON.stringify({ __type: "edited_text", text: trimmedContent }),
+      })
+      .eq("id", editingMsgId)
+      .eq("userid", currentUser.id)
+      .gte("createdat", editableSince)
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      console.error("메시지 수정 실패:", error);
+      alert("메시지 수정에 실패했습니다.");
+      return false;
+    }
+
+    if (!data) {
+      alert("메시지는 보낸 후 10분 이내에만 수정할 수 있습니다.");
+      cancelEditingMessage();
+      return false;
+    }
+
+    setEditingMsgId(null);
+    setContent("");
+    return true;
+  };
+
+  const insertMetaMessage = async (meta) => {
+    if (!currentUser || !currentProfile) return false;
+
+    const { error } = await supabase.from("room_messages").insert([
+      {
+        roomid: Number(roomId),
+        userid: currentUser.id === "guest" ? null : currentUser.id,
+        nickname: currentProfile.nickname || "익명",
+        profileimageurl: currentProfile.profileimageurl || null,
+        content: JSON.stringify(meta),
+        imageurl: null,
+      },
+    ]);
+
+    if (error) {
+      console.error("채팅 메타 메시지 저장 실패:", error);
+      alert("요청을 처리하지 못했습니다.");
+      return false;
+    }
+
+    return true;
+  };
+
+  const pinMessage = async (message) => {
+    const text = getPinnableText(message).trim();
+
+    if (!text) return;
+
+    const isMyMessage = currentUser && message.userid === currentUser.id;
+    const announcementTitle = isMyMessage
+      ? "공지가 등록되었습니다."
+      : `${message.nickname || "익명"}님의 글을 공지로 등록하였습니다.`;
+    const announcementSaved = await insertMetaMessage({
+      __type: "announcement",
+      text,
+      title: announcementTitle,
+    });
+
+    if (!announcementSaved) return;
+
+    const saved = await insertMetaMessage({
+      __type: "pin_event",
+      text,
+      sourceMessageId: message.id,
+    });
+
+    if (saved) {
+      setSelectedMsgId(null);
+      await sendChatNotification();
+    }
+  };
+
+  const unpinMessage = async () => {
+    await insertMetaMessage({ __type: "pin_event", cleared: true });
+  };
+
+  const createAnnouncement = async (event) => {
+    event.preventDefault();
+
+    const text = announcementContent.trim();
+
+    if (!text) return;
+
+    const saved = await insertMetaMessage({
+      __type: "announcement",
+      text,
+      title: "공지가 등록되었습니다.",
+    });
+
+    if (!saved) return;
+
+    await insertMetaMessage({ __type: "pin_event", text, announcement: true });
+    setAnnouncementContent("");
+    setShowAnnouncementForm(false);
+    await sendChatNotification();
   };
 
   const sendChatNotification = async () => {
@@ -673,12 +965,70 @@ function ChatTab({ roomId }) {
 
     if (!content.trim()) return;
 
+    if (editingMsgId) {
+      await editMessage();
+      return;
+    }
+
     await sendMessage({ text: content.trim() });
     setContent("");
   };
 
+  const latestPin = [...messages]
+    .reverse()
+    .map((message) => getMessageMeta(message.content))
+    .find((meta) => meta?.__type === "pin_event");
+  const pinnedText = latestPin && !latestPin.cleared ? latestPin.text : "";
+  const isPinnedMessageCollapsible =
+    pinnedText.length > PINNED_MESSAGE_COLLAPSE_LENGTH || pinnedText.includes("\n");
+
+  useEffect(() => {
+    setIsPinnedMessageExpanded(false);
+  }, [pinnedText]);
+
   return (
     <div className="chat-container">
+      {pinnedText && (
+        <div className="chat-pinned-message">
+          <div>
+            <strong>공지</strong>
+            <span className={isPinnedMessageExpanded ? "hidden" : ""}>
+              {pinnedText}
+            </span>
+            {isPinnedMessageCollapsible && (
+              <button
+                type="button"
+                className={`chat-pinned-toggle${
+                  isPinnedMessageExpanded ? " hidden" : ""
+                }`}
+                onClick={() => setIsPinnedMessageExpanded(true)}
+              >
+                펼치기
+              </button>
+            )}
+            {isPinnedMessageExpanded && (
+              <div className="chat-pinned-expanded">
+                <span>{pinnedText}</span>
+                <button
+                  type="button"
+                  className="chat-pinned-collapse"
+                  onClick={() => setIsPinnedMessageExpanded(false)}
+                >
+                  접기
+                </button>
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            className="chat-pinned-close"
+            onClick={unpinMessage}
+            aria-label="고정 해제"
+          >
+            ×
+          </button>
+        </div>
+      )}
       <div className="chat-message-list">
         {messages.map((message, index) => {
           const prevMessage = messages[index - 1];
@@ -704,6 +1054,9 @@ function ChatTab({ roomId }) {
               <div style={{ flex: 1, height: "1px", backgroundColor: "#ccc" }} />
             </div>
           );
+          const meta = getMessageMeta(message.content);
+
+          if (meta?.__type === "pin_event") return null;
 
           if (isDeletedMsg(message.content) && !message.imageurl) {
             return (
@@ -722,6 +1075,8 @@ function ChatTab({ roomId }) {
             message.userid === myId
           );
           const deletable = canDelete(message);
+          const editable = canEdit(message);
+          const pinnable = canPin(message);
 
           return (
             <div key={message.id}>
@@ -751,18 +1106,36 @@ function ChatTab({ roomId }) {
                         style={isMine ? { right: 0 } : { left: 0 }}
                         onClick={(event) => event.stopPropagation()}
                       >
-                        <button onClick={() => deleteMessage(message.id)}>
-                          삭제
-                        </button>
+                        {deletable && (
+                          <button onClick={() => deleteMessage(message.id)}>
+                            삭제
+                          </button>
+                        )}
+                        {editable && (
+                          <button
+                            className="chat-edit-button"
+                            onClick={() => startEditingMessage(message)}
+                          >
+                            수정하기
+                          </button>
+                        )}
+                        {pinnable && (
+                          <button
+                            className="chat-pin-button"
+                            onClick={() => pinMessage(message)}
+                          >
+                            고정하기
+                          </button>
+                        )}
                       </div>
                     )}
 
                     <div
                       className={`chat-bubble ${isMine ? "mine" : "other"}${
-                        deletable ? " deletable" : ""
+                        deletable || pinnable ? " deletable" : ""
                       }`}
                       onClick={
-                        deletable
+                        deletable || pinnable
                           ? (event) => {
                               event.stopPropagation();
                               setSelectedMsgId((value) =>
@@ -799,12 +1172,28 @@ function ChatTab({ roomId }) {
                             if (meta.__type === "map_share") {
                               return <MapShareMessageCard meta={meta} />;
                             }
+
+                            if (meta.__type === "edited_text") {
+                              return meta.text;
+                            }
+
+                            if (meta.__type === "announcement") {
+                              return (
+                                <div className="chat-announcement-message">
+                                  <strong>{meta.title || "공지사항"}</strong>
+                                  <span>{meta.text}</span>
+                                </div>
+                              );
+                            }
                           } catch {
                             // 일반 텍스트 메시지
                           }
 
                           return message.content;
                         })()
+                      )}
+                      {isEditedMsg(message.content) && (
+                        <span className="chat-edited-label">수정됨</span>
                       )}
                     </div>
                   </div>
@@ -901,6 +1290,17 @@ function ChatTab({ roomId }) {
                 <div className="chat-sheet-tile-icon">🖼️</div>
                 <span>사진</span>
               </button>
+
+              <button
+                className="chat-sheet-tile"
+                onClick={() => {
+                  setShowMediaOptions(false);
+                  setShowAnnouncementForm(true);
+                }}
+              >
+                <div className="chat-sheet-tile-icon">!</div>
+                <span>공지사항</span>
+              </button>
             </div>
           </div>
         </div>
@@ -944,11 +1344,51 @@ function ChatTab({ roomId }) {
         </div>
       )}
 
+      {showAnnouncementForm && (
+        <div
+          className="chat-announcement-overlay"
+          onClick={() => setShowAnnouncementForm(false)}
+        >
+          <form
+            className="chat-announcement-form"
+            onSubmit={createAnnouncement}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3>공지사항 작성</h3>
+            <textarea
+              value={announcementContent}
+              onChange={(event) => setAnnouncementContent(event.target.value)}
+              placeholder="공지 내용을 입력하세요."
+              autoFocus
+            />
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowAnnouncementForm(false)}
+              >
+                취소
+              </button>
+              <button type="submit">등록</button>
+            </div>
+          </form>
+        </div>
+      )}
+
       <form className="chat-input-area" onSubmit={handleSendMessage}>
+        {editingMsgId && (
+          <button
+            type="button"
+            className="chat-edit-cancel-btn"
+            onClick={cancelEditingMessage}
+          >
+            취소
+          </button>
+        )}
         <button
           type="button"
           className={`chat-plus-btn${showMediaOptions ? " active" : ""}`}
           onClick={() => setShowMediaOptions((value) => !value)}
+          disabled={!!editingMsgId}
         >
           +
         </button>
@@ -961,7 +1401,7 @@ function ChatTab({ roomId }) {
         />
 
         <button type="submit" disabled={uploading}>
-          전송
+          {editingMsgId ? "수정" : "전송"}
         </button>
       </form>
     </div>

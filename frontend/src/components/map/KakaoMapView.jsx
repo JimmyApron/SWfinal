@@ -17,6 +17,7 @@ function KakaoMapView({
   const memberMarkerRefs = useRef([])
   const placeMarkerRefs = useRef([])
   const pickedMarkerRef = useRef(null)
+  const selectedPlaceMarkerRef = useRef(null)
 
   const selectedInfoWindowRef = useRef(null)
   const routePolylineRef = useRef(null)
@@ -194,8 +195,7 @@ function KakaoMapView({
       content: `
         <div style="padding:8px; font-size:13px; line-height:1.5;">
           <strong>${escapeHtml(pickedPlace.name || '선택한 위치')}</strong>
-          <p style="margin:4px 0;">위도: ${Number(pickedPlace.lat).toFixed(6)}</p>
-          <p style="margin:4px 0;">경도: ${Number(pickedPlace.lng).toFixed(6)}</p>
+          <p style="margin:4px 0;">${escapeHtml(pickedPlace.address || '주소 정보 없음')}</p>
         </div>
       `,
     })
@@ -394,9 +394,16 @@ function KakaoMapView({
 
   // 선택한 장소 인포윈도우
   useEffect(() => {
-    if (!isMapReady || !mapObjectRef.current || !selectedPlace) {
+    if (!isMapReady || !mapObjectRef.current) {
       return
     }
+
+    if (selectedPlaceMarkerRef.current) {
+      selectedPlaceMarkerRef.current.setMap(null)
+      selectedPlaceMarkerRef.current = null
+    }
+
+    if (!selectedPlace) return
 
     if (!isValidLatLng(selectedPlace.lat, selectedPlace.lng)) {
       console.log('선택한 장소 좌표가 없습니다:', selectedPlace)
@@ -426,6 +433,11 @@ function KakaoMapView({
         title: selectedPlace.name || '장소',
       })
 
+      window.kakao.maps.event.addListener(marker, 'click', () => {
+        openPlaceInfoWindow(selectedPlace, marker)
+      })
+
+      selectedPlaceMarkerRef.current = marker
       openPlaceInfoWindow(selectedPlace, marker)
     }
 

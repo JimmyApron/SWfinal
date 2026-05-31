@@ -16,6 +16,7 @@ import {
   getAcceptedShares,
   removeCalendarShare,
 } from "../../api/calendarShareApi";
+import LocationPicker from "../../components/map/LocationPicker";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const MONTHS = [
@@ -851,7 +852,7 @@ function CalendarPage() {
           )}
 
           {selectedSchedules.map((s) => (
-            <p
+            <div
               key={s.id}
               style={{
                 margin: "4px 0 0",
@@ -869,7 +870,12 @@ function CalendarPage() {
                   · {s.roomname}
                 </span>
               )}
-            </p>
+              {s.location && (
+                <div style={{ fontSize: "12px", color: "#aaa" }}>
+                  📍 {s.location}
+                </div>
+              )}
+            </div>
           ))}
 
           {selectedPersonal.map((e) => (
@@ -1800,6 +1806,15 @@ function CalendarPage() {
                   fontSize: "15px",
                   boxSizing: "border-box",
                 }}
+              />
+
+              <LocationPicker
+                onSelect={(name, address) =>
+                  setForm((f) => ({
+                    ...f,
+                    location: name || address,
+                  }))
+                }
               />
             </div>
 

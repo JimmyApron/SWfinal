@@ -13,6 +13,11 @@ import {
 } from "../../api/voteApi";
 import { sendVoteClosedNotification } from "../notification/VoteNotification";
 import { addEventToGoogleCalendar } from "../../api/googleCalendarApi";
+import {
+  applyConfirmedLocationToSchedule,
+  createLocationOnlyConfirmedSchedule,
+  getRoomConfirmedSchedules,
+} from "../../api/scheduleApi";
 import KakaoMapView from "../../components/map/KakaoMapView";
 import LocationPicker from "../../components/map/LocationPicker";
 
@@ -48,11 +53,14 @@ function VoteDetailPage() {
   const [newKakaoMapUrl, setNewKakaoMapUrl] = useState("");
   const [newPickedPlace, setNewPickedPlace] = useState(null);
   const [showPickMap, setShowPickMap] = useState(false);
+  const [showAddPlaceForm, setShowAddPlaceForm] = useState(false);
 
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [pendingOption, setPendingOption] = useState(null);
   const [appointmentTitle, setAppointmentTitle] = useState("");
+  const [pendingConfirmedLocation, setPendingConfirmedLocation] = useState(null);
+  const [roomConfirmedSchedules, setRoomConfirmedSchedules] = useState([]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user));
@@ -68,6 +76,7 @@ function VoteDetailPage() {
       placelat: option.placelat ?? "",
       placelng: option.placelng ?? "",
       kakaomapurl: option.kakaomapurl || option.kakaoMapUrl || "",
+      travelresults: option.travelresults || null,
       isNew: false,
     }));
 
@@ -285,7 +294,7 @@ function VoteDetailPage() {
     }
 
     if ((hasLat && !hasLng) || (!hasLat && hasLng)) {
-      return "위도와 경도는 둘 다 입력해야 합니다.";
+      return "선택지 장소를 카카오맵에서 다시 선택해주세요.";
     }
 
     const latNumber = normalizeCoordinate(option.placelat);
@@ -295,7 +304,7 @@ function VoteDetailPage() {
       (hasLat && Number.isNaN(latNumber)) ||
       (hasLng && Number.isNaN(lngNumber))
     ) {
-      return "위도와 경도는 숫자로 입력해야 합니다.";
+      return "선택지 장소를 카카오맵에서 다시 선택해주세요.";
     }
 
     return null;
@@ -313,6 +322,7 @@ function VoteDetailPage() {
       placelat: latValue,
       placelng: lngValue,
       kakaomapurl: option.kakaomapurl.trim() || null,
+      travelresults: option.travelresults || null,
     };
   };
 
@@ -357,7 +367,7 @@ function VoteDetailPage() {
         const hasLng = hasValue(inputLng);
 
         if ((hasLat && !hasLng) || (!hasLat && hasLng)) {
-          alert("위도와 경도는 둘 다 입력해야 합니다.");
+          alert("선택지 장소를 카카오맵에서 다시 선택해주세요.");
           return;
         }
 
@@ -368,7 +378,7 @@ function VoteDetailPage() {
           (hasLat && Number.isNaN(latNumber)) ||
           (hasLng && Number.isNaN(lngNumber))
         ) {
-          alert("위도와 경도는 숫자로 입력해야 합니다.");
+          alert("선택지 장소를 카카오맵에서 다시 선택해주세요.");
           return;
         }
 
@@ -378,7 +388,7 @@ function VoteDetailPage() {
           !hasValue(newKakaoMapUrl)
         ) {
           alert(
-            "지도정보가 없습니다. 주소, 위도/경도, 카카오맵 URL 중 하나는 입력해야 합니다."
+            "지도정보가 없습니다. 카카오맵에서 장소를 다시 선택해주세요."
           );
           return;
         }
@@ -400,6 +410,7 @@ function VoteDetailPage() {
         setNewKakaoMapUrl("");
         setNewPickedPlace(null);
         setShowPickMap(false);
+        setShowAddPlaceForm(false);
       } else {
         if (!newOptionText.trim()) {
           alert("항목 내용을 입력하세요.");
@@ -483,35 +494,40 @@ function VoteDetailPage() {
 
       await loadVote();
 
-      if (
-        isLocationVote &&
-        !result?.hasConfirmedSchedule
-      ) {
-        setAppointmentTitle("");
-        setShowScheduleModal(true);
-      }
+      setPendingConfirmedLocation(result.confirmedLocation);
+      setRoomConfirmedSchedules(await getRoomConfirmedSchedules(roomid));
+      setShowScheduleModal(true);
     } catch (error) {
       alert("확정 실패: " + (error.message || JSON.stringify(error)));
     }
   };
 
-  const handleLocationConfirmedWithSchedule = (goToSchedule) => {
-    if (!appointmentTitle.trim()) {
-      alert("약속 이름을 입력하세요.");
-      return;
-    }
-
-    localStorage.setItem(
-      `appointment_draft_title_${Number(roomid)}`,
-      appointmentTitle.trim()
-    );
-    setShowScheduleModal(false);
-    setAppointmentTitle("");
-
-    if (goToSchedule) {
-      navigate(`/rooms/${roomid}?tab=schedule`);
-    } else {
+  const handleApplyLocationToSchedule = async (scheduleId) => {
+    try {
+      await applyConfirmedLocationToSchedule(
+        scheduleId,
+        pendingConfirmedLocation,
+        isMiddlePlaceVote
+      );
+      setShowScheduleModal(false);
+      setPendingConfirmedLocation(null);
       navigate("/home");
+    } catch (error) {
+      alert("일정 위치 저장 실패: " + error.message);
+    }
+  };
+
+  const handleCreateScheduleFromLocation = async () => {
+    try {
+      await createLocationOnlyConfirmedSchedule(
+        pendingConfirmedLocation,
+        isMiddlePlaceVote
+      );
+      setShowScheduleModal(false);
+      setPendingConfirmedLocation(null);
+      navigate(`/rooms/${roomid}?tab=schedule`);
+    } catch (error) {
+      alert("일정 생성 실패: " + error.message);
     }
   };
 
@@ -758,33 +774,6 @@ function VoteDetailPage() {
                 color: "#666",
                 fontSize: "13px",
                 textAlign: "center",
-                marginBottom: "16px",
-              }}
-            >
-              약속 이름을 입력해 주세요
-            </p>
-
-            <input
-              type="text"
-              placeholder="예: 팀 회식, 생일 파티..."
-              value={appointmentTitle}
-              onChange={(e) => setAppointmentTitle(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                fontSize: "14px",
-                border: "1px solid #ddd",
-                borderRadius: "10px",
-                boxSizing: "border-box",
-                marginBottom: "16px",
-              }}
-            />
-
-            <p
-              style={{
-                color: "#666",
-                fontSize: "13px",
-                textAlign: "center",
                 marginBottom: "12px",
               }}
             >
@@ -886,28 +875,40 @@ function VoteDetailPage() {
                 marginBottom: "12px",
               }}
             >
-              만날 일정을 지금 정하시겠어요?
+              위치를 추가할 일정을 선택하거나 새 일정을 만들어 주세요.
             </p>
 
-            <button
-              onClick={() => handleLocationConfirmedWithSchedule(true)}
-              style={{
-                width: "100%",
-                padding: "12px",
-                marginBottom: "8px",
-                backgroundColor: "#7c79ff",
-                color: "#fff",
-                border: "none",
-                borderRadius: "10px",
-                fontSize: "15px",
-                cursor: "pointer",
-              }}
-            >
-              일정 지금 정하기
-            </button>
+            {roomConfirmedSchedules.length > 0 && (
+              <div style={{ marginBottom: "12px" }}>
+                <p style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: "bold" }}>
+                  1. 확정된 일정에서 정하기
+                </p>
+
+                {roomConfirmedSchedules.map((schedule) => (
+                  <button
+                    key={schedule.id}
+                    onClick={() => handleApplyLocationToSchedule(schedule.id)}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      marginBottom: "6px",
+                      backgroundColor: "#f9f9ff",
+                      color: "#333",
+                      border: "1px solid #e0e0ff",
+                      borderRadius: "10px",
+                      fontSize: "14px",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    {schedule.title || schedule.date || "날짜 미정 일정"}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <button
-              onClick={() => handleLocationConfirmedWithSchedule(false)}
+              onClick={handleCreateScheduleFromLocation}
               style={{
                 width: "100%",
                 padding: "12px",
@@ -919,7 +920,7 @@ function VoteDetailPage() {
                 cursor: "pointer",
               }}
             >
-              나중에 정하기
+              2. 일정 정하러 가기
             </button>
           </div>
         </div>
@@ -1202,108 +1203,122 @@ function VoteDetailPage() {
                     </button>
 
                     {isLocationVote ? (
-                      <div
-                        style={{
-                          marginBottom: "16px",
-                          padding: "12px",
-                          border: "1px solid #eee",
-                          borderRadius: "8px",
-                        }}
-                      >
-                        <input
-                          value={newPlaceName}
-                          readOnly
-                          placeholder="추가할 장소명"
-                          style={editInputStyle}
-                        />
-
-                        <input
-                          value={newPlaceAddress}
-                          readOnly
-                          placeholder="주소 선택 입력"
-                          style={editInputStyle}
-                        />
-
-                        <div style={{ display: "flex", gap: "8px" }}>
-                          <input
-                            value={newPlaceLat}
-                            readOnly
-                            placeholder="위도 선택 입력"
-                            style={{ ...editInputStyle, flex: 1 }}
-                          />
-
-                          <input
-                            value={newPlaceLng}
-                            readOnly
-                            placeholder="경도 선택 입력"
-                            style={{ ...editInputStyle, flex: 1 }}
-                          />
-                        </div>
-
-                        <input
-                          value={newKakaoMapUrl}
-                          readOnly
-                          placeholder="카카오맵 URL 선택 입력"
-                          style={editInputStyle}
-                        />
-
-                        <p
-                          style={{
-                            fontSize: "12px",
-                            color: "#888",
-                            marginTop: 0,
-                          }}
-                        >
-                          장소명은 필수입니다. 주소, 위도/경도, 카카오맵 URL 중
-                          하나는 입력해야 합니다.
-                        </p>
-
+                      <>
                         <button
                           type="button"
-                          onClick={() => setShowPickMap(!showPickMap)}
-                          style={{ ...smallButtonStyle, marginBottom: "8px" }}
-                        >
-                          {showPickMap ? "장소 검색 닫기" : "카카오맵에서 장소 검색"}
-                        </button>
-
-                        {newPickedPlace && (
-                          <p style={{ fontSize: "13px", color: "#666" }}>
-                            선택 좌표: {Number(newPickedPlace.lat).toFixed(6)},{" "}
-                            {Number(newPickedPlace.lng).toFixed(6)}
-                          </p>
-                        )}
-
-                        {showPickMap && (
-                          <LocationPicker
-                            allowMapClick={false}
-                            onSelect={(name, address, place = {}) => {
-                              setNewPlaceName(name || "");
-                              setNewPlaceAddress(address || "");
-                              setNewPlaceLat(place.lat ?? "");
-                              setNewPlaceLng(place.lng ?? "");
-                              setNewKakaoMapUrl(
-                                place.kakaoMapUrl || place.kakaomapurl || ""
-                              );
-                              setNewPickedPlace(place);
-                              setShowPickMap(false);
-                            }}
-                          />
-                        )}
-
-                        <button
-                          onClick={handleAddOption}
+                          onClick={() => {
+                            setShowAddPlaceForm((prev) => !prev);
+                            setShowPickMap(false);
+                          }}
                           style={{
                             width: "100%",
                             padding: "10px 16px",
+                            marginBottom: "8px",
                             border: "1px solid #ddd",
                             borderRadius: "8px",
                             backgroundColor: "#fff",
                             cursor: "pointer",
                           }}
                         >
-                          장소 검색 항목 추가
+                          {showAddPlaceForm
+                            ? "장소 검색 항목 추가 닫기"
+                            : "장소 검색 항목 추가"}
                         </button>
-                      </div>
+
+                        {showAddPlaceForm && (
+                          <div
+                            style={{
+                              position: "relative",
+                              marginBottom: "16px",
+                              padding: "12px",
+                              paddingTop: "36px",
+                              border: "1px solid #eee",
+                              borderRadius: "8px",
+                              backgroundColor: "#fff",
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowAddPlaceForm(false);
+                                setShowPickMap(false);
+                              }}
+                              style={{
+                                position: "absolute",
+                                top: "8px",
+                                right: "8px",
+                                border: "none",
+                                background: "none",
+                                fontSize: "18px",
+                                cursor: "pointer",
+                                color: "#f44",
+                              }}
+                            >
+                              ×
+                            </button>
+
+                            <input
+                              value={newPlaceName}
+                              readOnly
+                              placeholder="장소명"
+                              style={editInputStyle}
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() => setShowPickMap(!showPickMap)}
+                              style={placeSearchButtonStyle}
+                            >
+                              {showPickMap ? "장소 검색 닫기" : "카카오맵에서 장소 검색"}
+                            </button>
+
+                            {showPickMap && (
+                              <LocationPicker
+                                allowMapClick={false}
+                                onSelect={(name, address, place = {}) => {
+                                  setNewPlaceName(name || "");
+                                  setNewPlaceAddress(address || "");
+                                  setNewPlaceLat(place.lat ?? "");
+                                  setNewPlaceLng(place.lng ?? "");
+                                  setNewKakaoMapUrl(
+                                    place.kakaoMapUrl || place.kakaomapurl || ""
+                                  );
+                                  setNewPickedPlace(place);
+                                  setShowPickMap(false);
+                                }}
+                              />
+                            )}
+
+                            <input
+                              value={newPlaceAddress}
+                              readOnly
+                              placeholder="주소 선택 입력"
+                              style={editInputStyle}
+                            />
+
+                            <input
+                              value={newKakaoMapUrl}
+                              readOnly
+                              placeholder="카카오맵 URL 선택 입력"
+                              style={editInputStyle}
+                            />
+
+                            <button
+                              onClick={handleAddOption}
+                              style={{
+                                width: "100%",
+                                padding: "10px 16px",
+                                border: "1px solid #ddd",
+                                borderRadius: "8px",
+                                backgroundColor: "#fff",
+                                cursor: "pointer",
+                              }}
+                            >
+                              선택한 장소 항목 추가
+                            </button>
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div
                         style={{
@@ -1672,6 +1687,7 @@ function EditPlaceOptionsPanel({
       "kakaomapurl",
       place.kakaoMapUrl || place.kakaomapurl || ""
     );
+    onChangeOption(index, "travelresults", null);
     setOpenPickerIndex(null);
   };
 
@@ -1733,7 +1749,7 @@ function EditPlaceOptionsPanel({
             onClick={() =>
               setOpenPickerIndex((prev) => (prev === index ? null : index))
             }
-            style={{ ...smallButtonStyle, marginBottom: "8px" }}
+            style={placeSearchButtonStyle}
           >
             {openPickerIndex === index ? "장소 검색 닫기" : "카카오맵에서 장소 검색"}
           </button>
@@ -1753,22 +1769,6 @@ function EditPlaceOptionsPanel({
             placeholder="주소 선택 입력"
             style={editInputStyle}
           />
-
-          <div style={{ display: "flex", gap: "8px" }}>
-            <input
-              value={option.placelat}
-              readOnly
-              placeholder="위도 선택 입력"
-              style={{ ...editInputStyle, flex: 1 }}
-            />
-
-            <input
-              value={option.placelng}
-              readOnly
-              placeholder="경도 선택 입력"
-              style={{ ...editInputStyle, flex: 1 }}
-            />
-          </div>
 
           <input
             value={option.kakaomapurl}
@@ -2001,6 +2001,16 @@ const smallButtonStyle = {
   borderRadius: "8px",
   backgroundColor: "#fff",
   fontSize: "12px",
+  cursor: "pointer",
+};
+
+const placeSearchButtonStyle = {
+  width: "100%",
+  height: "40px",
+  marginBottom: "8px",
+  border: "1px solid #ddd",
+  borderRadius: "6px",
+  backgroundColor: "#fff",
   cursor: "pointer",
 };
 

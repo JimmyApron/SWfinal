@@ -14,6 +14,102 @@
   overflow-y: auto;
 }
 
+.chat-pinned-message {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #fff;
+  border-bottom: 1px solid #ddd;
+}
+
+.chat-pinned-message div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-pinned-message strong {
+  color: #7c79ff;
+  font-size: 12px;
+}
+
+.chat-pinned-message span {
+  overflow: hidden;
+  color: #444;
+  display: -webkit-box;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.chat-pinned-close {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.chat-pinned-message .chat-pinned-toggle {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #7c79ff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.chat-pinned-message .hidden {
+  visibility: hidden;
+}
+
+.chat-pinned-message .chat-pinned-expanded {
+  position: absolute;
+  top: 27px;
+  right: 0;
+  left: 0;
+  max-height: 220px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  padding: 2px 42px 12px 14px;
+  background: #fff;
+  box-shadow: 0 8px 12px rgba(0, 0, 0, 0.12);
+  color: #444;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.chat-pinned-message .chat-pinned-expanded span {
+  display: block;
+  flex-shrink: 0;
+  overflow: visible;
+  white-space: pre-wrap;
+  -webkit-line-clamp: unset;
+}
+
+.chat-pinned-message .chat-pinned-collapse {
+  align-self: flex-start;
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #7c79ff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
 .chat-row {
   display: flex;
   margin-bottom: 12px;
@@ -77,13 +173,16 @@
 
 .chat-delete-popup {
   position: absolute;
-  top: -38px;
+  bottom: calc(100% + 6px);
   background: #222;
   border-radius: 8px;
   padding: 6px 14px;
   z-index: 10;
   white-space: nowrap;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .chat-delete-popup button {
@@ -95,6 +194,23 @@
   font-weight: bold;
   padding: 0;
   margin: 0;
+}
+
+.chat-delete-popup .chat-edit-button,
+.chat-delete-popup .chat-pin-button {
+  color: #fff;
+}
+
+.chat-announcement-message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  white-space: pre-wrap;
+}
+
+.chat-announcement-message strong {
+  color: #7c79ff;
+  font-size: 12px;
 }
 
 .chat-plus-btn {
@@ -216,4 +332,81 @@
   border-radius: 18px;
   background-color: #fee500;
   cursor: pointer;
+}
+
+.chat-input-area .chat-edit-cancel-btn {
+  margin-left: 0;
+  margin-right: 8px;
+  padding: 0 12px;
+  background-color: #eee;
+}
+
+.chat-edited-label {
+  display: block;
+  margin-top: 2px;
+  color: #888;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.chat-bubble.mine .chat-edited-label {
+  text-align: right;
+}
+
+.chat-bubble.other .chat-edited-label {
+  text-align: left;
+}
+
+.chat-announcement-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.chat-announcement-form {
+  width: min(100%, 360px);
+  padding: 18px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
+}
+
+.chat-announcement-form h3 {
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+
+.chat-announcement-form textarea {
+  width: 100%;
+  min-height: 120px;
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font: inherit;
+  resize: vertical;
+}
+
+.chat-announcement-form div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.chat-announcement-form button {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 16px;
+  background: #eee;
+  cursor: pointer;
+}
+
+.chat-announcement-form button[type="submit"] {
+  background: #fee500;
 }

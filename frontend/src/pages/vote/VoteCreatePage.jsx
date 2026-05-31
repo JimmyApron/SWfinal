@@ -88,6 +88,7 @@ function VoteCreatePage() {
         placelat: place.lat ?? "",
         placelng: place.lng ?? "",
         kakaomapurl: place.kakaoMapUrl || place.kakaomapurl || "",
+        travelresults: place.travelResults || place.travelresults || null,
       }));
     }
 
@@ -148,6 +149,7 @@ function VoteCreatePage() {
           placelat: option.placelat || "",
           placelng: option.placelng || "",
           kakaomapurl: option.kakaomapurl || "",
+          travelresults: option.travelresults || null,
         }))
       );
       return;
@@ -188,6 +190,7 @@ function VoteCreatePage() {
       placelat: place.lat ?? "",
       placelng: place.lng ?? "",
       kakaomapurl: place.kakaoMapUrl || place.kakaomapurl || "",
+      travelresults: null,
     };
 
     setOptions(newOptions);
@@ -300,7 +303,7 @@ function VoteCreatePage() {
     });
 
     alert("투표가 성공적으로 생성되었습니다.");
-    navigate(`/rooms/${roomid}?tab=${returnTab}`);
+    navigate(`/rooms/${roomid}?tab=vote`);
   };
 
   return (
@@ -597,22 +600,6 @@ function VoteCreatePage() {
                     placeholder="주소"
                     style={inputStyle}
                   />
-
-                  <div style={{ display: "flex", gap: "6px" }}>
-                    <input
-                      value={option.placelat}
-                      readOnly
-                      placeholder="위도"
-                      style={inputStyle}
-                    />
-
-                    <input
-                      value={option.placelng}
-                      readOnly
-                      placeholder="경도"
-                      style={inputStyle}
-                    />
-                  </div>
 
                   <input
                     value={option.kakaomapurl}

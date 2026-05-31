@@ -139,7 +139,7 @@ export async function getMyConfirmedSchedules(userId, { includeLocationOnly = fa
       .from("confirmed_schedules")
       .select("*")
       .in("roomid", roomIds)
-      .gte("date", new Date().toISOString().slice(0, 10))
+      .or(`date.gte.${new Date().toISOString().slice(0, 10)},date.is.null`)
       .order("date", { ascending: true }),
     supabase
       .from("dismissed_schedules")
@@ -158,53 +158,7 @@ export async function getMyConfirmedSchedules(userId, { includeLocationOnly = fa
 
   if (!includeLocationOnly) return visibleSchedules;
 
-  const { data: middlePlaces, error: middlePlaceError } = await supabase
-    .from("room_middle_places")
-    .select("roomid, name, address, lat, lng")
-    .in("roomid", roomIds);
-
-  if (middlePlaceError) throw new Error("중간 위치 조회 실패");
-
-  const middlePlaceMap = new Map(
-    (middlePlaces || []).map((place) => [place.roomid, place])
-  );
-  const schedulesWithMiddlePlace = visibleSchedules.map((schedule) => {
-    const middlePlace = middlePlaceMap.get(schedule.roomid);
-    return {
-      ...schedule,
-      middlePlace: middlePlace
-        ? {
-            name: middlePlace.name,
-            address: middlePlace.address || null,
-            lat: middlePlace.lat,
-            lng: middlePlace.lng,
-          }
-        : null,
-    };
-  });
-  const scheduledRoomIds = new Set(visibleSchedules.map((s) => s.roomid));
-  const locationOnlyCards = (middlePlaces || [])
-    .filter((place) => !scheduledRoomIds.has(place.roomid))
-    .map((place) => {
-      const membership = memberships.find((m) => m.roomid === place.roomid);
-      return {
-        id: `middle-place-${place.roomid}`,
-        roomid: place.roomid,
-        roomname: membership?.rooms?.roomname || "",
-        date: null,
-        location: place.name,
-        locationaddress: place.address || null,
-        middlePlace: {
-          name: place.name,
-          address: place.address || null,
-          lat: place.lat,
-          lng: place.lng,
-        },
-        isLocationOnly: true,
-      };
-    });
-
-  return [...schedulesWithMiddlePlace, ...locationOnlyCards];
+  return visibleSchedules;
 }
 
 export async function createConfirmedScheduleForRoom(roomId, schedule) {
@@ -227,12 +181,18 @@ export async function createConfirmedScheduleForRoom(roomId, schedule) {
   }
 }
 
-export async function getAdditionalConfirmedLocations(roomId) {
-  const { data, error } = await supabase
+export async function getAdditionalConfirmedLocations(roomId, scheduleId = null) {
+  let query = supabase
     .from("confirmed_locations")
-    .select("id, placename, voteid")
+    .select("id, placename, voteid, scheduleid")
     .eq("roomid", Number(roomId))
     .order("createdat", { ascending: true });
+
+  if (scheduleId !== null) {
+    query = query.eq("scheduleid", Number(scheduleId));
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("추가 위치 조회 실패:", error);
@@ -265,16 +225,85 @@ export async function getAdditionalConfirmedLocations(roomId) {
   });
 }
 
-export async function addAdditionalConfirmedLocation(roomId, placeName) {
+export async function addAdditionalConfirmedLocation(roomId, scheduleId, placeName) {
   const { data, error } = await supabase
     .from("confirmed_locations")
-    .insert([{ roomid: Number(roomId), placename: placeName, voteid: null }])
-    .select("id, placename")
+    .insert([{
+      roomid: Number(roomId),
+      scheduleid: Number(scheduleId),
+      placename: placeName,
+      voteid: null,
+    }])
+    .select("id, placename, scheduleid")
     .single();
 
   if (error) {
     console.error("추가 위치 저장 실패:", error);
     throw new Error("추가 위치 저장 실패");
+  }
+
+  return data;
+}
+
+export async function getRoomConfirmedSchedules(roomId) {
+  const { data, error } = await supabase
+    .from("confirmed_schedules")
+    .select("*")
+    .eq("roomid", Number(roomId))
+    .order("date", { ascending: true, nullsFirst: true });
+
+  if (error) throw new Error("확정 일정 조회 실패");
+  return data || [];
+}
+
+export async function applyConfirmedLocationToSchedule(scheduleId, location, isMiddlePlace) {
+  if (isMiddlePlace) {
+    const { error } = await supabase
+      .from("confirmed_schedules")
+      .update({
+        location: location.placename,
+        locationaddress: location.placeaddress || null,
+        locationlat: location.placelat ?? null,
+        locationlng: location.placelng ?? null,
+      })
+      .eq("id", Number(scheduleId));
+
+    if (error) throw new Error("일정 위치 저장 실패");
+    return;
+  }
+
+  const { error } = await supabase.from("confirmed_locations").insert([{
+    roomid: Number(location.roomid),
+    scheduleid: Number(scheduleId),
+    voteid: Number(location.voteid),
+    placename: location.placename,
+  }]);
+
+  if (error) throw new Error("추가 장소 저장 실패");
+}
+
+export async function createLocationOnlyConfirmedSchedule(location, isMiddlePlace) {
+  const { data, error } = await supabase
+    .from("confirmed_schedules")
+    .insert([{
+      roomid: Number(location.roomid),
+      title: null,
+      date: null,
+      starttime: null,
+      endtime: null,
+      isallday: false,
+      location: isMiddlePlace ? location.placename : null,
+      locationaddress: isMiddlePlace ? location.placeaddress || null : null,
+      locationlat: isMiddlePlace ? location.placelat ?? null : null,
+      locationlng: isMiddlePlace ? location.placelng ?? null : null,
+    }])
+    .select("id")
+    .single();
+
+  if (error) throw new Error("날짜 없는 일정 생성 실패");
+
+  if (!isMiddlePlace) {
+    await applyConfirmedLocationToSchedule(data.id, location, false);
   }
 
   return data;
@@ -288,10 +317,21 @@ export async function dismissConfirmedSchedule(userId, scheduleId) {
   if (error) throw new Error("숨기기 실패");
 }
 
-export async function updateConfirmedScheduleLocation(scheduleId, location, locationAddress) {
+export async function updateConfirmedScheduleLocation(
+  scheduleId,
+  location,
+  locationAddress,
+  locationLat = null,
+  locationLng = null
+) {
   const { error } = await supabase
     .from("confirmed_schedules")
-    .update({ location, locationaddress: locationAddress || null })
+    .update({
+      location,
+      locationaddress: locationAddress || null,
+      locationlat: locationLat,
+      locationlng: locationLng,
+    })
     .eq("id", scheduleId);
 
   if (error) {

@@ -14,6 +14,7 @@ import {
   removeFriend,
 } from "../../api/friendApi";
 import RoomListPage from "../room/RoomListPage";
+import ConfirmedScheduleCard from "../../components/ConfirmedScheduleCard";
 
 function getTodayStr() {
   const now = new Date();
@@ -21,24 +22,6 @@ function getTodayStr() {
   const m = String(now.getMonth() + 1).padStart(2, "0");
   const d = String(now.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
-}
-
-function getTimeUntil(date, starttime) {
-  const today = getTodayStr();
-
-  if (date === today) return "오늘 약속입니다";
-
-  const target = new Date(`${date}T${starttime || "00:00:00"}`);
-  const diff = target - new Date();
-
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-  if (days > 0) return `일정 ${days}일 ${hours}시간 전입니다`;
-  if (hours > 0) return `일정 ${hours}시간 ${minutes}분 전입니다`;
-
-  return `일정 ${minutes}분 전입니다`;
 }
 
 function Avatar({ url, nickname, size = 40 }) {
@@ -122,12 +105,10 @@ function HomePage() {
       includeLocationOnly: true,
     });
 
-    const roomIds = [...new Set((data || []).map((schedule) => schedule.roomid))];
-
     const additionalLocationEntries = await Promise.all(
-      roomIds.map(async (roomid) => [
-        roomid,
-        await getAdditionalConfirmedLocations(roomid),
+      (data || []).map(async (schedule) => [
+        schedule.id,
+        await getAdditionalConfirmedLocations(schedule.roomid, schedule.id),
       ])
     );
 
@@ -136,7 +117,7 @@ function HomePage() {
     setConfirmedSchedules(
       (data || []).map((schedule) => ({
         ...schedule,
-        additionalLocations: additionalLocationMap.get(schedule.roomid) || [],
+        additionalLocations: additionalLocationMap.get(schedule.id) || [],
       }))
     );
   }, []);
@@ -566,114 +547,17 @@ function HomePage() {
             확정된 일정이 없습니다
           </p>
         ) : (
-          upcomingSchedules.map((schedule) => {
-            const dateLabel = !schedule.date
-              ? null
-              : schedule.isallday
-              ? `${schedule.date} (하루종일)`
-              : `${schedule.date} ${schedule.starttime ?? ""} ~${
-                  schedule.endtime ? ` ${schedule.endtime}` : ""
-                }`;
-
-            return (
-              <div
-                key={schedule.id}
-                onClick={() =>
-                  navigate("/confirmed-schedule", {
-                    state: { schedule },
-                  })
-                }
-                style={{
-                  padding: "12px 14px",
-                  marginBottom: "8px",
-                  border: "1px solid #e0e0ff",
-                  borderRadius: "12px",
-                  cursor: "pointer",
-                  backgroundColor: "#f9f9ff",
-                }}
-              >
-                <p style={{ margin: 0, fontSize: "13px", color: "#888" }}>
-                  {schedule.roomname}
-                </p>
-
-                <p style={{ margin: "4px 0 0", fontWeight: "bold" }}>
-                  {schedule.title || dateLabel || "일정 미정"}
-                </p>
-
-                {dateLabel ? (
-                  <p
-                    style={{
-                      margin: "2px 0 0",
-                      fontSize: "13px",
-                      color: "#666",
-                    }}
-                  >
-                    {dateLabel}
-                  </p>
-                ) : (
-                  <p
-                    style={{
-                      margin: "2px 0 0",
-                      fontSize: "13px",
-                      color: "#aaa",
-                    }}
-                  >
-                    일정 미정
-                  </p>
-                )}
-
-                {schedule.date && (
-                  <p
-                    style={{
-                      margin: "4px 0 0",
-                      fontSize: "12px",
-                      color:
-                        schedule.date === getTodayStr() ? "#7c79ff" : "#f90",
-                      fontWeight:
-                        schedule.date === getTodayStr() ? "bold" : "normal",
-                    }}
-                  >
-                    {getTimeUntil(schedule.date, schedule.starttime)}
-                  </p>
-                )}
-
-                {schedule.location ? (
-                  <p
-                    style={{
-                      margin: "4px 0 0",
-                      fontSize: "13px",
-                      color: "#7c79ff",
-                    }}
-                  >
-                    📍 {schedule.location}
-                  </p>
-                ) : (
-                  <p
-                    style={{
-                      margin: "4px 0 0",
-                      fontSize: "13px",
-                      color: "#aaa",
-                    }}
-                  >
-                    위치 미정 (탭하여 설정)
-                  </p>
-                )}
-
-                {schedule.additionalLocations?.map((place) => (
-                  <p
-                    key={place.id}
-                    style={{
-                      margin: "4px 0 0",
-                      fontSize: "13px",
-                      color: "#666",
-                    }}
-                  >
-                    추가장소: {place.placename}
-                  </p>
-                ))}
-              </div>
-            );
-          })
+          upcomingSchedules.map((schedule) => (
+            <ConfirmedScheduleCard
+              key={schedule.id}
+              schedule={schedule}
+              onClick={() =>
+                navigate("/confirmed-schedule", {
+                  state: { schedule },
+                })
+              }
+            />
+          ))
         )}
       </div>
 

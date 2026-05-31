@@ -11,10 +11,16 @@ function loadKakaoScript() {
   });
 }
 
-function LocationPicker({ onSelect, allowMapClick = true }) {
+function LocationPicker({
+  onSelect,
+  allowMapClick = true,
+  initialPlace = null,
+  showMap = true,
+}) {
   const mapRef = useRef(null);
   const mapObjectRef = useRef(null);
   const markerRef = useRef(null);
+  const infoWindowRef = useRef(null);
 
   const [isReady, setIsReady] = useState(false);
   const [keyword, setKeyword] = useState("");
@@ -41,7 +47,9 @@ function LocationPicker({ onSelect, allowMapClick = true }) {
 
     const clickHandler = (mouseEvent) => {
       const latlng = mouseEvent.latLng;
-      placeMarker(latlng.getLat(), latlng.getLng());
+      placeMarker(latlng.getLat(), latlng.getLng(), {
+        name: "선택한 위치",
+      });
 
       const geocoder = new window.kakao.maps.services.Geocoder();
       geocoder.coord2Address(
@@ -52,6 +60,11 @@ function LocationPicker({ onSelect, allowMapClick = true }) {
             const road = result[0].road_address?.address_name || "";
             const jibun = result[0].address?.address_name || "";
             const address = road || jibun;
+
+            placeMarker(latlng.getLat(), latlng.getLng(), {
+              name: address || "선택한 위치",
+              address,
+            });
 
             onSelect(address, "", {
               name: address,
@@ -72,20 +85,51 @@ function LocationPicker({ onSelect, allowMapClick = true }) {
     };
   }, [allowMapClick, isReady, onSelect]);
 
-  const placeMarker = (lat, lng) => {
+  const placeMarker = (lat, lng, place = {}) => {
     const map = mapObjectRef.current;
     if (!map) return;
 
     if (markerRef.current) markerRef.current.setMap(null);
+    if (infoWindowRef.current) infoWindowRef.current.close();
 
     const marker = new window.kakao.maps.Marker({
       position: new window.kakao.maps.LatLng(lat, lng),
+      title: place.name || "선택한 위치",
     });
 
     marker.setMap(map);
     markerRef.current = marker;
+
+    infoWindowRef.current = new window.kakao.maps.InfoWindow({
+      content: `
+        <div style="padding:10px; font-size:13px; line-height:1.5;">
+          <strong>${escapeHtml(place.name || "선택한 위치")}</strong>
+          <p style="margin:4px 0;">${escapeHtml(
+            place.address || "주소 정보 없음"
+          )}</p>
+        </div>
+      `,
+    });
+
+    window.kakao.maps.event.addListener(marker, "click", () => {
+      infoWindowRef.current?.open(map, marker);
+    });
+
     map.setCenter(new window.kakao.maps.LatLng(lat, lng));
   };
+
+  useEffect(() => {
+    if (
+      !mapObjectRef.current ||
+      !Number.isFinite(Number(initialPlace?.lat)) ||
+      !Number.isFinite(Number(initialPlace?.lng))
+    ) {
+      return;
+    }
+
+    placeMarker(initialPlace.lat, initialPlace.lng, initialPlace);
+    setKeyword(initialPlace.name || "");
+  }, [initialPlace, isReady]);
 
   const handleSearch = () => {
     if (!keyword.trim()) return;
@@ -121,7 +165,7 @@ function LocationPicker({ onSelect, allowMapClick = true }) {
   };
 
   const handleSelectResult = (place) => {
-    placeMarker(place.lat, place.lng);
+    placeMarker(place.lat, place.lng, place);
     onSelect(place.name, place.address, place);
     setResults([]);
     setKeyword(place.name);
@@ -193,30 +237,43 @@ function LocationPicker({ onSelect, allowMapClick = true }) {
         </div>
       )}
 
-      <div
-        ref={mapRef}
-        style={{
-          width: "100%",
-          height: "250px",
-          borderRadius: "12px",
-          overflow: "hidden",
-        }}
-      />
+      {showMap && (
+        <>
+          <div
+            ref={mapRef}
+            style={{
+              width: "100%",
+              height: "250px",
+              borderRadius: "12px",
+              overflow: "hidden",
+            }}
+          />
 
-      <p
-        style={{
-          fontSize: "12px",
-          color: "#aaa",
-          textAlign: "center",
-          marginTop: "4px",
-        }}
-      >
-        {allowMapClick
-          ? "지도를 클릭하거나 검색 결과를 선택하세요."
-          : "검색 결과에서 장소를 선택하세요."}
-      </p>
+          <p
+            style={{
+              fontSize: "12px",
+              color: "#aaa",
+              textAlign: "center",
+              marginTop: "4px",
+            }}
+          >
+            {allowMapClick
+              ? "지도를 클릭하거나 검색 결과를 선택하세요."
+              : "검색 결과에서 장소를 선택하세요."}
+          </p>
+        </>
+      )}
     </div>
   );
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 export default LocationPicker;
