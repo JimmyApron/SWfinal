@@ -53,6 +53,7 @@ function MapPage({ roomId }) {
   const [memberRoutePaths, setMemberRoutePaths] = useState([])
 
   const [message, setMessage] = useState('')
+  const [shareToast, setShareToast] = useState('')
   const [locationUpdateError, setLocationUpdateError] = useState('')
   const [pendingMiddleLocation, setPendingMiddleLocation] = useState(null)
   const [roomConfirmedSchedules, setRoomConfirmedSchedules] = useState([])
@@ -272,12 +273,12 @@ function MapPage({ roomId }) {
   const sendMapShareToChat = async ({ shareType, place }) => {
     if (!currentRoomId) {
       setMessage('방 정보를 찾을 수 없어 채팅에 공유할 수 없습니다.')
-      return
+      return false
     }
 
     if (!currentUserId && !currentGuestId) {
       setMessage('로그인 또는 게스트 정보가 있어야 채팅에 공유할 수 있습니다.')
-      return
+      return false
     }
 
     const lat = place?.lat ?? place?.latitude
@@ -285,7 +286,7 @@ function MapPage({ roomId }) {
 
     if (!lat || !lng) {
       setMessage('위치 좌표가 없어 채팅에 공유할 수 없습니다.')
-      return
+      return false
     }
 
     const sender = getChatSenderProfile()
@@ -315,10 +316,11 @@ function MapPage({ roomId }) {
     if (error) {
       console.error('지도 정보 채팅 공유 실패:', error)
       setMessage('채팅 공유에 실패했습니다.')
-      return
+      return false
     }
 
     setMessage('채팅에 공유했습니다.')
+    return true
   }
 
   const handleShareCurrentLocation = async () => {
@@ -346,7 +348,7 @@ function MapPage({ roomId }) {
       }
     }
 
-    await sendMapShareToChat({
+    const isShared = await sendMapShareToChat({
       shareType: 'current_location',
       place: {
         name: '현재 위치',
@@ -354,6 +356,11 @@ function MapPage({ roomId }) {
         lng: location?.lng,
       },
     })
+
+    if (isShared) {
+      setShareToast('현재위치가 채팅에 공유되었습니다!')
+      setTimeout(() => setShareToast(''), 2000)
+    }
   }
 
   const handleShareMiddlePlace = async () => {
@@ -1132,6 +1139,25 @@ function MapPage({ roomId }) {
               2. 일정 정하러 가기
             </button>
           </div>
+        </div>
+      )}
+
+      {shareToast && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            padding: '14px 18px',
+            borderRadius: '12px',
+            backgroundColor: 'rgba(0, 0, 0, 0.78)',
+            color: '#fff',
+            fontSize: '14px',
+            zIndex: 1100,
+          }}
+        >
+          {shareToast}
         </div>
       )}
 

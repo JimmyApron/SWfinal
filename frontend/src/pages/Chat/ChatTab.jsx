@@ -226,7 +226,7 @@ function VoteMessageCard({ meta, navigate }) {
   );
 }
 
-function InlineKakaoMap({ lat, lng, name, address }) {
+function KakaoLocationMap({ lat, lng, name, address, style, onClick }) {
   const mapRef = useRef(null);
 
   useEffect(() => {
@@ -291,16 +291,96 @@ function InlineKakaoMap({ lat, lng, name, address }) {
   return (
     <div
       ref={mapRef}
-      style={{
-        width: "260px",
-        maxWidth: "100%",
-        height: "180px",
-        marginTop: "8px",
-        borderRadius: "8px",
-        overflow: "hidden",
-        backgroundColor: "#f2f2f2",
-      }}
+      onClick={onClick}
+      style={style}
     />
+  );
+}
+
+function InlineKakaoMap({ lat, lng, name, address }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <>
+      <KakaoLocationMap
+        lat={lat}
+        lng={lng}
+        name={name}
+        address={address}
+        onClick={() => setIsExpanded(true)}
+        style={{
+          width: "260px",
+          maxWidth: "100%",
+          height: "180px",
+          marginTop: "8px",
+          borderRadius: "8px",
+          overflow: "hidden",
+          backgroundColor: "#f2f2f2",
+          cursor: "pointer",
+        }}
+      />
+
+      {isExpanded && (
+        <div
+          onClick={() => setIsExpanded(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1200,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            backgroundColor: "rgba(0, 0, 0, 0.55)",
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              position: "relative",
+              width: "min(92vw, 760px)",
+              height: "min(75vh, 560px)",
+            }}
+          >
+            <button
+              type="button"
+              aria-label="지도 닫기"
+              onClick={() => setIsExpanded(false)}
+              style={{
+                position: "absolute",
+                top: "10px",
+                right: "10px",
+                zIndex: 2,
+                width: "34px",
+                height: "34px",
+                border: "none",
+                borderRadius: "50%",
+                color: "#333",
+                backgroundColor: "rgba(255, 255, 255, 0.92)",
+                fontSize: "24px",
+                lineHeight: 1,
+                cursor: "pointer",
+              }}
+            >
+              ×
+            </button>
+            <KakaoLocationMap
+              lat={lat}
+              lng={lng}
+              name={name}
+              address={address}
+              style={{
+                width: "100%",
+                height: "100%",
+                borderRadius: "12px",
+                overflow: "hidden",
+                backgroundColor: "#f2f2f2",
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

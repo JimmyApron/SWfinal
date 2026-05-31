@@ -534,7 +534,9 @@ function RoomDetailPage() {
           backgroundColor: "#f5f5f5",
         }}
       >
-        {currentUser && <button onClick={() => navigate("/home")}>←</button>}
+        {currentUser && currentUser.type !== "guest" && (
+          <button onClick={() => navigate("/home")}>←</button>
+        )}
         <span>{room.roomname}</span>
         <span>총 {members.length + guests.length}명</span>
         <button onClick={() => setIsSidebarOpen(true)}>⚙</button>
