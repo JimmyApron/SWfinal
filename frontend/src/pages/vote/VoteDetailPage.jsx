@@ -1281,10 +1281,6 @@ function VoteDetailPage() {
         </div>
       )}
 
-      <div
-        style={{        </div>
-      )}
-
       {createdLocationOnlySchedule && (
         <div
           style={{
