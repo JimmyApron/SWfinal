@@ -155,15 +155,20 @@ function MapPage({ roomId }) {
 
         if (!savedMiddlePlace) return
 
-        setMiddlePlace(savedMiddlePlace)
-        setSelectedPlace(savedMiddlePlace)
-        setDestination(savedMiddlePlace)
-        setPlaces([savedMiddlePlace])
+        const confirmedMiddlePlace = {
+          ...savedMiddlePlace,
+          isConfirmedMiddlePlace: true,
+        }
+
+        setMiddlePlace(confirmedMiddlePlace)
+        setSelectedPlace(confirmedMiddlePlace)
+        setDestination(confirmedMiddlePlace)
+        setPlaces([confirmedMiddlePlace])
         setMemberRouteResults([])
         setMemberRoutePaths([])
         setMessage(`${savedMiddlePlace.name}이(가) 중간 장소로 확정되어 있습니다.`)
 
-        await calculateAllMemberRoutesToMiddlePlace(savedMiddlePlace)
+        await calculateAllMemberRoutesToMiddlePlace(confirmedMiddlePlace)
       } catch (error) {
         console.error('확정 중간 장소 조회 오류:', error)
       }
@@ -374,10 +379,15 @@ function MapPage({ roomId }) {
       return
     }
 
-    await sendMapShareToChat({
+    const isShared = await sendMapShareToChat({
       shareType: 'middle_place',
       place: middlePlace,
     })
+
+    if (isShared) {
+      setShareToast('확정된 중간장소가 채팅에 공유되었습니다!')
+      setTimeout(() => setShareToast(''), 2000)
+    }
   }
 
   const handleShareNearbyPlace = async (place) => {
@@ -964,6 +974,7 @@ function MapPage({ roomId }) {
         address: savedMiddlePlace.address,
         lat: savedMiddlePlace.lat,
         lng: savedMiddlePlace.lng,
+        isConfirmedMiddlePlace: true,
       }
 
       setMiddlePlace(confirmedPlace)
