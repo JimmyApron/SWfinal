@@ -838,6 +838,13 @@ function ConfirmedScheduleDetailPage() {
           >
             직접 수정
           </button>
+          <button
+            type="button"
+            onClick={() => navigate(`/rooms/${schedule.roomid}?tab=location`)}
+            style={shortcutButtonStyle}
+          >
+            위치탭 바로가기
+          </button>
           {/* 케이스 1: 투표로 생성 + 투표 존재 */}
           {schedule.voteid && voteExists === true && (
             <button

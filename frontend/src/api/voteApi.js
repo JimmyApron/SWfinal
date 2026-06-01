@@ -552,7 +552,7 @@ export async function updateVoteOption(optionid, option) {
  * 일정 투표 확정 시 기존 위치-전용 확정일정에 날짜/시간 연결
  * - 위치 투표의 applyConfirmedLocationToSchedule 패턴과 동일
  */
-export async function applyScheduleVoteToExisting(scheduleId, option, voteid, roomid, title) {
+export async function applyScheduleVoteToExisting(scheduleId, option, voteid, roomid) {
   const { error: voteError } = await supabase
     .from("votes")
     .update({ confirmedoptionid: option.id })
@@ -560,6 +560,7 @@ export async function applyScheduleVoteToExisting(scheduleId, option, voteid, ro
 
   if (voteError) throw voteError;
 
+  // title은 의도적으로 포함하지 않음 - 기존 위치 항목의 이름을 보존하기 위해
   const updatePayload = {
     date: option.optiondate,
     starttime: option.starttime || null,
@@ -567,7 +568,6 @@ export async function applyScheduleVoteToExisting(scheduleId, option, voteid, ro
     isallday: !option.starttime,
     voteid: Number(voteid),
   };
-  if (title?.trim()) updatePayload.title = title.trim();
 
   const { error } = await supabase
     .from("confirmed_schedules")
