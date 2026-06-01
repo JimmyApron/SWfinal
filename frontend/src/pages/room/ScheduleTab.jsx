@@ -439,7 +439,17 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
         {confirmedSchedules.length === 0 ? (
           <p style={{ color: "#aaa", fontSize: "13px", margin: 0 }}>아직 확정된 일정이 없습니다.</p>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div
+            className="confirmed-schedules-container"
+            style={{
+              maxHeight: "340px",
+              overflowY: "auto",
+              paddingRight: "8px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+            }}
+          >
             {confirmedSchedules.map((s) => {
               const isAbsent = (s.absentees || []).includes(currentUser?.id);
               return (
@@ -457,6 +467,25 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
             })}
           </div>
         )}
+
+        <style>
+          {`
+            .confirmed-schedules-container::-webkit-scrollbar {
+              width: 6px;
+            }
+            .confirmed-schedules-container::-webkit-scrollbar-track {
+              background: #f1f1f1;
+              border-radius: 10px;
+            }
+            .confirmed-schedules-container::-webkit-scrollbar-thumb {
+              background: #ccc;
+              border-radius: 10px;
+            }
+            .confirmed-schedules-container::-webkit-scrollbar-thumb:hover {
+              background: #aaa;
+            }
+          `}
+        </style>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "16px 0 10px" }}>

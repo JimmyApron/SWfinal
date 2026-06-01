@@ -670,17 +670,49 @@ function HomePage() {
             확정된 일정이 없습니다
           </p>
         ) : (
-          upcomingSchedules.map((schedule) => (
-            <ConfirmedScheduleCard
-              key={schedule.id}
-              schedule={schedule}
-              onClick={() =>
-                navigate("/confirmed-schedule", {
-                  state: { schedule },
-                })
-              }
-            />
-          ))
+          <>
+            <div
+              className="confirmed-schedules-container"
+              style={{
+                maxHeight: "340px",
+                overflowY: "auto",
+                paddingRight: "8px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+              }}
+            >
+              {upcomingSchedules.map((schedule) => (
+                <ConfirmedScheduleCard
+                  key={schedule.id}
+                  schedule={schedule}
+                  onClick={() =>
+                    navigate("/confirmed-schedule", {
+                      state: { schedule },
+                    })
+                  }
+                />
+              ))}
+            </div>
+            <style>
+              {`
+                .confirmed-schedules-container::-webkit-scrollbar {
+                  width: 6px;
+                }
+                .confirmed-schedules-container::-webkit-scrollbar-track {
+                  background: #f1f1f1;
+                  border-radius: 10px;
+                }
+                .confirmed-schedules-container::-webkit-scrollbar-thumb {
+                  background: #ccc;
+                  border-radius: 10px;
+                }
+                .confirmed-schedules-container::-webkit-scrollbar-thumb:hover {
+                  background: #aaa;
+                }
+              `}
+            </style>
+          </>
         )}
       </div>
 
