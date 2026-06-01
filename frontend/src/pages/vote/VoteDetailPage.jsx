@@ -566,7 +566,6 @@ function VoteDetailPage() {
       }
 
       alert(`${scheduleTitle}에 장소를 저장했어요.`);
-      navigate(`/rooms/${roomid}?tab=location`);
     } catch (error) {
       alert("확정 실패: " + (error.message || JSON.stringify(error)));
     }

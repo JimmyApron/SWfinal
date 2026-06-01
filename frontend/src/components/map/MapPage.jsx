@@ -1059,6 +1059,9 @@ function MapPage({ roomId }) {
       setMemberRouteResults(confirmedPlace.travelResults || [])
       setMemberRoutePaths([])
       setRoomConfirmedSchedules(await getRoomConfirmedSchedules(currentRoomId))
+      if (!selectedSchedule?.date) {
+        setCreatedLocationOnlySchedule(selectedSchedule || { id: selectedScheduleId })
+      }
       setMessage(`${selectedSchedule?.title || '선택한 일정'}의 만날 위치로 저장했어요.`)
       await calculateAllMemberRoutesToMiddlePlace(confirmedPlace)
 
