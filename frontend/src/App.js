@@ -82,6 +82,8 @@ function NotificationListener() {
           myUserId = localStorage.getItem("guest_id");
         }
 
+        console.log("🚀 [App.js] NotificationListener 시작 - userId:", myUserId);
+
         if (!myUserId) {
           console.log("알림 리스너 연결 생략: 로그인/게스트 정보 없음");
           return;
@@ -107,9 +109,11 @@ function NotificationListener() {
             },
             async (payload) => {
               const newNotification = payload.new;
+              console.log("🚀 [App.js] 실시간 알림 수신됨:", newNotification);
 
               // notification-2 기능: 내가 받을 알림만 실시간 수신 (issilent가 false인 경우만 Toast/알림 표시)
               if (newNotification.issilent !== true) {
+                console.log("✅ [App.js] Toast 띄움 로직 실행:", newNotification.title);
                 setToast({
                   message: newNotification.message,
                   link: newNotification.link,
@@ -119,13 +123,15 @@ function NotificationListener() {
                 setTimeout(() => {
                   if (isMounted) setToast(null);
                 }, 4000);
+              } else {
+                 console.log("🤫 [App.js] 조용한 알림 - Toast 안 띄움");
               }
             }
           );
 
         channel.subscribe((status) => {
           if (!isMounted) return;
-
+          console.log("🚀 [App.js] Realtime 채널 상태:", status);
           if (status === "SUBSCRIBED") {
             channelRef.current = channel;
           }
@@ -135,11 +141,16 @@ function NotificationListener() {
       }
     };
 
+    // auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      setupRealtimeNotification();
+    });
+
     setupRealtimeNotification();
 
     return () => {
       isMounted = false;
-
+      subscription.unsubscribe();
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
