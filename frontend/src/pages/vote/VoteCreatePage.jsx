@@ -21,6 +21,8 @@ function VoteCreatePage() {
 
   const returnTab = location.state?.returnTab || "vote";
   const locationKind = location.state?.locationKind || null;
+  const scheduleId = location.state?.scheduleId || null;
+  const scheduleTitle = location.state?.scheduleTitle || "";
 
   const [currentUser, setCurrentUser] = useState(null);
   const [nickname, setNickname] = useState("");
@@ -223,6 +225,11 @@ function VoteCreatePage() {
     }
 
     if (isLocationVoteType(votetype)) {
+      if (!scheduleId) {
+        alert("위치 투표를 저장할 대상 일정이 없습니다.");
+        return;
+      }
+
       const invalidPlaceOption = options.some((option) => {
         if (option.optiontype !== "place") return false;
 
@@ -281,6 +288,7 @@ function VoteCreatePage() {
         reminderenabled,
         votetype,
         locationkind: votetype === "location" ? locationKind : null,
+        scheduleid: isLocationVoteType(votetype) ? scheduleId : null,
       });
 
       createdVoteId = result?.id || result?.data?.id || null;
@@ -347,6 +355,23 @@ function VoteCreatePage() {
       </div>
 
       <div style={{ padding: "20px" }}>
+        {isLocationVoteType(votetype) && (
+          <p
+            style={{
+              padding: "10px",
+              border: "1px solid #d8d8ff",
+              borderRadius: "8px",
+              backgroundColor: "#f8f8ff",
+              fontSize: "14px",
+              color: "#555",
+            }}
+          >
+            대상 일정: <strong>{scheduleTitle || "선택한 일정"}</strong>
+            <br />
+            확정된 장소는 이 일정에 자동 저장됩니다.
+          </p>
+        )}
+
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}

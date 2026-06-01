@@ -1,5 +1,9 @@
 import { supabase } from '../lib/supabaseClient'
 
+function getLocationTable(scheduleId) {
+  return scheduleId ? 'schedule_user_locations' : 'user_locations'
+}
+
 function buildLocationStatusFields(locationData) {
   const statusFields = {}
 
@@ -43,13 +47,15 @@ export async function saveMyLocation(locationData) {
     throw new Error('roomId가 필요합니다.')
   }
 
+  const scheduleId = locationData.scheduleId ? Number(locationData.scheduleId) : null
   const { data, error } = await supabase
-    .from('user_locations')
+    .from(getLocationTable(scheduleId))
     .upsert(
       {
         userid: locationData.userId,
         guestid: null,
         roomid: Number(locationData.roomId),
+        ...(scheduleId ? { scheduleid: scheduleId } : {}),
         latitude: locationData.latitude,
         longitude: locationData.longitude,
         accuracy: locationData.accuracy,
@@ -57,7 +63,7 @@ export async function saveMyLocation(locationData) {
         ...buildLocationStatusFields(locationData),
       },
       {
-        onConflict: 'userid,roomid',
+        onConflict: scheduleId ? 'scheduleid,userid' : 'userid,roomid',
       }
     )
     .select()
@@ -78,13 +84,15 @@ export async function saveMyGuestLocation(locationData) {
     throw new Error('roomId가 필요합니다.')
   }
 
+  const scheduleId = locationData.scheduleId ? Number(locationData.scheduleId) : null
   const { data, error } = await supabase
-    .from('user_locations')
+    .from(getLocationTable(scheduleId))
     .upsert(
       {
         userid: null,
         guestid: locationData.guestId,
         roomid: Number(locationData.roomId),
+        ...(scheduleId ? { scheduleid: scheduleId } : {}),
         latitude: locationData.latitude,
         longitude: locationData.longitude,
         accuracy: locationData.accuracy,
@@ -92,7 +100,7 @@ export async function saveMyGuestLocation(locationData) {
         ...buildLocationStatusFields(locationData),
       },
       {
-        onConflict: 'guestid,roomid',
+        onConflict: scheduleId ? 'scheduleid,guestid' : 'guestid,roomid',
       }
     )
     .select()
@@ -104,7 +112,7 @@ export async function saveMyGuestLocation(locationData) {
   return data
 }
 
-export async function getMyLocation(userId, roomId) {
+export async function getMyLocation(userId, roomId, scheduleId = null) {
   if (!userId) {
     throw new Error('userId가 필요합니다.')
   }
@@ -114,7 +122,7 @@ export async function getMyLocation(userId, roomId) {
   }
 
   const { data, error } = await supabase
-    .from('user_locations')
+    .from(getLocationTable(scheduleId))
     .select(`
       *,
       profiles:userid (
@@ -125,6 +133,7 @@ export async function getMyLocation(userId, roomId) {
     `)
     .eq('userid', userId)
     .eq('roomid', Number(roomId))
+    .match(scheduleId ? { scheduleid: Number(scheduleId) } : {})
     .maybeSingle()
 
   if (error) {
@@ -134,7 +143,7 @@ export async function getMyLocation(userId, roomId) {
   return data
 }
 
-export async function getMyGuestLocation(guestId, roomId) {
+export async function getMyGuestLocation(guestId, roomId, scheduleId = null) {
   if (!guestId) {
     throw new Error('guestId가 필요합니다.')
   }
@@ -144,7 +153,7 @@ export async function getMyGuestLocation(guestId, roomId) {
   }
 
   const { data, error } = await supabase
-    .from('user_locations')
+    .from(getLocationTable(scheduleId))
     .select(`
       *,
       room_guests:guestid (
@@ -154,6 +163,7 @@ export async function getMyGuestLocation(guestId, roomId) {
     `)
     .eq('guestid', guestId)
     .eq('roomid', Number(roomId))
+    .match(scheduleId ? { scheduleid: Number(scheduleId) } : {})
     .maybeSingle()
 
   if (error) {
@@ -163,12 +173,38 @@ export async function getMyGuestLocation(guestId, roomId) {
   return data
 }
 
-export async function getRoomMemberLocations(roomId) {
+export async function getRoomMemberLocations(roomId, scheduleId = null) {
   if (!roomId) {
     throw new Error('roomId가 필요합니다.')
   }
 
   const { data, error } = await supabase
+    .from(getLocationTable(scheduleId))
+    .select(`
+      *,
+      profiles:userid (
+        id,
+        nickname,
+        profileimageurl:profileimageurl
+      ),
+      room_guests:guestid (
+        id,
+        nickname
+      )
+    `)
+    .eq('roomid', Number(roomId))
+    .match(scheduleId ? { scheduleid: Number(scheduleId) } : {})
+    .order('createdat', { ascending: false })
+
+  if (error) {
+    throw error
+  }
+
+  if (!scheduleId) {
+    return data || []
+  }
+
+  const { data: defaultLocations, error: defaultError } = await supabase
     .from('user_locations')
     .select(`
       *,
@@ -185,11 +221,29 @@ export async function getRoomMemberLocations(roomId) {
     .eq('roomid', Number(roomId))
     .order('createdat', { ascending: false })
 
-  if (error) {
-    throw error
+  if (defaultError) {
+    throw defaultError
   }
 
-  return data || []
+  const scheduleLocations = data || []
+  const savedParticipantKeys = new Set(
+    scheduleLocations.map((location) => location.userid || location.guestid)
+  )
+  const inheritedLocations = (defaultLocations || [])
+    .filter((location) => !savedParticipantKeys.has(location.userid || location.guestid))
+    .map((location) => ({
+      ...location,
+      id: `default-${location.id}`,
+      scheduleid: Number(scheduleId),
+      isdeparted: false,
+      departedat: null,
+      arrivedat: null,
+      locationstatus: 'idle',
+      locationerror: null,
+      isinheriteddefault: true,
+    }))
+
+  return [...scheduleLocations, ...inheritedLocations]
 }
 
 export async function getRoomParticipants(roomId) {
@@ -243,7 +297,7 @@ export async function getRoomParticipants(roomId) {
   ]
 }
 
-export async function updateRoomLocationTransportModes(roomId, travelResults = []) {
+export async function updateRoomLocationTransportModes(roomId, travelResults = [], scheduleId = null) {
   if (!roomId) {
     throw new Error('roomId가 필요합니다.')
   }
@@ -255,9 +309,13 @@ export async function updateRoomLocationTransportModes(roomId, travelResults = [
   await Promise.all(
     updates.map(async (result) => {
       let query = supabase
-        .from('user_locations')
+        .from(getLocationTable(scheduleId))
         .update({ transportmode: result.mode })
         .eq('roomid', Number(roomId))
+
+      if (scheduleId) {
+        query = query.eq('scheduleid', Number(scheduleId))
+      }
 
       if (result.userid) {
         query = query.eq('userid', result.userid)
@@ -375,6 +433,7 @@ export async function deleteRoomMiddlePlace(roomId) {
  */
 export async function updateLocationStatus({
   roomId,
+  scheduleId,
   userId,
   guestId,
   status,
@@ -409,9 +468,13 @@ export async function updateLocationStatus({
   }
 
   let query = supabase
-    .from('user_locations')
+    .from(getLocationTable(scheduleId))
     .update(updateData)
     .eq('roomid', Number(roomId))
+
+  if (scheduleId) {
+    query = query.eq('scheduleid', Number(scheduleId))
+  }
 
   if (userId) {
     query = query.eq('userid', userId)

@@ -28,6 +28,8 @@ import {
 } from '../../api/mapApi'
 import {
   applyConfirmedLocationToSchedule,
+  clearConfirmedScheduleLocation,
+  createDraftConfirmedSchedule,
   createLocationOnlyConfirmedSchedule,
   getRoomConfirmedSchedules,
 } from '../../api/scheduleApi'
@@ -56,9 +58,16 @@ function MapPage({ roomId }) {
   const [locationUpdateError, setLocationUpdateError] = useState('')
   const [pendingMiddleLocation, setPendingMiddleLocation] = useState(null)
   const [roomConfirmedSchedules, setRoomConfirmedSchedules] = useState([])
+  const [selectedScheduleId, setSelectedScheduleId] = useState(null)
+  const [showNewScheduleModal, setShowNewScheduleModal] = useState(false)
+  const [newScheduleTitle, setNewScheduleTitle] = useState('')
+  const [newScheduleTitleError, setNewScheduleTitleError] = useState('')
   const [appointmentTitle, setAppointmentTitle] = useState('')
   const [createdLocationOnlySchedule, setCreatedLocationOnlySchedule] = useState(null)
   const [transportModePrompt, setTransportModePrompt] = useState(null)
+  const selectedSchedule = roomConfirmedSchedules.find(
+    (schedule) => Number(schedule.id) === Number(selectedScheduleId)
+  )
 
   const myLocationRecord = memberLocations.find((location) => {
     if (currentUserId) return location.userid === currentUserId
@@ -114,14 +123,14 @@ function MapPage({ roomId }) {
 
     loadRoomData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentRoomId])
+  }, [currentRoomId, selectedScheduleId])
 
   useEffect(() => {
     if (!currentRoomId) return
 
     const intervalId = setInterval(async () => {
       try {
-        const locations = await getRoomMemberLocations(currentRoomId)
+        const locations = await getRoomMemberLocations(currentRoomId, selectedScheduleId)
         setMemberLocations(locations)
       } catch (error) {
         console.error('실시간 멤버 위치 갱신 오류:', error)
@@ -131,7 +140,7 @@ function MapPage({ roomId }) {
     return () => {
       clearInterval(intervalId)
     }
-  }, [currentRoomId])
+  }, [currentRoomId, selectedScheduleId])
 
   useEffect(() => {
     if (!isTracking) return
@@ -144,10 +153,11 @@ function MapPage({ roomId }) {
       clearInterval(intervalId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isTracking, currentRoomId, currentUserId, currentGuestId, middlePlace])
+  }, [isTracking, currentRoomId, currentUserId, currentGuestId, middlePlace, selectedScheduleId])
 
   useEffect(() => {
     if (!currentRoomId) return
+    if (selectedScheduleId) return
 
     const loadSavedMiddlePlace = async () => {
       try {
@@ -176,7 +186,61 @@ function MapPage({ roomId }) {
 
     loadSavedMiddlePlace()
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRoomId, selectedScheduleId])
+
+  useEffect(() => {
+    if (!currentRoomId) return
+
+    getRoomConfirmedSchedules(currentRoomId)
+      .then((schedules) => {
+        setRoomConfirmedSchedules(schedules)
+        setSelectedScheduleId((previousId) => {
+          if (schedules.some((schedule) => Number(schedule.id) === Number(previousId))) {
+            return previousId
+          }
+          return schedules[0]?.id ?? null
+        })
+      })
+      .catch((error) => {
+        console.error('Failed to load confirmed schedules:', error)
+      })
   }, [currentRoomId])
+
+  useEffect(() => {
+    if (!currentRoomId || !selectedScheduleId) return
+
+    let selectedMiddlePlace = null
+
+    if (
+      selectedSchedule &&
+      selectedSchedule.locationlat !== null &&
+      selectedSchedule.locationlng !== null
+    ) {
+      selectedMiddlePlace = {
+        id: `schedule-${selectedSchedule.id}`,
+        roomid: currentRoomId,
+        name: selectedSchedule.location || 'Meeting place',
+        address: selectedSchedule.locationaddress || '',
+        lat: Number(selectedSchedule.locationlat),
+        lng: Number(selectedSchedule.locationlng),
+        isConfirmedMiddlePlace: true,
+        scheduleid: selectedSchedule.id,
+      }
+    }
+
+    setMiddlePlace(selectedMiddlePlace)
+    setSelectedPlace(selectedMiddlePlace)
+    setDestination(selectedMiddlePlace)
+    setPlaces(selectedMiddlePlace ? [selectedMiddlePlace] : [])
+    setMemberRouteResults([])
+    setMemberRoutePaths([])
+    loadMemberLocations().then(() => {
+      if (selectedMiddlePlace) {
+        calculateAllMemberRoutesToMiddlePlace(selectedMiddlePlace)
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRoomId, selectedScheduleId, selectedSchedule?.locationlat, selectedSchedule?.locationlng])
 
   const getMemberKey = (member) => {
     return member.userid || member.guestid || member.id
@@ -245,7 +309,7 @@ function MapPage({ roomId }) {
     if (!currentRoomId) return []
 
     try {
-      const locations = await getRoomMemberLocations(currentRoomId)
+      const locations = await getRoomMemberLocations(currentRoomId, selectedScheduleId)
       setMemberLocations(locations)
       return locations
     } catch (error) {
@@ -260,6 +324,7 @@ function MapPage({ roomId }) {
 
     const payload = {
       roomId: currentRoomId,
+      scheduleId: selectedScheduleId,
       latitude: location?.lat ?? null,
       longitude: location?.lng ?? null,
       accuracy: location?.accuracy ?? null,
@@ -594,6 +659,7 @@ function MapPage({ roomId }) {
       try {
         await updateLocationStatus({
           roomId: currentRoomId,
+          scheduleId: selectedScheduleId,
           userId: currentUserId,
           guestId: currentGuestId,
           status: 'tracking',
@@ -658,6 +724,7 @@ function MapPage({ roomId }) {
       try {
         await updateLocationStatus({
           roomId: currentRoomId,
+          scheduleId: selectedScheduleId,
           userId: currentUserId,
           guestId: currentGuestId,
           status: 'arrived',
@@ -756,6 +823,7 @@ function MapPage({ roomId }) {
       try {
         await updateLocationStatus({
           roomId: currentRoomId,
+          scheduleId: selectedScheduleId,
           userId: currentUserId,
           guestId: currentGuestId,
           status: 'approaching',
@@ -780,6 +848,7 @@ function MapPage({ roomId }) {
       try {
         await updateLocationStatus({
           roomId: currentRoomId,
+          scheduleId: selectedScheduleId,
           userId: currentUserId,
           guestId: currentGuestId,
           status: 'arrived',
@@ -960,7 +1029,40 @@ function MapPage({ roomId }) {
   }
 
   const handleSelectMiddlePlace = async (place) => {
+    if (!selectedScheduleId) {
+      setMessage('먼저 새 일정을 만들거나 기존 일정을 선택해 주세요.')
+      return
+    }
+
     try {
+      const scheduleLocation = {
+        roomid: currentRoomId,
+        voteid: null,
+        placename: place.name,
+        placeaddress: place.address || null,
+        placelat: place.lat,
+        placelng: place.lng,
+      }
+
+      await applyConfirmedLocationToSchedule(selectedScheduleId, scheduleLocation, true)
+      const confirmedPlace = {
+        ...place,
+        id: `schedule-${selectedScheduleId}`,
+        isConfirmedMiddlePlace: true,
+        scheduleid: selectedScheduleId,
+      }
+
+      setMiddlePlace(confirmedPlace)
+      setSelectedPlace(confirmedPlace)
+      setDestination(confirmedPlace)
+      setPlaces([confirmedPlace])
+      setMemberRouteResults(confirmedPlace.travelResults || [])
+      setMemberRoutePaths([])
+      setRoomConfirmedSchedules(await getRoomConfirmedSchedules(currentRoomId))
+      setMessage(`${selectedSchedule?.title || '선택한 일정'}의 만날 위치로 저장했어요.`)
+      await calculateAllMemberRoutesToMiddlePlace(confirmedPlace)
+
+      if (false) {
       const savedMiddlePlace = await saveRoomMiddlePlace({
         roomId: currentRoomId,
         place,
@@ -1012,6 +1114,7 @@ function MapPage({ roomId }) {
       }
 
       await calculateAllMemberRoutesToMiddlePlace(confirmedPlace)
+      }
     } catch (error) {
       console.error('중간 장소 확정 저장 오류:', error)
       setMessage('중간 장소 확정 중 오류가 발생했습니다.')
@@ -1021,6 +1124,8 @@ function MapPage({ roomId }) {
   const handleApplyMiddlePlaceToSchedule = async (scheduleId) => {
     try {
       await applyConfirmedLocationToSchedule(scheduleId, pendingMiddleLocation, true)
+      setRoomConfirmedSchedules(await getRoomConfirmedSchedules(currentRoomId))
+      setSelectedScheduleId(scheduleId)
       setPendingMiddleLocation(null)
       setAppointmentTitle('')
       setMessage('선택한 일정에 중간 장소를 추가했습니다.')
@@ -1047,6 +1152,8 @@ function MapPage({ roomId }) {
         ...schedule,
         isLocationOnly: true,
       })
+      setRoomConfirmedSchedules(await getRoomConfirmedSchedules(currentRoomId))
+      setSelectedScheduleId(schedule.id)
     } catch (error) {
       setMessage(`일정 생성 실패: ${error.message}`)
     }
@@ -1058,6 +1165,9 @@ function MapPage({ roomId }) {
       return
     }
 
+    await handleSelectMiddlePlace(place)
+
+    if (false) {
     setPendingMiddleLocation({
       roomid: currentRoomId,
       voteid: null,
@@ -1076,6 +1186,8 @@ function MapPage({ roomId }) {
     }
   }
 
+  }
+
   const handleOpenCreatedSchedule = () => {
     if (!createdLocationOnlySchedule) return
 
@@ -1090,6 +1202,11 @@ function MapPage({ roomId }) {
 
     if (!selectedPlaces || selectedPlaces.length === 0) {
       setMessage('투표로 만들 중간 장소 후보를 1개 이상 선택해주세요.')
+      return
+    }
+
+    if (!selectedScheduleId) {
+      setMessage('먼저 새 일정을 만들거나 기존 일정을 선택해 주세요.')
       return
     }
 
@@ -1115,6 +1232,8 @@ function MapPage({ roomId }) {
         selectedPlaces: votePlaces,
         title: '중간 장소 투표',
         returnTab: 'location',
+        scheduleId: selectedScheduleId,
+        scheduleTitle: selectedSchedule?.title || '',
       },
     })
   }
@@ -1127,6 +1246,11 @@ function MapPage({ roomId }) {
 
     if (!selectedPlaces || selectedPlaces.length === 0) {
       setMessage('투표로 만들 추가장소 후보를 1개 이상 선택해주세요.')
+      return
+    }
+
+    if (!selectedScheduleId) {
+      setMessage('먼저 새 일정을 만들거나 기존 일정을 선택해 주세요.')
       return
     }
 
@@ -1149,6 +1273,8 @@ function MapPage({ roomId }) {
         selectedPlaces: votePlaces,
         title: '추가 장소 투표',
         returnTab: 'location',
+        scheduleId: selectedScheduleId,
+        scheduleTitle: selectedSchedule?.title || '',
       },
     })
   }
@@ -1166,7 +1292,12 @@ function MapPage({ roomId }) {
     if (!confirmCancel) return
 
     try {
-      await deleteRoomMiddlePlace(currentRoomId)
+      if (selectedScheduleId) {
+        await clearConfirmedScheduleLocation(selectedScheduleId)
+        setRoomConfirmedSchedules(await getRoomConfirmedSchedules(currentRoomId))
+      } else {
+        await deleteRoomMiddlePlace(currentRoomId)
+      }
 
       setMiddlePlace(null)
       setSelectedPlace(null)
@@ -1197,8 +1328,67 @@ function MapPage({ roomId }) {
     await calculateAllMemberRoutesToMiddlePlace(middlePlace)
   }
 
+  const handleCreateDraftSchedule = async () => {
+    if (!newScheduleTitle.trim()) {
+      setNewScheduleTitleError('일정 이름을 입력해 주세요.')
+      return
+    }
+
+    try {
+      const schedule = await createDraftConfirmedSchedule(
+        currentRoomId,
+        newScheduleTitle
+      )
+      setRoomConfirmedSchedules(await getRoomConfirmedSchedules(currentRoomId))
+      setSelectedScheduleId(schedule.id)
+      setNewScheduleTitle('')
+      setNewScheduleTitleError('')
+      setShowNewScheduleModal(false)
+      setMessage(`${schedule.title} 일정을 만들었어요. 이제 만날 위치를 정해 주세요.`)
+    } catch (error) {
+      setNewScheduleTitleError(error.message)
+    }
+  }
+
   return (
     <section className="map-section">
+      {showNewScheduleModal && (
+        <div className="transport-mode-overlay">
+          <div className="transport-mode-dialog">
+            <h3>새 일정 만들기</h3>
+            <p className="location-schedule-helper">
+              일정 이름만 먼저 저장하고 위치와 날짜는 이어서 정할 수 있어요.
+            </p>
+            <input
+              className="location-schedule-input"
+              value={newScheduleTitle}
+              onChange={(event) => {
+                setNewScheduleTitle(event.target.value)
+                setNewScheduleTitleError('')
+              }}
+              placeholder="일정 이름"
+            />
+            {newScheduleTitleError && (
+              <p className="location-schedule-error">{newScheduleTitleError}</p>
+            )}
+            <div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNewScheduleModal(false)
+                  setNewScheduleTitleError('')
+                }}
+              >
+                취소
+              </button>
+              <button type="button" onClick={handleCreateDraftSchedule}>
+                만들기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {pendingMiddleLocation && (
         <div
           style={{
@@ -1385,6 +1575,45 @@ function MapPage({ roomId }) {
 
       <h2>위치 기능</h2>
 
+      <div className="location-schedule-selector">
+        {roomConfirmedSchedules.length === 0 ? (
+          <>
+            <strong>아직 일정이 없어요.</strong>
+            <span>새 일정을 만든 뒤 출발 위치와 만날 위치를 설정해 주세요.</span>
+          </>
+        ) : (
+          <>
+            <label htmlFor="location-schedule">경로를 확인할 일정</label>
+            <select
+              id="location-schedule"
+              value={selectedScheduleId || ''}
+              onChange={(event) => setSelectedScheduleId(Number(event.target.value))}
+            >
+              {roomConfirmedSchedules.map((schedule) => (
+                <option key={schedule.id} value={schedule.id}>
+                  {schedule.title || '제목 없는 일정'}
+                  {schedule.date ? ` · ${schedule.date}` : ''}
+                  {schedule.starttime ? ` ${schedule.starttime.slice(0, 5)}` : ''}
+                </option>
+              ))}
+            </select>
+            {!middlePlace && (
+              <span>선택한 일정의 만날 위치를 먼저 확정해 주세요.</span>
+            )}
+          </>
+        )}
+      </div>
+
+      <button
+        type="button"
+        className="location-new-schedule-button"
+        onClick={() => setShowNewScheduleModal(true)}
+      >
+        + 새 일정 만들기
+      </button>
+
+      {selectedScheduleId && (
+        <>
       <CurrentLocationButton onClick={handleCurrentLocation} />
 
       <button type="button" onClick={handleShareCurrentLocation}>
@@ -1468,7 +1697,7 @@ function MapPage({ roomId }) {
                     ? '위치 등록 완료'
                     : isMe
                     ? '내 위치 미등록'
-                    : '위치 등록 안 함'}
+                    : '위치 미등록'}
                 </span>
 
                 {!isRegistered && !isMe && canRequestLocation && (
@@ -1655,6 +1884,8 @@ function MapPage({ roomId }) {
             중간 장소가 확정되면 주변 음식점, 카페, 놀거리를 검색할 수 있습니다.
           </p>
         </section>
+      )}
+        </>
       )}
     </section>
   )

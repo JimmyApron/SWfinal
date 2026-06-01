@@ -1,37 +1,28 @@
 function PlaceCategoryTabs({ selectedCategory, onChangeCategory }) {
+  const categories = [
+    { value: 'restaurant', label: '음식점' },
+    { value: 'cafe', label: '카페' },
+    { value: 'activity', label: '놀거리' },
+    { value: 'parking', label: '주차장' },
+  ]
+
   return (
-    <div>
-      <button
-        type="button"
-        onClick={() => onChangeCategory('restaurant')}
-        disabled={selectedCategory === 'restaurant'}
-      >
-        음식점
-      </button>
+    <div className="place-category-tabs">
+      {categories.map((category) => {
+        const isSelected = selectedCategory === category.value
 
-      <button
-        type="button"
-        onClick={() => onChangeCategory('cafe')}
-        disabled={selectedCategory === 'cafe'}
-      >
-        카페
-      </button>
-
-      <button
-        type="button"
-        onClick={() => onChangeCategory('activity')}
-        disabled={selectedCategory === 'activity'}
-      >
-        놀거리
-      </button>
-
-      <button
-        type="button"
-        onClick={() => onChangeCategory('parking')}
-        disabled={selectedCategory === 'parking'}
-      >
-        주차장
-      </button>
+        return (
+          <button
+            key={category.value}
+            type="button"
+            className={isSelected ? 'is-selected' : ''}
+            aria-pressed={isSelected}
+            onClick={() => onChangeCategory(category.value)}
+          >
+            {category.label}
+          </button>
+        )
+      })}
     </div>
   )
 }
