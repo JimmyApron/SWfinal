@@ -1,7 +1,7 @@
 import "./App.css";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GoogleOAuthProvider } from "@react-oauth/google";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "./lib/supabaseClient";
 import { ThemeProvider } from "./context/ThemeContext";
 
@@ -54,6 +54,8 @@ function Layout({ children }) {
 }
 
 function NotificationListener() {
+  const navigate = useNavigate();
+  const [toast, setToast] = useState(null);
   const location = useLocation();
   const locationRef = useRef(location);
   const channelRef = useRef(null);
@@ -106,23 +108,18 @@ function NotificationListener() {
             async (payload) => {
               const newNotification = payload.new;
 
-              // 기존 HEAD 기능: 새 알림 로그 확인
-              console.log("새 알림:", newNotification);
-
               // notification-2 기능: 내가 받을 알림만 실시간 수신 (issilent가 false인 경우만 Toast/알림 표시)
               if (newNotification.issilent !== true) {
-                console.log(
-                  "🔔 [실시간 새 알림 도착 완료 - Toast]:",
-                  newNotification?.message
-                );
-                // 여기에 실제 Toast 표시 로직이 있다면 호출 (현재는 로그만 출력됨)
-              } else {
-                console.log("🤫 [조용한 알림]: Toast를 띄우지 않습니다.");
-              }
+                setToast({
+                  message: newNotification.message,
+                  link: newNotification.link,
+                });
 
-              // 현재 위치가 필요할 때 사용할 수 있게 locationRef 유지
-              const currentPath = locationRef.current.pathname;
-              console.log("현재 페이지:", currentPath);
+                // 4초 후 자동 닫기
+                setTimeout(() => {
+                  if (isMounted) setToast(null);
+                }, 4000);
+              }
             }
           );
 
@@ -130,16 +127,7 @@ function NotificationListener() {
           if (!isMounted) return;
 
           if (status === "SUBSCRIBED") {
-            console.log(`📡 [실시간 알림 연결 성공] 채널명: ${uniqueChannelName}`);
             channelRef.current = channel;
-          }
-
-          if (status === "CHANNEL_ERROR") {
-            console.error("실시간 알림 채널 연결 실패");
-          }
-
-          if (status === "TIMED_OUT") {
-            console.error("실시간 알림 채널 연결 시간 초과");
           }
         });
       } catch (err) {
@@ -159,7 +147,46 @@ function NotificationListener() {
     };
   }, []);
 
-  return null;
+  if (!toast) return null;
+
+  return (
+    <div
+      onClick={() => {
+        if (toast.link) navigate(toast.link);
+        setToast(null);
+      }}
+      style={{
+        position: "fixed",
+        top: "20px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 10000,
+        backgroundColor: "rgba(0, 0, 0, 0.9)",
+        color: "#fff",
+        padding: "14px 24px",
+        borderRadius: "16px",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
+        cursor: "pointer",
+        display: "flex",
+        flexDirection: "column",
+        gap: "4px",
+        minWidth: "300px",
+        maxWidth: "90vw",
+        animation: "toastSlideIn 0.4s cubic-bezier(0.23, 1, 0.32, 1)",
+      }}
+    >
+      <div style={{ fontSize: "14px", fontWeight: "bold", display: "flex", alignItems: "center", gap: "6px" }}>
+        🔔 <span style={{ color: "#7c79ff" }}>새 소식</span>
+      </div>
+      <div style={{ fontSize: "13px", opacity: 0.9, lineHeight: "1.4" }}>{toast.message}</div>
+      <style>{`
+        @keyframes toastSlideIn {
+          from { transform: translate(-50%, -100%); opacity: 0; }
+          to { transform: translate(-50%, 0); opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
 }
 
 function App() {

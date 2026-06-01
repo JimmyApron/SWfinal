@@ -109,29 +109,50 @@ export async function createNotification({
   if (!receiverId) return;
 
   const recId = String(receiverId);
+  const rId = roomId != null ? Number(roomId) : null;
 
   // 중복 체크
-  const isDup = await isDuplicateNotification(recId, type, roomId, link);
+  const isDup = await isDuplicateNotification(recId, type, rId, link);
   if (isDup) return;
 
-  const receivers = await getSettingsForReceivers(roomId, [{ receiverid: recId }], type);
+  const receivers = await getSettingsForReceivers(rId, [{ receiverid: recId }], type);
   const issilent = receivers[0].issilent;
+
+  // 방 이름 추가 로직
+  let finalMessage = message;
+  if (rId && !message.startsWith("[")) {
+    try {
+      const { data: roomData } = await supabase.from("rooms").select("roomname").eq("id", rId).single();
+      if (roomData?.roomname) {
+        finalMessage = `[${roomData.roomname}] ${message}`;
+      }
+    } catch (e) {
+      console.error("방 이름 조회 실패:", e);
+    }
+  }
 
   const { error } = await supabase.from("notifications").insert([
     {
-      roomid: roomId != null ? Number(roomId) : null,
+      roomid: rId,
       receiverid: recId,
       senderid: senderId ? String(senderId) : null,
       type,
       title,
-      message,
+      message: finalMessage,
       link,
       isread: false,
       issilent: issilent ?? false,
     },
   ]);
-// ... (rest of the code)
-  updateRoomLastActivity(roomId).catch(err => console.error("활동 시간 갱신 실패:", err));
+
+  if (error) {
+    console.error("알림 생성 실패:", error);
+    throw new Error("알림 생성 실패");
+  }
+
+  if (rId) {
+    updateRoomLastActivity(rId).catch(err => console.error("활동 시간 갱신 실패:", err));
+  }
 }
 
 /**
@@ -170,6 +191,19 @@ export async function createRoomNotifications({
 }) {
   if (!roomId) throw new Error("roomId가 필요합니다.");
 
+  const rId = Number(roomId);
+
+  // 방 이름 조회 및 메시지 머리말 추가
+  let finalMessage = message;
+  try {
+    const { data: roomData } = await supabase.from("rooms").select("roomname").eq("id", rId).single();
+    if (roomData?.roomname && !message.startsWith("[")) {
+      finalMessage = `[${roomData.roomname}] ${message}`;
+    }
+  } catch (e) {
+    console.error("방 이름 조회 실패:", e);
+  }
+
   let targetReceivers = [];
 
   if (targetUserIds && targetUserIds.length > 0) {
@@ -178,8 +212,8 @@ export async function createRoomNotifications({
       .map((id) => ({ receiverid: String(id) }));
   } else {
     const [{ data: members }, { data: guests }] = await Promise.all([
-      supabase.from("room_members").select("userid").eq("roomid", Number(roomId)),
-      supabase.from("room_guests").select("id").eq("roomid", Number(roomId)),
+      supabase.from("room_members").select("userid").eq("roomid", rId),
+      supabase.from("room_guests").select("id").eq("roomid", rId),
     ]);
 
     const memberIds = (members || [])
@@ -202,21 +236,21 @@ export async function createRoomNotifications({
   // 각 수신자별로 중복 체크 (개별적으로 거르기 위해 필터링)
   const nonDupReceivers = [];
   for (const r of uniqueReceivers) {
-    const isDup = await isDuplicateNotification(r.receiverid, type, roomId, link);
+    const isDup = await isDuplicateNotification(r.receiverid, type, rId, link);
     if (!isDup) nonDupReceivers.push(r);
   }
 
   if (nonDupReceivers.length === 0) return;
 
-  const receiversWithSettings = await getSettingsForReceivers(roomId, nonDupReceivers, type);
+  const receiversWithSettings = await getSettingsForReceivers(rId, nonDupReceivers, type);
 
   const rows = receiversWithSettings.map((r) => ({
-    roomid: Number(roomId),
+    roomid: rId,
     receiverid: r.receiverid,
     senderid: senderId ? String(senderId) : null,
     type,
     title,
-    message,
+    message: finalMessage,
     link,
     isread: false,
     issilent: r.issilent ?? false,
@@ -229,7 +263,7 @@ export async function createRoomNotifications({
     throw new Error("방 전체 알림 생성 실패");
   }
 
-  updateRoomLastActivity(roomId).catch(err => console.error("활동 시간 갱신 실패:", err));
+  updateRoomLastActivity(rId).catch(err => console.error("활동 시간 갱신 실패:", err));
 }
 
 async function getRoomParticipations(recipientId, isGuest) {
@@ -286,9 +320,7 @@ export async function getVisibleNotifications(recipientId, isGuest, unreadOnly =
     .in("type", NON_ROOM_NOTIFICATION_TYPES);
 
   if (unreadOnly) {
-    // 안 읽은 개수 계산 시 silent 알림 제외
-    // PostgREST에서 neq.true는 NULL을 제외하므로 .or()를 사용하여 NULL(안읽음) 포함
-    nonRoomQuery = nonRoomQuery.or("isread.is.null,isread.eq.false").or("issilent.is.null,issilent.eq.false");
+    nonRoomQuery = nonRoomQuery.or("isread.is.null,isread.eq.false");
   }
 
   const { data: nonRoomData, error: nonRoomError } = await nonRoomQuery;
@@ -309,7 +341,7 @@ export async function getVisibleNotifications(recipientId, isGuest, unreadOnly =
     .order("createdat", { ascending: false });
 
   if (unreadOnly) {
-    query = query.or("isread.is.null,isread.eq.false").or("issilent.is.null,issilent.eq.false");
+    query = query.or("isread.is.null,isread.eq.false");
   }
 
   const { data, error } = await query;
