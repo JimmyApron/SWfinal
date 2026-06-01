@@ -65,6 +65,7 @@ function MapPage({ roomId }) {
   const [appointmentTitle, setAppointmentTitle] = useState('')
   const [createdLocationOnlySchedule, setCreatedLocationOnlySchedule] = useState(null)
   const [transportModePrompt, setTransportModePrompt] = useState(null)
+  const [showDepartureLocationPicker, setShowDepartureLocationPicker] = useState(false)
   const selectedSchedule = roomConfirmedSchedules.find(
     (schedule) => Number(schedule.id) === Number(selectedScheduleId)
   )
@@ -519,12 +520,32 @@ function MapPage({ roomId }) {
       const location = await getCurrentPosition()
 
       setCurrentLocation(location)
-      setTransportModePrompt({ location, isEdit: false })
+      setTransportModePrompt({ location, isEdit: false, source: 'current' })
       setMessage('이동수단을 입력하세요.')
     } catch (error) {
       console.error('현재 위치 저장 오류:', error)
       setMessage('현재 위치를 가져오거나 저장하는 중 오류가 발생했습니다.')
     }
+  }
+
+  const handleSelectDepartureLocation = (name, address, place = {}) => {
+    const location = {
+      lat: Number(place.lat),
+      lng: Number(place.lng),
+      accuracy: null,
+      name,
+      address: address || place.address || '',
+    }
+
+    if (!Number.isFinite(location.lat) || !Number.isFinite(location.lng)) {
+      setMessage('출발 위치 좌표를 찾지 못했습니다.')
+      return
+    }
+
+    setCurrentLocation(location)
+    setShowDepartureLocationPicker(false)
+    setTransportModePrompt({ location, isEdit: false, source: 'manual' })
+    setMessage('이동수단을 입력하세요.')
   }
 
   const handleSelectTransportMode = async (transportMode) => {
@@ -543,6 +564,15 @@ function MapPage({ roomId }) {
 
       if (middlePlace) {
         await calculateAllMemberRoutesToMiddlePlace(middlePlace)
+      }
+
+      if (transportModePrompt.source === 'manual') {
+        setMessage(
+          middlePlace
+            ? '출발 위치와 이동수단을 저장하고 경로를 다시 계산했습니다.'
+            : '출발 위치와 이동수단을 저장했습니다.'
+        )
+        return
       }
 
       setMessage(
@@ -1618,6 +1648,26 @@ function MapPage({ roomId }) {
       {selectedScheduleId && (
         <>
       <CurrentLocationButton onClick={handleCurrentLocation} />
+
+      <div className="departure-location-picker">
+        <button
+          type="button"
+          className="departure-location-toggle"
+          onClick={() => setShowDepartureLocationPicker((isVisible) => !isVisible)}
+        >
+          {showDepartureLocationPicker ? '직접 입력 닫기' : '출발지 직접 입력'}
+        </button>
+
+        {showDepartureLocationPicker && (
+          <div className="departure-location-search">
+            <strong>출발 위치 검색</strong>
+            <LocationPicker
+              mapHeight="180px"
+              onSelect={handleSelectDepartureLocation}
+            />
+          </div>
+        )}
+      </div>
 
       <button type="button" onClick={handleShareCurrentLocation}>
         현재 위치 채팅에 공유

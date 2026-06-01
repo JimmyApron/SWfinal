@@ -16,6 +16,7 @@ function LocationPicker({
   allowMapClick = true,
   initialPlace = null,
   showMap = true,
+  mapHeight = "250px",
 }) {
   const mapRef = useRef(null);
   const mapObjectRef = useRef(null);
@@ -243,7 +244,7 @@ function LocationPicker({
             ref={mapRef}
             style={{
               width: "100%",
-              height: "250px",
+              height: mapHeight,
               borderRadius: "12px",
               overflow: "hidden",
             }}
