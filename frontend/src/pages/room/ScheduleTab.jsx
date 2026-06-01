@@ -34,6 +34,9 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const [newEndTime, setNewEndTime] = useState("");
   const [newIsAllDay, setNewIsAllDay] = useState(false);
   const [editingCandidateId, setEditingCandidateId] = useState(null);
+  const [showAllTimes, setShowAllTimes] = useState(false);
+  const [activeDragCandidateId, setActiveDragCandidateId] = useState(null);
+  const [clickedSlot, setClickedSlot] = useState(null); // { candidate, time, availableMembers, unavailableMembers }
 
   const [confirmedSchedules, setConfirmedSchedules] = useState([]);
   const [additionalLocations, setAdditionalLocations] = useState([]);
@@ -49,14 +52,16 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const [confirmedIsAllDay, setConfirmedIsAllDay] = useState(false);
   const [isConfirmedExpanded, setIsConfirmedExpanded] = useState(false);
 
+  const timetableScrollRef = useRef(null);
+
   const memberColors = [
-    "#7c79ff",
-    "#ff8a80",
-    "#4dd0e1",
-    "#81c784",
-    "#ffd54f",
-    "#ba68c8",
-    "#ffb74d",
+    "#7C5CFF",
+    "#FF8A80",
+    "#4DD0E1",
+    "#81C784",
+    "#FFD54F",
+    "#BA68C8",
+    "#FFB74D",
   ];
 
   const timeSlots = [];
@@ -67,6 +72,19 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
       timeSlots.push(`${h}:${m}`);
     }
   }
+
+  const filteredTimeSlots = showAllTimes
+    ? timeSlots
+    : timeSlots.filter((t) => t >= "09:00" && t <= "22:00");
+
+  const getHeatmapColor = (count, total) => {
+    if (count === 0) return "#F3F4F6";
+    const ratio = count / total;
+    if (ratio >= 1) return "#5B35E6";
+    if (ratio > 0.7) return "#7C5CFF";
+    if (ratio > 0.4) return "#A78BFA";
+    return "#EDE9FE";
+  };
 
   const getMemberColor = (userid) => {
     const allIds = [
@@ -183,6 +201,50 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
       alert("일정 저장 실패");
     }
   };
+
+  const getSelectedSummary = () => {
+    if (selectedSlots.length === 0) return "선택한 시간이 없습니다.";
+    const sorted = [...selectedSlots].sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      return a.starttime.localeCompare(b.starttime);
+    });
+    const first = sorted[0];
+    const rangeText = `${first.starttime}~${first.endtime}`;
+    return selectedSlots.length > 1 ? `${rangeText} 외 ${selectedSlots.length - 1}개` : rangeText;
+  };
+
+  const scrollToCandidate = (candidateId) => {
+    const element = document.getElementById(`candidate-col-${candidateId}`);
+    if (element && timetableScrollRef.current) {
+      const offsetLeft = element.offsetLeft;
+      timetableScrollRef.current.scrollTo({
+        left: offsetLeft - 100,
+        behavior: "smooth",
+      });
+    }
+  };
+
+  const handleCellClick = (candidate, time) => {
+    if (isSelectMode) return;
+    
+    const slotAvails = getSlotAvailabilities(candidate.id, time);
+    const availableIds = slotAvails.map(a => a.userid);
+    const allParticipants = [
+      ...members.map(m => ({ id: m.userid, nickname: m.nickname, type: 'member' })),
+      ...guests.map(g => ({ id: g.id, nickname: g.nickname, type: 'guest' }))
+    ];
+    
+    const available = allParticipants.filter(p => availableIds.includes(p.id));
+    const unavailable = allParticipants.filter(p => !availableIds.includes(p.id));
+    
+    setClickedSlot({
+      candidate,
+      time,
+      available,
+      unavailable
+    });
+  };
+
 
   const reloadScheduleData = async () => {
     const candidateData = await getScheduleCandidates(roomId);
@@ -561,130 +623,624 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
 
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "16px 0 10px" }}>
-        <h2 style={{ margin: 0 }}>일정 후보</h2>
-        <div style={{ display: "flex", border: "1px solid #ddd", borderRadius: "8px", overflow: "hidden" }}>
+        <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "700", color: "#1F2933" }}>일정 조율</h2>
+        <div style={{ display: "flex", backgroundColor: "#F3F4F6", borderRadius: "8px", padding: "2px" }}>
           {["timetable", "calendar"].map((v) => (
             <button
               key={v}
               onClick={() => setCandidateViewMode(v)}
-              style={{ padding: "6px 14px", border: "none", backgroundColor: candidateViewMode === v ? "#7c79ff" : "#fff", color: candidateViewMode === v ? "#fff" : "#666", fontSize: "13px", cursor: "pointer", fontWeight: candidateViewMode === v ? "600" : "normal" }}
+              style={{
+                padding: "6px 12px",
+                border: "none",
+                borderRadius: "6px",
+                backgroundColor: candidateViewMode === v ? "#FFFFFF" : "transparent",
+                color: candidateViewMode === v ? "#1F2933" : "#6B7280",
+                fontSize: "13px",
+                cursor: "pointer",
+                fontWeight: candidateViewMode === v ? "600" : "500",
+                boxShadow: candidateViewMode === v ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                transition: "all 0.2s",
+              }}
             >
-              {v === "calendar" ? "달력" : "타임테이블"}
+              {v === "calendar" ? "달력" : "시간표"}
             </button>
           ))}
         </div>
       </div>
 
       {candidateViewMode === "timetable" && (
-        <>
-          <div>
-            {editingCandidateId ? (
-              <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} style={{ padding: "8px", border: "1px solid #ddd", borderRadius: "8px", marginBottom: "8px" }} />
-            ) : (
-              <DatePicker multiple value={newDates} onChange={setNewDates} format="YYYY-MM-DD" minDate={new Date()} placeholder="날짜 여러 개 선택 가능" style={{ padding: "8px", border: "1px solid #ddd", borderRadius: "8px", width: "100%", marginBottom: "8px" }} />
-            )}
-            <label style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
-              <input type="checkbox" checked={newIsAllDay} onChange={(e) => setNewIsAllDay(e.target.checked)} /> 하루종일
-            </label>
-            {!newIsAllDay && (
-              <>
-                <select value={newStartTime} onChange={(e) => setNewStartTime(e.target.value)}>
-                  <option value="">시작 시간</option>
-                  {timeSlots.map((time) => <option key={time} value={time}>{time}</option>)}
-                </select>
-                <select value={newEndTime} onChange={(e) => setNewEndTime(e.target.value)}>
-                  <option value="">종료 시간</option>
-                  {timeSlots.map((time) => <option key={time} value={time}>{time}</option>)}
-                </select>
-              </>
-            )}
-            <button onClick={handleAddOrUpdateCandidate}>{editingCandidateId ? "후보 수정 완료" : "후보 추가"}</button>
-            {editingCandidateId && (
-              <button onClick={() => { setEditingCandidateId(null); setNewDate(""); setNewDates([]); setNewStartTime(""); setNewEndTime(""); setNewIsAllDay(false); }}>수정 취소</button>
-            )}
-          </div>
+        <div style={{ paddingBottom: isSelectMode ? "100px" : "0" }}>
+          <p style={{ margin: "4px 0 0", fontSize: "14px", fontWeight: "600", color: "#1F2933" }}>
+            위아래로 드래그해서 가능한 시간을 선택하세요.
+          </p>
+          <p style={{ margin: "2px 0 16px", fontSize: "12px", color: "#6B7280" }}>
+            같은 날짜 안에서 세로 방향으로만 선택됩니다.
+          </p>
 
-          <div style={{ overflowX: "auto", maxWidth: "100%" }} onMouseLeave={() => { setIsDragging(false); setDragMode(null); }} onMouseUp={() => { setIsDragging(false); setDragMode(null); }}>
-            <table style={{ borderCollapse: "collapse", minWidth: "800px" }}>
-              <thead>
-                <tr>
-                  <th style={headerCellStyle}>시간</th>
-                  {candidates.map((candidate) => (
-                    <th key={candidate.id} style={headerCellStyle}>
-                      <div>{formatDateWithDay(candidate.date)}</div>
-                      <div>{candidate.isallday ? "하루종일" : `${candidate.starttime?.slice(0, 5)} ~ ${candidate.endtime?.slice(0, 5)}`}</div>
-                      <button onClick={() => handleEditCandidate(candidate)}>수정</button>
-                      <button onClick={() => handleDeleteCandidate(candidate.id)}>삭제</button>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {timeSlots.map((time) => (
-                  <tr key={time}>
-                    <td style={timeCellStyle}>{time}</td>
-                    {candidates.map((candidate) => {
-                      const key = getSlotKey(candidate.id, time);
-                      const selectable = isTimeSelectable(candidate, time);
-                      const isSelected = selectedSlots.some((slot) => slot.key === key);
-                      const slotMembers = getSlotAvailabilities(candidate.id, time);
-                      const mySaved = slotMembers.some((member) => member.userid === currentUser?.id);
-                      return (
-                        <td
-                          key={key}
-                          onMouseDown={() => { if (!isSelectMode || !selectable) return; const mode = isSelected ? "remove" : "add"; setDragMode(mode); setIsDragging(true); handleSelectSlot(candidate, time, mode); }}
-                          onMouseEnter={() => { if (isDragging && dragMode && selectable) { handleSelectSlot(candidate, time, dragMode); } }}
-                          onMouseUp={() => { setIsDragging(false); setDragMode(null); }}
-                          style={{ ...slotCellStyle, backgroundColor: !selectable ? "#f1f1f1" : isSelectMode ? isSelected ? "#dcdcff" : "white" : mySaved ? "#7c79ff" : "white", cursor: isSelectMode && selectable ? "pointer" : "not-allowed" }}
-                        >
-                          {!isSelectMode && (
-                            <div style={{ display: "flex", height: "100%" }}>
-                              {slotMembers.map((member) => <div key={member.id} title={member.nickname} style={{ flex: 1, backgroundColor: getMemberColor(member.userid) }} />)}
-                            </div>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {!isSelectMode ? (
-            <button onClick={() => { const mySaveSlots = availabilities.filter((item) => item.userid === myUserId).map((item) => ({ key: getSlotKey(item.candidateid, item.starttime.slice(0, 5)), candidateId: item.candidateid, date: item.date, starttime: item.starttime.slice(0, 5), endtime: item.endtime.slice(0, 5) })); setSelectedSlots(mySaveSlots); setIsSelectMode(true); }}>
-              {myAvailability ? "내 일정 수정하기" : "내 일정 등록하기"}
-            </button>
-          ) : (
-            <div>
-              <button onClick={handleSaveAvailability}>저장하기</button>
-              <button onClick={() => { setSelectedSlots([]); setIsSelectMode(false); }}>취소</button>
+          {/* 날짜 선택 버튼 영역 */}
+          <div
+            style={{
+              display: "flex",
+              gap: "8px",
+              overflowX: "auto",
+              paddingBottom: "12px",
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+            }}
+          >
+            {candidates.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => scrollToCandidate(c.id)}
+                style={{
+                  padding: "8px 14px",
+                  backgroundColor: "#FFFFFF",
+                  border: "1px solid #E5E7EB",
+                  borderRadius: "20px",
+                  fontSize: "13px",
+                  fontWeight: "500",
+                  color: "#4B5563",
+                  whiteSpace: "nowrap",
+                  cursor: "pointer",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                }}
+              >
+                {formatDateWithDay(c.date)}
+              </button>
+            ))}
+            <div style={{
+              padding: "0 4px",
+              display: "flex",
+              alignItems: "center",
+            }}>
+              <DatePicker
+                multiple
+                value={newDates}
+                onChange={setNewDates}
+                format="YYYY-MM-DD"
+                minDate={new Date()}
+                style={{ display: "none" }}
+                render={(value, openCalendar) => (
+                  <button
+                    onClick={openCalendar}
+                    style={{
+                      padding: "8px 14px",
+                      backgroundColor: "#F0ECFF",
+                      border: "1px dashed #7C5CFF",
+                      borderRadius: "20px",
+                      fontSize: "13px",
+                      fontWeight: "600",
+                      color: "#7C5CFF",
+                      whiteSpace: "nowrap",
+                      cursor: "pointer",
+                    }}
+                  >
+                    + 날짜 추가
+                  </button>
+                )}
+              />
             </div>
+          </div>
+
+          {/* 시간 선택 카드 그리드 */}
+          <div
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: "16px",
+              border: "1px solid #E5E7EB",
+              boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
+              overflow: "hidden",
+              marginBottom: "20px",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "flex-end", padding: "12px 16px", borderBottom: "1px solid #F3F4F6" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#6B7280", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={showAllTimes}
+                  onChange={(e) => setShowAllTimes(e.target.checked)}
+                  style={{ accentColor: "#7C5CFF" }}
+                />
+                전체 시간 보기
+              </label>
+            </div>
+
+            <div
+              ref={timetableScrollRef}
+              style={{
+                overflowX: "auto",
+                maxWidth: "100%",
+                position: "relative",
+              }}
+              onMouseLeave={() => { setIsDragging(false); setDragMode(null); setActiveDragCandidateId(null); }}
+              onMouseUp={() => { setIsDragging(false); setDragMode(null); setActiveDragCandidateId(null); }}
+            >
+              <table style={{ borderCollapse: "separate", borderSpacing: 0, minWidth: "100%" }}>
+                <thead>
+                  <tr>
+                    <th style={{
+                      position: "sticky",
+                      left: 0,
+                      zIndex: 10,
+                      backgroundColor: "#FFFFFF",
+                      width: "60px",
+                      padding: "12px 8px",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      color: "#9CA3AF",
+                      borderBottom: "1px solid #F3F4F6",
+                      borderRight: "1px solid #F3F4F6",
+                    }}>시간</th>
+                    {candidates.map((candidate) => (
+                      <th
+                        key={candidate.id}
+                        id={`candidate-col-${candidate.id}`}
+                        style={{
+                          minWidth: "120px",
+                          padding: "12px 8px",
+                          backgroundColor: "#FFFFFF",
+                          borderBottom: "1px solid #F3F4F6",
+                          borderRight: "1px solid #F3F4F6",
+                        }}
+                      >
+                        <div style={{ fontSize: "13px", fontWeight: "700", color: "#1F2933" }}>{formatDateWithDay(candidate.date)}</div>
+                        <div style={{ fontSize: "11px", color: "#6B7280", fontWeight: "500", marginTop: "2px" }}>
+                          {candidate.isallday ? "하루종일" : `${candidate.starttime?.slice(0, 5)}~${candidate.endtime?.slice(0, 5)}`}
+                        </div>
+                        <div style={{ display: "flex", gap: "4px", justifyContent: "center", marginTop: "6px" }}>
+                          <button
+                            onClick={() => handleEditCandidate(candidate)}
+                            style={{ fontSize: "10px", color: "#7C5CFF", background: "none", border: "none", cursor: "pointer", fontWeight: "600" }}
+                          >수정</button>
+                          <button
+                            onClick={() => handleDeleteCandidate(candidate.id)}
+                            style={{ fontSize: "10px", color: "#EF4444", background: "none", border: "none", cursor: "pointer", fontWeight: "600" }}
+                          >삭제</button>
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTimeSlots.map((time, timeIdx) => (
+                    <tr key={time}>
+                      <td style={{
+                        position: "sticky",
+                        left: 0,
+                        zIndex: 5,
+                        backgroundColor: "#FFFFFF",
+                        textAlign: "center",
+                        fontSize: "11px",
+                        fontWeight: "600",
+                        color: time.endsWith(":00") ? "#4B5563" : "#D1D5DB",
+                        borderRight: "1px solid #F3F4F6",
+                        borderBottom: time.endsWith(":30") ? "1px solid #F3F4F6" : "none",
+                        height: "28px",
+                      }}>
+                        {time.endsWith(":00") ? time : ""}
+                      </td>
+                      {candidates.map((candidate) => {
+                        const key = getSlotKey(candidate.id, time);
+                        const selectable = isTimeSelectable(candidate, time);
+                        const isSelected = selectedSlots.some((slot) => slot.key === key);
+                        const slotMembers = getSlotAvailabilities(candidate.id, time);
+                        
+                        const totalParticipants = members.length + guests.length;
+                        const availableCount = slotMembers.length;
+                        
+                        const mySaved = !isSelectMode && slotMembers.some((member) => member.userid === currentUser?.id);
+                        const showMySelection = isSelectMode ? isSelected : mySaved;
+                        
+                        // 자연스러운 연결을 위한 주변 상태 체크
+                        const nextTime = filteredTimeSlots[timeIdx + 1];
+                        const prevTime = filteredTimeSlots[timeIdx - 1];
+                        const isNextMySelection = nextTime && (isSelectMode 
+                          ? selectedSlots.some(s => s.key === getSlotKey(candidate.id, nextTime))
+                          : getSlotAvailabilities(candidate.id, nextTime).some(m => m.userid === currentUser?.id));
+                        const isPrevMySelection = prevTime && (isSelectMode 
+                          ? selectedSlots.some(s => s.key === getSlotKey(candidate.id, prevTime))
+                          : getSlotAvailabilities(candidate.id, prevTime).some(m => m.userid === currentUser?.id));
+
+                        const bgColor = !selectable ? "#F3F4F6" : getHeatmapColor(availableCount, totalParticipants);
+
+                        return (
+                          <td
+                            key={key}
+                            onMouseDown={() => {
+                              if (!isSelectMode || !selectable) return;
+                              const mode = isSelected ? "remove" : "add";
+                              setDragMode(mode);
+                              setIsDragging(true);
+                              setActiveDragCandidateId(candidate.id);
+                              handleSelectSlot(candidate, time, mode);
+                            }}
+                            onMouseEnter={() => {
+                              if (isDragging && dragMode && selectable && activeDragCandidateId === candidate.id) {
+                                handleSelectSlot(candidate, time, dragMode);
+                              }
+                            }}
+                            onClick={() => handleCellClick(candidate, time)}
+                            style={{
+                              backgroundColor: bgColor,
+                              borderRight: "1px solid #F3F4F6",
+                              borderBottom: (showMySelection ? (isNextMySelection ? "none" : "1px solid #F3F4F6") : "1px solid #F3F4F6"),
+                              borderTop: (showMySelection ? (isPrevMySelection ? "none" : "none") : "none"),
+                              borderTopLeftRadius: (showMySelection && !isPrevMySelection) ? "8px" : "0",
+                              borderTopRightRadius: (showMySelection && !isPrevMySelection) ? "8px" : "0",
+                              borderBottomLeftRadius: (showMySelection && !isNextMySelection) ? "8px" : "0",
+                              borderBottomRightRadius: (showMySelection && !isNextMySelection) ? "8px" : "0",
+                              boxShadow: showMySelection ? "inset 0 0 0 2px #7C5CFF" : "none",
+                              cursor: selectable ? "pointer" : "default",
+                              padding: 0,
+                              height: "28px",
+                              transition: "all 0.1s",
+                              position: "relative",
+                              zIndex: showMySelection ? 1 : 0,
+                            }}
+                          >
+                            {showMySelection && !isPrevMySelection && isNextMySelection && (
+                              <div style={{
+                                position: "absolute",
+                                top: "50%",
+                                left: "50%",
+                                transform: "translate(-50%, -50%)",
+                                width: "12px",
+                                height: "2px",
+                                backgroundColor: "rgba(255,255,255,0.6)",
+                                borderRadius: "1px",
+                                display: (timeIdx % 2 === 0) ? "block" : "none"
+                              }} />
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* 범례 영역 */}
+            <div style={{ padding: "12px 16px", backgroundColor: "#F9FAFB", display: "flex", gap: "12px", flexWrap: "wrap", borderTop: "1px solid #F3F4F6" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <div style={{ width: "12px", height: "12px", borderRadius: "2px", backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB", boxShadow: "inset 0 0 0 2px #7C5CFF" }} />
+                <span style={{ fontSize: "11px", color: "#6B7280" }}>내 선택</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <div style={{ width: "12px", height: "12px", borderRadius: "2px", backgroundColor: "#F3F4F6" }} />
+                <span style={{ fontSize: "11px", color: "#6B7280" }}>선택 전</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <div style={{ width: "12px", height: "12px", borderRadius: "2px", backgroundColor: "#EDE9FE" }} />
+                <span style={{ fontSize: "11px", color: "#6B7280" }}>다른 사람 가능</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <div style={{ width: "12px", height: "12px", borderRadius: "2px", backgroundColor: "#A78BFA" }} />
+                <span style={{ fontSize: "11px", color: "#6B7280" }}>많이 겹침</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <div style={{ width: "12px", height: "12px", borderRadius: "2px", backgroundColor: "#5B35E6" }} />
+                <span style={{ fontSize: "11px", color: "#6B7280" }}>전원 가능</span>
+              </div>
+            </div>
+          </div>
+
+
+          <div style={{ display: "flex", gap: "10px", marginBottom: "24px" }}>
+            {!isSelectMode ? (
+              <button
+                onClick={() => {
+                  const mySaveSlots = availabilities
+                    .filter((item) => item.userid === myUserId)
+                    .map((item) => ({
+                      key: getSlotKey(item.candidateid, item.starttime.slice(0, 5)),
+                      candidateId: item.candidateid,
+                      date: item.date,
+                      starttime: item.starttime.slice(0, 5),
+                      endtime: item.endtime.slice(0, 5)
+                    }));
+                  setSelectedSlots(mySaveSlots);
+                  setIsSelectMode(true);
+                }}
+                style={{
+                  flex: 1,
+                  padding: "14px",
+                  backgroundColor: "#7C5CFF",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: "12px",
+                  fontSize: "15px",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(124, 92, 255, 0.2)",
+                }}
+              >
+                {myAvailability ? "내 일정 수정하기" : "내 일정 등록하기"}
+              </button>
+            ) : null}
+          </div>
+
+          {/* 슬롯 상세 정보 팝업 (바텀 시트 느낌) */}
+          {clickedSlot && (
+            <>
+              <div
+                onClick={() => setClickedSlot(null)}
+                style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", zIndex: 2000 }}
+              />
+              <div
+                style={{
+                  position: "fixed",
+                  bottom: 0, left: 0, right: 0,
+                  backgroundColor: "#fff",
+                  borderTopLeftRadius: "24px", borderTopRightRadius: "24px",
+                  padding: "24px 20px 40px", zIndex: 2001,
+                  boxShadow: "0 -4px 20px rgba(0,0,0,0.15)",
+                  maxHeight: "80vh", overflowY: "auto"
+                }}
+              >
+                <div style={{ width: "40px", height: "4px", backgroundColor: "#E5E7EB", borderRadius: "2px", margin: "0 auto 20px" }} />
+                <h3 style={{ margin: "0 0 4px", fontSize: "18px", fontWeight: "700", color: "#1F2933" }}>
+                  {formatDateWithDay(clickedSlot.candidate.date)}
+                </h3>
+                <p style={{ margin: "0 0 24px", fontSize: "14px", color: "#6B7280", fontWeight: "500" }}>
+                  {clickedSlot.time} ~ {getNextTime(clickedSlot.time)}
+                </p>
+
+                <div style={{ marginBottom: "20px" }}>
+                  <p style={{ fontSize: "13px", fontWeight: "700", color: "#7C5CFF", marginBottom: "12px" }}>
+                    가능한 멤버 ({clickedSlot.available.length}명)
+                  </p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                    {clickedSlot.available.length > 0 ? (
+                      clickedSlot.available.map(p => (
+                        <div key={p.id} style={{ padding: "6px 12px", backgroundColor: "#F0ECFF", color: "#7C5CFF", borderRadius: "20px", fontSize: "13px", fontWeight: "600" }}>
+                          {p.nickname}{p.id === currentUser?.id ? "(나)" : ""}
+                        </div>
+                      ))
+                    ) : (
+                      <span style={{ fontSize: "13px", color: "#9CA3AF" }}>가능한 멤버가 없습니다.</span>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <p style={{ fontSize: "13px", fontWeight: "700", color: "#6B7280", marginBottom: "12px" }}>
+                    미등록 멤버 ({clickedSlot.unavailable.length}명)
+                  </p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                    {clickedSlot.unavailable.length > 0 ? (
+                      clickedSlot.unavailable.map(p => (
+                        <div key={p.id} style={{ padding: "6px 12px", backgroundColor: "#F3F4F6", color: "#6B7280", borderRadius: "20px", fontSize: "13px", fontWeight: "500" }}>
+                          {p.nickname}{p.id === currentUser?.id ? "(나)" : ""}
+                        </div>
+                      ))
+                    ) : (
+                      <span style={{ fontSize: "13px", color: "#9CA3AF" }}>모두가 가능합니다!</span>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setClickedSlot(null)}
+                  style={{ width: "100%", marginTop: "32px", padding: "14px", backgroundColor: "#F3F4F6", color: "#1F2933", border: "none", borderRadius: "12px", fontSize: "15px", fontWeight: "700", cursor: "pointer" }}
+                >
+                  닫기
+                </button>
+              </div>
+            </>
           )}
 
-          <h3>멤버 일정 등록 현황</h3>
-          {members.map((member) => {
-            const isRegistered = availabilities.some((item) => item.userid === member.userid);
-            const isMe = !!currentUser?.id && member.userid === currentUser.id;
-            return (
-              <div key={member.id} style={{ display: "flex", gap: "10px" }}>
-                <span>👤</span><span>{member.nickname || "닉네임 없음"}</span><span>{isRegistered ? "등록 완료" : isMe ? "내 일정 미등록" : "일정 등록 안 함"}</span>
-                {!isRegistered && !isMe && <button onClick={() => handleRequestSchedule(member)}>일정 등록 요청</button>}
+          {/* 참여자 현황 */}
+          <div style={{ marginBottom: "32px" }}>
+            <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#1F2933", marginBottom: "12px" }}>참여자 현황</h3>
+            <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
+              {members.map((member) => {
+                const isRegistered = availabilities.some((item) => item.userid === member.userid);
+                const isMe = !!currentUser?.id && member.userid === currentUser.id;
+                const color = getMemberColor(member.userid);
+
+                return (
+                  <div
+                    key={member.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "6px 12px",
+                      backgroundColor: isMe ? "#F0ECFF" : "#FFFFFF",
+                      border: `1px solid ${isMe ? "#7C5CFF" : "#E5E7EB"}`,
+                      borderRadius: "20px",
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <div style={{
+                      width: "20px",
+                      height: "20px",
+                      borderRadius: "50%",
+                      backgroundColor: color,
+                      color: "#FFFFFF",
+                      fontSize: "10px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: "bold"
+                    }}>
+                      {(member.nickname || "?").charAt(0)}
+                    </div>
+                    <span style={{ fontSize: "13px", fontWeight: "600", color: isMe ? "#7C5CFF" : "#1F2933" }}>
+                      {member.nickname || "닉네임 없음"}{isMe ? "(나)" : ""}
+                    </span>
+                    {!isRegistered && !isMe && (
+                      <button
+                        onClick={() => handleRequestSchedule(member)}
+                        style={{
+                          marginLeft: "4px",
+                          padding: "2px 6px",
+                          backgroundColor: "#F3F4F6",
+                          border: "none",
+                          borderRadius: "4px",
+                          fontSize: "10px",
+                          color: "#6B7280",
+                          cursor: "pointer"
+                        }}
+                      >요청</button>
+                    )}
+                    {isRegistered && <span style={{ fontSize: "10px", color: "#10B981", fontWeight: "700" }}>✓</span>}
+                  </div>
+                );
+              })}
+              {guests.map((guest) => {
+                const isRegistered = availabilities.some((item) => item.userid === guest.id);
+                const guestId = localStorage.getItem("guest_id");
+                const isMe = !!guestId && guest.id === guestId;
+                const color = getMemberColor(guest.id);
+
+                return (
+                  <div
+                    key={guest.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "6px 12px",
+                      backgroundColor: isMe ? "#F0ECFF" : "#FFFFFF",
+                      border: `1px solid ${isMe ? "#7C5CFF" : "#E5E7EB"}`,
+                      borderRadius: "20px",
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <div style={{
+                      width: "20px",
+                      height: "20px",
+                      borderRadius: "50%",
+                      backgroundColor: color,
+                      color: "#FFFFFF",
+                      fontSize: "10px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: "bold"
+                    }}>
+                      {(guest.nickname || "?").charAt(0)}
+                    </div>
+                    <span style={{ fontSize: "13px", fontWeight: "600", color: isMe ? "#7C5CFF" : "#1F2933" }}>
+                      {guest.nickname || "닉네임 없음"}{isMe ? "(나)" : ""}
+                    </span>
+                    {!isRegistered && !isMe && (
+                      <button
+                        onClick={() => handleRequestSchedule(guest)}
+                        style={{
+                          marginLeft: "4px",
+                          padding: "2px 6px",
+                          backgroundColor: "#F3F4F6",
+                          border: "none",
+                          borderRadius: "4px",
+                          fontSize: "10px",
+                          color: "#6B7280",
+                          cursor: "pointer"
+                        }}
+                      >요청</button>
+                    )}
+                    {isRegistered && <span style={{ fontSize: "10px", color: "#10B981", fontWeight: "700" }}>✓</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <button
+            onClick={handleShowAvailableResult}
+            style={{
+              width: "100%",
+              padding: "14px",
+              backgroundColor: "#FFFFFF",
+              color: "#7C5CFF",
+              border: "1px solid #7C5CFF",
+              borderRadius: "12px",
+              fontSize: "15px",
+              fontWeight: "700",
+              cursor: "pointer",
+              marginBottom: "40px",
+            }}
+          >
+            가능한 시간 분석 보기
+          </button>
+
+          {/* 하단 선택 요약 영역 (선택 모드일 때만 표시) */}
+          {isSelectMode && (
+            <div
+              style={{
+                position: "fixed",
+                bottom: "74px",
+                left: "16px",
+                right: "16px",
+                backgroundColor: "#FFFFFF",
+                padding: "16px",
+                borderRadius: "16px",
+                boxShadow: "0 -4px 20px rgba(0,0,0,0.12)",
+                zIndex: 1000,
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                border: "1px solid #E5E7EB",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <span style={{ fontSize: "13px", color: "#6B7280" }}>선택한 시간 {selectedSlots.length}개</span>
+                  <p style={{ margin: "2px 0 0", fontSize: "15px", fontWeight: "700", color: "#1F2933" }}>
+                    {getSelectedSummary()}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedSlots([])}
+                  style={{
+                    padding: "6px 12px",
+                    backgroundColor: "transparent",
+                    color: "#6B7280",
+                    border: "1px solid #E5E7EB",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    cursor: "pointer"
+                  }}
+                >초기화</button>
               </div>
-            );
-          })}
-          {guests.map((guest) => {
-            const isRegistered = availabilities.some((item) => item.userid === guest.id);
-            const guestId = localStorage.getItem("guest_id");
-            const isMe = !!guestId && guest.id === guestId;
-            return (
-              <div key={guest.id} style={{ display: "flex", gap: "10px" }}>
-                <span>👤</span><span>{guest.nickname || "닉네임 없음"}</span><span>{isRegistered ? "등록 완료" : isMe ? "내 일정 미등록" : "일정 등록 안 함"}</span>
-                {!isRegistered && !isMe && <button onClick={() => handleRequestSchedule(guest)}>일정 등록 요청</button>}
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  onClick={() => setIsSelectMode(false)}
+                  style={{
+                    flex: 1,
+                    padding: "12px",
+                    backgroundColor: "#F3F4F6",
+                    color: "#4B5563",
+                    border: "none",
+                    borderRadius: "10px",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    cursor: "pointer"
+                  }}
+                >취소</button>
+                <button
+                  onClick={handleSaveAvailability}
+                  style={{
+                    flex: 2,
+                    padding: "12px",
+                    backgroundColor: "#7C5CFF",
+                    color: "#FFFFFF",
+                    border: "none",
+                    borderRadius: "10px",
+                    fontSize: "14px",
+                    fontWeight: "700",
+                    cursor: "pointer"
+                  }}
+                >선택 완료</button>
               </div>
-            );
-          })}
-        </>
+            </div>
+          )}
+        </div>
       )}
 
       {candidateViewMode === "calendar" && (
