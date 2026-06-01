@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
-import { transferRoomOwnership } from "../../api/roomApi";
+import { transferRoomOwnership, updateRoomNameApi, updateRoomImageApi } from "../../api/roomApi";
 import ScheduleTab from "./ScheduleTab";
 import MapPage from "../../components/map/MapPage";
 import ChatTab from "../Chat/ChatTab";
@@ -388,23 +388,39 @@ function RoomDetailPage() {
     }
   };
 
-  const handleUpdateRoomName = async () => {
-    if (!newRoomName.trim()) return;
+  const handleImageChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-    const { error } = await supabase
-      .from("rooms")
-      .update({ roomname: newRoomName })
-      .eq("id", roomId);
-
-    if (error) {
-      alert("방 제목 변경 실패!");
-      console.error(error);
+    if (!isCurrentUserHost) {
+      alert("방장만 대표 이미지를 변경할 수 있습니다.");
       return;
     }
 
-    setRoom({ ...room, roomname: newRoomName });
-    setIsEditingTitle(false);
-    alert("방 제목이 새롭게 변경되었습니다!");
+    try {
+      const result = await updateRoomImageApi(file, roomId, currentUser.id);
+      if (result.success) {
+        setRoom((prev) => ({ ...prev, roomimageurl: result.publicUrl }));
+        alert(result.message);
+      }
+    } catch (error) {
+      alert("이미지 업로드 중 오류가 발생했습니다.");
+      console.error(error);
+    }
+  };
+
+  const handleUpdateRoomName = async () => {
+    if (!newRoomName.trim()) return;
+
+    try {
+      await updateRoomNameApi(roomId, newRoomName);
+      setRoom({ ...room, roomname: newRoomName });
+      setIsEditingTitle(false);
+      alert("방 제목이 새롭게 변경되었습니다!");
+    } catch (error) {
+      alert("방 제목 변경 실패!");
+      console.error(error);
+    }
   };
 
   const handleToggleNotification = async (tabName) => {
@@ -721,6 +737,56 @@ function RoomDetailPage() {
 
             <h3 style={{ marginTop: 0 }}>방 설정</h3>
             <hr />
+
+            {/* 방 대표 이미지 변경 (방장 전용) */}
+            <div style={{ marginBottom: "25px", textAlign: "center", position: "relative" }}>
+              <div style={{
+                width: "100px",
+                height: "100px",
+                borderRadius: "24px",
+                backgroundColor: "var(--btn-bg)",
+                margin: "0 auto 10px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "40px",
+                overflow: "hidden",
+                position: "relative",
+                border: "2px solid var(--border-color)"
+              }}>
+                {room.roomimageurl ? (
+                  <img src={room.roomimageurl} alt="방 이미지" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ) : (
+                  "🏠"
+                )}
+                
+                {isCurrentUserHost && (
+                  <label htmlFor="room-image-upload" style={{
+                    position: "absolute",
+                    bottom: 0,
+                    right: 0,
+                    left: 0,
+                    backgroundColor: "rgba(0,0,0,0.5)",
+                    color: "white",
+                    fontSize: "12px",
+                    padding: "4px 0",
+                    cursor: "pointer",
+                    fontWeight: "bold"
+                  }}>
+                    변경
+                  </label>
+                )}
+              </div>
+              {isCurrentUserHost && (
+                <input 
+                  id="room-image-upload" 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={handleImageChange} 
+                  style={{ display: "none" }} 
+                />
+              )}
+            </div>
 
             <div style={{ marginBottom: "25px" }}>
               <h4 style={{ margin: "0 0 10px 0" }}>✏️ 방 제목 변경</h4>

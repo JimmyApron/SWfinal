@@ -313,7 +313,7 @@ function SettingEditPage() {
         <label htmlFor="avatar-file-input" className="avatar-upload-btn-label">
           {isUploading ? '처리 중...' : '사진 변경하기 📷'}
         </label>
-        <input id="avatar-file-input" type="file" accept="image/*" onChange={handleAvatarChange} disabled={isUploading} className="hidden-file-input" />
+        <input id="avatar-file-input" type="file" accept="image/*" onChange={handleAvatarChange} disabled={isUploading} style={{ display: 'none' }} />
       </div>
 
       {/* 닉네임 */}

@@ -241,9 +241,18 @@ function RoomListPage() {
                   fontSize: "24px",
                   marginRight: "15px",
                   flexShrink: 0,
-                  position: "relative"
+                  position: "relative",
+                  overflow: "hidden"
                 }}>
-                  🏠
+                  {room.roomimageurl ? (
+                    <img 
+                      src={room.roomimageurl} 
+                      alt={room.roomname} 
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+                    />
+                  ) : (
+                    "🏠"
+                  )}
                   {isPinned && (
                     <div style={{
                       position: "absolute",

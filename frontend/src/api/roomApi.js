@@ -249,6 +249,53 @@ export async function transferRoomOwnership(roomId, newHostId) {
   }
 }
 
+export async function updateRoomNameApi(roomId, newName) {
+  const { error } = await supabase
+    .from("rooms")
+    .update({ roomname: newName })
+    .eq("id", Number(roomId));
+
+  if (error) {
+    console.error("방 이름 수정 실패:", error);
+    throw new Error("방 이름 수정에 실패했습니다.");
+  }
+}
+
+export async function updateRoomImageApi(file, roomId, userId) {
+  try {
+    const fileExt = file.name.split(".").pop();
+    // RLS 정책을 준수하기 위해 userId를 파일명 앞에 추가 (avatars 버킷 정책 기준)
+    const fileName = `${userId}_room_${roomId}_${Date.now()}.${fileExt}`;
+    const filePath = `${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(filePath, file, { upsert: true });
+
+    if (uploadError) throw uploadError;
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("avatars").getPublicUrl(filePath);
+
+    const { error: roomError } = await supabase
+      .from("rooms")
+      .update({ roomimageurl: publicUrl })
+      .eq("id", Number(roomId));
+
+    if (roomError) throw roomError;
+
+    return {
+      success: true,
+      publicUrl,
+      message: "방 대표 이미지가 성공적으로 변경되었습니다.",
+    };
+  } catch (error) {
+    console.error("방 이미지 업로드 오류:", error.message);
+    throw error;
+  }
+}
+
 export async function getRoomById(roomId) {
   const { data, error } = await supabase
     .from("rooms")
