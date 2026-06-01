@@ -610,7 +610,7 @@ function KakaoMapView({
       content.appendChild(link)
     }
 
-    if (onSetMeetingPlace) {
+    if (onSetMeetingPlace && !place.isConfirmedMiddlePlace) {
       const button = document.createElement('button')
       button.type = 'button'
       button.textContent = '만날 위치로 설정하기'
