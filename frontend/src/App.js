@@ -111,8 +111,19 @@ function NotificationListener() {
               const newNotification = payload.new;
               console.log("🚀 [App.js] 실시간 알림 수신됨:", newNotification);
 
-              // notification-2 기능: 내가 받을 알림만 실시간 수신 (issilent가 false인 경우만 Toast/알림 표시)
-              if (newNotification.issilent !== true) {
+              // [알림 팝업 제어 로직]
+              const isGlobalPopupEnabled = localStorage.getItem("global_popup_enabled") !== "false";
+              const mutedRooms = JSON.parse(localStorage.getItem("muted_rooms") || "[]");
+              
+              // 타입을 확실히 맞추기 위해 String으로 비교
+              const isRoomMuted = newNotification.roomid && mutedRooms.some(id => String(id) === String(newNotification.roomid));
+
+              // 현재 보고 있는 방의 알림은 팝업을 띄우지 않음 (UX 개선)
+              const currentPath = locationRef.current.pathname;
+              const isCurrentlyInRoom = newNotification.roomid && currentPath.includes(`/rooms/${newNotification.roomid}`);
+
+              // issilent가 아니고, 전역 설정이 켜져있고, 해당 방이 차단되지 않았으며, 현재 그 방에 있지 않은 경우만 Toast 표시
+              if (newNotification.issilent !== true && isGlobalPopupEnabled && !isRoomMuted && !isCurrentlyInRoom) {
                 console.log("✅ [App.js] Toast 띄움 로직 실행:", newNotification.title);
                 setToast({
                   message: newNotification.message,
@@ -124,7 +135,7 @@ function NotificationListener() {
                   if (isMounted) setToast(null);
                 }, 4000);
               } else {
-                 console.log("🤫 [App.js] 조용한 알림 - Toast 안 띄움");
+                 console.log("🤫 [App.js] 조용한 알림 또는 차단된 알림 - Toast 안 띄움");
               }
             }
           );

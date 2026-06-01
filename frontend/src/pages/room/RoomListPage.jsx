@@ -35,6 +35,25 @@ function RoomListPage() {
 
   const [contextMenu, setContextMenu] = useState(null); // { x, y, roomId }
 
+  // 알림 끄기 관리 (Local Storage 사용)
+  const [mutedRooms, setMutedRooms] = useState(() => {
+    const saved = localStorage.getItem("muted_rooms");
+    return saved ? JSON.parse(saved) : []; // [roomId1, roomId2, ...]
+  });
+
+  const toggleMute = (roomId) => {
+    const isMuted = mutedRooms.includes(roomId);
+    let newMuted;
+    if (isMuted) {
+      newMuted = mutedRooms.filter(id => id !== roomId);
+    } else {
+      newMuted = [...mutedRooms, roomId];
+    }
+    setMutedRooms(newMuted);
+    localStorage.setItem("muted_rooms", JSON.stringify(newMuted));
+    setContextMenu(null);
+  };
+
   // 고정 토글 함수
   const togglePin = (roomId) => {
     const isPinned = !!pinnedRooms[roomId];
@@ -258,13 +277,18 @@ function RoomListPage() {
                       }}>
                         {room.roomname}
                       </span>
+                      
+                      {mutedRooms.includes(room.id) && (
+                        <span style={{ marginLeft: "4px", fontSize: "12px", opacity: 0.5 }}>🔕</span>
+                      )}
+
                       <span style={{ marginLeft: "6px", color: "var(--secondary-text)", fontSize: "14px", flexShrink: 0 }}>
                         {(room.room_members?.[0]?.count || 0) + (room.room_guests?.[0]?.count || 0)}
                       </span>
                       
                       {room.unreadCount > 0 && (
                         <div style={{
-                          backgroundColor: "#ff4d4f",
+                          backgroundColor: mutedRooms.includes(room.id) ? "#ccc" : "#ff4d4f",
                           color: "white",
                           borderRadius: "10px",
                           padding: "1px 6px",
@@ -330,6 +354,27 @@ function RoomListPage() {
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
           >
             {pinnedRooms[contextMenu.roomId] ? "📌 고정 해제" : "📌 상단 고정"}
+          </button>
+
+          <button 
+            onClick={() => toggleMute(contextMenu.roomId)}
+            style={{
+              width: "100%",
+              padding: "10px 16px",
+              border: "none",
+              background: "none",
+              textAlign: "left",
+              fontSize: "14px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              color: "var(--text-color)"
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "var(--btn-bg)"}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+          >
+            {mutedRooms.includes(contextMenu.roomId) ? "🔔 알림 켜기" : "🔕 알림 끄기"}
           </button>
         </div>
       )}

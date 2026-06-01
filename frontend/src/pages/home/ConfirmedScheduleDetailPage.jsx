@@ -405,7 +405,7 @@ function ConfirmedScheduleDetailPage() {
         senderId: currentUser?.id,
         type: "schedule_cancelled",
         title: "확정 일정이 취소되었습니다",
-        message: `"${schedule.title || dateLabel}" 일정 확정이 취소되었습니다.`,
+        message: `방의 "${schedule.title || dateLabel}" 일정 확정이 취소되었습니다.`,
         link: `/rooms/${schedule.roomid}?tab=vote`,
       });
 
@@ -464,7 +464,7 @@ function ConfirmedScheduleDetailPage() {
             senderId: userId,
             type: "schedule_cancelled",
             title: "확정 일정이 취소되었습니다",
-            message: `참여 인원 부족으로 "${
+            message: `방의 참여 인원 부족으로 "${
               schedule.title || schedule.date
             }" 일정이 자동 취소되었습니다.`,
             link: `/rooms/${schedule.roomid}?tab=vote`,

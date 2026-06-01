@@ -82,14 +82,9 @@ function BottomNav() {
         table: "notifications",
         filter: `receiverid=eq.${currentUserId}`,
       },
-      (payload) => {
-        if (payload.eventType === "INSERT") {
-          // 모든 알림에 대해 뱃지 증가 (issilent 상관없이)
-          setUnreadCount((prev) => prev + 1);
-        } else {
-          // 읽음 처리나 삭제 시에는 서버와 동기화
-          reloadUnreadCount();
-        }
+      () => {
+        // 알림에 변화(추가, 수정, 삭제)가 생기면 서버에서 최신 숫자를 다시 가져옴
+        reloadUnreadCount();
       }
     )
     .subscribe();
@@ -99,7 +94,7 @@ function BottomNav() {
     };
   }, [currentUserId, isGuestUser]);
 
-  const displayCount = unreadCount > 9 ? "9+" : `+${unreadCount}`;
+  const displayCount = unreadCount > 9 ? "9+" : `${unreadCount}`;
 
   const handleRestrictedClick = async (e, path) => {
     e.preventDefault();

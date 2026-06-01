@@ -522,7 +522,7 @@ function NotificationPage() {
               cursor: "pointer",
             }}
           >
-            전체 확인
+            모두 읽기
           </button>
 
           <button

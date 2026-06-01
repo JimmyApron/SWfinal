@@ -113,7 +113,7 @@ export const sendVoteClosedNotification = async ({
       senderId: null, // 마감 알림은 시스템 성격이므로 senderId를 null로 하거나 senderId 유지
       type: "vote_closed",
       title: "🔒 투표 마감 완료",
-      message: `🏁 투표 [${title}]가 마감되었습니다! 최종 결과를 확인해 보세요.`,
+      message: `🏁 방의 [${title}] 투표가 마감되었습니다! 최종 결과를 확인해 보세요.`,
       link: `/rooms/${rId}/votes/${voteid}`,
     });
 

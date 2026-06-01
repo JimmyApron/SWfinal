@@ -46,6 +46,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const [confirmedStartTime, setConfirmedStartTime] = useState("");
   const [confirmedEndTime, setConfirmedEndTime] = useState("");
   const [confirmedIsAllDay, setConfirmedIsAllDay] = useState(false);
+  const [isConfirmedExpanded, setIsConfirmedExpanded] = useState(false);
 
   const memberColors = [
     "#7c79ff",
@@ -439,53 +440,51 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
         {confirmedSchedules.length === 0 ? (
           <p style={{ color: "#aaa", fontSize: "13px", margin: 0 }}>아직 확정된 일정이 없습니다.</p>
         ) : (
-          <div
-            className="confirmed-schedules-container"
-            style={{
-              maxHeight: "340px",
-              overflowY: "auto",
-              paddingRight: "8px",
-              display: "flex",
-              flexDirection: "column",
-              gap: "10px",
-            }}
-          >
-            {confirmedSchedules.map((s) => {
-              const isAbsent = (s.absentees || []).includes(currentUser?.id);
-              return (
-                <ConfirmedScheduleCard
-                  key={s.id}
-                  schedule={{
-                    ...s,
-                    roomname: roomName,
-                    additionalLocations: additionalLocations.filter((location) => Number(location.scheduleid) === Number(s.id)),
-                    isAbsent,
-                  }}
-                  onClick={() => navigate("/confirmed-schedule", { state: { schedule: { ...s, roomname: roomName } } })}
-                />
-              );
-            })}
+          <div>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+              }}
+            >
+              {(isConfirmedExpanded ? confirmedSchedules : confirmedSchedules.slice(0, 3)).map((s) => {
+                const isAbsent = (s.absentees || []).includes(currentUser?.id);
+                return (
+                  <ConfirmedScheduleCard
+                    key={s.id}
+                    schedule={{
+                      ...s,
+                      roomname: roomName,
+                      additionalLocations: additionalLocations.filter((location) => Number(location.scheduleid) === Number(s.id)),
+                      isAbsent,
+                    }}
+                    onClick={() => navigate("/confirmed-schedule", { state: { schedule: { ...s, roomname: roomName } } })}
+                  />
+                );
+              })}
+            </div>
+            {confirmedSchedules.length > 3 && (
+              <button
+                onClick={() => setIsConfirmedExpanded(!isConfirmedExpanded)}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  marginTop: "8px",
+                  backgroundColor: "transparent",
+                  color: "#7c79ff",
+                  border: "1px solid #7c79ff",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                  fontWeight: "bold"
+                }}
+              >
+                {isConfirmedExpanded ? "접기 ▲" : `더보기 (+${confirmedSchedules.length - 3}) ▼`}
+              </button>
+            )}
           </div>
         )}
-
-        <style>
-          {`
-            .confirmed-schedules-container::-webkit-scrollbar {
-              width: 6px;
-            }
-            .confirmed-schedules-container::-webkit-scrollbar-track {
-              background: #f1f1f1;
-              border-radius: 10px;
-            }
-            .confirmed-schedules-container::-webkit-scrollbar-thumb {
-              background: #ccc;
-              border-radius: 10px;
-            }
-            .confirmed-schedules-container::-webkit-scrollbar-thumb:hover {
-              background: #aaa;
-            }
-          `}
-        </style>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "16px 0 10px" }}>
