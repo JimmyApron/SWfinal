@@ -299,7 +299,12 @@ export async function getRoomConfirmedSchedules(roomId) {
   return data || [];
 }
 
-export async function applyConfirmedLocationToSchedule(scheduleId, location, isMiddlePlace) {
+export async function applyConfirmedLocationToSchedule(
+  scheduleId,
+  location,
+  isMiddlePlace,
+  linkVoteToSchedule = true
+) {
   if (isMiddlePlace) {
     const { error } = await supabase
       .from("confirmed_schedules")
@@ -312,17 +317,25 @@ export async function applyConfirmedLocationToSchedule(scheduleId, location, isM
       .eq("id", Number(scheduleId));
 
     if (error) throw new Error("일정 위치 저장 실패");
-    return;
+  } else {
+    const { error } = await supabase.from("confirmed_locations").insert([{
+      roomid: Number(location.roomid),
+      scheduleid: Number(scheduleId),
+      voteid: Number(location.voteid),
+      placename: location.placename,
+    }]);
+
+    if (error) throw new Error("추가 장소 저장 실패");
   }
 
-  const { error } = await supabase.from("confirmed_locations").insert([{
-    roomid: Number(location.roomid),
-    scheduleid: Number(scheduleId),
-    voteid: Number(location.voteid),
-    placename: location.placename,
-  }]);
+  if (location.voteid && linkVoteToSchedule) {
+    const { error } = await supabase
+      .from("votes")
+      .update({ scheduleid: Number(scheduleId) })
+      .eq("id", Number(location.voteid));
 
-  if (error) throw new Error("추가 장소 저장 실패");
+    if (error) throw new Error("투표 일정 연결 실패");
+  }
 }
 
 export async function createLocationOnlyConfirmedSchedule(
@@ -349,9 +362,7 @@ export async function createLocationOnlyConfirmedSchedule(
 
   if (error) throw new Error("날짜 없는 일정 생성 실패");
 
-  if (!isMiddlePlace) {
-    await applyConfirmedLocationToSchedule(data.id, location, false);
-  }
+  await applyConfirmedLocationToSchedule(data.id, location, isMiddlePlace, false);
 
   // 알림 생성
   try {

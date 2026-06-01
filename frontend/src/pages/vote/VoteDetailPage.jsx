@@ -74,7 +74,7 @@ function VoteDetailPage() {
   const [isReconfirmation, setIsReconfirmation] = useState(false);
   const [existingHasLocation, setExistingHasLocation] = useState(false);
   const [showShareToast, setShowShareToast] = useState(false);
-  const [roomConfirmedSchedules] = useState([]);
+  const [roomConfirmedSchedules, setRoomConfirmedSchedules] = useState([]);
   const [locationOnlySchedules, setLocationOnlySchedules] = useState([]);
   const [pendingGoToLocation, setPendingGoToLocation] = useState(false);
   const [memberNicknames, setMemberNicknames] = useState({});
@@ -583,7 +583,7 @@ function VoteDetailPage() {
     }
 
     try {
-      await confirmVote(
+      const result = await confirmVote(
         Number(voteid),
         option,
         Number(roomid),
@@ -592,6 +592,14 @@ function VoteDetailPage() {
       );
 
       await loadVote();
+
+      if (!vote.locationkind) {
+        setPendingConfirmedLocation(result.confirmedLocation);
+        setRoomConfirmedSchedules(await getRoomConfirmedSchedules(roomid));
+        setAppointmentTitle("");
+        setShowScheduleModal(true);
+        return;
+      }
 
       const scheduleTitle = vote.confirmed_schedules?.title || "대상 일정";
 
@@ -611,12 +619,24 @@ function VoteDetailPage() {
       await applyConfirmedLocationToSchedule(
         scheduleId,
         pendingConfirmedLocation,
-        isMiddlePlaceVote
+        isMiddlePlaceVote,
+        false
       );
       setShowScheduleModal(false);
       setPendingConfirmedLocation(null);
       setAppointmentTitle("");
-      navigate("/home");
+      const schedule = roomConfirmedSchedules.find(
+        (item) => Number(item.id) === Number(scheduleId)
+      );
+
+      if (!schedule?.date) {
+        setConfirmedLocationSchedulePrompt({
+          title: schedule?.title || "대상 일정",
+        });
+        return;
+      }
+
+      alert(`${schedule?.title || "대상 일정"}에 장소를 저장했어요.`);
     } catch (error) {
       alert("일정 위치 저장 실패: " + error.message);
     }
@@ -1680,7 +1700,7 @@ function VoteDetailPage() {
           </p>
         ) : null}
 
-        {isLocationVote && (
+        {isLocationVote && vote.locationkind && vote.scheduleid && (
           <p
             style={{
               color: "#555",

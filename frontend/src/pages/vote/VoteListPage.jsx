@@ -60,7 +60,7 @@ function VoteListPage({ roomid }) {
             }}
           >
             <h3>{vote.title}</h3>
-            {vote.scheduleid && (
+            {vote.locationkind && vote.scheduleid && (
               <p>대상 일정: {vote.confirmed_schedules?.title || "선택한 일정"}</p>
             )}
             <p>참여 인원: {votedCount}명</p>
