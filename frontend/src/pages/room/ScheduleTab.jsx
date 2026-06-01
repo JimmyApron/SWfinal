@@ -14,7 +14,7 @@ import {
 } from "../../api/scheduleApi";
 import { updateRoomLastActivity } from "../../api/roomApi";
 import { supabase } from "../../lib/supabaseClient";
-import { createNotification } from "../../api/notificationApi";
+import { createNotification, createRoomNotifications } from "../../api/notificationApi";
 import ConfirmedScheduleCard from "../../components/ConfirmedScheduleCard";
 
 function ScheduleTab({ roomId, ownerUserId, roomName }) {
@@ -289,6 +289,20 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
             endtime: newIsAllDay ? null : newEndTime,
             isallday: newIsAllDay,
           });
+        }
+
+        // 📢 새 일정 후보 추가 알림 전송
+        try {
+          await createRoomNotifications({
+            roomId: Number(roomId),
+            senderId: currentUser?.id,
+            type: "schedule_new",
+            title: "📅 새로운 일정 후보 등록",
+            message: `[${roomName}] 방에 ${dateStrings.length}개의 새로운 일정 후보가 등록되었습니다. 가능한 시간을 표시해 주세요!`,
+            link: `/rooms/${roomId}?tab=schedule`,
+          });
+        } catch (notifError) {
+          console.error("일정 후보 알림 생성 실패:", notifError);
         }
 
         alert(`후보 일정 ${dateStrings.length}개가 추가되었습니다.`);

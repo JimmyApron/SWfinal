@@ -910,27 +910,15 @@ function ChatTab({ roomId }) {
 
   const sendChatNotification = async () => {
     try {
-      const { data: activeMembers } = await supabase
-        .from("room_members")
-        .select("userid")
-        .eq("roomid", Number(roomId))
-        .eq("chatnotifenabled", true);
-
-      const filteredMemberIds = activeMembers
-        ? activeMembers.map((m) => m.userid).filter((id) => id !== currentUser.id)
-        : [];
-
-      if (filteredMemberIds.length > 0) {
-        await createRoomNotifications({
-          roomId,
-          senderId: currentUser.id,
-          type: "chat_new",
-          title: "새 채팅이 도착했습니다",
-          message: `${currentProfile.nickname || "익명"}님이 메시지를 보냈습니다.`,
-          link: `/rooms/${roomId}?tab=chat`,
-          targetUserIds: filteredMemberIds,
-        });
-      }
+      // 모든 멤버와 게스트에게 알림을 생성 (issilent는 createRoomNotifications 내부에서 처리됨)
+      await createRoomNotifications({
+        roomId,
+        senderId: currentUser.id,
+        type: "chat_new",
+        title: "새 채팅이 도착했습니다",
+        message: `${currentProfile.nickname || "익명"}님이 메시지를 보냈습니다.`,
+        link: `/rooms/${roomId}?tab=chat`,
+      });
     } catch (notificationError) {
       console.error("채팅 알림 생성 실패:", notificationError);
     }

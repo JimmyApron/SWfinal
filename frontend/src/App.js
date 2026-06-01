@@ -115,6 +115,9 @@ function NotificationListener() {
                   "🔔 [실시간 새 알림 도착 완료 - Toast]:",
                   newNotification?.message
                 );
+                // 여기에 실제 Toast 표시 로직이 있다면 호출 (현재는 로그만 출력됨)
+              } else {
+                console.log("🤫 [조용한 알림]: Toast를 띄우지 않습니다.");
               }
 
               // 현재 위치가 필요할 때 사용할 수 있게 locationRef 유지
