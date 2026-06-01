@@ -39,19 +39,21 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
     <div
       onClick={onClick}
       style={{
-        padding: "12px 14px",
+        padding: "10px 14px",
         marginBottom: "8px",
         border: "1px solid var(--card-border)",
         borderRadius: "12px",
         cursor: "pointer",
         backgroundColor: "var(--card-bg)",
+        width: "100%",
+        boxSizing: "border-box",
       }}
     >
-      <p style={{ margin: 0, fontSize: "13px", color: "var(--secondary-text)" }}>
+      <p style={{ margin: 0, fontSize: "12px", color: "var(--secondary-text)" }}>
         {schedule.roomname}
       </p>
 
-      <p style={{ margin: "4px 0 0", fontWeight: "bold", color: "var(--text-color)" }}>
+      <p style={{ margin: "4px 0 0", fontWeight: "bold", color: "var(--text-color)", fontSize: "15px" }}>
         {schedule.title || dateLabel || "일정 미정"}
         {schedule.isAbsent && (
           <span

@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { FaEye, FaEyeSlash } from 'react-icons/fa'
 import { getCurrentUserApi, sendEmailOtpApi } from '../../api/authApi'
 import { supabase } from '../../lib/supabaseClient'
 import {
@@ -40,6 +41,11 @@ function SettingEditPage() {
 
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const [showDeleteForm, setShowDeleteForm] = useState(false)
   const [deletePassword, setDeletePassword] = useState('')
@@ -154,37 +160,55 @@ function SettingEditPage() {
     if (email === initialEmail) { setIsEmailChecked(true); setMessage('✅ 현재 사용 중인 이메일입니다.'); return }
     try {
       setMessage('이메일 중복 체크 중...')
-      const res = await checkEmailDuplicateApi(email)
-      if (res.success) {
-        setIsEmailChecked(true)
-        setOtpSent(false)
-        setMessage(`✅ ${res.message} "인증번호 전송"을 눌러주세요.`)
-      } else {
+      // 1. profiles 테이블 확인 (다른 유저)
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', email.trim())
+        .neq('id', userId)
+        .maybeSingle()
+      if (profileError) throw profileError
+      if (profileData) {
         setIsEmailChecked(false)
-        setMessage(`❌ ${res.message}`)
+        setMessage('❌ 이미 사용 중인 이메일입니다.')
+        return
       }
+      // 2. auth.users 확인 (미완료 계정 포함) — updateUser 실패 방지
+      const { data: isDuplicate, error: rpcError } = await supabase.rpc('check_email_exists', {
+        email_to_check: email.trim(),
+      })
+      if (rpcError) throw rpcError
+      if (isDuplicate) {
+        setIsEmailChecked(false)
+        setMessage('❌ 이미 등록된 이메일입니다. 다른 이메일을 사용해주세요.')
+        return
+      }
+      setIsEmailChecked(true)
+      setOtpSent(false)
+      setMessage('✅ 사용 가능한 이메일입니다.')
     } catch (error) { setIsEmailChecked(false); setMessage(`❌ 중복 확인 실패: ${error.message}`) }
   }
 
-  // OTP 전송 (회원가입과 동일한 로직)
+  // OTP 전송 (이메일 변경용 — supabase.auth.updateUser 사용)
   const handleSendOtp = async () => {
     if (!isEmailChecked) { setMessage('⚠️ 먼저 이메일 중복 확인을 해주세요.'); return }
     if (countdown > 0) { setMessage(`⚠️ ${countdown}초 후에 다시 시도해주세요.`); return }
-    
+
     try {
       setIsUploading(true)
       setMessage('📧 인증 코드를 발송 중입니다...')
-      
-      // 회원가입과 동일한 API 호출 (supabase.auth.signInWithOtp 사용)
-      await sendEmailOtpApi(email.trim())
-      
+
+      // 이메일 변경 확인 코드 전송 (signInWithOtp 아닌 updateUser 사용)
+      const { error } = await supabase.auth.updateUser({ email: email.trim() })
+      if (error) throw error
+
       setOtpSent(true)
-      setCountdown(60) // 1분 쿨다운 시작
+      setCountdown(60)
       setMessage('📧 새 이메일로 6자리 인증 코드가 발송되었습니다. 인증번호를 입력하고 "확인"을 눌러주세요.')
     } catch (error) {
-      if (error.message?.includes('rate limit exceeded')) {
-        setMessage('❌ 보안을 위해 인증 메일 발송이 일시적으로 제한되었습니다. 약 1~5분 후 다시 시도해주세요.')
-        setCountdown(60) // 에러 발생 시에도 쿨다운 적용
+      if (error.message?.includes('rate limit')) {
+        setMessage('❌ 보안을 위해 인증 메일 발송이 일시적으로 제한되었습니다. 잠시 후 다시 시도해주세요.')
+        setCountdown(60)
       } else {
         setMessage(`❌ 인증 코드 발송 실패: ${error.message}`)
       }
@@ -254,13 +278,35 @@ function SettingEditPage() {
     } finally { setIsUploading(false) }
   }
 
-  // 비밀번호/회원탈퇴 등 기타 함수 유지 (생략하지만 코드엔 포함)
+  // 비밀번호 변경 기능
   const handleUpdatePasswordDirect = async (e) => {
     e.preventDefault(); if (isSocialUser) return;
+    
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/
+
+    if (!currentPassword) { setMessage('⚠️ 현재 비밀번호를 입력해주세요.'); return }
+    if (!newPassword) { setMessage('⚠️ 새 비밀번호를 입력해주세요.'); return }
+    if (!passwordRegex.test(newPassword)) {
+      setMessage('⚠️ 비밀번호는 영문 대/소문자, 숫자, 특수문자를 모두 포함하여 최소 8자 이상이어야 합니다.')
+      return
+    }
+    if (newPassword !== confirmPassword) { setMessage('⚠️ 새 비밀번호 확인이 일치하지 않습니다.'); return }
+
     try {
+      setIsUploading(true)
+      setMessage('🔄 비밀번호를 변경 중입니다...')
       const res = await updatePasswordApi(currentPassword, newPassword)
-      if (res.success) { setMessage(`✅ ${res.message}`); setCurrentPassword(''); setNewPassword('') }
-    } catch (e) { setMessage('❌ 비밀번호 변경 실패') }
+      if (res.success) { 
+        setMessage(`✅ ${res.message}`)
+        setCurrentPassword('')
+        setNewPassword('')
+        setConfirmPassword('')
+      }
+    } catch (err) { 
+      setMessage(`❌ ${err.message || '비밀번호 변경 실패'}`) 
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   const handleConfirmDeleteAccount = async (e) => {
@@ -273,6 +319,12 @@ function SettingEditPage() {
 
   return (
     <div className="setting-container" style={{ paddingBottom: '90px' }}>
+      <button
+        onClick={() => navigate(-1)}
+        style={{ border: 'none', background: 'none', fontSize: '24px', cursor: 'pointer', padding: '0 0 8px', display: 'block' }}
+      >
+        ←
+      </button>
       <h2>내 정보 수정 ⚙️</h2>
 
       {/* 프로필 사진 */}
@@ -285,7 +337,7 @@ function SettingEditPage() {
         <label htmlFor="avatar-file-input" className="avatar-upload-btn-label">
           {isUploading ? '처리 중...' : '사진 변경하기 📷'}
         </label>
-        <input id="avatar-file-input" type="file" accept="image/*" onChange={handleAvatarChange} disabled={isUploading} className="hidden-file-input" />
+        <input id="avatar-file-input" type="file" accept="image/*" onChange={handleAvatarChange} disabled={isUploading} style={{ display: 'none' }} />
       </div>
 
       {/* 닉네임 */}
@@ -299,30 +351,183 @@ function SettingEditPage() {
 
       {/* 이메일 (OTP 인증 방식) */}
       <div className="edit-form-group">
-        <label>이메일 변경</label>
-        <div className="input-with-buttons">
-          <input type="email" value={email} disabled={isSocialUser || emailVerified} onChange={(e) => { setEmail(e.target.value); setIsEmailChecked(e.target.value === initialEmail); setOtpSent(false); setEmailVerified(false); }} />
-          <div className="dual-button-group">
-            <button type="button" onClick={handleCheckEmail} disabled={isSocialUser || emailVerified}>중복 확인</button>
-            {isEmailChecked && email !== initialEmail && !emailVerified && (
-              <button type="button" onClick={handleSendOtp} disabled={isUploading || countdown > 0}>
-                {countdown > 0 ? `${countdown}초 후 가능` : (otpSent ? '재전송' : '인증번호 전송')}
-              </button>
-            )}
-            {emailVerified && <span style={{ color: '#4caf50', fontWeight: 'bold', fontSize: '14px', marginLeft: '10px' }}>인증 완료 ✅</span>}
+        <label>이메일{isSocialUser ? '' : ' 변경'}</label>
+        {isSocialUser ? (
+          <>
+            <input type="email" value={email} disabled style={{ width: '100%', boxSizing: 'border-box' }} />
+            <p style={{ margin: '6px 0 0', fontSize: '13px', color: '#888' }}>
+              카카오 또는 구글로 로그인한 계정은 이메일을 변경할 수 없습니다.
+            </p>
+          </>
+        ) : (
+          <div className="input-with-button">
+            <input
+              type="email"
+              value={email}
+              disabled={emailVerified}
+              onChange={(e) => {
+                setEmail(e.target.value)
+                setIsEmailChecked(e.target.value === initialEmail)
+                setOtpSent(false)
+                setEmailVerified(false)
+              }}
+            />
+            <button type="button" onClick={handleCheckEmail} disabled={emailVerified}>
+              중복 확인
+            </button>
           </div>
-        </div>
+        )}
+
+        {emailVerified && (
+          <p style={{ margin: '8px 0 0', fontSize: '14px', color: '#4caf50', fontWeight: 'bold' }}>
+            ✅ 인증 완료
+          </p>
+        )}
+
+        {isEmailChecked && email !== initialEmail && !emailVerified && (
+          <button
+            type="button"
+            onClick={handleSendOtp}
+            disabled={isUploading || countdown > 0}
+            style={{
+              width: '100%',
+              marginTop: '8px',
+              padding: '10px',
+              backgroundColor: countdown > 0 ? '#eee' : '#7c79ff',
+              color: countdown > 0 ? '#aaa' : '#fff',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: countdown > 0 ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {countdown > 0
+              ? `${countdown}초 후 재전송 가능`
+              : otpSent
+              ? '인증 코드 재전송'
+              : '이메일 인증하기'}
+          </button>
+        )}
 
         {otpSent && !emailVerified && (
           <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
             <div style={{ position: 'relative', flex: 1 }}>
-              <input type="text" placeholder="인증 번호 6자리" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))} maxLength={6} style={{ width: '100%', paddingRight: '50px' }} />
-              <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', color: timeLeft <= 60 ? '#f44' : '#888' }}>{formatTime(timeLeft)}</span>
+              <input
+                type="text"
+                placeholder="인증 코드 6자리"
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                maxLength={6}
+                style={{ width: '100%', paddingRight: '50px', boxSizing: 'border-box' }}
+              />
+              <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', color: timeLeft <= 60 ? '#f44' : '#888' }}>
+                {formatTime(timeLeft)}
+              </span>
             </div>
-            <button type="button" onClick={handleVerifyOtp} disabled={isUploading || timeLeft === 0}>확인</button>
+            <button type="button" onClick={handleVerifyOtp} disabled={isUploading || timeLeft === 0}>
+              확인
+            </button>
           </div>
         )}
       </div>
+
+      {/* 비밀번호 변경 (일반 로그인 사용자만) */}
+      {!isSocialUser && (
+        <div className="edit-form-group" style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
+          <label>비밀번호 변경 🔒</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ position: 'relative' }}>
+              <input 
+                type={showCurrentPassword ? "text" : "password"} 
+                placeholder="현재 비밀번호" 
+                value={currentPassword} 
+                onChange={(e) => setCurrentPassword(e.target.value)} 
+                autoComplete="new-password"
+                style={{ width: '100%', paddingRight: '40px' }}
+              />
+              <span 
+                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: '#888' }}
+              >
+                {showCurrentPassword ? <FaEyeSlash /> : <FaEye />}
+              </span>
+            </div>
+            
+            <div style={{ position: 'relative' }}>
+              <input 
+                type={showNewPassword ? "text" : "password"} 
+                placeholder="새 비밀번호" 
+                value={newPassword} 
+                onChange={(e) => setNewPassword(e.target.value)} 
+                autoComplete="new-password"
+                style={{ width: '100%', paddingRight: '40px' }}
+              />
+              <span 
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: '#888' }}
+              >
+                {showNewPassword ? <FaEyeSlash /> : <FaEye />}
+              </span>
+            </div>
+            {newPassword && (
+              <p style={{ 
+                fontSize: '12px', 
+                margin: '0 0 4px 4px', 
+                color: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(newPassword) ? '#4caf50' : '#f44336' 
+              }}>
+                {/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(newPassword) 
+                  ? '✅ 안전한 비밀번호입니다.' 
+                  : '❌ 영문 대/소문자, 숫자, 특수문자 포함 8자 이상'}
+              </p>
+            )}
+
+            <div style={{ position: 'relative' }}>
+              <input 
+                type={showConfirmPassword ? "text" : "password"} 
+                placeholder="새 비밀번호 확인" 
+                value={confirmPassword} 
+                onChange={(e) => setConfirmPassword(e.target.value)} 
+                autoComplete="new-password"
+                style={{ width: '100%', paddingRight: '40px' }}
+              />
+              <span 
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: '#888' }}
+              >
+                {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
+              </span>
+            </div>
+            {confirmPassword && (
+              <p style={{ 
+                fontSize: '12px', 
+                margin: '0 0 4px 4px', 
+                color: newPassword === confirmPassword ? '#4caf50' : '#f44336' 
+              }}>
+                {newPassword === confirmPassword ? '✅ 비밀번호가 일치합니다.' : '❌ 비밀번호가 일치하지 않습니다.'}
+              </p>
+            )}
+
+            <button 
+              type="button" 
+              onClick={handleUpdatePasswordDirect} 
+              disabled={isUploading}
+              style={{ 
+                marginTop: '5px', 
+                padding: '10px', 
+                backgroundColor: '#f0f0f0', 
+                border: '1px solid #ddd', 
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '600'
+              }}
+            >
+              비밀번호 변경하기
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 알림 메시지 */}
       {message && <p className="status-message">{message}</p>}

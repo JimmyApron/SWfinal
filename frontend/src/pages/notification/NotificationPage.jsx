@@ -41,115 +41,6 @@ function NotificationPage() {
     let channel = null;
     let isMounted = true;
 
-    const checkExpiredVotesAndNotify = async (userId, isGuest) => {
-      try {
-        const nowIso = new Date().toISOString();
-
-        let roomIds = [];
-
-        if (isGuest) {
-          const { data: myGuestRooms, error: guestRoomError } = await supabase
-            .from("room_guests")
-            .select("roomid")
-            .eq("id", userId);
-
-          if (guestRoomError) throw guestRoomError;
-
-          roomIds = myGuestRooms?.map((room) => room.roomid) || [];
-        } else {
-          const { data: myRooms, error: roomError } = await supabase
-            .from("room_members")
-            .select("roomid")
-            .eq("userid", userId);
-
-          if (roomError) throw roomError;
-
-          roomIds = myRooms?.map((room) => room.roomid) || [];
-        }
-
-        if (roomIds.length === 0) return;
-
-        const { data: expiredVotes, error: voteError } = await supabase
-          .from("votes")
-          .select("id, roomid, title")
-          .in("roomid", roomIds)
-          .eq("endtimeenabled", true)
-          .lte("endtime", nowIso)
-          .eq("isclosed", false);
-
-        if (voteError) throw voteError;
-
-        if (!expiredVotes || expiredVotes.length === 0) return;
-
-        for (const vote of expiredVotes) {
-          const notificationsToInsert = [];
-
-          const { data: activeMembers, error: memberError } = await supabase
-            .from("room_members")
-            .select("userid")
-            .eq("roomid", vote.roomid)
-            .eq("votenotifenabled", true);
-
-          if (memberError) throw memberError;
-
-          if (activeMembers && activeMembers.length > 0) {
-            activeMembers.forEach((member) => {
-              notificationsToInsert.push({
-                roomid: vote.roomid,
-                receiverid: member.userid,
-                type: "vote_closed",
-                title: "🔒 투표 마감 완료",
-                message: `🏁 [${vote.title}] 투표가 마감되었습니다! 최종 결과를 확인해 보세요.`,
-                isread: false,
-                link: `/rooms/${vote.roomid}/votes/${vote.id}`,
-              });
-            });
-          }
-
-          const { data: activeGuests, error: guestError } = await supabase
-            .from("room_guests")
-            .select("id")
-            .eq("roomid", vote.roomid)
-            .eq("votenotifenabled", true);
-
-          if (guestError) throw guestError;
-
-          if (activeGuests && activeGuests.length > 0) {
-            activeGuests.forEach((guest) => {
-              notificationsToInsert.push({
-                roomid: vote.roomid,
-                receiverid: guest.id,
-                type: "vote_closed",
-                title: "투표 마감 완료",
-                message: `[${vote.title}] 투표가 마감되었습니다. 최종 결과를 확인해 보세요.`,
-                isread: false,
-                link: `/rooms/${vote.roomid}/votes/${vote.id}`,
-              });
-            });
-          }
-
-          if (notificationsToInsert.length > 0) {
-            const { error: insertError } = await supabase
-              .from("notifications")
-              .insert(notificationsToInsert);
-
-            if (insertError) throw insertError;
-          }
-
-          const { error: closeError } = await supabase
-            .from("votes")
-            .update({ isclosed: true })
-            .eq("id", vote.id);
-
-          if (closeError) throw closeError;
-
-          console.log(`🏁 [${vote.title}] 투표 마감 알림 처리 완료!`);
-        }
-      } catch (checkError) {
-        console.error("🔒 마감 투표 자동 체크 중 에러:", checkError);
-      }
-    };
-
     const loadNotifications = async () => {
       const {
         data: { user },
@@ -174,9 +65,6 @@ function NotificationPage() {
 
       setCurrentUserId(userId);
       setIsGuestUser(isGuest);
-
-      // HEAD 기능 유지: 알림창 열었을 때 마감된 투표 자동 체크
-      await checkExpiredVotesAndNotify(userId, isGuest);
 
       // origin/feature/notification-2 기준 유지: 최신 알림 조회
       const data = isGuest
@@ -634,7 +522,7 @@ function NotificationPage() {
               cursor: "pointer",
             }}
           >
-            전체 확인
+            모두 읽기
           </button>
 
           <button

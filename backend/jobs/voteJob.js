@@ -85,6 +85,32 @@ async function checkAndSendReminders() {
 }
 
 /**
+ * 중복 알림 여부를 확인합니다.
+ */
+async function isDuplicateNotification(receiverId, type, roomId, link) {
+  try {
+    let query = supabase
+      .from("notifications")
+      .select("id")
+      .eq("receiverid", String(receiverId))
+      .eq("type", type);
+
+    if (roomId) query = query.eq("roomid", Number(roomId));
+    if (link) query = query.eq("link", link);
+    
+    // 최근 1시간 이내의 동일한 알림이 있는지 확인
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    query = query.gt("createdat", oneHourAgo);
+
+    const { data, error } = await query.limit(1);
+    if (error) return false;
+    return data && data.length > 0;
+  } catch (err) {
+    return false;
+  }
+}
+
+/**
  * 📢 마감된 투표에 대해 방 참여자 전원에게 알림을 보냅니다.
  */
 async function sendClosedNotifications(vote) {
@@ -100,31 +126,44 @@ async function sendClosedNotifications(vote) {
     
     const roomName = roomData?.roomname || "참여 중인 방";
 
-    // 대상 조회 (회원 + 게스트 전원 무조건 발송 - 설정 무시)
+    // 대상 조회 (설정값 포함)
     const [ { data: members }, { data: guests } ] = await Promise.all([
-      supabase.from("room_members").select("userid").eq("roomid", roomId),
-      supabase.from("room_guests").select("id").eq("roomid", roomId)
+      supabase.from("room_members").select("userid, votenotifenabled").eq("roomid", roomId),
+      supabase.from("room_guests").select("id, votenotifenabled").eq("roomid", roomId)
     ]);
 
     const allReceivers = [
-      ...(members || []).map(m => m.userid),
-      ...(guests || []).map(g => g.id)
+      ...(members || []).map(m => ({ id: m.userid, enabled: m.votenotifenabled })),
+      ...(guests || []).map(g => ({ id: g.id, enabled: g.votenotifenabled }))
     ];
 
     if (allReceivers.length > 0) {
-      const notifications = allReceivers.map((receiverId) => ({
-        roomid: roomId,
-        receiverid: receiverId,
-        senderid: null,
-        type: "vote_closed",
-        title: "🔒 투표 마감 완료",
-        message: `🏁 [${roomName}] 방의 [${title}] 투표가 마감되었습니다! 최종 결과를 확인해 보세요.`,
-        isread: false,
-        link: `/rooms/${roomId}/votes/${voteId}`,
-      }));
+      const link = `/rooms/${roomId}/votes/${voteId}`;
+      const type = "vote_closed";
+      const notifications = [];
 
-      const { error } = await supabase.from("notifications").insert(notifications);
-      if (error) console.error(`❌ [백엔드-마감] 알림 저장 실패 (투표 ID: ${voteId}):`, error);
+      for (const receiver of allReceivers) {
+        // 중복 체크
+        const isDup = await isDuplicateNotification(receiver.id, type, roomId, link);
+        if (!isDup) {
+          notifications.push({
+            roomid: roomId,
+            receiverid: String(receiver.id),
+            senderid: null,
+            type: type,
+            title: "🔒 투표 마감 완료",
+            message: `🏁 [${roomName}] 방의 [${title}] 투표가 마감되었습니다! 최종 결과를 확인해 보세요.`,
+            isread: false,
+            issilent: receiver.enabled === false, // 설정이 꺼져 있으면 조용한 알림
+            link: link,
+          });
+        }
+      }
+
+      if (notifications.length > 0) {
+        const { error } = await supabase.from("notifications").insert(notifications);
+        if (error) console.error(`❌ [백엔드-마감] 알림 저장 실패 (투표 ID: ${voteId}):`, error);
+      }
     }
   } catch (err) {
     console.error(`‼️ [백엔드-마감] 알림 발송 중 오류 (투표 ID: ${vote.id}):`, err);
@@ -146,36 +185,50 @@ async function sendReminderNotifications(vote) {
     
     const roomName = roomData?.roomname || "참여 중인 방";
 
+    // 대상 조회 (설정값 포함)
     const [ { data: members }, { data: guests } ] = await Promise.all([
-      supabase.from("room_members").select("userid").eq("roomid", roomId),
-      supabase.from("room_guests").select("id").eq("roomid", roomId)
+      supabase.from("room_members").select("userid, votenotifenabled").eq("roomid", roomId),
+      supabase.from("room_guests").select("id, votenotifenabled").eq("roomid", roomId)
     ]);
 
     const allReceivers = [
-      ...(members || []).map(m => m.userid),
-      ...(guests || []).map(g => g.id)
+      ...(members || []).map(m => ({ id: m.userid, enabled: m.votenotifenabled })),
+      ...(guests || []).map(g => ({ id: g.id, enabled: g.votenotifenabled }))
     ];
 
     if (allReceivers.length > 0) {
+      const link = `/rooms/${roomId}/votes/${voteId}`;
+      const type = "vote_reminder";
+      
       // 남은 시간(분) 계산
-      // endtime은 'YYYY-MM-DDTHH:mm:ss' 형태의 KST 문자열이므로 +09:00을 붙여 명확한 시점으로 변환
       const endTimestamp = new Date(endtime.replace(' ', 'T') + "+09:00").getTime();
       const nowTimestamp = new Date().getTime();
       const diffInMinutes = Math.max(1, Math.ceil((endTimestamp - nowTimestamp) / (1000 * 60)));
+      
+      const notifications = [];
 
-      const notifications = allReceivers.map((receiverId) => ({
-        roomid: roomId,
-        receiverid: receiverId,
-        senderid: null,
-        type: "vote_reminder",
-        title: "🗳️ 투표 마감 임박",
-        message: `⚠️ [${roomName}] 방의 [${title}] 투표 마감 시간이 ${diffInMinutes}분 남았습니다! 서둘러 참여해 주세요!`,
-        isread: false,
-        link: `/rooms/${roomId}/votes/${voteId}`,
-      }));
+      for (const receiver of allReceivers) {
+        // 중복 체크
+        const isDup = await isDuplicateNotification(receiver.id, type, roomId, link);
+        if (!isDup) {
+          notifications.push({
+            roomid: roomId,
+            receiverid: String(receiver.id),
+            senderid: null,
+            type: type,
+            title: "🗳️ 투표 마감 임박",
+            message: `⚠️ [${roomName}] 방의 [${title}] 투표 마감 시간이 ${diffInMinutes}분 남았습니다! 서둘러 참여해 주세요!`,
+            isread: false,
+            issilent: receiver.enabled === false, // 설정이 꺼져 있으면 조용한 알림
+            link: link,
+          });
+        }
+      }
 
-      const { error } = await supabase.from("notifications").insert(notifications);
-      if (error) console.error(`❌ [백엔드-임박] 알림 저장 실패 (투표 ID: ${voteId}):`, error);
+      if (notifications.length > 0) {
+        const { error } = await supabase.from("notifications").insert(notifications);
+        if (error) console.error(`❌ [백엔드-임박] 알림 저장 실패 (투표 ID: ${voteId}):`, error);
+      }
     }
   } catch (err) {
     console.error(`‼️ [백엔드-임박] 알림 발송 중 오류 (투표 ID: ${vote.id}):`, err);

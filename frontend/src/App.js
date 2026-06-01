@@ -1,7 +1,7 @@
 import "./App.css";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GoogleOAuthProvider } from "@react-oauth/google";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "./lib/supabaseClient";
 import { ThemeProvider } from "./context/ThemeContext";
 
@@ -54,6 +54,8 @@ function Layout({ children }) {
 }
 
 function NotificationListener() {
+  const navigate = useNavigate();
+  const [toast, setToast] = useState(null);
   const location = useLocation();
   const locationRef = useRef(location);
   const channelRef = useRef(null);
@@ -80,6 +82,8 @@ function NotificationListener() {
           myUserId = localStorage.getItem("guest_id");
         }
 
+        console.log("🚀 [App.js] NotificationListener 시작 - userId:", myUserId);
+
         if (!myUserId) {
           console.log("알림 리스너 연결 생략: 로그인/게스트 정보 없음");
           return;
@@ -105,36 +109,42 @@ function NotificationListener() {
             },
             async (payload) => {
               const newNotification = payload.new;
+              console.log("🚀 [App.js] 실시간 알림 수신됨:", newNotification);
 
-              // 기존 HEAD 기능: 새 알림 로그 확인
-              console.log("새 알림:", newNotification);
+              // [알림 팝업 제어 로직]
+              const isGlobalPopupEnabled = localStorage.getItem("global_popup_enabled") !== "false";
+              const mutedRooms = JSON.parse(localStorage.getItem("muted_rooms") || "[]");
+              
+              // 타입을 확실히 맞추기 위해 String으로 비교
+              const isRoomMuted = newNotification.roomid && mutedRooms.some(id => String(id) === String(newNotification.roomid));
 
-              // notification-2 기능: 내가 받을 알림만 실시간 수신
-              console.log(
-                "🔔 [실시간 새 알림 도착 완료]:",
-                newNotification?.message
-              );
-
-              // 현재 위치가 필요할 때 사용할 수 있게 locationRef 유지
+              // 현재 보고 있는 방의 알림은 팝업을 띄우지 않음 (UX 개선)
               const currentPath = locationRef.current.pathname;
-              console.log("현재 페이지:", currentPath);
+              const isCurrentlyInRoom = newNotification.roomid && currentPath.includes(`/rooms/${newNotification.roomid}`);
+
+              // issilent가 아니고, 전역 설정이 켜져있고, 해당 방이 차단되지 않았으며, 현재 그 방에 있지 않은 경우만 Toast 표시
+              if (newNotification.issilent !== true && isGlobalPopupEnabled && !isRoomMuted && !isCurrentlyInRoom) {
+                console.log("✅ [App.js] Toast 띄움 로직 실행:", newNotification.title);
+                setToast({
+                  message: newNotification.message,
+                  link: newNotification.link,
+                });
+
+                // 4초 후 자동 닫기
+                setTimeout(() => {
+                  if (isMounted) setToast(null);
+                }, 4000);
+              } else {
+                 console.log("🤫 [App.js] 조용한 알림 또는 차단된 알림 - Toast 안 띄움");
+              }
             }
           );
 
         channel.subscribe((status) => {
           if (!isMounted) return;
-
+          console.log("🚀 [App.js] Realtime 채널 상태:", status);
           if (status === "SUBSCRIBED") {
-            console.log(`📡 [실시간 알림 연결 성공] 채널명: ${uniqueChannelName}`);
             channelRef.current = channel;
-          }
-
-          if (status === "CHANNEL_ERROR") {
-            console.error("실시간 알림 채널 연결 실패");
-          }
-
-          if (status === "TIMED_OUT") {
-            console.error("실시간 알림 채널 연결 시간 초과");
           }
         });
       } catch (err) {
@@ -142,11 +152,16 @@ function NotificationListener() {
       }
     };
 
+    // auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      setupRealtimeNotification();
+    });
+
     setupRealtimeNotification();
 
     return () => {
       isMounted = false;
-
+      subscription.unsubscribe();
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
@@ -154,7 +169,46 @@ function NotificationListener() {
     };
   }, []);
 
-  return null;
+  if (!toast) return null;
+
+  return (
+    <div
+      onClick={() => {
+        if (toast.link) navigate(toast.link);
+        setToast(null);
+      }}
+      style={{
+        position: "fixed",
+        top: "20px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 10000,
+        backgroundColor: "rgba(0, 0, 0, 0.9)",
+        color: "#fff",
+        padding: "14px 24px",
+        borderRadius: "16px",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
+        cursor: "pointer",
+        display: "flex",
+        flexDirection: "column",
+        gap: "4px",
+        minWidth: "300px",
+        maxWidth: "90vw",
+        animation: "toastSlideIn 0.4s cubic-bezier(0.23, 1, 0.32, 1)",
+      }}
+    >
+      <div style={{ fontSize: "14px", fontWeight: "bold", display: "flex", alignItems: "center", gap: "6px" }}>
+        🔔 <span style={{ color: "#7c79ff" }}>새 소식</span>
+      </div>
+      <div style={{ fontSize: "13px", opacity: 0.9, lineHeight: "1.4" }}>{toast.message}</div>
+      <style>{`
+        @keyframes toastSlideIn {
+          from { transform: translate(-50%, -100%); opacity: 0; }
+          to { transform: translate(-50%, 0); opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
 }
 
 function App() {

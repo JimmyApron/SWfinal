@@ -322,12 +322,13 @@ export async function confirmVote(
     // 알림 생성
     try {
       const { data: userData } = await supabase.auth.getUser();
+      const scheduleTitle = appointmentTitle?.trim() ? `'${appointmentTitle}' ` : "";
       await createRoomNotifications({
         roomId: roomid,
         senderId: userData.user?.id,
         type: "schedule_confirmed",
         title: "🗓️ 일정 확정",
-        message: "확정된 일정이 추가되었습니다.",
+        message: `방에 ${scheduleTitle}일정이 확정되었습니다.`,
         link: `/rooms/${roomid}?tab=schedule`,
       });
     } catch (notifError) {

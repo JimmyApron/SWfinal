@@ -15,20 +15,13 @@ import {
 import { sendVoteClosedNotification } from "../notification/VoteNotification";
 import { addEventToGoogleCalendar } from "../../api/googleCalendarApi";
 import {
-<<<<<<< HEAD
   applyConfirmedLocationToSchedule,
   createLocationOnlyConfirmedSchedule,
   getRoomConfirmedSchedules,
   getMemberAvailabilities,
   getScheduleCandidates,
 } from "../../api/scheduleApi";
-import { getTopAvailableTimes, sortAvailableTimes, getTopConsecutiveDays } from "../../utils/scheduleUtils";
-=======
-  applyConfirmedLocationToSchedule,
-  createLocationOnlyConfirmedSchedule,
-} from "../../api/scheduleApi";
->>>>>>> origin/feature/merge5-y2
-import KakaoMapView from "../../components/map/KakaoMapView";
+import { getTopAvailableTimes, sortAvailableTimes, getTopConsecutiveDays } from "../../utils/scheduleUtils";import KakaoMapView from "../../components/map/KakaoMapView";
 import LocationPicker from "../../components/map/LocationPicker";
 
 function VoteDetailPage() {
@@ -84,7 +77,6 @@ function VoteDetailPage() {
   const [roomConfirmedSchedules] = useState([]);
   const [locationOnlySchedules, setLocationOnlySchedules] = useState([]);
   const [pendingGoToLocation, setPendingGoToLocation] = useState(false);
-<<<<<<< HEAD
   const [memberNicknames, setMemberNicknames] = useState({});
   const [showDetailAvailModal, setShowDetailAvailModal] = useState(false);
   const [detailAvailabilities, setDetailAvailabilities] = useState([]);
@@ -94,11 +86,8 @@ function VoteDetailPage() {
   const [detailAvailNDays, setDetailAvailNDays] = useState(2);
   const [detailSelectedMultiDays, setDetailSelectedMultiDays] = useState([]);
   const [createdLocationOnlySchedule, setCreatedLocationOnlySchedule] = useState(null);
-=======
-  const [createdLocationOnlySchedule, setCreatedLocationOnlySchedule] = useState(null);
   const [confirmedLocationSchedulePrompt, setConfirmedLocationSchedulePrompt] =
     useState(null);
->>>>>>> origin/feature/merge5-y2
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user));

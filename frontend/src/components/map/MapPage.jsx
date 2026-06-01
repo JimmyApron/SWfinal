@@ -834,7 +834,7 @@ function MapPage({ roomId }) {
           senderId: currentUserId || currentGuestId,
           type: 'arrival_approaching',
           title: '⚠️ 도착 10분 전!',
-          message: `${nickname}님이 약 ${durationMinutes}분 뒤에 목적지에 도착할 예정입니다.`,
+          message: `방에 ${nickname}님이 약 ${durationMinutes}분 뒤에 목적지에 도착할 예정입니다.`,
           link: `/rooms/${currentRoomId}?tab=location`,
         })
       } catch (error) {
@@ -867,7 +867,7 @@ function MapPage({ roomId }) {
           senderId: currentUserId || currentGuestId,
           type: 'arrival_completed',
           title: '✅ 도착 완료!',
-          message: `${nickname}님이 목적지에 도착했습니다!`,
+          message: `방에 ${nickname}님이 목적지에 도착했습니다!`,
           link: `/rooms/${currentRoomId}?tab=location`,
         })
       } catch (error) {
@@ -1108,7 +1108,7 @@ function MapPage({ roomId }) {
             senderId: currentUserId,
             type: 'middle_place_confirmed',
             title: '중간 장소가 확정되었습니다',
-            message: `${confirmedPlace.name}이(가) 중간 장소로 확정되었습니다.`,
+            message: `방에 ${confirmedPlace.name}이(가) 중간 장소로 확정되었습니다.`,
             link: `/rooms/${currentRoomId}?tab=location`,
           })
         }

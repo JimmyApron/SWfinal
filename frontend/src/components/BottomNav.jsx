@@ -73,33 +73,28 @@ function BottomNav() {
     };
 
     const channel = supabase
-      .channel(`bottom-notifications-${currentUserId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "notifications",
-          filter: `receiverid=eq.${currentUserId}`,
-        },
-        (payload) => {
-          if (payload.eventType === "INSERT") {
-            // [즉시 업데이트] 서버 통신 없이 리액트 상태만 즉시 +1
-            setUnreadCount((prev) => prev + 1);
-          } else {
-            // 읽음 처리나 삭제 시에는 서버와 동기화
-            reloadUnreadCount();
-          }
-        }
-      )
-      .subscribe();
+    .channel(`bottom-notifications-${currentUserId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "notifications",
+        filter: `receiverid=eq.${currentUserId}`,
+      },
+      () => {
+        // 알림에 변화(추가, 수정, 삭제)가 생기면 서버에서 최신 숫자를 다시 가져옴
+        reloadUnreadCount();
+      }
+    )
+    .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, [currentUserId, isGuestUser]);
 
-  const displayCount = unreadCount > 9 ? "9+" : `+${unreadCount}`;
+  const displayCount = unreadCount > 9 ? "9+" : `${unreadCount}`;
 
   const handleRestrictedClick = async (e, path) => {
     e.preventDefault();

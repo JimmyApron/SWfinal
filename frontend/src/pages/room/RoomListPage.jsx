@@ -35,6 +35,25 @@ function RoomListPage() {
 
   const [contextMenu, setContextMenu] = useState(null); // { x, y, roomId }
 
+  // 알림 끄기 관리 (Local Storage 사용)
+  const [mutedRooms, setMutedRooms] = useState(() => {
+    const saved = localStorage.getItem("muted_rooms");
+    return saved ? JSON.parse(saved) : []; // [roomId1, roomId2, ...]
+  });
+
+  const toggleMute = (roomId) => {
+    const isMuted = mutedRooms.includes(roomId);
+    let newMuted;
+    if (isMuted) {
+      newMuted = mutedRooms.filter(id => id !== roomId);
+    } else {
+      newMuted = [...mutedRooms, roomId];
+    }
+    setMutedRooms(newMuted);
+    localStorage.setItem("muted_rooms", JSON.stringify(newMuted));
+    setContextMenu(null);
+  };
+
   // 고정 토글 함수
   const togglePin = (roomId) => {
     const isPinned = !!pinnedRooms[roomId];
@@ -214,31 +233,50 @@ function RoomListPage() {
                 <div style={{
                   width: "50px",
                   height: "50px",
-                  borderRadius: "18px",
-                  backgroundColor: isPinned ? "var(--accent-color)" : "var(--btn-bg)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "24px",
                   marginRight: "15px",
                   flexShrink: 0,
-                  position: "relative"
+                  position: "relative",
                 }}>
-                  🏠
+                  {/* 이미지/아이콘 영역 (프레임) */}
+                  <div style={{
+                    width: "100%",
+                    height: "100%",
+                    borderRadius: "18px",
+                    backgroundColor: isPinned ? "var(--accent-color)" : "var(--btn-bg)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "24px",
+                    overflow: "hidden"
+                  }}>
+                    {room.roomimageurl ? (
+                      <img 
+                        src={room.roomimageurl} 
+                        alt={room.roomname} 
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+                      />
+                    ) : (
+                      "🏠"
+                    )}
+                  </div>
+
+                  {/* 핀 아이콘 (프레임 밖으로 튀어나오게 배치) */}
                   {isPinned && (
                     <div style={{
                       position: "absolute",
-                      bottom: "-2px",
-                      right: "-2px",
-                      backgroundColor: "var(--card-bg)",
+                      top: "-6px",
+                      right: "-6px",
+                      backgroundColor: "white",
                       borderRadius: "50%",
-                      width: "18px",
-                      height: "18px",
+                      width: "22px",
+                      height: "22px",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: "10px",
-                      boxShadow: "0 1px 4px rgba(0,0,0,0.2)"
+                      fontSize: "12px",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+                      border: "1.5px solid var(--accent-color)",
+                      zIndex: 1
                     }}>
                       📌
                     </div>
@@ -258,13 +296,18 @@ function RoomListPage() {
                       }}>
                         {room.roomname}
                       </span>
+                      
+                      {mutedRooms.includes(room.id) && (
+                        <span style={{ marginLeft: "4px", fontSize: "12px", opacity: 0.5 }}>🔕</span>
+                      )}
+
                       <span style={{ marginLeft: "6px", color: "var(--secondary-text)", fontSize: "14px", flexShrink: 0 }}>
                         {(room.room_members?.[0]?.count || 0) + (room.room_guests?.[0]?.count || 0)}
                       </span>
                       
                       {room.unreadCount > 0 && (
                         <div style={{
-                          backgroundColor: "#ff4d4f",
+                          backgroundColor: mutedRooms.includes(room.id) ? "#ccc" : "#ff4d4f",
                           color: "white",
                           borderRadius: "10px",
                           padding: "1px 6px",
@@ -330,6 +373,27 @@ function RoomListPage() {
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
           >
             {pinnedRooms[contextMenu.roomId] ? "📌 고정 해제" : "📌 상단 고정"}
+          </button>
+
+          <button 
+            onClick={() => toggleMute(contextMenu.roomId)}
+            style={{
+              width: "100%",
+              padding: "10px 16px",
+              border: "none",
+              background: "none",
+              textAlign: "left",
+              fontSize: "14px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              color: "var(--text-color)"
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "var(--btn-bg)"}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+          >
+            {mutedRooms.includes(contextMenu.roomId) ? "🔔 알림 켜기" : "🔕 알림 끄기"}
           </button>
         </div>
       )}

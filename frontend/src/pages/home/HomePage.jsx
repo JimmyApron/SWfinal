@@ -65,6 +65,7 @@ function HomePage() {
   const navigate = useNavigate();
 
   const [confirmedSchedules, setConfirmedSchedules] = useState([]);
+  const [isConfirmedExpanded, setIsConfirmedExpanded] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
 
   const [showFriendPanel, setShowFriendPanel] = useState(false);
@@ -670,17 +671,46 @@ function HomePage() {
             확정된 일정이 없습니다
           </p>
         ) : (
-          upcomingSchedules.map((schedule) => (
-            <ConfirmedScheduleCard
-              key={schedule.id}
-              schedule={schedule}
-              onClick={() =>
-                navigate("/confirmed-schedule", {
-                  state: { schedule },
-                })
-              }
-            />
-          ))
+          <div>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+              }}
+            >
+              {(isConfirmedExpanded ? upcomingSchedules : upcomingSchedules.slice(0, 3)).map((schedule) => (
+                <ConfirmedScheduleCard
+                  key={schedule.id}
+                  schedule={schedule}
+                  onClick={() =>
+                    navigate("/confirmed-schedule", {
+                      state: { schedule },
+                    })
+                  }
+                />
+              ))}
+            </div>
+            {upcomingSchedules.length > 3 && (
+              <button
+                onClick={() => setIsConfirmedExpanded(!isConfirmedExpanded)}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  marginTop: "8px",
+                  backgroundColor: "transparent",
+                  color: "var(--accent-color)",
+                  border: "1px solid var(--accent-color)",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                  fontWeight: "bold"
+                }}
+              >
+                {isConfirmedExpanded ? "접기 ▲" : `더보기 (+${upcomingSchedules.length - 3}) ▼`}
+              </button>
+            )}
+          </div>
         )}
       </div>
 

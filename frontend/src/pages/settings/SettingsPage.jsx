@@ -12,6 +12,17 @@ function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [loginProvider, setLoginProvider] = useState(null)
 
+  // 알림 팝업 전역 설정 (Local Storage 사용)
+  const [isNotifEnabled, setIsNotifEnabled] = useState(() => {
+    return localStorage.getItem("global_popup_enabled") !== "false";
+  });
+
+  const toggleNotif = () => {
+    const nextValue = !isNotifEnabled;
+    setIsNotifEnabled(nextValue);
+    localStorage.setItem("global_popup_enabled", String(nextValue));
+  };
+
   const handleLogout = async () => {
     if (!window.confirm('정말 로그아웃 하시겠습니까? 🥺')) return
 
@@ -236,6 +247,41 @@ function SettingsPage() {
             position: 'absolute',
             top: '3px',
             left: isDarkMode ? '27px' : '3px',
+            transition: 'left 0.3s',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+          }} />
+        </div>
+      </div>
+
+      {/* 알림 팝업 토글 */}
+      <div className="profile-info-group" style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        padding: '16px 0',
+        borderBottom: '1px solid var(--border-color)'
+      }}>
+        <label className="info-label" style={{ marginBottom: 0 }}>알림 팝업 🔔</label>
+        <div 
+          onClick={toggleNotif}
+          style={{
+            width: '50px',
+            height: '26px',
+            backgroundColor: isNotifEnabled ? '#7c79ff' : '#ccc',
+            borderRadius: '13px',
+            position: 'relative',
+            cursor: 'pointer',
+            transition: 'background-color 0.3s'
+          }}
+        >
+          <div style={{
+            width: '20px',
+            height: '20px',
+            backgroundColor: 'white',
+            borderRadius: '50%',
+            position: 'absolute',
+            top: '3px',
+            left: isNotifEnabled ? '27px' : '3px',
             transition: 'left 0.3s',
             boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
           }} />

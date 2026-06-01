@@ -180,12 +180,13 @@ export async function createConfirmedScheduleForRoom(roomId, schedule) {
 
   // 알림 생성
   try {
+    const scheduleTitle = schedule.title?.trim() ? `'${schedule.title}' ` : "";
     await createRoomNotifications({
       roomId,
       senderId: userId,
       type: "schedule_confirmed",
       title: "🗓️ 일정 확정",
-      message: "확정된 일정이 추가되었습니다.",
+      message: `방에 ${scheduleTitle}일정이 확정되었습니다.`,
       link: `/rooms/${roomId}?tab=schedule`,
     });
   } catch (notifError) {
@@ -355,12 +356,13 @@ export async function createLocationOnlyConfirmedSchedule(
   // 알림 생성
   try {
     const { data: userData } = await supabase.auth.getUser();
+    const placeName = location.placename ? `'${location.placename}' ` : "";
     await createRoomNotifications({
       roomId: location.roomid,
       senderId: userData.user?.id,
       type: "schedule_confirmed",
       title: "🗓️ 일정 확정",
-      message: "확정된 일정이 추가되었습니다.",
+      message: `방에 ${placeName}장소가 확정되었습니다.`,
       link: `/rooms/${location.roomid}?tab=schedule`,
     });
   } catch (notifError) {
@@ -398,7 +400,6 @@ export async function updateConfirmedScheduleLocation(
   if (error) {
     console.error("위치 저장 실패 상세:", JSON.stringify(error));
     throw new Error("위치 저장 실패");
-<<<<<<< HEAD
   }
 }
 
@@ -425,11 +426,6 @@ export async function updateConfirmedScheduleTiming(
   if (error) {
     console.error("확정 일정 날짜 및 시간 수정 실패:", error);
     throw new Error("확정 일정 날짜 및 시간 수정 실패");
-  }
-}
-
-export async function cancelConfirmedSchedule(scheduleId, voteid) {
-=======
   }
 }
 
@@ -450,34 +446,9 @@ export async function clearConfirmedScheduleLocation(scheduleId) {
   }
 }
 
-export async function updateConfirmedScheduleTiming(
-  scheduleId,
-  { title, date, starttime, endtime, isallday }
-) {
-  const updateData = {
-    date,
-    starttime: isallday ? null : starttime || null,
-    endtime: isallday ? null : endtime || null,
-    isallday,
-  };
 
-  if (title !== undefined) {
-    updateData.title = title?.trim() || null;
-  }
-
-  const { error } = await supabase
-    .from("confirmed_schedules")
-    .update(updateData)
-    .eq("id", scheduleId);
-
-  if (error) {
-    console.error("확정 일정 날짜 및 시간 수정 실패:", error);
-    throw new Error("확정 일정 날짜 및 시간 수정 실패");
-  }
-}
 
 export async function cancelConfirmedSchedule(scheduleId, voteid) {
->>>>>>> origin/feature/merge5-y2
   const { error: deleteError } = await supabase
     .from("confirmed_schedules")
     .delete()

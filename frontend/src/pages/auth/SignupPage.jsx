@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { sendEmailOtpApi, verifyEmailOtpApi, signupApi, checkNicknameDuplicateApi } from '../../api/authApi'
+import { sendEmailOtpApi, verifyEmailOtpApi, signupApi, checkNicknameDuplicateApi, checkEmailDuplicateApi } from '../../api/authApi'
 import { FaEye, FaEyeSlash } from 'react-icons/fa'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
@@ -8,6 +8,7 @@ function SignupPage() {
   const navigate = useNavigate()
 
   const [email, setEmail] = useState('')
+  const [isEmailChecked, setIsEmailChecked] = useState(false)
   const [otpCode, setOtpCode] = useState('')
   const [otpSent, setOtpSent] = useState(false)
   const [emailVerified, setEmailVerified] = useState(false)
@@ -49,27 +50,51 @@ function SignupPage() {
 
   const handleEmailChange = (e) => {
     setEmail(e.target.value)
+    setIsEmailChecked(false)
     setOtpSent(false)
     setEmailVerified(false)
     setOtpCode('')
     setMessage('')
   }
 
-  const handleSendOtp = async () => {
+  const handleCheckEmail = async () => {
     if (!email) { setMessage('이메일을 입력해주세요.'); return }
     if (!emailRegex.test(email)) { setMessage('⚠️ 올바른 이메일 형식이 아닙니다. (예: user@example.com)'); return }
+    setLoading(true)
+    setMessage('중복 확인 중...')
+    try {
+      const isDuplicate = await checkEmailDuplicateApi(email.trim())
+      if (isDuplicate) {
+        setIsEmailChecked(false)
+        setMessage('❌ 이미 사용 중인 이메일입니다.')
+      } else {
+        setIsEmailChecked(true)
+        setMessage('✅ 사용 가능한 이메일입니다.')
+      }
+    } catch (error) {
+      setIsEmailChecked(false)
+      setMessage('❌ 중복 확인 실패: ' + error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
+  const handleSendOtp = async () => {
+    if (!isEmailChecked) { setMessage('⚠️ 먼저 이메일 중복 확인을 해주세요.'); return }
     setLoading(true)
     setMessage('인증 코드 전송 중...')
-
     try {
       await sendEmailOtpApi(email.trim())
       setOtpSent(true)
       setMessage('📧 인증 코드를 이메일로 전송했습니다. 6자리 코드를 입력해주세요.')
     } catch (error) {
-      setMessage(error.message === '이미 사용 중인 이메일입니다.'
-        ? '❌ 이미 사용 중인 이메일입니다.'
-        : '인증 코드 전송에 실패했습니다. 다시 시도해주세요.')
+      if (error.status === 429 || error.message?.includes('rate limit') || error.message?.includes('429')) {
+        setMessage('⚠️ 인증 코드 요청이 너무 많습니다. 1~5분 후 다시 시도해주세요.')
+      } else if (error.message === '이미 사용 중인 이메일입니다.') {
+        setMessage('❌ 이미 사용 중인 이메일입니다.')
+      } else {
+        setMessage('❌ 인증 코드 전송 실패: ' + (error.message || '잠시 후 다시 시도해주세요.'))
+      }
     } finally {
       setLoading(false)
     }
@@ -140,8 +165,8 @@ function SignupPage() {
       <h2>회원가입</h2>
 
       <form onSubmit={handleSignup}>
-        {/* 이메일 + 인증하기 */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+        {/* 이메일 + 중복 확인 */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
           <input
             type="email"
             placeholder="이메일"
@@ -151,12 +176,24 @@ function SignupPage() {
           />
           <button
             type="button"
-            onClick={handleSendOtp}
+            onClick={handleCheckEmail}
             disabled={loading || emailVerified}
           >
-            {emailVerified ? '인증완료' : otpSent ? '재전송' : '인증하기'}
+            {emailVerified ? '인증완료' : '중복 확인'}
           </button>
         </div>
+
+        {/* 중복 확인 후 인증하기 버튼 */}
+        {isEmailChecked && !emailVerified && (
+          <button
+            type="button"
+            onClick={handleSendOtp}
+            disabled={loading}
+            style={{ width: '100%', marginBottom: '10px', padding: '8px', backgroundColor: '#7c79ff', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}
+          >
+            {otpSent ? '인증 코드 재전송' : '인증하기'}
+          </button>
+        )}
 
         {/* OTP 코드 입력 */}
         {otpSent && !emailVerified && (
