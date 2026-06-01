@@ -233,40 +233,50 @@ function RoomListPage() {
                 <div style={{
                   width: "50px",
                   height: "50px",
-                  borderRadius: "18px",
-                  backgroundColor: isPinned ? "var(--accent-color)" : "var(--btn-bg)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "24px",
                   marginRight: "15px",
                   flexShrink: 0,
                   position: "relative",
-                  overflow: "hidden"
                 }}>
-                  {room.roomimageurl ? (
-                    <img 
-                      src={room.roomimageurl} 
-                      alt={room.roomname} 
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }} 
-                    />
-                  ) : (
-                    "🏠"
-                  )}
+                  {/* 이미지/아이콘 영역 (프레임) */}
+                  <div style={{
+                    width: "100%",
+                    height: "100%",
+                    borderRadius: "18px",
+                    backgroundColor: isPinned ? "var(--accent-color)" : "var(--btn-bg)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "24px",
+                    overflow: "hidden"
+                  }}>
+                    {room.roomimageurl ? (
+                      <img 
+                        src={room.roomimageurl} 
+                        alt={room.roomname} 
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+                      />
+                    ) : (
+                      "🏠"
+                    )}
+                  </div>
+
+                  {/* 핀 아이콘 (프레임 밖으로 튀어나오게 배치) */}
                   {isPinned && (
                     <div style={{
                       position: "absolute",
-                      bottom: "-2px",
-                      right: "-2px",
-                      backgroundColor: "var(--card-bg)",
+                      top: "-6px",
+                      right: "-6px",
+                      backgroundColor: "white",
                       borderRadius: "50%",
-                      width: "18px",
-                      height: "18px",
+                      width: "22px",
+                      height: "22px",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: "10px",
-                      boxShadow: "0 1px 4px rgba(0,0,0,0.2)"
+                      fontSize: "12px",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+                      border: "1.5px solid var(--accent-color)",
+                      zIndex: 1
                     }}>
                       📌
                     </div>
