@@ -38,6 +38,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const [confirmedSchedules, setConfirmedSchedules] = useState([]);
   const [additionalLocations, setAdditionalLocations] = useState([]);
   const [showConfirmedForm, setShowConfirmedForm] = useState(false);
+  const [showAddMethodSheet, setShowAddMethodSheet] = useState(false);
   const [candidateViewMode, setCandidateViewMode] = useState("timetable"); // "timetable" | "calendar"
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
@@ -452,10 +453,18 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
 
         setCurrentUser(user);
 
-        const candidateData = await getScheduleCandidates(roomId);
+        let candidateData = await getScheduleCandidates(roomId);
         const memberData = await getRoomMembers(roomId);
         const guestData = await getRoomGuests(roomId);
         const availabilityData = await getMemberAvailabilities(roomId);
+
+        // 오늘 이전 후보 자동 삭제 (확정일정과 무관)
+        const today = new Date().toISOString().slice(0, 10);
+        const expired = candidateData.filter((c) => c.date && c.date < today);
+        if (expired.length > 0) {
+          await Promise.all(expired.map((c) => deleteScheduleCandidate(c.id)));
+          candidateData = await getScheduleCandidates(roomId);
+        }
 
         setCandidates(candidateData);
         setMembers(memberData);
@@ -478,12 +487,52 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
 
   return (
     <div>
+      {/* 일정 추가 방법 선택 바텀시트 */}
+      {showAddMethodSheet && (
+        <>
+          <div
+            onClick={() => setShowAddMethodSheet(false)}
+            style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", zIndex: 200 }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              top: "50%", left: "50%",
+              transform: "translate(-50%, -50%)",
+              backgroundColor: "#fff", borderRadius: "16px",
+              padding: "24px 20px", zIndex: 201,
+              width: "280px",
+            }}
+          >
+            <p style={{ margin: "0 0 16px", fontWeight: "bold", fontSize: "16px", textAlign: "center" }}>일정 추가 방법</p>
+            <button
+              onClick={() => { setShowAddMethodSheet(false); setShowConfirmedForm(true); }}
+              style={{ width: "100%", padding: "14px", marginBottom: "10px", backgroundColor: "#f9f9ff", border: "1px solid #d8d8ff", borderRadius: "12px", fontSize: "15px", color: "#333", cursor: "pointer", textAlign: "left" }}
+            >
+              ✏️ 직접 입력
+            </button>
+            <button
+              onClick={() => { setShowAddMethodSheet(false); navigate(`/rooms/${roomId}/vote-create`, { state: { votePurpose: "schedule", voteType: "date", returnTab: "schedule" } }); }}
+              style={{ width: "100%", padding: "14px", backgroundColor: "#f9f9ff", border: "1px solid #d8d8ff", borderRadius: "12px", fontSize: "15px", color: "#333", cursor: "pointer", textAlign: "left" }}
+            >
+              🗳️ 투표로 정하기
+            </button>
+          </div>
+        </>
+      )}
+
       {/* Confirmed schedules section */}
       <div style={{ marginBottom: "20px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
           <h2 style={{ margin: 0 }}>확정된 일정</h2>
           <button
-            onClick={() => setShowConfirmedForm((v) => !v)}
+            onClick={() => {
+              if (showConfirmedForm) {
+                setShowConfirmedForm(false);
+              } else {
+                setShowAddMethodSheet(true);
+              }
+            }}
             style={{ padding: "6px 14px", backgroundColor: "#7c79ff", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "13px" }}
           >
             {showConfirmedForm ? "취소" : "+ 일정 추가"}

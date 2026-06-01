@@ -284,7 +284,7 @@ function CalendarPage() {
     // 켤 때 기존 일정 일괄 추가
     try {
       const [confirmedList, personalList] = await Promise.all([
-        getMyConfirmedSchedules(currentUser.id),
+        getMyConfirmedSchedules(currentUser.id, { includeAll: true }),
         getPersonalEvents(currentUser.id),
       ]);
 
@@ -429,7 +429,7 @@ function CalendarPage() {
   useEffect(() => {
     if (!currentUser) return;
 
-    getMyConfirmedSchedules(currentUser.id)
+    getMyConfirmedSchedules(currentUser.id, { includeAll: true })
       .then(async (data) => {
         if (!data || !data.length) { setSchedules([]); return; }
         const roomIds = [...new Set(data.map((s) => s.roomid))];

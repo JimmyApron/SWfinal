@@ -118,9 +118,24 @@ function AvailableResultPage() {
         {/* 당일 모드 */}
         {mode === "당일" && (
           <>
-            <p style={{ margin: "0 0 12px", fontSize: "13px", color: "#888" }}>
-              사람 많은 순 → 오래 있는 순으로 순위를 매깁니다.
-            </p>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <p style={{ margin: 0, fontSize: "13px", color: "#888" }}>
+                사람 많은 순 → 오래 있는 순으로 순위를 매깁니다.
+              </p>
+              {topTimes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    selectedTimes.length === topTimes.length
+                      ? setSelectedTimes([])
+                      : setSelectedTimes([...topTimes])
+                  }
+                  style={{ fontSize: "13px", color: "#7c79ff", background: "none", border: "none", cursor: "pointer", whiteSpace: "nowrap", padding: 0 }}
+                >
+                  {selectedTimes.length === topTimes.length ? "모두 해제" : "모두 선택"}
+                </button>
+              )}
+            </div>
 
             {topTimes.length === 0 && (
               <p style={{ color: "#aaa", textAlign: "center", marginTop: "40px" }}>가능한 시간이 없습니다.</p>
@@ -200,11 +215,25 @@ function AvailableResultPage() {
               <span style={{ fontSize: "14px", color: "#555" }}>일</span>
             </div>
 
+            {consecutiveResults.length > 0 && (
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    selectedMultiDays.length === consecutiveResults.length
+                      ? setSelectedMultiDays([])
+                      : setSelectedMultiDays([...consecutiveResults])
+                  }
+                  style={{ fontSize: "13px", color: "#7c79ff", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                >
+                  {selectedMultiDays.length === consecutiveResults.length ? "모두 해제" : "모두 선택"}
+                </button>
+              </div>
+            )}
+
             {consecutiveResults.length === 0 && (
               <p style={{ color: "#aaa", textAlign: "center", marginTop: "40px" }}>
-                {candidates.length === 0
-                  ? "후보 일정이 없습니다."
-                  : `${nDays}일 연속 가능한 조합이 없습니다.`}
+                {`${nDays}일 연속 가능한 조합이 없습니다.`}
               </p>
             )}
 

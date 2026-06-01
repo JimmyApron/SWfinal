@@ -113,7 +113,7 @@ export async function deleteScheduleCandidate(candidateId) {
   }
 }
 
-export async function getMyConfirmedSchedules(userId, { includeLocationOnly = false } = {}) {
+export async function getMyConfirmedSchedules(userId, { includeLocationOnly = false, includeAll = false } = {}) {
   const { data: memberships, error: memberError } = await supabase
     .from("room_members")
     .select("roomid, rooms(roomname)")
@@ -124,13 +124,18 @@ export async function getMyConfirmedSchedules(userId, { includeLocationOnly = fa
   const roomIds = memberships.map((m) => m.roomid);
   if (roomIds.length === 0) return [];
 
+  const today = new Date().toISOString().slice(0, 10);
+  let schedulesQuery = supabase
+    .from("confirmed_schedules")
+    .select("*")
+    .in("roomid", roomIds);
+  if (!includeAll) {
+    schedulesQuery = schedulesQuery.or(`date.gte.${today},date.is.null`);
+  }
+  schedulesQuery = schedulesQuery.order("date", { ascending: true });
+
   const [{ data, error }, { data: dismissed }] = await Promise.all([
-    supabase
-      .from("confirmed_schedules")
-      .select("*")
-      .in("roomid", roomIds)
-      .or(`date.gte.${new Date().toISOString().slice(0, 10)},date.is.null`)
-      .order("date", { ascending: true }),
+    schedulesQuery,
     supabase
       .from("dismissed_schedules")
       .select("scheduleid")

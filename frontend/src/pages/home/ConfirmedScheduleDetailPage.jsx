@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabaseClient";
 import {
   addAdditionalConfirmedLocation,
   cancelConfirmedSchedule,
+  createConfirmedScheduleForRoom,
   dismissConfirmedSchedule,
   getAdditionalConfirmedLocations,
   updateConfirmedScheduleTiming,
@@ -85,6 +86,7 @@ function ConfirmedScheduleDetailPage() {
   );
   const [memberLocations, setMemberLocations] = useState([]);
   const [memberRoutePaths, setMemberRoutePaths] = useState([]);
+  const [voteExists, setVoteExists] = useState(null); // null=로딩중, true/false
 
   useEffect(() => {
     if (!schedule) {
@@ -98,6 +100,17 @@ function ConfirmedScheduleDetailPage() {
       } = await supabase.auth.getUser();
 
       setCurrentUser(user);
+
+      if (schedule.voteid) {
+        const { data: voteData } = await supabase
+          .from("votes")
+          .select("id")
+          .eq("id", schedule.voteid)
+          .maybeSingle();
+        setVoteExists(Boolean(voteData));
+      } else {
+        setVoteExists(false);
+      }
 
       const [{ data: roomData }, { data: scheduleData }] = await Promise.all([
         supabase
@@ -678,11 +691,18 @@ function ConfirmedScheduleDetailPage() {
             <button
               type="button"
               onClick={() =>
-                navigate(`/rooms/${schedule.roomid}?tab=schedule`)
+                navigate(`/rooms/${schedule.roomid}/vote-create`, {
+                  state: {
+                    fromScheduleId: schedule.id,
+                    votePurpose: "schedule",
+                    voteType: "date",
+                    returnTab: "schedule",
+                  },
+                })
               }
               style={shortcutButtonStyle}
             >
-              일정 탭으로 이동
+              새 투표 만들기
             </button>
           </div>
 
@@ -818,7 +838,8 @@ function ConfirmedScheduleDetailPage() {
           >
             직접 수정
           </button>
-          {schedule.voteid ? (
+          {/* 케이스 1: 투표로 생성 + 투표 존재 */}
+          {schedule.voteid && voteExists === true && (
             <button
               type="button"
               onClick={() =>
@@ -828,15 +849,43 @@ function ConfirmedScheduleDetailPage() {
             >
               투표로 돌아가기
             </button>
-          ) : (
+          )}
+          {/* 케이스 2: 투표로 생성 + 투표 삭제됨 */}
+          {schedule.voteid && voteExists === false && (
             <button
               type="button"
               onClick={() =>
-                navigate(`/rooms/${schedule.roomid}?tab=schedule`)
+                navigate(`/rooms/${schedule.roomid}/vote-create`, {
+                  state: {
+                    fromScheduleId: schedule.id,
+                    votePurpose: "schedule",
+                    voteType: "date",
+                    returnTab: "schedule",
+                  },
+                })
+              }
+              style={{ ...shortcutButtonStyle, color: "#f44", borderColor: "#ffcccc" }}
+            >
+              투표가 삭제됨. 새 투표 만들기
+            </button>
+          )}
+          {/* 케이스 3: 직접 생성 */}
+          {!schedule.voteid && (
+            <button
+              type="button"
+              onClick={() =>
+                navigate(`/rooms/${schedule.roomid}/vote-create`, {
+                  state: {
+                    fromScheduleId: schedule.id,
+                    votePurpose: "schedule",
+                    voteType: "date",
+                    returnTab: "schedule",
+                  },
+                })
               }
               style={shortcutButtonStyle}
             >
-              일정 탭으로 이동
+              새 투표 만들기
             </button>
           )}
         </div>

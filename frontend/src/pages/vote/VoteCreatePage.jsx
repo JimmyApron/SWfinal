@@ -4,6 +4,8 @@ import { supabase } from "../../lib/supabaseClient";
 import { createVote } from "../../api/voteApi";
 import { sendVoteNotification } from "../notification/VoteNotification";
 import LocationPicker from "../../components/map/LocationPicker";
+import { getMemberAvailabilities, getScheduleCandidates } from "../../api/scheduleApi";
+import { getTopAvailableTimes, sortAvailableTimes, getTopConsecutiveDays } from "../../utils/scheduleUtils";
 
 function VoteCreatePage() {
   const { roomid } = useParams();
@@ -21,8 +23,16 @@ function VoteCreatePage() {
 
   const returnTab = location.state?.returnTab || "vote";
   const locationKind = location.state?.locationKind || null;
+  const fromScheduleId = location.state?.fromScheduleId || null;
 
   const [currentUser, setCurrentUser] = useState(null);
+  const [showAvailModal, setShowAvailModal] = useState(false);
+  const [availabilities, setAvailabilities] = useState([]);
+  const [candidates, setCandidates] = useState([]);
+  const [selectedAvailSlots, setSelectedAvailSlots] = useState([]);
+  const [availMode, setAvailMode] = useState("당일");
+  const [availNDays, setAvailNDays] = useState(2);
+  const [selectedMultiDays, setSelectedMultiDays] = useState([]);
   const [nickname, setNickname] = useState("");
   const [roomName, setRoomName] = useState("");
 
@@ -197,6 +207,66 @@ function VoteCreatePage() {
     setOpenPlacePickerIndex(null);
   };
 
+  const handleLoadAvailabilities = async () => {
+    try {
+      const [avail, cands] = await Promise.all([
+        getMemberAvailabilities(roomid),
+        getScheduleCandidates(roomid),
+      ]);
+      setAvailabilities(avail);
+      setCandidates(cands);
+      setSelectedAvailSlots([]);
+      setSelectedMultiDays([]);
+      setAvailMode("당일");
+      setAvailNDays(2);
+      setShowAvailModal(true);
+    } catch {
+      alert("가능 시간 불러오기 실패");
+    }
+  };
+
+  const handleAddAvailSlotsAsOptions = () => {
+    let newOpts = [];
+
+    if (availMode === "당일") {
+      newOpts = selectedAvailSlots.map((slot) => ({
+        optiontype: "date",
+        optiontext: "",
+        optiondate: slot.date,
+        starttime: slot.starttime,
+        endtime: slot.endtime,
+        isallday: false,
+        availablecount: slot.availableCount || 0,
+        placename: "", placeaddress: "", placelat: "", placelng: "", kakaomapurl: "",
+      }));
+    } else {
+      newOpts = selectedMultiDays.flatMap((r) =>
+        r.dates.map((date) => ({
+          optiontype: "date",
+          optiontext: "",
+          optiondate: date,
+          starttime: null,
+          endtime: null,
+          isallday: true,
+          availablecount: r.availableCount || 0,
+          placename: "", placeaddress: "", placelat: "", placelng: "", kakaomapurl: "",
+        }))
+      );
+    }
+
+    const existingKeys = new Set(
+      options.filter((o) => o.optiondate).map((o) => `${o.optiondate}|${o.starttime || ""}`)
+    );
+    const filtered = newOpts.filter(
+      (o) => !existingKeys.has(`${o.optiondate}|${o.starttime || ""}`)
+    );
+    setOptions((prev) => {
+      const base = prev.filter((o) => o.optiondate || o.optiontext);
+      return [...base, ...filtered];
+    });
+    setShowAvailModal(false);
+  };
+
   const handleAddOption = () => {
     const currentType = options[0]?.optiontype || "text";
     setOptions([...options, makeEmptyOption(currentType)]);
@@ -290,6 +360,14 @@ function VoteCreatePage() {
       return;
     }
 
+    // 기존 확정일정에서 "새 투표 만들기"로 진입한 경우 → 확정일정의 voteid를 새 투표로 연결
+    if (fromScheduleId && createdVoteId) {
+      await supabase
+        .from("confirmed_schedules")
+        .update({ voteid: createdVoteId })
+        .eq("id", fromScheduleId);
+    }
+
     await sendVoteNotification({
       roomid,
       title,
@@ -306,8 +384,184 @@ function VoteCreatePage() {
     navigate(`/rooms/${roomid}?tab=vote`);
   };
 
+  const availTopTimes = sortAvailableTimes(getTopAvailableTimes(availabilities), "count");
+  const availConsecutive = getTopConsecutiveDays(availabilities, candidates, availNDays);
+
+  const makeAvailKey = (t) => `${t.date}_${t.starttime}_${t.endtime}`;
+  const makeMultiKey = (r) => r.dates.join("_");
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr + "T00:00:00");
+    const days = ["일", "월", "화", "수", "목", "금", "토"];
+    return `${dateStr} (${days[d.getDay()]})`;
+  };
+
+  const availSelectedCount = availMode === "당일" ? selectedAvailSlots.length : selectedMultiDays.length;
+
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#fff" }}>
+      {showAvailModal && (
+        <>
+          <div
+            onClick={() => setShowAvailModal(false)}
+            style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", zIndex: 300 }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              bottom: 0, left: 0, right: 0,
+              backgroundColor: "#fff",
+              borderRadius: "20px 20px 0 0",
+              padding: "0 0 80px",
+              zIndex: 301,
+              maxHeight: "80vh",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            {/* 헤더 */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 20px 0" }}>
+              <span style={{ fontSize: "16px", fontWeight: "bold" }}>가능 시간 선택</span>
+              <button onClick={() => setShowAvailModal(false)} style={{ border: "none", background: "none", fontSize: "20px", cursor: "pointer", color: "#aaa" }}>✕</button>
+            </div>
+
+            {/* 당일 / 일별 탭 */}
+            <div style={{ display: "flex", borderBottom: "1px solid #eee", margin: "12px 0 0" }}>
+              {["당일", "일별"].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => { setAvailMode(tab); setSelectedAvailSlots([]); setSelectedMultiDays([]); }}
+                  style={{
+                    flex: 1, padding: "10px", border: "none",
+                    borderBottom: availMode === tab ? "2px solid #7c79ff" : "2px solid transparent",
+                    backgroundColor: "transparent",
+                    color: availMode === tab ? "#7c79ff" : "#888",
+                    fontWeight: availMode === tab ? "bold" : "normal",
+                    fontSize: "15px", cursor: "pointer",
+                  }}
+                >{tab}</button>
+              ))}
+            </div>
+
+            {/* 일별 N일 선택 */}
+            {availMode === "일별" && (
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px 20px 0" }}>
+                <span style={{ fontSize: "14px", fontWeight: "600", color: "#333" }}>며칠 연속?</span>
+                <input
+                  type="number" min="2" max="30" value={availNDays}
+                  onChange={(e) => { setAvailNDays(Math.max(2, Number(e.target.value))); setSelectedMultiDays([]); }}
+                  style={{ width: "60px", padding: "6px 10px", fontSize: "15px", border: "1px solid #ddd", borderRadius: "8px", textAlign: "center" }}
+                />
+                <span style={{ fontSize: "14px", color: "#555" }}>일</span>
+              </div>
+            )}
+
+            {/* 리스트 */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "12px 20px 0" }}>
+              {availMode === "당일" && availTopTimes.length > 0 && (
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      selectedAvailSlots.length === availTopTimes.length
+                        ? setSelectedAvailSlots([])
+                        : setSelectedAvailSlots([...availTopTimes])
+                    }
+                    style={{ fontSize: "13px", color: "#7c79ff", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                  >
+                    {selectedAvailSlots.length === availTopTimes.length ? "모두 해제" : "모두 선택"}
+                  </button>
+                </div>
+              )}
+              {availMode === "당일" && (
+                availTopTimes.length === 0
+                  ? <p style={{ color: "#aaa", textAlign: "center", marginTop: "30px" }}>가능한 시간이 없습니다.</p>
+                  : availTopTimes.map((time, index) => {
+                    const key = makeAvailKey(time);
+                    const checked = selectedAvailSlots.some((s) => makeAvailKey(s) === key);
+                    const hours = Math.floor(time.duration / 60);
+                    const mins = time.duration % 60;
+                    return (
+                      <label key={index} style={{ display: "flex", alignItems: "flex-start", gap: "12px", border: `1px solid ${checked ? "#7c79ff" : "#eee"}`, borderRadius: "12px", padding: "14px", marginBottom: "10px", backgroundColor: checked ? "#f5f5ff" : "#fff", cursor: "pointer" }}>
+                        <input type="checkbox" checked={checked} onChange={() => setSelectedAvailSlots((prev) => checked ? prev.filter((s) => makeAvailKey(s) !== key) : [...prev, time])} style={{ marginTop: "3px", accentColor: "#7c79ff" }} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontWeight: "bold", fontSize: "15px" }}>{index + 1}순위</span>
+                            <span style={{ fontSize: "12px", backgroundColor: "#7c79ff", color: "#fff", borderRadius: "10px", padding: "2px 8px" }}>{time.availableCount}명 가능</span>
+                          </div>
+                          <p style={{ margin: "6px 0 2px", fontSize: "14px", color: "#333" }}>{formatDate(time.date)}</p>
+                          <p style={{ margin: 0, fontSize: "13px", color: "#666" }}>
+                            {time.starttime} ~ {time.endtime}
+                            <span style={{ marginLeft: "8px", color: "#7c79ff" }}>({hours > 0 ? `${hours}시간 ` : ""}{mins > 0 ? `${mins}분` : ""})</span>
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })
+              )}
+              {availMode === "일별" && availConsecutive.length > 0 && (
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      selectedMultiDays.length === availConsecutive.length
+                        ? setSelectedMultiDays([])
+                        : setSelectedMultiDays([...availConsecutive])
+                    }
+                    style={{ fontSize: "13px", color: "#7c79ff", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                  >
+                    {selectedMultiDays.length === availConsecutive.length ? "모두 해제" : "모두 선택"}
+                  </button>
+                </div>
+              )}
+              {availMode === "일별" && (
+                availConsecutive.length === 0
+                  ? <p style={{ color: "#aaa", textAlign: "center", marginTop: "30px" }}>{availNDays}일 연속 가능한 조합이 없습니다.</p>
+                  : availConsecutive.map((result, index) => {
+                    const key = makeMultiKey(result);
+                    const checked = selectedMultiDays.some((s) => makeMultiKey(s) === key);
+                    return (
+                      <label key={index} style={{ display: "flex", alignItems: "flex-start", gap: "12px", border: `1px solid ${checked ? "#7c79ff" : "#eee"}`, borderRadius: "12px", padding: "14px", marginBottom: "10px", backgroundColor: checked ? "#f5f5ff" : "#fff", cursor: "pointer" }}>
+                        <input type="checkbox" checked={checked} onChange={() => setSelectedMultiDays((prev) => checked ? prev.filter((s) => makeMultiKey(s) !== key) : [...prev, result])} style={{ marginTop: "3px", accentColor: "#7c79ff" }} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontWeight: "bold", fontSize: "15px" }}>{index + 1}순위</span>
+                            <span style={{ fontSize: "12px", backgroundColor: "#7c79ff", color: "#fff", borderRadius: "10px", padding: "2px 8px" }}>{result.availableCount}명 가능</span>
+                          </div>
+                          <p style={{ margin: "6px 0 4px", fontSize: "14px", color: "#333" }}>{formatDate(result.startDate)} ~ {formatDate(result.endDate)}</p>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                            {result.dates.map((d) => (
+                              <span key={d} style={{ fontSize: "12px", backgroundColor: "#f0f0ff", color: "#7c79ff", borderRadius: "6px", padding: "2px 7px" }}>{d}</span>
+                            ))}
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })
+              )}
+            </div>
+
+            {/* 추가 버튼 */}
+            <div style={{ padding: "12px 20px 0" }}>
+              <button
+                onClick={handleAddAvailSlotsAsOptions}
+                disabled={availSelectedCount === 0}
+                style={{
+                  width: "100%", padding: "13px",
+                  backgroundColor: availSelectedCount > 0 ? "#7c79ff" : "#eee",
+                  color: availSelectedCount > 0 ? "#fff" : "#aaa",
+                  border: "none", borderRadius: "10px", fontSize: "15px", fontWeight: "bold",
+                  cursor: availSelectedCount > 0 ? "pointer" : "default",
+                }}
+              >
+                {availSelectedCount > 0 ? `${availSelectedCount}개 후보로 추가` : "선택 후 추가"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       <div
         style={{
           height: "56px",
@@ -632,6 +886,27 @@ function VoteCreatePage() {
             </button>
           </div>
         ))}
+
+        {votetype === "schedule" && (
+          <button
+            type="button"
+            onClick={handleLoadAvailabilities}
+            style={{
+              width: "100%",
+              padding: "12px",
+              marginBottom: "8px",
+              border: "1px solid #d8d8ff",
+              borderRadius: "10px",
+              backgroundColor: "#f9f9ff",
+              color: "#5c58d8",
+              fontSize: "14px",
+              cursor: "pointer",
+              fontWeight: "600",
+            }}
+          >
+            📅 가능 시간 불러오기
+          </button>
+        )}
 
         <button
           type="button"
