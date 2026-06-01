@@ -332,6 +332,22 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     }]);
 
     if (error) { alert("확정 일정 추가 실패"); return; }
+    
+    // 📢 확정 일정 추가 알림 전송
+    try {
+      const scheduleTitle = confirmedTitle?.trim() ? `'${confirmedTitle}' ` : "";
+      await createRoomNotifications({
+        roomId: Number(roomId),
+        senderId: currentUser?.id,
+        type: "schedule_confirmed",
+        title: "🗓️ 일정 확정",
+        message: `[${roomName}] 방에 ${scheduleTitle}일정이 확정되었습니다.`,
+        link: `/rooms/${roomId}?tab=schedule`,
+      });
+    } catch (notifError) {
+      console.error("확정 일정 알림 생성 실패:", notifError);
+    }
+
     await updateRoomLastActivity(roomId);
     setConfirmedTitle(""); setConfirmedDate(""); setConfirmedStartTime(""); setConfirmedEndTime(""); setConfirmedIsAllDay(false);
     setShowConfirmedForm(false);

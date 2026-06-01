@@ -175,12 +175,13 @@ export async function createConfirmedScheduleForRoom(roomId, schedule) {
 
   // 알림 생성
   try {
+    const scheduleTitle = schedule.title?.trim() ? `'${schedule.title}' ` : "";
     await createRoomNotifications({
       roomId,
       senderId: userId,
       type: "schedule_confirmed",
       title: "🗓️ 일정 확정",
-      message: "확정된 일정이 추가되었습니다.",
+      message: `방에 ${scheduleTitle}일정이 확정되었습니다.`,
       link: `/rooms/${roomId}?tab=schedule`,
     });
   } catch (notifError) {
@@ -316,12 +317,13 @@ export async function createLocationOnlyConfirmedSchedule(location, isMiddlePlac
   // 알림 생성
   try {
     const { data: userData } = await supabase.auth.getUser();
+    const placeName = location.placename ? `'${location.placename}' ` : "";
     await createRoomNotifications({
       roomId: location.roomid,
       senderId: userData.user?.id,
       type: "schedule_confirmed",
       title: "🗓️ 일정 확정",
-      message: "확정된 일정이 추가되었습니다.",
+      message: `방에 ${placeName}장소가 확정되었습니다.`,
       link: `/rooms/${location.roomid}?tab=schedule`,
     });
   } catch (notifError) {
