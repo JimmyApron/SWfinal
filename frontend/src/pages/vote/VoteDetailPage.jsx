@@ -10,6 +10,7 @@ import {
   addVoteOption,
   updateVoteOption,
   confirmVote,
+  applyScheduleVoteToExisting,
 } from "../../api/voteApi";
 import { sendVoteClosedNotification } from "../notification/VoteNotification";
 import { addEventToGoogleCalendar } from "../../api/googleCalendarApi";
@@ -62,6 +63,9 @@ function VoteDetailPage() {
 
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showLinkScheduleModal, setShowLinkScheduleModal] = useState(false);
+  const [showReconfirmWarningModal, setShowReconfirmWarningModal] = useState(false);
+  const [existingScheduleTitle, setExistingScheduleTitle] = useState("");
   const [pendingOption, setPendingOption] = useState(null);
   const [appointmentTitle, setAppointmentTitle] = useState("");
   const [pendingConfirmedLocation, setPendingConfirmedLocation] = useState(null);
@@ -69,6 +73,8 @@ function VoteDetailPage() {
   const [existingHasLocation, setExistingHasLocation] = useState(false);
   const [showShareToast, setShowShareToast] = useState(false);
   const [roomConfirmedSchedules, setRoomConfirmedSchedules] = useState([]);
+  const [locationOnlySchedules, setLocationOnlySchedules] = useState([]);
+  const [pendingGoToLocation, setPendingGoToLocation] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user));
@@ -494,26 +500,48 @@ function VoteDetailPage() {
       return;
     }
 
+    if (vote.votetype === "schedule") {
+      const [{ data: existingSchedule }, { data: locOnly }] = await Promise.all([
+        supabase
+          .from("confirmed_schedules")
+          .select("id, title, location, date")
+          .eq("voteid", Number(voteid))
+          .maybeSingle(),
+        supabase
+          .from("confirmed_schedules")
+          .select("id, title, location, locationaddress")
+          .eq("roomid", Number(roomid))
+          .is("date", null)
+          .not("location", "is", null),
+      ]);
+
+      setIsReconfirmation(Boolean(existingSchedule));
+      setExistingHasLocation(Boolean(existingSchedule?.location));
+      setLocationOnlySchedules(locOnly || []);
+      setPendingOption(option);
+      setAppointmentTitle(existingSchedule?.title || "");
+
+      if (existingSchedule) {
+        // 재확정: 경고 모달 먼저 표시
+        setExistingScheduleTitle(
+          existingSchedule.title || existingSchedule.date || "기존 일정"
+        );
+        setShowReconfirmWarningModal(true);
+      } else {
+        // 첫 확정: 기존 플로우 유지
+        if (!window.confirm(`"${getOptionLabel(option)}" 을(를) 일정으로 확정할까요?`)) {
+          return;
+        }
+        setShowLocationModal(true);
+      }
+      return;
+    }
+
     if (
       !window.confirm(
         `"${getOptionLabel(option)}" 을(를) ${typeLabel}으로 확정할까요?`
       )
     ) {
-      return;
-    }
-
-    if (vote.votetype === "schedule") {
-      const { data: existingSchedule } = await supabase
-        .from("confirmed_schedules")
-        .select("id, title, location")
-        .eq("voteid", Number(voteid))
-        .maybeSingle();
-
-      setIsReconfirmation(Boolean(existingSchedule));
-      setExistingHasLocation(Boolean(existingSchedule?.location));
-      setPendingOption(option);
-      setAppointmentTitle(existingSchedule?.title || "");
-      setShowLocationModal(true);
       return;
     }
 
@@ -571,6 +599,14 @@ function VoteDetailPage() {
       return;
     }
 
+    // 재확정이 아니고, 위치만 있는 확정일정이 있으면 연결 모달 표시
+    if (!isReconfirmation && locationOnlySchedules.length > 0) {
+      setPendingGoToLocation(goToLocation);
+      setShowLocationModal(false);
+      setShowLinkScheduleModal(true);
+      return;
+    }
+
     try {
       await confirmVote(
         Number(voteid),
@@ -598,8 +634,77 @@ function VoteDetailPage() {
       setShowLocationModal(false);
       setPendingOption(null);
       setAppointmentTitle("");
+      setLocationOnlySchedules([]);
 
       if (goToLocation) {
+        navigate(`/rooms/${roomid}?tab=location`);
+      } else {
+        navigate("/home");
+      }
+    } catch (error) {
+      alert("확정 실패: " + (error.message || JSON.stringify(error)));
+    }
+  };
+
+  const handleLinkToExisting = async (scheduleId) => {
+    try {
+      await applyScheduleVoteToExisting(
+        scheduleId,
+        pendingOption,
+        Number(voteid),
+        Number(roomid),
+        appointmentTitle.trim()
+      );
+
+      const [{ data: updatedSchedule }, { data: roomData }] = await Promise.all([
+        supabase.from("confirmed_schedules").select("*").eq("id", scheduleId).single(),
+        supabase.from("rooms").select("roomname").eq("id", Number(roomid)).single(),
+      ]);
+
+      await loadVote();
+      setShowLinkScheduleModal(false);
+      setPendingOption(null);
+      setAppointmentTitle("");
+      setLocationOnlySchedules([]);
+
+      alert("일정이 수정됐습니다.");
+      navigate("/confirmed-schedule", {
+        state: { schedule: { ...updatedSchedule, roomname: roomData?.roomname || "" } },
+      });
+    } catch (error) {
+      alert("일정 연결 실패: " + error.message);
+    }
+  };
+
+  const handleCreateNewConfirmed = async () => {
+    try {
+      await confirmVote(
+        Number(voteid),
+        pendingOption,
+        Number(roomid),
+        vote.votetype,
+        appointmentTitle.trim()
+      );
+
+      if (localStorage.getItem("google_calendar_auto_sync") === "true") {
+        try {
+          await addEventToGoogleCalendar({
+            title: appointmentTitle.trim(),
+            date: pendingOption.optiondate,
+            starttime: pendingOption.starttime,
+            endtime: pendingOption.endtime,
+          });
+        } catch (googleErr) {
+          alert("일정은 확정됐지만 구글 캘린더 추가에 실패했습니다.\n\n(" + googleErr.message + ")");
+        }
+      }
+
+      await loadVote();
+      setShowLinkScheduleModal(false);
+      setPendingOption(null);
+      setAppointmentTitle("");
+      setLocationOnlySchedules([]);
+      if (pendingGoToLocation) {
         navigate(`/rooms/${roomid}?tab=location`);
       } else {
         navigate("/home");
@@ -753,6 +858,87 @@ function VoteDetailPage() {
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "var(--bg-color)" }}>
+      {showReconfirmWarningModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "var(--bg-color)",
+              borderRadius: "16px",
+              padding: "24px",
+              width: "300px",
+            }}
+          >
+            <h3 style={{ marginBottom: "12px", textAlign: "center" }}>
+              ⚠️ 이미 확정된 투표입니다
+            </h3>
+
+            <p
+              style={{
+                fontSize: "14px",
+                color: "var(--text-color)",
+                textAlign: "center",
+                lineHeight: "1.6",
+                marginBottom: "20px",
+              }}
+            >
+              일정을 변경하면 기존 확정일정{" "}
+              <strong>"{existingScheduleTitle}"</strong>의 일정이 변경됩니다.
+              {"\n"}계속하시겠어요?
+            </p>
+
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                onClick={() => {
+                  setShowReconfirmWarningModal(false);
+                  setPendingOption(null);
+                  setAppointmentTitle("");
+                }}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  backgroundColor: "var(--btn-bg)",
+                  color: "var(--text-color)",
+                  border: "none",
+                  borderRadius: "10px",
+                  fontSize: "15px",
+                  cursor: "pointer",
+                }}
+              >
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  setShowReconfirmWarningModal(false);
+                  setShowLocationModal(true);
+                }}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  backgroundColor: "#7c79ff",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "10px",
+                  fontSize: "15px",
+                  cursor: "pointer",
+                }}
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showLocationModal && (
         <div
           style={{
@@ -812,32 +998,40 @@ function VoteDetailPage() {
 
             <input
               type="text"
-              placeholder="약속 이름 (선택)"
+              placeholder="약속 이름"
               value={appointmentTitle}
               onChange={(e) => setAppointmentTitle(e.target.value)}
               style={{
                 width: "100%",
                 padding: "10px 12px",
                 fontSize: "14px",
-                border: "1px solid #ddd",
+                border: `1px solid ${appointmentTitle.trim() ? "#ddd" : "#ffbbbb"}`,
                 borderRadius: "10px",
                 boxSizing: "border-box",
-                marginBottom: "12px",
+                marginBottom: "4px",
               }}
             />
 
+            {!appointmentTitle.trim() && (
+              <p style={{ fontSize: "12px", color: "#e53935", margin: "0 0 10px 2px" }}>
+                약속 이름을 입력해주세요.
+              </p>
+            )}
+            {appointmentTitle.trim() && <div style={{ marginBottom: "10px" }} />}
+
             {existingHasLocation ? (
               <button
+                disabled={!appointmentTitle.trim()}
                 onClick={() => handleConfirmWithLocation(false)}
                 style={{
                   width: "100%",
                   padding: "12px",
-                  backgroundColor: "#7c79ff",
+                  backgroundColor: appointmentTitle.trim() ? "#7c79ff" : "#ccc",
                   color: "#fff",
                   border: "none",
                   borderRadius: "10px",
                   fontSize: "15px",
-                  cursor: "pointer",
+                  cursor: appointmentTitle.trim() ? "pointer" : "not-allowed",
                 }}
               >
                 확인
@@ -845,33 +1039,35 @@ function VoteDetailPage() {
             ) : (
               <>
                 <button
+                  disabled={!appointmentTitle.trim()}
                   onClick={() => handleConfirmWithLocation(true)}
                   style={{
                     width: "100%",
                     padding: "12px",
                     marginBottom: "8px",
-                    backgroundColor: "#7c79ff",
+                    backgroundColor: appointmentTitle.trim() ? "#7c79ff" : "#ccc",
                     color: "#fff",
                     border: "none",
                     borderRadius: "10px",
                     fontSize: "15px",
-                    cursor: "pointer",
+                    cursor: appointmentTitle.trim() ? "pointer" : "not-allowed",
                   }}
                 >
                   위치 지금 정하기
                 </button>
 
                 <button
+                  disabled={!appointmentTitle.trim()}
                   onClick={() => handleConfirmWithLocation(false)}
                   style={{
                     width: "100%",
                     padding: "12px",
-                    backgroundColor: "#f5f5f5",
-                    color: "#333",
+                    backgroundColor: appointmentTitle.trim() ? "#f5f5f5" : "#eee",
+                    color: appointmentTitle.trim() ? "#333" : "#aaa",
                     border: "none",
                     borderRadius: "10px",
                     fontSize: "15px",
-                    cursor: "pointer",
+                    cursor: appointmentTitle.trim() ? "pointer" : "not-allowed",
                   }}
                 >
                   나중에 정하기
@@ -986,6 +1182,88 @@ function VoteDetailPage() {
               }}
             >
               2. 일정 정하러 가기
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showLinkScheduleModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "var(--bg-color)",
+              borderRadius: "16px",
+              padding: "24px",
+              width: "300px",
+            }}
+          >
+            <h3 style={{ marginBottom: "4px", textAlign: "center" }}>
+              일정이 확정되었습니다!
+            </h3>
+
+            <p
+              style={{
+                color: "var(--secondary-text)",
+                fontSize: "13px",
+                textAlign: "center",
+                marginBottom: "16px",
+              }}
+            >
+              위치가 등록된 기존 확정일정에 연결하시겠어요?
+            </p>
+
+            <div style={{ marginBottom: "12px" }}>
+              <p style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: "bold" }}>
+                1. 기존 확정일정에 등록
+              </p>
+
+              {locationOnlySchedules.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => handleLinkToExisting(s.id)}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    marginBottom: "6px",
+                    backgroundColor: "var(--card-bg)",
+                    color: "var(--text-color)",
+                    border: "1px solid var(--border-color)",
+                    borderRadius: "10px",
+                    fontSize: "14px",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  📍 {s.location}
+                  {s.title ? ` · ${s.title}` : ""}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={handleCreateNewConfirmed}
+              style={{
+                width: "100%",
+                padding: "12px",
+                backgroundColor: "var(--btn-bg)",
+                color: "var(--text-color)",
+                border: "none",
+                borderRadius: "10px",
+                fontSize: "15px",
+                cursor: "pointer",
+              }}
+            >
+              2. 새 확정일정으로 생성
             </button>
           </div>
         </div>

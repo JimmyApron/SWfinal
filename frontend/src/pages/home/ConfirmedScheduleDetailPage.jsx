@@ -672,12 +672,24 @@ function ConfirmedScheduleDetailPage() {
 
           <h2 style={{ marginBottom: "2px" }}>일정 미정</h2>
 
-          <p style={{ color: "#aaa", marginBottom: "16px" }}>
+          <p style={{ color: "#aaa", marginBottom: "12px" }}>
             아직 확정된 일정이 없습니다.
           </p>
 
+          <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+            <button
+              type="button"
+              onClick={() =>
+                navigate(`/rooms/${schedule.roomid}?tab=schedule`)
+              }
+              style={shortcutButtonStyle}
+            >
+              일정 탭으로 이동
+            </button>
+          </div>
+
           <p style={{ fontWeight: "bold", marginBottom: "8px" }}>
-            일정 입력하기
+            직접 입력하기
           </p>
 
           <input
@@ -800,21 +812,35 @@ function ConfirmedScheduleDetailPage() {
         >
           <button
             type="button"
-            onClick={() => navigate(`/rooms/${schedule.roomid}?tab=schedule`)}
-            style={shortcutButtonStyle}
-          >
-            일정탭 바로가기
-          </button>
-          <button
-            type="button"
             onClick={() => {
               setTimingDraft(scheduleTiming);
-              setIsEditingTiming(true);
+              setIsEditingTiming((prev) => !prev);
             }}
             style={shortcutButtonStyle}
           >
-            수정하기
+            직접 수정
           </button>
+          {schedule.voteid ? (
+            <button
+              type="button"
+              onClick={() =>
+                navigate(`/rooms/${schedule.roomid}/votes/${schedule.voteid}`)
+              }
+              style={shortcutButtonStyle}
+            >
+              투표로 돌아가기
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() =>
+                navigate(`/rooms/${schedule.roomid}?tab=schedule`)
+              }
+              style={shortcutButtonStyle}
+            >
+              일정 탭으로 이동
+            </button>
+          )}
         </div>
 
         {isEditingTiming && (

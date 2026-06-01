@@ -526,3 +526,46 @@ export async function updateVoteOption(optionid, option) {
 
   return data;
 }
+
+/**
+ * 일정 투표 확정 시 기존 위치-전용 확정일정에 날짜/시간 연결
+ * - 위치 투표의 applyConfirmedLocationToSchedule 패턴과 동일
+ */
+export async function applyScheduleVoteToExisting(scheduleId, option, voteid, roomid, title) {
+  const { error: voteError } = await supabase
+    .from("votes")
+    .update({ confirmedoptionid: option.id })
+    .eq("id", Number(voteid));
+
+  if (voteError) throw voteError;
+
+  const updatePayload = {
+    date: option.optiondate,
+    starttime: option.starttime || null,
+    endtime: option.endtime || null,
+    isallday: !option.starttime,
+    voteid: Number(voteid),
+  };
+  if (title?.trim()) updatePayload.title = title.trim();
+
+  const { error } = await supabase
+    .from("confirmed_schedules")
+    .update(updatePayload)
+    .eq("id", Number(scheduleId));
+
+  if (error) throw error;
+
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    await createRoomNotifications({
+      roomId: roomid,
+      senderId: userData.user?.id,
+      type: "schedule_confirmed",
+      title: "🗓️ 일정 확정",
+      message: "확정된 일정이 업데이트되었습니다.",
+      link: `/rooms/${roomid}?tab=schedule`,
+    });
+  } catch (notifError) {
+    console.error("알림 생성 실패:", notifError);
+  }
+}
