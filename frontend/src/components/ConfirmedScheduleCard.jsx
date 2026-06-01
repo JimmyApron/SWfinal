@@ -41,17 +41,17 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
       style={{
         padding: "12px 14px",
         marginBottom: "8px",
-        border: "1px solid #e0e0ff",
+        border: "1px solid var(--card-border)",
         borderRadius: "12px",
         cursor: "pointer",
-        backgroundColor: "#f9f9ff",
+        backgroundColor: "var(--card-bg)",
       }}
     >
-      <p style={{ margin: 0, fontSize: "13px", color: "#888" }}>
+      <p style={{ margin: 0, fontSize: "13px", color: "var(--secondary-text)" }}>
         {schedule.roomname}
       </p>
 
-      <p style={{ margin: "4px 0 0", fontWeight: "bold" }}>
+      <p style={{ margin: "4px 0 0", fontWeight: "bold", color: "var(--text-color)" }}>
         {schedule.title || dateLabel || "일정 미정"}
         {schedule.isAbsent && (
           <span
@@ -69,7 +69,7 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
         )}
       </p>
 
-      <p style={{ margin: "2px 0 0", fontSize: "13px", color: dateLabel ? "#666" : "#aaa" }}>
+      <p style={{ margin: "2px 0 0", fontSize: "13px", color: dateLabel ? "var(--text-color)" : "var(--secondary-text)" }}>
         {dateLabel || "일정 미정"}
       </p>
 
@@ -78,7 +78,7 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
           style={{
             margin: "4px 0 0",
             fontSize: "12px",
-            color: schedule.date === getTodayStr() ? "#7c79ff" : "#f90",
+            color: schedule.date === getTodayStr() ? "var(--accent-color)" : "#f90",
             fontWeight: schedule.date === getTodayStr() ? "bold" : "normal",
           }}
         >
@@ -90,14 +90,14 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
         style={{
           margin: "4px 0 0",
           fontSize: "13px",
-          color: schedule.location ? "#7c79ff" : "#aaa",
+          color: schedule.location ? "var(--accent-color)" : "var(--secondary-text)",
         }}
       >
         {schedule.location ? `📍 ${schedule.location}` : "위치 미정 (탭하여 설정)"}
       </p>
 
       {schedule.additionalLocations?.map((place) => (
-        <p key={place.id} style={{ margin: "4px 0 0", fontSize: "13px", color: "#666" }}>
+        <p key={place.id} style={{ margin: "4px 0 0", fontSize: "13px", color: "var(--text-color)" }}>
           추가장소: {place.placename}
         </p>
       ))}

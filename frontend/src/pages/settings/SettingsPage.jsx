@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { logoutApi, getCurrentUserApi } from '../../api/authApi'
 import { supabase } from '../../lib/supabaseClient'
+import { useTheme } from '../../context/ThemeContext'
 
 function SettingsPage() {
   const navigate = useNavigate()
+  const { isDarkMode, toggleTheme } = useTheme()
 
   const [userProfile, setUserProfile] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -203,6 +205,41 @@ function SettingsPage() {
         </p>
 
         {renderProviderBadge()}
+      </div>
+
+      {/* 다크 모드 토글 */}
+      <div className="profile-info-group" style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        padding: '16px 0',
+        borderBottom: '1px solid var(--border-color)'
+      }}>
+        <label className="info-label" style={{ marginBottom: 0 }}>다크 모드 🌙</label>
+        <div 
+          onClick={toggleTheme}
+          style={{
+            width: '50px',
+            height: '26px',
+            backgroundColor: isDarkMode ? '#4caf50' : '#ccc',
+            borderRadius: '13px',
+            position: 'relative',
+            cursor: 'pointer',
+            transition: 'background-color 0.3s'
+          }}
+        >
+          <div style={{
+            width: '20px',
+            height: '20px',
+            backgroundColor: 'white',
+            borderRadius: '50%',
+            position: 'absolute',
+            top: '3px',
+            left: isDarkMode ? '27px' : '3px',
+            transition: 'left 0.3s',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+          }} />
+        </div>
       </div>
 
       <div className="setting-actions">

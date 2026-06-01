@@ -38,6 +38,7 @@ function Avatar({ url, nickname, size = 40 }) {
         borderRadius: "50%",
         objectFit: "cover",
         flexShrink: 0,
+        border: "1px solid var(--border-color)",
       }}
     />
   ) : (
@@ -46,12 +47,13 @@ function Avatar({ url, nickname, size = 40 }) {
         width: size,
         height: size,
         borderRadius: "50%",
-        backgroundColor: "#e0e0ff",
+        backgroundColor: "var(--btn-bg)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         fontSize: size * 0.45,
         flexShrink: 0,
+        border: "1px solid var(--border-color)",
       }}
     >
       👤
@@ -271,7 +273,7 @@ function HomePage() {
   );
 
   return (
-    <div className="home-container">
+    <div className="home-container" style={{ backgroundColor: "var(--bg-color)", color: "var(--text-color)", minHeight: "100vh" }}>
       <div
         style={{
           display: "flex",
@@ -280,7 +282,7 @@ function HomePage() {
           marginBottom: "8px",
         }}
       >
-        <h1 style={{ margin: 0 }}>홈</h1>
+        <h1 style={{ margin: 0, color: "var(--text-color)" }}>홈</h1>
 
         <button
           onClick={handleOpenFriendPanel}
@@ -290,7 +292,7 @@ function HomePage() {
             background: "none",
             fontSize: "22px",
             cursor: "pointer",
-            color: "#555",
+            color: "var(--text-color)",
             lineHeight: 1,
             padding: "4px",
           }}
@@ -328,7 +330,7 @@ function HomePage() {
             style={{
               position: "fixed",
               inset: 0,
-              backgroundColor: "rgba(0,0,0,0.3)",
+              backgroundColor: "rgba(0,0,0,0.5)",
               zIndex: 200,
             }}
           />
@@ -340,9 +342,9 @@ function HomePage() {
               right: 0,
               bottom: 0,
               width: "300px",
-              backgroundColor: "#fff",
+              backgroundColor: "var(--header-bg)",
               zIndex: 201,
-              boxShadow: "-2px 0 12px rgba(0,0,0,0.15)",
+              boxShadow: "-2px 0 12px rgba(0,0,0,0.3)",
               display: "flex",
               flexDirection: "column",
             }}
@@ -353,10 +355,10 @@ function HomePage() {
                 justifyContent: "space-between",
                 alignItems: "center",
                 padding: "20px 20px 16px",
-                borderBottom: "1px solid #eee",
+                borderBottom: "1px solid var(--border-color)",
               }}
             >
-              <span style={{ fontSize: "16px", fontWeight: "bold" }}>친구</span>
+              <span style={{ fontSize: "16px", fontWeight: "bold", color: "var(--text-color)" }}>친구</span>
 
               <button
                 onClick={() => setShowFriendPanel(false)}
@@ -365,7 +367,7 @@ function HomePage() {
                   background: "none",
                   fontSize: "20px",
                   cursor: "pointer",
-                  color: "#aaa",
+                  color: "var(--secondary-text)",
                 }}
               >
                 ✕
@@ -378,7 +380,7 @@ function HomePage() {
                   margin: "0 0 8px",
                   fontSize: "13px",
                   fontWeight: "600",
-                  color: "#555",
+                  color: "var(--secondary-text)",
                 }}
               >
                 이메일로 친구 요청
@@ -395,10 +397,12 @@ function HomePage() {
                   style={{
                     flex: 1,
                     padding: "10px 12px",
-                    border: "1px solid #ddd",
+                    border: "1px solid var(--border-color)",
                     borderRadius: "8px",
                     fontSize: "14px",
                     outline: "none",
+                    backgroundColor: "var(--input-bg)",
+                    color: "var(--text-color)",
                   }}
                 />
 
@@ -407,8 +411,8 @@ function HomePage() {
                   disabled={friendLoading}
                   style={{
                     padding: "10px 16px",
-                    backgroundColor: "#7c79ff",
-                    color: "#fff",
+                    backgroundColor: "var(--accent-color)",
+                    color: "var(--accent-text)",
                     border: "none",
                     borderRadius: "8px",
                     fontSize: "14px",
@@ -427,7 +431,7 @@ function HomePage() {
                       margin: "0 0 10px",
                       fontSize: "13px",
                       fontWeight: "600",
-                      color: "#555",
+                      color: "var(--secondary-text)",
                     }}
                   >
                     친구 요청
@@ -453,7 +457,7 @@ function HomePage() {
                         alignItems: "center",
                         gap: "10px",
                         padding: "10px 0",
-                        borderBottom: "1px solid #f5f5f5",
+                        borderBottom: "1px solid var(--border-color)",
                       }}
                     >
                       <Avatar
@@ -466,6 +470,7 @@ function HomePage() {
                           flex: 1,
                           fontSize: "14px",
                           fontWeight: "500",
+                          color: "var(--text-color)",
                         }}
                       >
                         {request.nickname || "닉네임 없음"}
@@ -475,8 +480,8 @@ function HomePage() {
                         onClick={() => handleAccept(request)}
                         style={{
                           padding: "5px 10px",
-                          backgroundColor: "#7c79ff",
-                          color: "#fff",
+                          backgroundColor: "var(--accent-color)",
+                          color: "var(--accent-text)",
                           border: "none",
                           borderRadius: "6px",
                           fontSize: "12px",
@@ -490,9 +495,9 @@ function HomePage() {
                         onClick={() => handleReject(request)}
                         style={{
                           padding: "5px 10px",
-                          backgroundColor: "#fff",
-                          color: "#999",
-                          border: "1px solid #ddd",
+                          backgroundColor: "var(--btn-bg)",
+                          color: "var(--btn-text)",
+                          border: "1px solid var(--border-color)",
                           borderRadius: "6px",
                           fontSize: "12px",
                           cursor: "pointer",
@@ -512,15 +517,15 @@ function HomePage() {
                       margin: "0 0 10px",
                       fontSize: "13px",
                       fontWeight: "600",
-                      color: "#555",
+                      color: "var(--secondary-text)",
                     }}
                   >
                     보낸 요청
                     <span
                       style={{
                         marginLeft: "6px",
-                        backgroundColor: "#bbb",
-                        color: "#fff",
+                        backgroundColor: "var(--btn-bg)",
+                        color: "var(--btn-text)",
                         borderRadius: "10px",
                         padding: "1px 7px",
                         fontSize: "11px",
@@ -538,7 +543,7 @@ function HomePage() {
                         alignItems: "center",
                         gap: "10px",
                         padding: "10px 0",
-                        borderBottom: "1px solid #f5f5f5",
+                        borderBottom: "1px solid var(--border-color)",
                       }}
                     >
                       <Avatar
@@ -551,6 +556,7 @@ function HomePage() {
                           flex: 1,
                           fontSize: "14px",
                           fontWeight: "500",
+                          color: "var(--text-color)",
                         }}
                       >
                         {request.nickname || "닉네임 없음"}
@@ -559,7 +565,7 @@ function HomePage() {
                       <span
                         style={{
                           fontSize: "11px",
-                          color: "#aaa",
+                          color: "var(--secondary-text)",
                           marginRight: "4px",
                         }}
                       >
@@ -570,9 +576,9 @@ function HomePage() {
                         onClick={() => handleCancelSentRequest(request)}
                         style={{
                           padding: "5px 10px",
-                          backgroundColor: "#fff",
-                          color: "#999",
-                          border: "1px solid #ddd",
+                          backgroundColor: "var(--btn-bg)",
+                          color: "var(--btn-text)",
+                          border: "1px solid var(--border-color)",
                           borderRadius: "6px",
                           fontSize: "12px",
                           cursor: "pointer",
@@ -590,7 +596,7 @@ function HomePage() {
                   margin: "0 0 12px",
                   fontSize: "13px",
                   fontWeight: "600",
-                  color: "#555",
+                  color: "var(--secondary-text)",
                 }}
               >
                 친구 목록 {friends.length > 0 && `(${friends.length})`}
@@ -600,7 +606,7 @@ function HomePage() {
                 <p
                   style={{
                     fontSize: "14px",
-                    color: "#aaa",
+                    color: "var(--secondary-text)",
                     textAlign: "center",
                     marginTop: "16px",
                   }}
@@ -616,7 +622,7 @@ function HomePage() {
                       alignItems: "center",
                       gap: "12px",
                       padding: "10px 0",
-                      borderBottom: "1px solid #f5f5f5",
+                      borderBottom: "1px solid var(--border-color)",
                     }}
                   >
                     <Avatar
@@ -629,6 +635,7 @@ function HomePage() {
                         flex: 1,
                         fontSize: "14px",
                         fontWeight: "500",
+                        color: "var(--text-color)",
                       }}
                     >
                       {friend.nickname || "닉네임 없음"}
@@ -641,7 +648,7 @@ function HomePage() {
                         background: "none",
                         fontSize: "16px",
                         cursor: "pointer",
-                        color: "#ccc",
+                        color: "var(--secondary-text)",
                         padding: "4px",
                       }}
                     >
@@ -656,10 +663,10 @@ function HomePage() {
       )}
 
       <div style={{ marginBottom: "20px" }}>
-        <h3 style={{ marginBottom: "8px" }}>확정된 일정</h3>
+        <h3 style={{ marginBottom: "8px", color: "var(--text-color)" }}>확정된 일정</h3>
 
         {upcomingSchedules.length === 0 ? (
-          <p style={{ color: "#aaa", fontSize: "14px" }}>
+          <p style={{ color: "var(--secondary-text)", fontSize: "14px" }}>
             확정된 일정이 없습니다
           </p>
         ) : (
@@ -679,8 +686,8 @@ function HomePage() {
 
       <RoomListPage />
 
-      <button onClick={() => navigate("/rooms/create")}>방 만들기</button>
-      <button onClick={() => navigate("/rooms/invite")}>
+      <button onClick={() => navigate("/rooms/create")} style={{ backgroundColor: "var(--accent-color)", color: "var(--accent-text)", padding: "12px", borderRadius: "8px", border: "none", width: "100%", marginBottom: "8px", fontWeight: "bold" }}>방 만들기</button>
+      <button onClick={() => navigate("/rooms/invite")} style={{ backgroundColor: "var(--btn-bg)", color: "var(--btn-text)", padding: "12px", borderRadius: "8px", border: "1px solid var(--border-color)", width: "100%", fontWeight: "bold" }}>
         초대코드 입력하기
       </button>
     </div>

@@ -7,12 +7,12 @@ import {
   getRoomGuests,
   getMemberAvailabilities,
   saveMemberAvailabilities,
-  updateRoomLastActivity,
   addScheduleCandidate,
   updateScheduleCandidate,
   deleteScheduleCandidate,
   getAdditionalConfirmedLocations,
 } from "../../api/scheduleApi";
+import { updateRoomLastActivity } from "../../api/roomApi";
 import { supabase } from "../../lib/supabaseClient";
 import { createNotification } from "../../api/notificationApi";
 import ConfirmedScheduleCard from "../../components/ConfirmedScheduleCard";

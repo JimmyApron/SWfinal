@@ -1165,13 +1165,13 @@ function ChatTab({ roomId }) {
                 margin: "16px 0 12px",
               }}
             >
-              <div style={{ flex: 1, height: "1px", backgroundColor: "#ccc" }} />
+              <div style={{ flex: 1, height: "1px", backgroundColor: "var(--border-color)" }} />
 
-              <span style={{ fontSize: "12px", color: "#888" }}>
+              <span style={{ fontSize: "12px", color: "var(--secondary-text)" }}>
                 {formatDateSeparator(message.createdat)}
               </span>
 
-              <div style={{ flex: 1, height: "1px", backgroundColor: "#ccc" }} />
+              <div style={{ flex: 1, height: "1px", backgroundColor: "var(--border-color)" }} />
             </div>
           );
           const meta = getMessageMeta(message.content);

@@ -752,7 +752,7 @@ function VoteDetailPage() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#fff" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: "var(--bg-color)" }}>
       {showLocationModal && (
         <div
           style={{
@@ -767,7 +767,7 @@ function VoteDetailPage() {
         >
           <div
             style={{
-              backgroundColor: "#fff",
+              backgroundColor: "var(--bg-color)",
               borderRadius: "16px",
               padding: "24px",
               width: "300px",
@@ -787,7 +787,7 @@ function VoteDetailPage() {
                 border: "none",
                 background: "none",
                 fontSize: "18px",
-                color: "#aaa",
+                color: "var(--secondary-text)",
                 cursor: "pointer",
                 lineHeight: 1,
               }}
@@ -801,7 +801,7 @@ function VoteDetailPage() {
 
             <p
               style={{
-                color: "#666",
+                color: "var(--secondary-text)",
                 fontSize: "13px",
                 textAlign: "center",
                 marginBottom: "12px",
@@ -877,8 +877,7 @@ function VoteDetailPage() {
                   나중에 정하기
                 </button>
               </>
-            )}
-          </div>
+            )}          </div>
         </div>
       )}
 
@@ -896,7 +895,7 @@ function VoteDetailPage() {
         >
           <div
             style={{
-              backgroundColor: "#fff",
+              backgroundColor: "var(--bg-color)",
               borderRadius: "16px",
               padding: "24px",
               width: "300px",
@@ -908,7 +907,7 @@ function VoteDetailPage() {
 
             <p
               style={{
-                color: "#666",
+                color: "var(--secondary-text)",
                 fontSize: "13px",
                 textAlign: "center",
                 marginBottom: "16px",
@@ -926,7 +925,7 @@ function VoteDetailPage() {
                 width: "100%",
                 padding: "10px 12px",
                 fontSize: "14px",
-                border: "1px solid #ddd",
+                border: "1px solid var(--border-color)",
                 borderRadius: "10px",
                 boxSizing: "border-box",
                 marginBottom: "16px",
@@ -935,7 +934,7 @@ function VoteDetailPage() {
 
             <p
               style={{
-                color: "#666",
+                color: "var(--secondary-text)",
                 fontSize: "13px",
                 textAlign: "center",
                 marginBottom: "12px",
@@ -958,9 +957,9 @@ function VoteDetailPage() {
                       width: "100%",
                       padding: "10px",
                       marginBottom: "6px",
-                      backgroundColor: "#f9f9ff",
-                      color: "#333",
-                      border: "1px solid #e0e0ff",
+                      backgroundColor: "var(--card-bg)",
+                      color: "var(--text-color)",
+                      border: "1px solid var(--border-color)",
                       borderRadius: "10px",
                       fontSize: "14px",
                       cursor: "pointer",
@@ -978,8 +977,8 @@ function VoteDetailPage() {
               style={{
                 width: "100%",
                 padding: "12px",
-                backgroundColor: "#f5f5f5",
-                color: "#333",
+                backgroundColor: "var(--btn-bg)",
+                color: "var(--text-color)",
                 border: "none",
                 borderRadius: "10px",
                 fontSize: "15px",
@@ -999,7 +998,7 @@ function VoteDetailPage() {
           alignItems: "center",
           justifyContent: "space-between",
           padding: "0 16px",
-          borderBottom: "1px solid #eee",
+          borderBottom: "1px solid var(--border-color)",
         }}
       >
         <button
@@ -2101,7 +2100,7 @@ function renderOptionContent(option) {
             style={{
               display: "block",
               fontSize: "13px",
-              color: "#666",
+              color: "var(--secondary-text)",
               marginTop: "2px",
             }}
           >
@@ -2129,15 +2128,15 @@ function optionToPlace(option) {
 const badgeStyle = {
   padding: "4px 10px",
   borderRadius: "12px",
-  backgroundColor: "#eee",
+  backgroundColor: "var(--btn-bg)",
   fontSize: "13px",
 };
 
 const smallButtonStyle = {
   padding: "6px 10px",
-  border: "1px solid #ddd",
+  border: "1px solid var(--border-color)",
   borderRadius: "8px",
-  backgroundColor: "#fff",
+  backgroundColor: "var(--bg-color)",
   fontSize: "12px",
   cursor: "pointer",
 };
@@ -2146,16 +2145,16 @@ const placeSearchButtonStyle = {
   width: "100%",
   height: "40px",
   marginBottom: "8px",
-  border: "1px solid #ddd",
+  border: "1px solid var(--border-color)",
   borderRadius: "6px",
-  backgroundColor: "#fff",
+  backgroundColor: "var(--bg-color)",
   cursor: "pointer",
 };
 
 const editInputStyle = {
   width: "100%",
   padding: "10px",
-  border: "1px solid #ddd",
+  border: "1px solid var(--border-color)",
   borderRadius: "8px",
   boxSizing: "border-box",
   marginBottom: "8px",
@@ -2172,14 +2171,14 @@ const mapBoxStyle = {
   marginTop: "-4px",
   marginBottom: "10px",
   padding: "12px",
-  border: "1px solid #eee",
+  border: "1px solid var(--border-color)",
   borderRadius: "8px",
-  backgroundColor: "#fafafa",
+  backgroundColor: "var(--card-bg)",
 };
 
 const mapInfoTextStyle = {
   fontSize: "12px",
-  color: "#888",
+  color: "var(--secondary-text)",
   marginTop: 0,
   marginBottom: "8px",
 };

@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
+import { getVisibleNotifications } from "./notificationApi";
 
 function generateInviteCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -140,9 +141,11 @@ export async function joinRoomById(roomId, userId, nickname) {
 }
 
 export async function getRooms(userId) {
-  const { data, error } = await supabase
+  // 1. 방 목록 및 본인의 가입 시간(joinedat) 가져오기
+  const { data: memberData, error: memberError } = await supabase
     .from("room_members")
     .select(`
+      joinedat,
       rooms (
         *,
         room_members(count),
@@ -151,17 +154,50 @@ export async function getRooms(userId) {
     `)
     .eq("userid", userId);
 
-  if (error) {
-    console.error(error);
+  if (memberError) {
+    console.error(memberError);
     throw new Error("방 목록 조회 실패");
   }
 
-  const rooms = data
-    .map((item) => item.rooms)
-    .sort(
-      (a, b) =>
-        new Date(b.lastactivityat) - new Date(a.lastactivityat)
-    );
+  // 2. 안 읽은 알림 전체 조회 (receiverid === 본인, isread === false)
+  const { data: notifications, error: notifError } = await supabase
+    .from("notifications")
+    .select("roomid, createdat")
+    .eq("receiverid", userId)
+    .eq("isread", false);
+
+  if (notifError) {
+    console.error(notifError);
+    throw new Error("알림 데이터 조회 실패");
+  }
+
+  // 3. 가시성 필터링 및 방별 unreadCount 집계 (Reduce 사용)
+  const unreadCountMap = (notifications || []).reduce((acc, notif) => {
+    const myParticipation = memberData.find(m => Number(m.rooms.id) === Number(notif.roomid));
+    
+    // 가시성 규칙: 가입 시간(joinedat) 이후에 생성된 알림만 합산
+    if (myParticipation && new Date(notif.createdat) >= new Date(myParticipation.joinedat)) {
+      acc[notif.roomid] = (acc[notif.roomid] || 0) + 1;
+    }
+    return acc;
+  }, {});
+
+  // 4. 데이터 결합 및 초기 정렬
+  const rooms = memberData
+    .map((item) => ({
+      ...item.rooms,
+      unreadCount: unreadCountMap[item.rooms.id] || 0
+    }))
+    .sort((a, b) => {
+      // 규칙 1순위: unreadCount 내림차순
+      if (b.unreadCount !== a.unreadCount) {
+        return b.unreadCount - a.unreadCount;
+      }
+      // 규칙 2순위: 최신 활동 시간(또는 생성일) 내림차순
+      const timeA = new Date(a.lastactivityat || a.createdat).getTime();
+      const timeB = new Date(b.lastactivityat || b.createdat).getTime();
+      return timeB - timeA;
+    });
 
   return {
     rooms,
