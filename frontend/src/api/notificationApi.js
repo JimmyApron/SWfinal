@@ -1,6 +1,42 @@
 import { supabase } from "../lib/supabaseClient";
 import { updateRoomLastActivity } from "./roomApi";
 
+async function getSettingsForReceivers(roomId, targetReceivers, type) {
+  let settingColumn = null;
+  if (type === "vote_closed" || type === "vote_reminder") settingColumn = "votenotifenabled";
+  else if (type === "schedule_confirmed") settingColumn = "schedulenotifenabled";
+  else if (type === "location_request") settingColumn = "locationnotifenabled";
+  else if (type === "chat_new") settingColumn = "chatnotifenabled";
+
+  if (!roomId || !settingColumn) {
+    return targetReceivers.map(r => ({ ...r, issilent: false }));
+  }
+
+  try {
+    const [{ data: members }, { data: guests }] = await Promise.all([
+      supabase.from("room_members").select(`userid, ${settingColumn}`).eq("roomid", Number(roomId)),
+      supabase.from("room_guests").select(`id, ${settingColumn}`).eq("roomid", Number(roomId)),
+    ]);
+
+    const memberMap = new Map((members || []).map(m => [m.userid, m[settingColumn]]));
+    const guestMap = new Map((guests || []).map(g => [g.id, g[settingColumn]]));
+
+    return targetReceivers.map(receiver => {
+      let isSilent = false;
+      const recId = receiver.receiverid;
+      if (memberMap.has(recId)) {
+        isSilent = memberMap.get(recId) === false;
+      } else if (guestMap.has(recId)) {
+        isSilent = guestMap.get(recId) === false;
+      }
+      return { ...receiver, issilent: isSilent };
+    });
+  } catch (error) {
+    console.error("설정 조회 실패 (기본값 false 적용):", error);
+    return targetReceivers.map(r => ({ ...r, issilent: false }));
+  }
+}
+
 export async function createNotification({
   roomId,
   receiverId,
@@ -15,6 +51,9 @@ export async function createNotification({
     return;
   }
 
+  const receivers = await getSettingsForReceivers(roomId, [{ receiverid: receiverId }], type);
+  const issilent = receivers[0].issilent;
+
   const { error } = await supabase.from("notifications").insert([
     {
       roomid: roomId != null ? Number(roomId) : null,
@@ -25,6 +64,7 @@ export async function createNotification({
       message,
       link,
       isread: false,
+      issilent,
     },
   ]);
 
@@ -51,6 +91,9 @@ export async function createGuestNotification({
     return;
   }
 
+  const receivers = await getSettingsForReceivers(roomId, [{ receiverid: guestId }], type);
+  const issilent = receivers[0].issilent;
+
   const { error } = await supabase.from("notifications").insert([
     {
       roomid: roomId != null ? Number(roomId) : null,
@@ -61,6 +104,7 @@ export async function createGuestNotification({
       message,
       link: link || (roomId ? `/rooms/${Number(roomId)}?tab=location` : null),
       isread: false,
+      issilent,
     },
   ]);
 
@@ -127,7 +171,9 @@ export async function createRoomNotifications({
 
   if (uniqueReceivers.length === 0) return;
 
-  const rows = uniqueReceivers.map((receiver) => ({
+  const receiversWithSettings = await getSettingsForReceivers(roomId, uniqueReceivers, type);
+
+  const rows = receiversWithSettings.map((receiver) => ({
     roomid: Number(roomId),
     receiverid: receiver.receiverid,
     senderid: senderId || null,
@@ -136,6 +182,7 @@ export async function createRoomNotifications({
     message,
     link,
     isread: false,
+    issilent: receiver.issilent,
   }));
 
   const { error } = await supabase.from("notifications").insert(rows);
@@ -195,7 +242,7 @@ export async function getVisibleNotifications(recipientId, isGuest, unreadOnly =
     .in("type", NON_ROOM_NOTIFICATION_TYPES);
 
   if (unreadOnly) {
-    nonRoomQuery = nonRoomQuery.eq("isread", false);
+    nonRoomQuery = nonRoomQuery.neq("isread", true).neq("issilent", true);
   }
 
   const { data: nonRoomData, error: nonRoomError } = await nonRoomQuery;
@@ -230,7 +277,7 @@ export async function getVisibleNotifications(recipientId, isGuest, unreadOnly =
     .order("createdat", { ascending: false });
 
   if (unreadOnly) {
-    query = query.eq("isread", false);
+    query = query.neq("isread", true).neq("issilent", true);
   }
 
   const { data, error } = await query;

@@ -84,8 +84,10 @@ function BottomNav() {
         },
         (payload) => {
           if (payload.eventType === "INSERT") {
-            // [즉시 업데이트] 서버 통신 없이 리액트 상태만 즉시 +1
-            setUnreadCount((prev) => prev + 1);
+            // [즉시 업데이트] 서버 통신 없이 리액트 상태만 즉시 +1 (단, 조용한 알림이 아닐 때만 뱃지 표시)
+            if (payload.new.issilent !== true) {
+              setUnreadCount((prev) => prev + 1);
+            }
           } else {
             // 읽음 처리나 삭제 시에는 서버와 동기화
             reloadUnreadCount();

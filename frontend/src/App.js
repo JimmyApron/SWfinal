@@ -109,11 +109,13 @@ function NotificationListener() {
               // 기존 HEAD 기능: 새 알림 로그 확인
               console.log("새 알림:", newNotification);
 
-              // notification-2 기능: 내가 받을 알림만 실시간 수신
-              console.log(
-                "🔔 [실시간 새 알림 도착 완료]:",
-                newNotification?.message
-              );
+              // notification-2 기능: 내가 받을 알림만 실시간 수신 (issilent가 false인 경우만 Toast/알림 표시)
+              if (newNotification.issilent !== true) {
+                console.log(
+                  "🔔 [실시간 새 알림 도착 완료 - Toast]:",
+                  newNotification?.message
+                );
+              }
 
               // 현재 위치가 필요할 때 사용할 수 있게 locationRef 유지
               const currentPath = locationRef.current.pathname;

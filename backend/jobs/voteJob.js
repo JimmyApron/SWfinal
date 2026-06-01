@@ -100,26 +100,27 @@ async function sendClosedNotifications(vote) {
     
     const roomName = roomData?.roomname || "참여 중인 방";
 
-    // 대상 조회 (회원 + 게스트 전원 무조건 발송 - 설정 무시)
+    // 대상 조회 (설정값 포함)
     const [ { data: members }, { data: guests } ] = await Promise.all([
-      supabase.from("room_members").select("userid").eq("roomid", roomId),
-      supabase.from("room_guests").select("id").eq("roomid", roomId)
+      supabase.from("room_members").select("userid, votenotifenabled").eq("roomid", roomId),
+      supabase.from("room_guests").select("id, votenotifenabled").eq("roomid", roomId)
     ]);
 
     const allReceivers = [
-      ...(members || []).map(m => m.userid),
-      ...(guests || []).map(g => g.id)
+      ...(members || []).map(m => ({ id: m.userid, enabled: m.votenotifenabled })),
+      ...(guests || []).map(g => ({ id: g.id, enabled: g.votenotifenabled }))
     ];
 
     if (allReceivers.length > 0) {
-      const notifications = allReceivers.map((receiverId) => ({
+      const notifications = allReceivers.map((receiver) => ({
         roomid: roomId,
-        receiverid: receiverId,
+        receiverid: receiver.id,
         senderid: null,
         type: "vote_closed",
         title: "🔒 투표 마감 완료",
         message: `🏁 [${roomName}] 방의 [${title}] 투표가 마감되었습니다! 최종 결과를 확인해 보세요.`,
         isread: false,
+        issilent: receiver.enabled === false, // 설정이 꺼져 있으면 조용한 알림
         link: `/rooms/${roomId}/votes/${voteId}`,
       }));
 
@@ -146,14 +147,15 @@ async function sendReminderNotifications(vote) {
     
     const roomName = roomData?.roomname || "참여 중인 방";
 
+    // 대상 조회 (설정값 포함)
     const [ { data: members }, { data: guests } ] = await Promise.all([
-      supabase.from("room_members").select("userid").eq("roomid", roomId),
-      supabase.from("room_guests").select("id").eq("roomid", roomId)
+      supabase.from("room_members").select("userid, votenotifenabled").eq("roomid", roomId),
+      supabase.from("room_guests").select("id, votenotifenabled").eq("roomid", roomId)
     ]);
 
     const allReceivers = [
-      ...(members || []).map(m => m.userid),
-      ...(guests || []).map(g => g.id)
+      ...(members || []).map(m => ({ id: m.userid, enabled: m.votenotifenabled })),
+      ...(guests || []).map(g => ({ id: g.id, enabled: g.votenotifenabled }))
     ];
 
     if (allReceivers.length > 0) {
@@ -163,14 +165,15 @@ async function sendReminderNotifications(vote) {
       const nowTimestamp = new Date().getTime();
       const diffInMinutes = Math.max(1, Math.ceil((endTimestamp - nowTimestamp) / (1000 * 60)));
 
-      const notifications = allReceivers.map((receiverId) => ({
+      const notifications = allReceivers.map((receiver) => ({
         roomid: roomId,
-        receiverid: receiverId,
+        receiverid: receiver.id,
         senderid: null,
         type: "vote_reminder",
         title: "🗳️ 투표 마감 임박",
         message: `⚠️ [${roomName}] 방의 [${title}] 투표 마감 시간이 ${diffInMinutes}분 남았습니다! 서둘러 참여해 주세요!`,
         isread: false,
+        issilent: receiver.enabled === false, // 설정이 꺼져 있으면 조용한 알림
         link: `/rooms/${roomId}/votes/${voteId}`,
       }));
 
