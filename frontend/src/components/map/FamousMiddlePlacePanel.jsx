@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { recommendFamousMiddlePlaces } from '../../utils/famousMiddlePlaceRecommendation'
 
 function FamousMiddlePlacePanel({
@@ -10,6 +10,15 @@ function FamousMiddlePlacePanel({
   const [recommendedPlaces, setRecommendedPlaces] = useState([])
   const [selectedPlaceIds, setSelectedPlaceIds] = useState([])
   const [message, setMessage] = useState('')
+  const canRecommend = memberLocations?.length >= 2
+
+  useEffect(() => {
+    if (canRecommend) return
+
+    setRecommendedPlaces([])
+    setSelectedPlaceIds([])
+    onRecommendPlaces([])
+  }, [canRecommend, onRecommendPlaces])
 
   const getMemberKey = (member) => {
     return member.userid || member.guestid || member.id
@@ -25,8 +34,8 @@ function FamousMiddlePlacePanel({
   }
 
   const handleRecommend = async () => {
-    if (!memberLocations || memberLocations.length < 2) {
-      setMessage('멤버 위치가 2개 이상 필요합니다.')
+    if (!canRecommend) {
+      setMessage('중간 장소 추천은 2명 이상 위치를 등록해야 사용할 수 있어요.')
       return
     }
 
@@ -79,6 +88,11 @@ function FamousMiddlePlacePanel({
   }
 
   const handleCreateVote = () => {
+    if (!canRecommend) {
+      setMessage('중간 장소 투표는 2명 이상 위치를 등록해야 만들 수 있어요.')
+      return
+    }
+
     if (!onCreateMiddlePlaceVote) {
       setMessage('중간장소 투표 생성 기능이 연결되지 않았습니다.')
       return
@@ -118,9 +132,13 @@ function FamousMiddlePlacePanel({
         )
       })}
 
-      <button type="button" onClick={handleRecommend}>
+      <button type="button" onClick={handleRecommend} disabled={!canRecommend}>
         유명 중간장소 5개 추천
       </button>
+
+      {!canRecommend && (
+        <p>중간 장소 추천은 2명 이상 위치를 등록하면 사용할 수 있어요.</p>
+      )}
 
       {message && <p>{message}</p>}
 

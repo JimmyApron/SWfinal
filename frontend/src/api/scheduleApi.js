@@ -193,6 +193,34 @@ export async function createConfirmedScheduleForRoom(roomId, schedule) {
   }
 }
 
+export async function createDraftConfirmedSchedule(roomId, title) {
+  const trimmedTitle = title?.trim();
+
+  if (!trimmedTitle) {
+    throw new Error("일정 이름을 입력해 주세요.");
+  }
+
+  const { data, error } = await supabase
+    .from("confirmed_schedules")
+    .insert([{
+      roomid: Number(roomId),
+      title: trimmedTitle,
+      date: null,
+      starttime: null,
+      endtime: null,
+      isallday: false,
+    }])
+    .select("*")
+    .single();
+
+  if (error) {
+    console.error("준비 중 일정 생성 실패:", error);
+    throw new Error("일정을 만들지 못했습니다.");
+  }
+
+  return data;
+}
+
 export async function getAdditionalConfirmedLocations(roomId, scheduleId = null) {
   let query = supabase
     .from("confirmed_locations")
@@ -258,11 +286,13 @@ export async function addAdditionalConfirmedLocation(roomId, scheduleId, placeNa
 }
 
 export async function getRoomConfirmedSchedules(roomId) {
+  const today = new Date().toISOString().slice(0, 10);
   const { data, error } = await supabase
     .from("confirmed_schedules")
     .select("*")
     .eq("roomid", Number(roomId))
-    .order("date", { ascending: true, nullsFirst: true });
+    .or(`date.gte.${today},date.is.null`)
+    .order("date", { ascending: true, nullsFirst: false });
 
   if (error) throw new Error("확정 일정 조회 실패");
   return data || [];
@@ -368,6 +398,7 @@ export async function updateConfirmedScheduleLocation(
   if (error) {
     console.error("위치 저장 실패 상세:", JSON.stringify(error));
     throw new Error("위치 저장 실패");
+<<<<<<< HEAD
   }
 }
 
@@ -398,6 +429,55 @@ export async function updateConfirmedScheduleTiming(
 }
 
 export async function cancelConfirmedSchedule(scheduleId, voteid) {
+=======
+  }
+}
+
+export async function clearConfirmedScheduleLocation(scheduleId) {
+  const { error } = await supabase
+    .from("confirmed_schedules")
+    .update({
+      location: null,
+      locationaddress: null,
+      locationlat: null,
+      locationlng: null,
+    })
+    .eq("id", Number(scheduleId));
+
+  if (error) {
+    console.error("위치 삭제 실패 상세:", JSON.stringify(error));
+    throw new Error("위치 삭제 실패");
+  }
+}
+
+export async function updateConfirmedScheduleTiming(
+  scheduleId,
+  { title, date, starttime, endtime, isallday }
+) {
+  const updateData = {
+    date,
+    starttime: isallday ? null : starttime || null,
+    endtime: isallday ? null : endtime || null,
+    isallday,
+  };
+
+  if (title !== undefined) {
+    updateData.title = title?.trim() || null;
+  }
+
+  const { error } = await supabase
+    .from("confirmed_schedules")
+    .update(updateData)
+    .eq("id", scheduleId);
+
+  if (error) {
+    console.error("확정 일정 날짜 및 시간 수정 실패:", error);
+    throw new Error("확정 일정 날짜 및 시간 수정 실패");
+  }
+}
+
+export async function cancelConfirmedSchedule(scheduleId, voteid) {
+>>>>>>> origin/feature/merge5-y2
   const { error: deleteError } = await supabase
     .from("confirmed_schedules")
     .delete()

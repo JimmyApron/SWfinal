@@ -15,6 +15,7 @@ import {
 import { sendVoteClosedNotification } from "../notification/VoteNotification";
 import { addEventToGoogleCalendar } from "../../api/googleCalendarApi";
 import {
+<<<<<<< HEAD
   applyConfirmedLocationToSchedule,
   createLocationOnlyConfirmedSchedule,
   getRoomConfirmedSchedules,
@@ -22,6 +23,11 @@ import {
   getScheduleCandidates,
 } from "../../api/scheduleApi";
 import { getTopAvailableTimes, sortAvailableTimes, getTopConsecutiveDays } from "../../utils/scheduleUtils";
+=======
+  applyConfirmedLocationToSchedule,
+  createLocationOnlyConfirmedSchedule,
+} from "../../api/scheduleApi";
+>>>>>>> origin/feature/merge5-y2
 import KakaoMapView from "../../components/map/KakaoMapView";
 import LocationPicker from "../../components/map/LocationPicker";
 
@@ -75,9 +81,10 @@ function VoteDetailPage() {
   const [isReconfirmation, setIsReconfirmation] = useState(false);
   const [existingHasLocation, setExistingHasLocation] = useState(false);
   const [showShareToast, setShowShareToast] = useState(false);
-  const [roomConfirmedSchedules, setRoomConfirmedSchedules] = useState([]);
+  const [roomConfirmedSchedules] = useState([]);
   const [locationOnlySchedules, setLocationOnlySchedules] = useState([]);
   const [pendingGoToLocation, setPendingGoToLocation] = useState(false);
+<<<<<<< HEAD
   const [memberNicknames, setMemberNicknames] = useState({});
   const [showDetailAvailModal, setShowDetailAvailModal] = useState(false);
   const [detailAvailabilities, setDetailAvailabilities] = useState([]);
@@ -87,6 +94,11 @@ function VoteDetailPage() {
   const [detailAvailNDays, setDetailAvailNDays] = useState(2);
   const [detailSelectedMultiDays, setDetailSelectedMultiDays] = useState([]);
   const [createdLocationOnlySchedule, setCreatedLocationOnlySchedule] = useState(null);
+=======
+  const [createdLocationOnlySchedule, setCreatedLocationOnlySchedule] = useState(null);
+  const [confirmedLocationSchedulePrompt, setConfirmedLocationSchedulePrompt] =
+    useState(null);
+>>>>>>> origin/feature/merge5-y2
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user));
@@ -582,7 +594,7 @@ function VoteDetailPage() {
     }
 
     try {
-      const result = await confirmVote(
+      await confirmVote(
         Number(voteid),
         option,
         Number(roomid),
@@ -592,10 +604,14 @@ function VoteDetailPage() {
 
       await loadVote();
 
-      setPendingConfirmedLocation(result.confirmedLocation);
-      setRoomConfirmedSchedules(await getRoomConfirmedSchedules(roomid));
-      setAppointmentTitle("");
-      setShowScheduleModal(true);
+      const scheduleTitle = vote.confirmed_schedules?.title || "대상 일정";
+
+      if (!vote.confirmed_schedules?.date) {
+        setConfirmedLocationSchedulePrompt({ title: scheduleTitle });
+        return;
+      }
+
+      alert(`${scheduleTitle}에 장소를 저장했어요.`);
     } catch (error) {
       alert("확정 실패: " + (error.message || JSON.stringify(error)));
     }
@@ -1462,6 +1478,69 @@ function VoteDetailPage() {
         </div>
       )}
 
+      {confirmedLocationSchedulePrompt && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              width: "300px",
+              padding: "24px",
+              borderRadius: "16px",
+              backgroundColor: "var(--bg-color)",
+              textAlign: "center",
+            }}
+          >
+            <h3 style={{ marginTop: 0 }}>
+              {confirmedLocationSchedulePrompt.title}에 등록됐어요.
+            </h3>
+            <p style={{ color: "var(--secondary-text)", fontSize: "13px" }}>
+              아직 날짜와 시간이 정해지지 않았어요. 일정을 정하러 이동할까요?
+            </p>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={() => setConfirmedLocationSchedulePrompt(null)}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  border: "none",
+                  borderRadius: "8px",
+                  backgroundColor: "var(--btn-bg)",
+                  color: "var(--btn-text)",
+                  cursor: "pointer",
+                }}
+              >
+                나중에 하기
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(`/rooms/${roomid}?tab=schedule`)}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  border: "none",
+                  borderRadius: "8px",
+                  backgroundColor: "#7c79ff",
+                  color: "#fff",
+                  cursor: "pointer",
+                }}
+              >
+                지금 하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {createdLocationOnlySchedule && (
         <div
           style={{
@@ -1611,6 +1690,23 @@ function VoteDetailPage() {
             {getTimeRemaining(vote.endtime)}
           </p>
         ) : null}
+
+        {isLocationVote && (
+          <p
+            style={{
+              color: "#555",
+              fontSize: "14px",
+              padding: "10px",
+              backgroundColor: "#f8f8ff",
+              border: "1px solid #d8d8ff",
+              borderRadius: "8px",
+            }}
+          >
+            대상 일정: <strong>{vote.confirmed_schedules?.title || "선택한 일정"}</strong>
+            <br />
+            확정된 장소는 이 일정에 자동 저장됩니다.
+          </p>
+        )}
 
         {isLocationVote && (
           <p

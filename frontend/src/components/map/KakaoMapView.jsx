@@ -23,9 +23,20 @@ function KakaoMapView({
   const selectedInfoWindowRef = useRef(null)
   const routePolylineRef = useRef(null)
   const memberRoutePolylineRefs = useRef([])
+  const autoFitPendingRef = useRef(true)
 
   const [isMapReady, setIsMapReady] = useState(false)
   const [mapError, setMapError] = useState('')
+  const placeViewportKey = places
+    .map((place) => `${place.id || place.name}-${place.lat}-${place.lng}`)
+    .join('|')
+  const selectedPlaceViewportKey = selectedPlace
+    ? `${selectedPlace.id || selectedPlace.name}-${selectedPlace.lat}-${selectedPlace.lng}`
+    : ''
+
+  useEffect(() => {
+    autoFitPendingRef.current = true
+  }, [placeViewportKey, selectedPlaceViewportKey])
 
   useEffect(() => {
     loadKakaoMapScript()
@@ -308,18 +319,25 @@ function KakaoMapView({
       memberMarkerRefs.current.push(marker)
     })
 
-    if (validLocationCount === 1 && memberMarkerRefs.current[0]) {
+    if (
+      autoFitPendingRef.current &&
+      validLocationCount === 1 &&
+      memberMarkerRefs.current[0]
+    ) {
       const position = memberMarkerRefs.current[0].getPosition()
       mapObjectRef.current.setCenter(position)
       mapObjectRef.current.setLevel(5)
+      autoFitPendingRef.current = false
     }
 
     if (
+      autoFitPendingRef.current &&
       validLocationCount >= 2 &&
       places.length === 0 &&
       memberRoutePaths.length === 0
     ) {
       mapObjectRef.current.setBounds(bounds)
+      autoFitPendingRef.current = false
     }
 
     mapObjectRef.current.relayout()
@@ -373,6 +391,7 @@ function KakaoMapView({
     })
 
     if (
+      autoFitPendingRef.current &&
       validPlaceCount === 1 &&
       firstValidPlace &&
       memberRoutePaths.length === 0
@@ -384,10 +403,16 @@ function KakaoMapView({
         )
       )
       mapObjectRef.current.setLevel(4)
+      autoFitPendingRef.current = false
     }
 
-    if (validPlaceCount >= 2 && memberRoutePaths.length === 0) {
+    if (
+      autoFitPendingRef.current &&
+      validPlaceCount >= 2 &&
+      memberRoutePaths.length === 0
+    ) {
       mapObjectRef.current.setBounds(bounds)
+      autoFitPendingRef.current = false
     }
 
     mapObjectRef.current.relayout()
@@ -487,7 +512,10 @@ function KakaoMapView({
       bounds.extend(position)
     })
 
-    mapObjectRef.current.setBounds(bounds)
+    if (autoFitPendingRef.current) {
+      mapObjectRef.current.setBounds(bounds)
+      autoFitPendingRef.current = false
+    }
     mapObjectRef.current.relayout()
   }, [routePath, isMapReady])
 
@@ -573,8 +601,9 @@ function KakaoMapView({
       }
     })
 
-    if (validRouteCount > 0) {
+    if (autoFitPendingRef.current && validRouteCount > 0) {
       mapObjectRef.current.setBounds(bounds)
+      autoFitPendingRef.current = false
     }
 
     mapObjectRef.current.relayout()

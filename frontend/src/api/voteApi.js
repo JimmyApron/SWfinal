@@ -75,6 +75,7 @@ export async function createVote({
   reminderenabled,
   votetype,
   locationkind,
+  scheduleid,
 }) {
   if (!roomid) {
     throw new Error("roomid가 없습니다. 투표를 생성할 방 정보가 필요합니다.");
@@ -101,6 +102,7 @@ export async function createVote({
         is_reminder_sent: isUrgent && reminderenabled,
         votetype: votetype || "general",
         locationkind: locationkind || null,
+        scheduleid: scheduleid ? Number(scheduleid) : null,
       },
     ])
     .select()
@@ -147,6 +149,8 @@ export async function getVotes(roomid) {
       votetype,
       isclosed,
       confirmedoptionid,
+      scheduleid,
+      confirmed_schedules:scheduleid(title, date),
       voteresponses(userid)
     `)
     .eq("roomid", Number(roomid))
@@ -168,6 +172,7 @@ export async function getVoteDetail(voteid) {
     .from("votes")
     .select(`
       *,
+      confirmed_schedules:scheduleid(title, date),
       voteoptions!vote_options_voteid_fkey(*),
       voteresponses(optionid, userid, nickname)
     `)
@@ -333,8 +338,6 @@ export async function confirmVote(
   }
 
   if (isLocationVoteType(votetype)) {
-    const confirmedBy = extraValue;
-
     const placeName =
       option.placename || option.optiontext || "확정된 중간장소";
 
@@ -361,7 +364,7 @@ export async function confirmVote(
 
     const { data: locationVote, error: voteError } = await supabase
       .from("votes")
-      .select("title, votetype, locationkind")
+      .select("title, votetype, locationkind, scheduleid")
       .eq("id", Number(voteid))
       .single();
 
@@ -378,6 +381,12 @@ export async function confirmVote(
         locationVote?.title?.trim() === MIDDLE_PLACE_VOTE_TITLE
       );
 
+    const scheduleId = locationVote?.scheduleid;
+
+    if (!scheduleId) {
+      throw new Error("대상 일정이 없는 위치 투표입니다.");
+    }
+
     /**
      * 위치 탭에서 확정 중간장소로 다시 불러올 수 있도록 저장
      *
@@ -387,18 +396,14 @@ export async function confirmVote(
      */
     if (isMiddlePlaceVote && placeLat !== null && placeLng !== null) {
       const { error: middlePlaceError } = await supabase
-        .from("room_middle_places")
-        .upsert(
-          {
-            roomid: Number(roomid),
-            name: placeName,
-            address: placeAddress,
-            lat: placeLat,
-            lng: placeLng,
-            confirmedby: confirmedBy,
-          },
-          { onConflict: "roomid" }
-        );
+        .from("confirmed_schedules")
+        .update({
+          location: placeName,
+          locationaddress: placeAddress,
+          locationlat: placeLat,
+          locationlng: placeLng,
+        })
+        .eq("id", Number(scheduleId));
 
       if (middlePlaceError) {
         console.error("room_middle_places 저장 실패:", middlePlaceError);
@@ -406,7 +411,21 @@ export async function confirmVote(
       }
 
       if (option.travelresults?.length > 0) {
-        await updateRoomLocationTransportModes(roomid, option.travelresults);
+        await updateRoomLocationTransportModes(roomid, option.travelresults, scheduleId);
+      }
+    } else {
+      const { error: locationError } = await supabase
+        .from("confirmed_locations")
+        .insert([{
+          roomid: Number(roomid),
+          scheduleid: Number(scheduleId),
+          voteid: Number(voteid),
+          placename: placeName,
+        }]);
+
+      if (locationError) {
+        console.error("추가 장소 저장 실패:", locationError);
+        throw locationError;
       }
     }
 
@@ -415,6 +434,7 @@ export async function confirmVote(
       confirmedLocation: {
         roomid: Number(roomid),
         voteid: Number(voteid),
+        scheduleid: Number(scheduleId),
         placename: placeName,
         placeaddress: placeAddress,
         placelat: placeLat,
