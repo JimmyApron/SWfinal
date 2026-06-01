@@ -4,7 +4,6 @@ import { supabase } from "../../lib/supabaseClient";
 import {
   addAdditionalConfirmedLocation,
   cancelConfirmedSchedule,
-  createConfirmedScheduleForRoom,
   dismissConfirmedSchedule,
   getAdditionalConfirmedLocations,
   updateConfirmedScheduleTiming,
@@ -488,10 +487,9 @@ function ConfirmedScheduleDetailPage() {
     try {
       setSaving(true);
 
-      await createConfirmedScheduleForRoom(schedule.roomid, {
+      await updateConfirmedScheduleTiming(schedule.id, {
         ...scheduleForm,
-        location: schedule.location,
-        locationaddress: schedule.locationaddress,
+        isallday: !scheduleForm.starttime,
       });
 
       localStorage.removeItem(

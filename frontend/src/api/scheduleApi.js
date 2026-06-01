@@ -289,12 +289,16 @@ export async function applyConfirmedLocationToSchedule(scheduleId, location, isM
   if (error) throw new Error("추가 장소 저장 실패");
 }
 
-export async function createLocationOnlyConfirmedSchedule(location, isMiddlePlace) {
+export async function createLocationOnlyConfirmedSchedule(
+  location,
+  isMiddlePlace,
+  title = null
+) {
   const { data, error } = await supabase
     .from("confirmed_schedules")
     .insert([{
       roomid: Number(location.roomid),
-      title: null,
+      title: title?.trim() || null,
       date: null,
       starttime: null,
       endtime: null,
@@ -304,7 +308,7 @@ export async function createLocationOnlyConfirmedSchedule(location, isMiddlePlac
       locationlat: isMiddlePlace ? location.placelat ?? null : null,
       locationlng: isMiddlePlace ? location.placelng ?? null : null,
     }])
-    .select("id")
+    .select("*")
     .single();
 
   if (error) throw new Error("날짜 없는 일정 생성 실패");
@@ -364,16 +368,22 @@ export async function updateConfirmedScheduleLocation(
 
 export async function updateConfirmedScheduleTiming(
   scheduleId,
-  { date, starttime, endtime, isallday }
+  { title, date, starttime, endtime, isallday }
 ) {
+  const updateData = {
+    date,
+    starttime: isallday ? null : starttime || null,
+    endtime: isallday ? null : endtime || null,
+    isallday,
+  };
+
+  if (title !== undefined) {
+    updateData.title = title?.trim() || null;
+  }
+
   const { error } = await supabase
     .from("confirmed_schedules")
-    .update({
-      date,
-      starttime: isallday ? null : starttime || null,
-      endtime: isallday ? null : endtime || null,
-      isallday,
-    })
+    .update(updateData)
     .eq("id", scheduleId);
 
   if (error) {

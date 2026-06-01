@@ -69,6 +69,7 @@ function VoteDetailPage() {
   const [existingHasLocation, setExistingHasLocation] = useState(false);
   const [showShareToast, setShowShareToast] = useState(false);
   const [roomConfirmedSchedules, setRoomConfirmedSchedules] = useState([]);
+  const [createdLocationOnlySchedule, setCreatedLocationOnlySchedule] = useState(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user));
@@ -530,6 +531,7 @@ function VoteDetailPage() {
 
       setPendingConfirmedLocation(result.confirmedLocation);
       setRoomConfirmedSchedules(await getRoomConfirmedSchedules(roomid));
+      setAppointmentTitle("");
       setShowScheduleModal(true);
     } catch (error) {
       alert("확정 실패: " + (error.message || JSON.stringify(error)));
@@ -545,6 +547,7 @@ function VoteDetailPage() {
       );
       setShowScheduleModal(false);
       setPendingConfirmedLocation(null);
+      setAppointmentTitle("");
       navigate("/home");
     } catch (error) {
       alert("일정 위치 저장 실패: " + error.message);
@@ -552,17 +555,33 @@ function VoteDetailPage() {
   };
 
   const handleCreateScheduleFromLocation = async () => {
+    if (!appointmentTitle.trim()) {
+      alert("일정 이름을 입력해주세요.");
+      return;
+    }
+
     try {
-      await createLocationOnlyConfirmedSchedule(
+      const schedule = await createLocationOnlyConfirmedSchedule(
         pendingConfirmedLocation,
-        isMiddlePlaceVote
+        isMiddlePlaceVote,
+        appointmentTitle
       );
       setShowScheduleModal(false);
       setPendingConfirmedLocation(null);
-      navigate(`/rooms/${roomid}?tab=schedule`);
+      setAppointmentTitle("");
+      setCreatedLocationOnlySchedule({
+        ...schedule,
+        isLocationOnly: true,
+      });
     } catch (error) {
       alert("일정 생성 실패: " + error.message);
     }
+  };
+
+  const handleOpenCreatedSchedule = () => {
+    if (!createdLocationOnlySchedule) return;
+
+    navigate(`/rooms/${roomid}?tab=schedule`);
   };
 
   const handleConfirmWithLocation = async (goToLocation) => {
@@ -910,33 +929,6 @@ function VoteDetailPage() {
                 color: "var(--secondary-text)",
                 fontSize: "13px",
                 textAlign: "center",
-                marginBottom: "16px",
-              }}
-            >
-              약속 이름을 입력해 주세요
-            </p>
-
-            <input
-              type="text"
-              placeholder="예: 팀 회식, 생일 파티..."
-              value={appointmentTitle}
-              onChange={(e) => setAppointmentTitle(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                fontSize: "14px",
-                border: "1px solid var(--border-color)",
-                borderRadius: "10px",
-                boxSizing: "border-box",
-                marginBottom: "16px",
-              }}
-            />
-
-            <p
-              style={{
-                color: "var(--secondary-text)",
-                fontSize: "13px",
-                textAlign: "center",
                 marginBottom: "12px",
               }}
             >
@@ -972,6 +964,26 @@ function VoteDetailPage() {
               </div>
             )}
 
+            <p style={{ margin: "16px 0 8px", fontSize: "13px", fontWeight: "bold" }}>
+              2. 새로운 확정 일정 추가하기
+            </p>
+
+            <input
+              type="text"
+              placeholder="일정 이름 (예: 팀 회식, 생일 파티...)"
+              value={appointmentTitle}
+              onChange={(e) => setAppointmentTitle(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                fontSize: "14px",
+                border: "1px solid var(--border-color)",
+                borderRadius: "10px",
+                boxSizing: "border-box",
+                marginBottom: "8px",
+              }}
+            />
+
             <button
               onClick={handleCreateScheduleFromLocation}
               style={{
@@ -985,8 +997,69 @@ function VoteDetailPage() {
                 cursor: "pointer",
               }}
             >
-              2. 일정 정하러 가기
+              새로운 확정 일정 추가하기
             </button>
+          </div>
+        </div>
+      )}
+
+      {createdLocationOnlySchedule && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              width: "300px",
+              padding: "24px",
+              borderRadius: "16px",
+              backgroundColor: "var(--bg-color)",
+              textAlign: "center",
+            }}
+          >
+            <h3 style={{ marginTop: 0 }}>일정을 정하러 가시겠습니까?</h3>
+            <p style={{ color: "var(--secondary-text)", fontSize: "13px" }}>
+              만날 위치와 일정 이름은 저장되었습니다. 날짜와 시간은 나중에 입력할 수도 있습니다.
+            </p>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={() => setCreatedLocationOnlySchedule(null)}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  border: "none",
+                  borderRadius: "8px",
+                  backgroundColor: "var(--btn-bg)",
+                  color: "var(--btn-text)",
+                  cursor: "pointer",
+                }}
+              >
+                나중에 하기
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenCreatedSchedule}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  border: "none",
+                  borderRadius: "8px",
+                  backgroundColor: "#7c79ff",
+                  color: "#fff",
+                  cursor: "pointer",
+                }}
+              >
+                지금 일정 정하기
+              </button>
+            </div>
           </div>
         </div>
       )}
