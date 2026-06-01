@@ -69,12 +69,26 @@ export const updateNicknameApi = async (newNickname, userId) => {
  */
 export const updatePasswordApi = async (currentPassword, newPassword) => {
   try {
-    const { error } = await supabase.auth.updateUser({
-      current_password: currentPassword,
+    // 1. 현재 사용자 정보 가져오기 (이메일 확인용)
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) throw new Error('사용자 정보를 불러올 수 없습니다.')
+
+    // 2. 현재 비밀번호 확인을 위해 다시 로그인 시도
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: currentPassword,
+    })
+
+    if (signInError) {
+      throw new Error('현재 비밀번호가 일치하지 않습니다.')
+    }
+
+    // 3. 새 비밀번호로 업데이트
+    const { error: updateError } = await supabase.auth.updateUser({
       password: newPassword,
     })
 
-    if (error) throw error
+    if (updateError) throw updateError
 
     return {
       success: true,

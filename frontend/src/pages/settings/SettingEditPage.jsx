@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { FaEye, FaEyeSlash } from 'react-icons/fa'
 import { getCurrentUserApi, sendEmailOtpApi } from '../../api/authApi'
 import { supabase } from '../../lib/supabaseClient'
 import {
@@ -40,6 +41,11 @@ function SettingEditPage() {
 
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const [showDeleteForm, setShowDeleteForm] = useState(false)
   const [deletePassword, setDeletePassword] = useState('')
@@ -254,13 +260,35 @@ function SettingEditPage() {
     } finally { setIsUploading(false) }
   }
 
-  // 비밀번호/회원탈퇴 등 기타 함수 유지 (생략하지만 코드엔 포함)
+  // 비밀번호 변경 기능
   const handleUpdatePasswordDirect = async (e) => {
     e.preventDefault(); if (isSocialUser) return;
+    
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/
+
+    if (!currentPassword) { setMessage('⚠️ 현재 비밀번호를 입력해주세요.'); return }
+    if (!newPassword) { setMessage('⚠️ 새 비밀번호를 입력해주세요.'); return }
+    if (!passwordRegex.test(newPassword)) {
+      setMessage('⚠️ 비밀번호는 영문 대/소문자, 숫자, 특수문자를 모두 포함하여 최소 8자 이상이어야 합니다.')
+      return
+    }
+    if (newPassword !== confirmPassword) { setMessage('⚠️ 새 비밀번호 확인이 일치하지 않습니다.'); return }
+
     try {
+      setIsUploading(true)
+      setMessage('🔄 비밀번호를 변경 중입니다...')
       const res = await updatePasswordApi(currentPassword, newPassword)
-      if (res.success) { setMessage(`✅ ${res.message}`); setCurrentPassword(''); setNewPassword('') }
-    } catch (e) { setMessage('❌ 비밀번호 변경 실패') }
+      if (res.success) { 
+        setMessage(`✅ ${res.message}`)
+        setCurrentPassword('')
+        setNewPassword('')
+        setConfirmPassword('')
+      }
+    } catch (err) { 
+      setMessage(`❌ ${err.message || '비밀번호 변경 실패'}`) 
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   const handleConfirmDeleteAccount = async (e) => {
@@ -323,6 +351,103 @@ function SettingEditPage() {
           </div>
         )}
       </div>
+
+      {/* 비밀번호 변경 (일반 로그인 사용자만) */}
+      {!isSocialUser && (
+        <div className="edit-form-group" style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
+          <label>비밀번호 변경 🔒</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ position: 'relative' }}>
+              <input 
+                type={showCurrentPassword ? "text" : "password"} 
+                placeholder="현재 비밀번호" 
+                value={currentPassword} 
+                onChange={(e) => setCurrentPassword(e.target.value)} 
+                autoComplete="new-password"
+                style={{ width: '100%', paddingRight: '40px' }}
+              />
+              <span 
+                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: '#888' }}
+              >
+                {showCurrentPassword ? <FaEyeSlash /> : <FaEye />}
+              </span>
+            </div>
+            
+            <div style={{ position: 'relative' }}>
+              <input 
+                type={showNewPassword ? "text" : "password"} 
+                placeholder="새 비밀번호" 
+                value={newPassword} 
+                onChange={(e) => setNewPassword(e.target.value)} 
+                autoComplete="new-password"
+                style={{ width: '100%', paddingRight: '40px' }}
+              />
+              <span 
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: '#888' }}
+              >
+                {showNewPassword ? <FaEyeSlash /> : <FaEye />}
+              </span>
+            </div>
+            {newPassword && (
+              <p style={{ 
+                fontSize: '12px', 
+                margin: '0 0 4px 4px', 
+                color: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(newPassword) ? '#4caf50' : '#f44336' 
+              }}>
+                {/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(newPassword) 
+                  ? '✅ 안전한 비밀번호입니다.' 
+                  : '❌ 영문 대/소문자, 숫자, 특수문자 포함 8자 이상'}
+              </p>
+            )}
+
+            <div style={{ position: 'relative' }}>
+              <input 
+                type={showConfirmPassword ? "text" : "password"} 
+                placeholder="새 비밀번호 확인" 
+                value={confirmPassword} 
+                onChange={(e) => setConfirmPassword(e.target.value)} 
+                autoComplete="new-password"
+                style={{ width: '100%', paddingRight: '40px' }}
+              />
+              <span 
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: '#888' }}
+              >
+                {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
+              </span>
+            </div>
+            {confirmPassword && (
+              <p style={{ 
+                fontSize: '12px', 
+                margin: '0 0 4px 4px', 
+                color: newPassword === confirmPassword ? '#4caf50' : '#f44336' 
+              }}>
+                {newPassword === confirmPassword ? '✅ 비밀번호가 일치합니다.' : '❌ 비밀번호가 일치하지 않습니다.'}
+              </p>
+            )}
+
+            <button 
+              type="button" 
+              onClick={handleUpdatePasswordDirect} 
+              disabled={isUploading}
+              style={{ 
+                marginTop: '5px', 
+                padding: '10px', 
+                backgroundColor: '#f0f0f0', 
+                border: '1px solid #ddd', 
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '600'
+              }}
+            >
+              비밀번호 변경하기
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 알림 메시지 */}
       {message && <p className="status-message">{message}</p>}
