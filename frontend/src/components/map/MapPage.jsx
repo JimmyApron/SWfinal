@@ -56,6 +56,8 @@ function MapPage({ roomId }) {
   const [locationUpdateError, setLocationUpdateError] = useState('')
   const [pendingMiddleLocation, setPendingMiddleLocation] = useState(null)
   const [roomConfirmedSchedules, setRoomConfirmedSchedules] = useState([])
+  const [appointmentTitle, setAppointmentTitle] = useState('')
+  const [createdLocationOnlySchedule, setCreatedLocationOnlySchedule] = useState(null)
   const [transportModePrompt, setTransportModePrompt] = useState(null)
 
   const myLocationRecord = memberLocations.find((location) => {
@@ -463,9 +465,18 @@ function MapPage({ roomId }) {
       setCurrentLocation(transportModePrompt.location)
       setTransportModePrompt(null)
       await loadMemberLocations()
+
+      if (middlePlace) {
+        await calculateAllMemberRoutesToMiddlePlace(middlePlace)
+      }
+
       setMessage(
         transportModePrompt.isEdit
-          ? '이동수단을 수정했습니다.'
+          ? middlePlace
+            ? '이동수단을 수정하고 경로를 다시 계산했습니다.'
+            : '이동수단을 수정했습니다.'
+          : middlePlace
+          ? '현재 위치와 이동수단을 저장하고 경로를 다시 계산했습니다.'
           : '현재 위치와 이동수단을 저장했습니다.'
       )
     } catch (error) {
@@ -971,6 +982,7 @@ function MapPage({ roomId }) {
         placelat: confirmedPlace.lat,
         placelng: confirmedPlace.lng,
       })
+      setAppointmentTitle('')
       setRoomConfirmedSchedules(await getRoomConfirmedSchedules(currentRoomId))
 
       try {
@@ -999,6 +1011,7 @@ function MapPage({ roomId }) {
     try {
       await applyConfirmedLocationToSchedule(scheduleId, pendingMiddleLocation, true)
       setPendingMiddleLocation(null)
+      setAppointmentTitle('')
       setMessage('선택한 일정에 중간 장소를 추가했습니다.')
     } catch (error) {
       setMessage(`일정 위치 저장 실패: ${error.message}`)
@@ -1006,13 +1019,56 @@ function MapPage({ roomId }) {
   }
 
   const handleCreateScheduleFromMiddlePlace = async () => {
+    if (!appointmentTitle.trim()) {
+      alert('일정 이름을 입력해주세요.')
+      return
+    }
+
     try {
-      await createLocationOnlyConfirmedSchedule(pendingMiddleLocation, true)
+      const schedule = await createLocationOnlyConfirmedSchedule(
+        pendingMiddleLocation,
+        true,
+        appointmentTitle
+      )
       setPendingMiddleLocation(null)
-      navigate(`/rooms/${currentRoomId}?tab=schedule`)
+      setAppointmentTitle('')
+      setCreatedLocationOnlySchedule({
+        ...schedule,
+        isLocationOnly: true,
+      })
     } catch (error) {
       setMessage(`일정 생성 실패: ${error.message}`)
     }
+  }
+
+  const handleSetMeetingPlace = async (place) => {
+    if (!currentRoomId) {
+      setMessage('방 정보를 찾을 수 없어 만날 위치를 설정할 수 없습니다.')
+      return
+    }
+
+    setPendingMiddleLocation({
+      roomid: currentRoomId,
+      voteid: null,
+      placename: place.name || '이름 없는 장소',
+      placeaddress: place.address || null,
+      placelat: place.lat,
+      placelng: place.lng,
+    })
+    setAppointmentTitle('')
+
+    try {
+      setRoomConfirmedSchedules(await getRoomConfirmedSchedules(currentRoomId))
+    } catch (error) {
+      setPendingMiddleLocation(null)
+      setMessage(`확정 일정 조회 실패: ${error.message}`)
+    }
+  }
+
+  const handleOpenCreatedSchedule = () => {
+    if (!createdLocationOnlySchedule) return
+
+    navigate(`/rooms/${currentRoomId}?tab=schedule`)
   }
 
   const handleCreateMiddlePlaceVote = (selectedPlaces) => {
@@ -1144,21 +1200,36 @@ function MapPage({ roomId }) {
             zIndex: 1000,
           }}
         >
-          <div style={{ width: '300px', padding: '24px', borderRadius: '16px', backgroundColor: '#fff' }}>
-            <h3 style={{ marginTop: 0 }}>위치가 확정되었습니다!</h3>
-            <p style={{ color: '#666', fontSize: '13px' }}>
+          <div style={{ width: '300px', padding: '24px', borderRadius: '16px', backgroundColor: 'var(--bg-color)' }}>
+            <h3 style={{ marginBottom: '4px', textAlign: 'center' }}>
+              위치가 확정되었습니다!
+            </h3>
+            <p style={{ color: 'var(--secondary-text)', fontSize: '13px', textAlign: 'center', marginBottom: '12px' }}>
               위치를 추가할 일정을 선택하거나 새 일정을 만들어 주세요.
             </p>
 
             {roomConfirmedSchedules.length > 0 && (
               <div style={{ marginBottom: '12px' }}>
-                <strong style={{ fontSize: '13px' }}>1. 확정된 일정에서 정하기</strong>
+                <p style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: 'bold' }}>
+                  1. 확정된 일정에서 정하기
+                </p>
                 {roomConfirmedSchedules.map((schedule) => (
                   <button
                     key={schedule.id}
                     type="button"
                     onClick={() => handleApplyMiddlePlaceToSchedule(schedule.id)}
-                    style={{ width: '100%', marginTop: '6px', padding: '10px', textAlign: 'left' }}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      marginBottom: '6px',
+                      backgroundColor: 'var(--card-bg)',
+                      color: 'var(--text-color)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '10px',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
                   >
                     {schedule.title || schedule.date || '날짜 미정 일정'}
                   </button>
@@ -1166,9 +1237,87 @@ function MapPage({ roomId }) {
               </div>
             )}
 
-            <button type="button" onClick={handleCreateScheduleFromMiddlePlace} style={{ width: '100%', padding: '12px' }}>
-              2. 일정 정하러 가기
+            <p style={{ margin: '16px 0 8px', fontSize: '13px', fontWeight: 'bold' }}>
+              2. 새로운 확정 일정 추가하기
+            </p>
+
+            <input
+              type="text"
+              placeholder="일정 이름 (예: 팀 회식, 생일 파티...)"
+              value={appointmentTitle}
+              onChange={(event) => setAppointmentTitle(event.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                fontSize: '14px',
+                border: '1px solid var(--border-color)',
+                borderRadius: '10px',
+                boxSizing: 'border-box',
+                marginBottom: '8px',
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={handleCreateScheduleFromMiddlePlace}
+              style={{
+                width: '100%',
+                padding: '12px',
+                backgroundColor: 'var(--btn-bg)',
+                color: 'var(--text-color)',
+                border: 'none',
+                borderRadius: '10px',
+                fontSize: '15px',
+                cursor: 'pointer',
+              }}
+            >
+              새로운 확정 일정 추가하기
             </button>
+          </div>
+        </div>
+      )}
+
+      {createdLocationOnlySchedule && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+        >
+          <div style={{ width: '300px', padding: '24px', borderRadius: '16px', backgroundColor: 'var(--bg-color)', textAlign: 'center' }}>
+            <h3 style={{ marginTop: 0 }}>일정을 정하러 가시겠습니까?</h3>
+            <p style={{ color: 'var(--secondary-text)', fontSize: '13px' }}>
+              만날 위치와 일정 이름은 저장되었습니다. 날짜와 시간은 나중에 입력할 수도 있습니다.
+            </p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setCreatedLocationOnlySchedule(null)}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--btn-bg)',
+                  color: 'var(--btn-text)',
+                  cursor: 'pointer',
+                }}
+              >
+                나중에 하기
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenCreatedSchedule}
+                style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '8px', backgroundColor: '#7c79ff', color: '#fff', cursor: 'pointer' }}
+              >
+                지금 일정 정하기
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1467,6 +1616,7 @@ function MapPage({ roomId }) {
         selectedPlace={selectedPlace}
         destination={destination}
         memberRoutePaths={memberRoutePaths}
+        onSetMeetingPlace={handleSetMeetingPlace}
       />
 
       {!middlePlace && (

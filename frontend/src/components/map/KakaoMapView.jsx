@@ -9,6 +9,7 @@ function KakaoMapView({
   memberRoutePaths = [],
   onMapClick,
   pickedPlace,
+  onSetMeetingPlace,
 }) {
   const mapRef = useRef(null)
   const mapObjectRef = useRef(null)
@@ -586,18 +587,47 @@ function KakaoMapView({
 
     const kakaoMapUrl = place.kakaoMapUrl || place.kakaomapurl
 
+    const content = document.createElement('div')
+    content.style.padding = '10px'
+    content.style.fontSize = '13px'
+    content.style.lineHeight = '1.5'
+
+    const name = document.createElement('strong')
+    name.textContent = place.name || '장소명 없음'
+    content.appendChild(name)
+
+    const address = document.createElement('p')
+    address.style.margin = '4px 0'
+    address.textContent = place.address || '주소 정보 없음'
+    content.appendChild(address)
+
+    if (kakaoMapUrl) {
+      const link = document.createElement('a')
+      link.href = kakaoMapUrl
+      link.target = '_blank'
+      link.rel = 'noreferrer'
+      link.textContent = '카카오맵에서 보기'
+      content.appendChild(link)
+    }
+
+    if (onSetMeetingPlace) {
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.textContent = '만날 위치로 설정하기'
+      button.style.display = 'block'
+      button.style.marginTop = '8px'
+      button.style.padding = '7px 10px'
+      button.style.border = 'none'
+      button.style.borderRadius = '7px'
+      button.style.backgroundColor = '#7c79ff'
+      button.style.color = '#fff'
+      button.style.cursor = 'pointer'
+      button.addEventListener('click', () => onSetMeetingPlace(place))
+      content.appendChild(button)
+    }
+
     selectedInfoWindowRef.current = new window.kakao.maps.InfoWindow({
-      content: `
-        <div style="padding:10px; font-size:13px; line-height:1.5;">
-          <strong>${escapeHtml(place.name || '장소명 없음')}</strong>
-          <p style="margin:4px 0;">${escapeHtml(place.address || '주소 정보 없음')}</p>
-          ${
-            kakaoMapUrl
-              ? `<a href="${escapeHtml(kakaoMapUrl)}" target="_blank" rel="noreferrer">카카오맵에서 보기</a>`
-              : ''
-          }
-        </div>
-      `,
+      content,
     })
 
     selectedInfoWindowRef.current.open(mapObjectRef.current, marker)
