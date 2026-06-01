@@ -447,9 +447,13 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
         </>
       )}
 
-      {/* Confirmed schedules section */}      <div style={{ marginBottom: "20px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
-          <h2 style={{ margin: 0 }}>확정된 일정</h2>
+      {/* Confirmed schedules section */}
+      <div style={{ marginBottom: "32px", marginTop: "24px" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "16px" }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "700", color: "#1F2933" }}>확정된 일정</h2>
+            <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#6B7280" }}>다가오는 약속을 확인해보세요.</p>
+          </div>
           <button
             onClick={() => {
               if (showConfirmedForm) {
@@ -458,44 +462,56 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                 setShowAddMethodSheet(true);
               }
             }}
-            style={{ padding: "6px 14px", backgroundColor: "#7c79ff", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "13px" }}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#F0ECFF",
+              color: "#7C5CFF",
+              border: "1px solid #7C5CFF",
+              borderRadius: "20px",
+              cursor: "pointer",
+              fontSize: "13px",
+              fontWeight: "600",
+              transition: "all 0.2s",
+            }}
           >
             {showConfirmedForm ? "취소" : "+ 일정 추가"}
           </button>
         </div>
 
         {showConfirmedForm && (
-          <div style={{ backgroundColor: "#f8f8ff", borderRadius: "10px", padding: "14px", marginBottom: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
-            <input type="text" placeholder="일정 제목 (선택)" value={confirmedTitle} onChange={(e) => setConfirmedTitle(e.target.value)} style={{ padding: "7px 10px", border: "1px solid #d8d8ff", borderRadius: "6px", fontSize: "14px" }} />
-            <input type="date" value={confirmedDate} onChange={(e) => setConfirmedDate(e.target.value)} style={{ padding: "7px 10px", border: "1px solid #d8d8ff", borderRadius: "6px", fontSize: "14px" }} />
-            <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "14px" }}>
-              <input type="checkbox" checked={confirmedIsAllDay} onChange={(e) => setConfirmedIsAllDay(e.target.checked)} /> 하루종일
+          <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", padding: "16px", marginBottom: "16px", display: "flex", flexDirection: "column", gap: "10px", border: "1px solid #E5E7EB", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+            <input type="text" placeholder="일정 제목 (선택)" value={confirmedTitle} onChange={(e) => setConfirmedTitle(e.target.value)} style={{ padding: "10px 12px", border: "1px solid #E5E7EB", borderRadius: "8px", fontSize: "14px", outline: "none" }} />
+            <input type="date" value={confirmedDate} onChange={(e) => setConfirmedDate(e.target.value)} style={{ padding: "10px 12px", border: "1px solid #E5E7EB", borderRadius: "8px", fontSize: "14px", outline: "none" }} />
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", color: "#1F2933", cursor: "pointer" }}>
+              <input type="checkbox" checked={confirmedIsAllDay} onChange={(e) => setConfirmedIsAllDay(e.target.checked)} style={{ accentColor: "#7C5CFF" }} /> 하루종일
             </label>
             {!confirmedIsAllDay && (
               <div style={{ display: "flex", gap: "8px" }}>
-                <select value={confirmedStartTime} onChange={(e) => setConfirmedStartTime(e.target.value)} style={{ flex: 1, padding: "7px", border: "1px solid #d8d8ff", borderRadius: "6px", fontSize: "14px" }}>
+                <select value={confirmedStartTime} onChange={(e) => setConfirmedStartTime(e.target.value)} style={{ flex: 1, padding: "10px", border: "1px solid #E5E7EB", borderRadius: "8px", fontSize: "14px", outline: "none", backgroundColor: "#FFFFFF" }}>
                   <option value="">시작 시간</option>
                   {timeSlots.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
-                <select value={confirmedEndTime} onChange={(e) => setConfirmedEndTime(e.target.value)} style={{ flex: 1, padding: "7px", border: "1px solid #d8d8ff", borderRadius: "6px", fontSize: "14px" }}>
+                <select value={confirmedEndTime} onChange={(e) => setConfirmedEndTime(e.target.value)} style={{ flex: 1, padding: "10px", border: "1px solid #E5E7EB", borderRadius: "8px", fontSize: "14px", outline: "none", backgroundColor: "#FFFFFF" }}>
                   <option value="">종료 시간</option>
                   {timeSlots.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
             )}
-            <button onClick={handleAddConfirmedSchedule} style={{ padding: "8px", backgroundColor: "#7c79ff", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "14px", fontWeight: "bold" }}>추가하기</button>
+            <button onClick={handleAddConfirmedSchedule} style={{ padding: "12px", backgroundColor: "#7C5CFF", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "14px", fontWeight: "700", marginTop: "4px" }}>추가하기</button>
           </div>
         )}
 
         {confirmedSchedules.length === 0 ? (
-          <p style={{ color: "#aaa", fontSize: "13px", margin: 0 }}>아직 확정된 일정이 없습니다.</p>
+          <div style={{ padding: "32px 0", textAlign: "center", backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px dashed #E5E7EB" }}>
+            <p style={{ color: "#6B7280", fontSize: "14px", margin: 0 }}>아직 확정된 일정이 없습니다.</p>
+          </div>
         ) : (
           <div>
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: "10px",
+                gap: "12px",
               }}
             >
               {(isConfirmedExpanded ? confirmedSchedules : confirmedSchedules.slice(0, 3)).map((s) => {
@@ -519,23 +535,30 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                 onClick={() => setIsConfirmedExpanded(!isConfirmedExpanded)}
                 style={{
                   width: "100%",
-                  padding: "8px",
+                  padding: "12px",
                   marginTop: "8px",
                   backgroundColor: "transparent",
-                  color: "#7c79ff",
-                  border: "1px solid #7c79ff",
-                  borderRadius: "8px",
+                  color: "#7C5CFF",
+                  border: "none",
                   cursor: "pointer",
-                  fontSize: "13px",
-                  fontWeight: "bold"
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "4px",
                 }}
               >
-                {isConfirmedExpanded ? "접기 ▲" : `더보기 (+${confirmedSchedules.length - 3}) ▼`}
+                {isConfirmedExpanded ? "접기 ▲" : `${confirmedSchedules.length - 3}개 더 보기 ▼`}
               </button>
             )}
+            <div style={{ textAlign: "center", marginTop: "12px" }}>
+              <span style={{ fontSize: "12px", color: "#9CA3AF" }}>총 {confirmedSchedules.length}개의 일정</span>
+            </div>
           </div>
         )}
       </div>
+
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "16px 0 10px" }}>
         <h2 style={{ margin: 0 }}>일정 후보</h2>

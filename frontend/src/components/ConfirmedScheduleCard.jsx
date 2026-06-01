@@ -1,3 +1,6 @@
+import { FaCalendarAlt, FaClock, FaMapMarkerAlt, FaBell } from "react-icons/fa";
+import { FiMoreHorizontal } from "react-icons/fi";
+
 function getTodayStr() {
   const now = new Date();
   const y = now.getFullYear();
@@ -9,29 +12,38 @@ function getTodayStr() {
 function getTimeUntil(date, starttime) {
   const today = getTodayStr();
 
-  if (date === today) return "오늘 약속입니다";
+  if (date === today) return "오늘 약속";
 
   const target = new Date(`${date}T${starttime || "00:00:00"}`);
   const diff = target - new Date();
 
-  if (diff < 0) return "지난 일정입니다";
+  if (diff < 0) return "지난 일정";
 
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
   const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
 
-  if (days > 0) return `일정 ${days}일 ${hours}시간 전입니다`;
-  if (hours > 0) return `일정 ${hours}시간 ${minutes}분 전입니다`;
+  if (days > 0) return `${days}일 ${hours}시간 전`;
+  if (hours > 0) return `${hours}시간 ${minutes}분 전`;
 
-  return `일정 ${minutes}분 전입니다`;
+  return `${minutes}분 전`;
+}
+
+function formatDateDisplay(dateStr) {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const days = ["일", "월", "화", "수", "목", "금", "토"];
+  return `${y}.${m}.${d} (${days[date.getDay()]})`;
 }
 
 function ConfirmedScheduleCard({ schedule, onClick, actions }) {
-  const dateLabel = !schedule.date
-    ? null
-    : schedule.isallday
-    ? `${schedule.date} (하루종일)`
-    : `${schedule.date} ${schedule.starttime ?? ""} ~${
+  const dateLabel = formatDateDisplay(schedule.date);
+  const timeLabel = schedule.isallday
+    ? "하루종일"
+    : `${schedule.starttime ?? ""} ~${
         schedule.endtime ? ` ${schedule.endtime}` : ""
       }`;
 
@@ -39,75 +51,137 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
     <div
       onClick={onClick}
       style={{
-        padding: "10px 14px",
-        marginBottom: "8px",
-        border: "1px solid var(--card-border)",
-        borderRadius: "12px",
+        padding: "16px",
+        marginBottom: "12px",
+        borderRadius: "16px",
         cursor: "pointer",
-        backgroundColor: "var(--card-bg)",
+        backgroundColor: "#FFFFFF",
         width: "100%",
         boxSizing: "border-box",
+        boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+        border: "1px solid #E5E7EB",
+        display: "flex",
+        flexDirection: "column",
+        gap: "12px",
       }}
     >
-      <p style={{ margin: 0, fontSize: "12px", color: "var(--secondary-text)" }}>
-        {schedule.roomname}
-      </p>
-
-      <p style={{ margin: "4px 0 0", fontWeight: "bold", color: "var(--text-color)", fontSize: "15px" }}>
-        {schedule.title || dateLabel || "일정 미정"}
-        {schedule.isAbsent && (
-          <span
-            style={{
-              marginLeft: "6px",
-              fontSize: "11px",
-              color: "#fff",
-              backgroundColor: "#bbb",
-              borderRadius: "4px",
-              padding: "1px 5px",
-            }}
-          >
-            불참
-          </span>
-        )}
-      </p>
-
-      <p style={{ margin: "2px 0 0", fontSize: "13px", color: dateLabel ? "var(--text-color)" : "var(--secondary-text)" }}>
-        {dateLabel || "일정 미정"}
-      </p>
-
-      {schedule.date && (
-        <p
+      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        {/* 왼쪽 아이콘 영역 */}
+        <div
           style={{
-            margin: "4px 0 0",
-            fontSize: "12px",
-            color: schedule.date === getTodayStr() ? "var(--accent-color)" : "#f90",
-            fontWeight: schedule.date === getTodayStr() ? "bold" : "normal",
+            width: "40px",
+            height: "40px",
+            borderRadius: "12px",
+            backgroundColor: "#F0ECFF",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#7C5CFF",
+            flexShrink: 0,
           }}
         >
-          {getTimeUntil(schedule.date, schedule.starttime)}
-        </p>
+          {schedule.isallday ? <FaCalendarAlt size={18} /> : <FaClock size={18} />}
+        </div>
+
+        {/* 중앙 정보 영역 */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px" }}>
+            <p
+              style={{
+                margin: 0,
+                fontWeight: "700",
+                color: "#1F2933",
+                fontSize: "15px",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                flex: 1,
+              }}
+            >
+              {schedule.title || "일정 미정"}
+              {schedule.isAbsent && (
+                <span
+                  style={{
+                    marginLeft: "6px",
+                    fontSize: "10px",
+                    color: "#6B7280",
+                    backgroundColor: "#F3F4F6",
+                    borderRadius: "4px",
+                    padding: "2px 6px",
+                    fontWeight: "500",
+                    verticalAlign: "middle",
+                  }}
+                >
+                  불참
+                </span>
+              )}
+            </p>
+            <button
+              style={{
+                background: "none",
+                border: "none",
+                color: "#9CA3AF",
+                cursor: "pointer",
+                padding: "4px",
+                marginTop: "-4px",
+                marginRight: "-4px",
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                // 더보기 기능 연결 시 사용
+              }}
+            >
+              <FiMoreHorizontal size={18} />
+            </button>
+          </div>
+          <p style={{ margin: "2px 0 0", fontSize: "13px", color: "#6B7280" }}>
+            {dateLabel} · {timeLabel}
+          </p>
+        </div>
+      </div>
+
+      {/* 구분선 */}
+      <div style={{ height: "1px", backgroundColor: "#F3F4F6", margin: "0 -4px" }} />
+
+      {/* 하단 정보 영역 */}
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "12px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "4px", color: schedule.location ? "#4B5563" : "#9CA3AF", flex: 1, minWidth: 0 }}>
+          <FaMapMarkerAlt size={12} color={schedule.location ? "#7C5CFF" : "#9CA3AF"} />
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {schedule.location || "위치 미정"}
+          </span>
+        </div>
+        <div style={{ width: "1px", height: "12px", backgroundColor: "#E5E7EB" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#F59E0B", fontWeight: "500" }}>
+          <FaBell size={12} />
+          <span>{getTimeUntil(schedule.date, schedule.starttime)} 알림</span>
+        </div>
+      </div>
+
+      {schedule.additionalLocations && schedule.additionalLocations.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "-4px" }}>
+          {schedule.additionalLocations.map((place) => (
+            <span
+              key={place.id}
+              style={{
+                fontSize: "11px",
+                backgroundColor: "#F9FAFB",
+                color: "#6B7280",
+                padding: "2px 8px",
+                borderRadius: "6px",
+                border: "1px solid #E5E7EB",
+              }}
+            >
+              #{place.placename}
+            </span>
+          ))}
+        </div>
       )}
-
-      <p
-        style={{
-          margin: "4px 0 0",
-          fontSize: "13px",
-          color: schedule.location ? "var(--accent-color)" : "var(--secondary-text)",
-        }}
-      >
-        {schedule.location ? `📍 ${schedule.location}` : "위치 미정 (탭하여 설정)"}
-      </p>
-
-      {schedule.additionalLocations?.map((place) => (
-        <p key={place.id} style={{ margin: "4px 0 0", fontSize: "13px", color: "var(--text-color)" }}>
-          추가장소: {place.placename}
-        </p>
-      ))}
 
       {actions && (
         <div
           onClick={(event) => event.stopPropagation()}
-          style={{ display: "flex", gap: "6px", marginTop: "10px", flexWrap: "wrap" }}
+          style={{ display: "flex", gap: "6px", marginTop: "4px", flexWrap: "wrap" }}
         >
           {actions}
         </div>
@@ -115,5 +189,6 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
     </div>
   );
 }
+
 
 export default ConfirmedScheduleCard;
