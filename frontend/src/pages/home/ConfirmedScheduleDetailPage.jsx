@@ -248,6 +248,12 @@ function ConfirmedScheduleDetailPage() {
   const isLocationOnly = Boolean(schedule.isLocationOnly);
   const isAbsent = currentUser?.id ? absentees.includes(currentUser.id) : false;
 
+  const isPastSchedule = (() => {
+    if (!scheduleTiming.date) return false;
+    const today = getTodayStr();
+    return scheduleTiming.date < today;
+  })();
+
   const dateLabel = !scheduleTiming.date
     ? "일정 미정"
     : scheduleTiming.isallday
@@ -806,6 +812,21 @@ function ConfirmedScheduleDetailPage() {
 
         <p style={{ color: "#555", marginBottom: schedule.date ? "4px" : "16px" }}>{dateLabel}</p>
 
+        {isPastSchedule && (
+          <div
+            style={{
+              padding: "10px 14px",
+              marginBottom: "12px",
+              backgroundColor: "#f5f5f5",
+              borderRadius: "10px",
+              fontSize: "13px",
+              color: "#888",
+            }}
+          >
+            지난 일정입니다. 날짜·위치 수정은 불가합니다.
+          </div>
+        )}
+
         {schedule.date && (
           <p
             style={{
@@ -831,19 +852,17 @@ function ConfirmedScheduleDetailPage() {
           <button
             type="button"
             onClick={() => {
+              if (isPastSchedule) return;
               setTimingDraft(scheduleTiming);
               setIsEditingTiming((prev) => !prev);
             }}
-            style={shortcutButtonStyle}
+            disabled={isPastSchedule}
+            style={{
+              ...shortcutButtonStyle,
+              ...(isPastSchedule ? { opacity: 0.4, cursor: "not-allowed" } : {}),
+            }}
           >
             직접 수정
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate(`/rooms/${schedule.roomid}?tab=location`)}
-            style={shortcutButtonStyle}
-          >
-            위치탭 바로가기
           </button>
           {/* 케이스 1: 투표로 생성 + 투표 존재 */}
           {schedule.voteid && voteExists === true && (
@@ -1018,9 +1037,15 @@ function ConfirmedScheduleDetailPage() {
 
         {middlePlaceSection}
 
-        <p style={{ fontWeight: "bold", marginBottom: "12px" }}>
-          만날 위치 설정
-        </p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+          <p style={{ fontWeight: "bold", margin: 0 }}>만날 위치 설정</p>
+          <button
+            onClick={() => navigate(`/rooms/${schedule.roomid}?tab=location`)}
+            style={{ border: "none", background: "none", color: "#7c79ff", fontSize: "13px", cursor: "pointer", padding: 0 }}
+          >
+            위치 탭에서 정하기
+          </button>
+        </div>
 
         <input
           type="text"
@@ -1045,83 +1070,126 @@ function ConfirmedScheduleDetailPage() {
 
         {!locationAddress && <div style={{ marginBottom: "12px" }} />}
 
-        <button
-          onClick={() => setShowMap((prev) => !prev)}
-          style={secondaryButtonStyle}
-        >
-          {showMap ? "지도 닫기" : "지도에서 위치 선택하기"}
-        </button>
+        {isPastSchedule ? (
+          <p style={{ fontSize: "13px", color: "#aaa", marginBottom: "12px" }}>
+            지난 일정은 위치를 수정할 수 없습니다.
+          </p>
+        ) : (
+          <>
+            <button
+              onClick={() => setShowMap((prev) => !prev)}
+              style={secondaryButtonStyle}
+            >
+              {showMap ? "지도 닫기" : "지도에서 위치 선택하기"}
+            </button>
 
-        {showMap && (
-          <LocationPicker
-            initialPlace={selectedMeetingPlace}
-            onSelect={(name, address, place = {}) => {
-              setLocationText(name);
-              setLocationAddress(address || place.address || "");
-              setSelectedMeetingPlace({
-                name,
-                address: address || place.address || "",
-                lat: place.lat,
-                lng: place.lng,
-              });
-              refreshRouteEstimates(place);
-            }}
-          />
+            {showMap && (
+              <LocationPicker
+                initialPlace={selectedMeetingPlace}
+                onSelect={(name, address, place = {}) => {
+                  setLocationText(name);
+                  setLocationAddress(address || place.address || "");
+                  setSelectedMeetingPlace({
+                    name,
+                    address: address || place.address || "",
+                    lat: place.lat,
+                    lng: place.lng,
+                  });
+                  refreshRouteEstimates(place);
+                }}
+              />
+            )}
+
+            <button onClick={handleSave} disabled={saving} style={primaryButtonStyle}>
+              {saving ? "저장 중..." : "위치 저장"}
+            </button>
+          </>
         )}
-
-        <button onClick={handleSave} disabled={saving} style={primaryButtonStyle}>
-          {saving ? "저장 중..." : "위치 저장"}
-        </button>
 
         <div style={{ marginBottom: "24px" }} />
 
-        {currentUser && (
-          <button
-            onClick={handleToggleAbsence}
-            style={{
-              width: "100%",
-              padding: "12px",
-              marginBottom: "8px",
-              backgroundColor: "#fff",
-              color: isAbsent ? "#7c79ff" : "#f44",
-              border: `1px solid ${isAbsent ? "#7c79ff" : "#f44"}`,
-              borderRadius: "10px",
-              fontSize: "15px",
-              cursor: "pointer",
-            }}
-          >
-            {isAbsent ? "참석으로 변경" : "일정 취소"}
-          </button>
-        )}
-
-        {isRoomOwner && (
+        {isPastSchedule ? (
+          /* 지난 일정: 개인 캘린더에서만 삭제 (본인에게만 적용) */
+          currentUser && (
+            <>
+              <button
+                onClick={handleDismiss}
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  backgroundColor: "#fff",
+                  color: "#f44",
+                  border: "1px solid #f44",
+                  borderRadius: "10px",
+                  fontSize: "15px",
+                  cursor: "pointer",
+                }}
+              >
+                일정 삭제
+              </button>
+              <p
+                style={{
+                  textAlign: "center",
+                  fontSize: "12px",
+                  color: "#aaa",
+                  marginTop: "6px",
+                }}
+              >
+                내 캘린더에서만 삭제됩니다
+              </p>
+            </>
+          )
+        ) : (
+          /* 현재/미래 일정: 기존 버튼 유지 */
           <>
-            <button
-              onClick={handleCancel}
-              style={{
-                width: "100%",
-                padding: "12px",
-                backgroundColor: "#fff",
-                color: "#f44",
-                border: "1px solid #f44",
-                borderRadius: "10px",
-                fontSize: "15px",
-                cursor: "pointer",
-              }}
-            >
-              일정 삭제
-            </button>
+            {currentUser && (
+              <button
+                onClick={handleToggleAbsence}
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  marginBottom: "8px",
+                  backgroundColor: "#fff",
+                  color: isAbsent ? "#7c79ff" : "#f44",
+                  border: `1px solid ${isAbsent ? "#7c79ff" : "#f44"}`,
+                  borderRadius: "10px",
+                  fontSize: "15px",
+                  cursor: "pointer",
+                }}
+              >
+                {isAbsent ? "참석으로 변경" : "일정 취소"}
+              </button>
+            )}
 
-            <p
-              style={{
-                textAlign: "center",
-                fontSize: "12px",
-                color: "#aaa",
-                marginTop: "6px",
-              }}
-            >
-              삭제하면 모든 멤버의 화면에서 사라집니다
-            </p>
+            {isRoomOwner && (
+              <>
+                <button
+                  onClick={handleCancel}
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    backgroundColor: "#fff",
+                    color: "#f44",
+                    border: "1px solid #f44",
+                    borderRadius: "10px",
+                    fontSize: "15px",
+                    cursor: "pointer",
+                  }}
+                >
+                  일정 삭제
+                </button>
+                <p
+                  style={{
+                    textAlign: "center",
+                    fontSize: "12px",
+                    color: "#aaa",
+                    marginTop: "6px",
+                  }}
+                >
+                  삭제하면 모든 멤버의 화면에서 사라집니다
+                </p>
+              </>
+            )}
           </>
         )}
 

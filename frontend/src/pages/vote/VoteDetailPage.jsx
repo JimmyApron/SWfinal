@@ -16,6 +16,7 @@ import { sendVoteClosedNotification } from "../notification/VoteNotification";
 import { addEventToGoogleCalendar } from "../../api/googleCalendarApi";
 import {
   applyConfirmedLocationToSchedule,
+  createDraftConfirmedSchedule,
   createLocationOnlyConfirmedSchedule,
   getRoomConfirmedSchedules,
   getMemberAvailabilities,
@@ -74,7 +75,7 @@ function VoteDetailPage() {
   const [isReconfirmation, setIsReconfirmation] = useState(false);
   const [existingHasLocation, setExistingHasLocation] = useState(false);
   const [showShareToast, setShowShareToast] = useState(false);
-  const [roomConfirmedSchedules] = useState([]);
+  const [roomConfirmedSchedules, setRoomConfirmedSchedules] = useState([]);
   const [locationOnlySchedules, setLocationOnlySchedules] = useState([]);
   const [pendingGoToLocation, setPendingGoToLocation] = useState(false);
   const [memberNicknames, setMemberNicknames] = useState({});
@@ -90,6 +91,10 @@ function VoteDetailPage() {
     useState(null);
   const [showNameInputModal, setShowNameInputModal] = useState(false);
   const [nameInputMode, setNameInputMode] = useState(null); // "new_with_location" | "later"
+  const [showNewScheduleConfirmModal, setShowNewScheduleConfirmModal] = useState(false);
+  const [newScheduleTitleError, setNewScheduleTitleError] = useState("");
+  const [showScheduleVoteLocationModal, setShowScheduleVoteLocationModal] = useState(false);
+  const [createdScheduleId, setCreatedScheduleId] = useState(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user));
@@ -150,6 +155,14 @@ function VoteDetailPage() {
     loadVote();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voteid]);
+
+  useEffect(() => {
+    if (!showScheduleModal && !showLocationModal) return;
+    getRoomConfirmedSchedules(roomid)
+      .then((data) => setRoomConfirmedSchedules(data))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showScheduleModal, showLocationModal]);
 
   const getTimeRemaining = (endtime) => {
     const diff = new Date(endtime) - new Date();
@@ -624,25 +637,46 @@ function VoteDetailPage() {
     }
   };
 
-  const handleCreateScheduleFromLocation = async () => {
+  const handleCreateScheduleFromLocation = () => {
     if (!appointmentTitle.trim()) {
-      alert("일정 이름을 입력해주세요.");
+      setNewScheduleTitleError("일정 이름을 입력해주세요.");
       return;
     }
+    setNewScheduleTitleError("");
+    setShowNewScheduleConfirmModal(true);
+  };
 
+  const handleScheduleConfirmLater = async () => {
     try {
-      const schedule = await createLocationOnlyConfirmedSchedule(
-        pendingConfirmedLocation,
-        isMiddlePlaceVote,
-        appointmentTitle
-      );
+      await createDraftConfirmedSchedule(Number(roomid), appointmentTitle.trim());
+      setShowNewScheduleConfirmModal(false);
       setShowScheduleModal(false);
       setPendingConfirmedLocation(null);
       setAppointmentTitle("");
-      setCreatedLocationOnlySchedule({
-        ...schedule,
-        isLocationOnly: true,
-      });
+      setNewScheduleTitleError("");
+      navigate(`/rooms/${roomid}?tab=schedule`);
+    } catch (error) {
+      alert("일정 생성 실패: " + error.message);
+    }
+  };
+
+  const handleScheduleConfirmNow = async () => {
+    try {
+      if (pendingConfirmedLocation) {
+        await createLocationOnlyConfirmedSchedule(
+          pendingConfirmedLocation,
+          isMiddlePlaceVote,
+          appointmentTitle.trim()
+        );
+      } else {
+        await createDraftConfirmedSchedule(Number(roomid), appointmentTitle.trim());
+      }
+      setShowNewScheduleConfirmModal(false);
+      setShowScheduleModal(false);
+      setPendingConfirmedLocation(null);
+      setAppointmentTitle("");
+      setNewScheduleTitleError("");
+      navigate(`/rooms/${roomid}?tab=location`);
     } catch (error) {
       alert("일정 생성 실패: " + error.message);
     }
@@ -650,8 +684,7 @@ function VoteDetailPage() {
 
   const handleOpenCreatedSchedule = () => {
     if (!createdLocationOnlySchedule) return;
-
-    navigate(`/rooms/${roomid}?tab=schedule`);
+    navigate(`/rooms/${roomid}?tab=location`);
   };
 
   const handleConfirmWithLocation = async (goToLocation) => {
@@ -718,6 +751,54 @@ function VoteDetailPage() {
       navigate(`/rooms/${roomid}?tab=location`);
     } catch (error) {
       alert("일정 연결 실패: " + error.message);
+    }
+  };
+
+  const handleConfirmWithNewName = async () => {
+    if (!appointmentTitle.trim()) {
+      setNewScheduleTitleError("일정 이름을 입력해주세요.");
+      return;
+    }
+    setNewScheduleTitleError("");
+    try {
+      await confirmVote(
+        Number(voteid),
+        pendingOption,
+        Number(roomid),
+        vote.votetype,
+        appointmentTitle.trim()
+      );
+
+      if (localStorage.getItem("google_calendar_auto_sync") === "true") {
+        try {
+          await addEventToGoogleCalendar({
+            title: appointmentTitle.trim(),
+            date: pendingOption.optiondate,
+            starttime: pendingOption.starttime,
+            endtime: pendingOption.endtime,
+          });
+        } catch (googleErr) {
+          alert("일정은 확정됐지만 구글 캘린더 추가에 실패했습니다.\n설정에서 다시 연결해주세요.\n\n(" + googleErr.message + ")");
+        }
+      }
+
+      await loadVote();
+
+      // 방금 생성된 일정 ID 조회 (위치탭 자동 선택에 사용)
+      const { data: newSchedule } = await supabase
+        .from("confirmed_schedules")
+        .select("id")
+        .eq("voteid", Number(voteid))
+        .maybeSingle();
+      setCreatedScheduleId(newSchedule?.id ?? null);
+
+      setShowLocationModal(false);
+      setPendingOption(null);
+      setAppointmentTitle("");
+      setLocationOnlySchedules([]);
+      setShowScheduleVoteLocationModal(true);
+    } catch (error) {
+      alert("확정 실패: " + (error.message || JSON.stringify(error)));
     }
   };
 
@@ -1185,6 +1266,8 @@ function VoteDetailPage() {
               borderRadius: "16px",
               padding: "24px",
               width: "300px",
+              maxHeight: "80vh",
+              overflowY: "auto",
               position: "relative",
             }}
           >
@@ -1193,6 +1276,7 @@ function VoteDetailPage() {
                 setShowLocationModal(false);
                 setPendingOption(null);
                 setAppointmentTitle("");
+                setNewScheduleTitleError("");
               }}
               style={{
                 position: "absolute",
@@ -1218,13 +1302,13 @@ function VoteDetailPage() {
                 color: "var(--secondary-text)",
                 fontSize: "13px",
                 textAlign: "center",
-                marginBottom: "20px",
+                marginBottom: "16px",
               }}
             >
               {existingHasLocation ? "기존 위치가 유지됩니다." : "만날 위치를 지금 정하시겠어요?"}
             </p>
 
-            {existingHasLocation ? (
+            {(existingHasLocation || isReconfirmation) ? (
               <button
                 onClick={() => handleConfirmWithLocation(false)}
                 style={{
@@ -1242,40 +1326,102 @@ function VoteDetailPage() {
               </button>
             ) : (
               <>
-                <button
-                  onClick={handleGoToLocationNow}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    marginBottom: "8px",
-                    backgroundColor: "#7c79ff",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "10px",
-                    fontSize: "15px",
-                    cursor: "pointer",
-                  }}
-                >
-                  위치 지금 정하기
-                </button>
+                {/* 1. 확정된 일정에서 정하기 */}
+                <div style={{ marginBottom: "20px" }}>
+                  <p style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: "bold" }}>
+                    1. 확정된 일정에서 정하기
+                  </p>
 
-                <button
-                  onClick={handleGoToLocationLater}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    backgroundColor: "#f5f5f5",
-                    color: "#333",
-                    border: "none",
-                    borderRadius: "10px",
-                    fontSize: "15px",
-                    cursor: "pointer",
-                  }}
-                >
-                  위치 나중에 정하기
-                </button>
+                  {roomConfirmedSchedules.length === 0 ? (
+                    <p style={{ fontSize: "13px", color: "#aaa", margin: "8px 0" }}>
+                      확정된 일정이 없습니다.
+                    </p>
+                  ) : (
+                    roomConfirmedSchedules.map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => handleLinkToExisting(s.id)}
+                        style={{
+                          width: "100%",
+                          padding: "10px 12px",
+                          marginBottom: "6px",
+                          backgroundColor: "var(--card-bg)",
+                          color: "var(--text-color)",
+                          border: "1px solid var(--border-color)",
+                          borderRadius: "10px",
+                          fontSize: "14px",
+                          cursor: "pointer",
+                          textAlign: "left",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {s.title || "제목 없음"}
+                        </span>
+                        {s.date && (
+                          <span style={{ fontSize: "12px", color: "#888", whiteSpace: "nowrap", flexShrink: 0 }}>
+                            {s.date}{s.starttime ? ` ${s.starttime}` : ""}
+                          </span>
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+
+                {/* 2. 새로운 확정 일정 추가하기 */}
+                <div>
+                  <p style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: "bold" }}>
+                    2. 새로운 확정 일정 추가하기
+                  </p>
+
+                  <input
+                    type="text"
+                    placeholder="일정 이름 (예: 팀 회식, 생일 파티...)"
+                    value={appointmentTitle}
+                    onChange={(e) => {
+                      setAppointmentTitle(e.target.value);
+                      setNewScheduleTitleError("");
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      fontSize: "14px",
+                      border: `1px solid ${newScheduleTitleError ? "#e53935" : "var(--border-color)"}`,
+                      borderRadius: "10px",
+                      boxSizing: "border-box",
+                      marginBottom: newScheduleTitleError ? "4px" : "8px",
+                    }}
+                  />
+
+                  {newScheduleTitleError && (
+                    <p style={{ fontSize: "12px", color: "#e53935", margin: "0 0 8px 2px" }}>
+                      {newScheduleTitleError}
+                    </p>
+                  )}
+
+                  <button
+                    onClick={handleConfirmWithNewName}
+                    style={{
+                      width: "100%",
+                      padding: "14px",
+                      backgroundColor: "#7c79ff",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "12px",
+                      fontSize: "15px",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                    }}
+                  >
+                    새로운 확정 일정 추가하기
+                  </button>
+                </div>
               </>
-            )}          </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1297,6 +1443,10 @@ function VoteDetailPage() {
               borderRadius: "16px",
               padding: "24px",
               width: "300px",
+              maxHeight: "80vh",
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
             <h3 style={{ marginBottom: "4px", textAlign: "center" }}>
@@ -1308,25 +1458,30 @@ function VoteDetailPage() {
                 color: "var(--secondary-text)",
                 fontSize: "13px",
                 textAlign: "center",
-                marginBottom: "12px",
+                marginBottom: "16px",
               }}
             >
               위치를 추가할 일정을 선택하거나 새 일정을 만들어 주세요.
             </p>
 
-            {roomConfirmedSchedules.length > 0 && (
-              <div style={{ marginBottom: "12px" }}>
-                <p style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: "bold" }}>
-                  1. 확정된 일정에서 정하기
-                </p>
+            {/* 1. 확정된 일정에서 정하기 */}
+            <div style={{ marginBottom: "20px" }}>
+              <p style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: "bold" }}>
+                1. 확정된 일정에서 정하기
+              </p>
 
-                {roomConfirmedSchedules.map((schedule) => (
+              {roomConfirmedSchedules.length === 0 ? (
+                <p style={{ fontSize: "13px", color: "#aaa", margin: "8px 0" }}>
+                  연결할 확정 일정이 없습니다. 새 일정을 추가해주세요.
+                </p>
+              ) : (
+                roomConfirmedSchedules.map((schedule) => (
                   <button
                     key={schedule.id}
                     onClick={() => handleApplyLocationToSchedule(schedule.id)}
                     style={{
                       width: "100%",
-                      padding: "10px",
+                      padding: "10px 12px",
                       marginBottom: "6px",
                       backgroundColor: "var(--card-bg)",
                       color: "var(--text-color)",
@@ -1335,15 +1490,27 @@ function VoteDetailPage() {
                       fontSize: "14px",
                       cursor: "pointer",
                       textAlign: "left",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: "8px",
                     }}
                   >
-                    {schedule.title || schedule.date || "날짜 미정 일정"}
+                    <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {schedule.title || "제목 없음"}
+                    </span>
+                    {schedule.date && (
+                      <span style={{ fontSize: "12px", color: "#888", whiteSpace: "nowrap", flexShrink: 0 }}>
+                        {schedule.date}{schedule.starttime ? ` ${schedule.starttime}` : ""}
+                      </span>
+                    )}
                   </button>
-                ))}
-              </div>
-            )}
+                ))
+              )}
+            </div>
 
-            <p style={{ margin: "16px 0 8px", fontSize: "13px", fontWeight: "bold" }}>
+            {/* 2. 새로운 확정 일정 추가하기 */}
+            <p style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: "bold" }}>
               2. 새로운 확정 일정 추가하기
             </p>
 
@@ -1351,33 +1518,180 @@ function VoteDetailPage() {
               type="text"
               placeholder="일정 이름 (예: 팀 회식, 생일 파티...)"
               value={appointmentTitle}
-              onChange={(e) => setAppointmentTitle(e.target.value)}
+              onChange={(e) => { setAppointmentTitle(e.target.value); setNewScheduleTitleError(""); }}
               style={{
                 width: "100%",
                 padding: "10px 12px",
                 fontSize: "14px",
-                border: "1px solid var(--border-color)",
+                border: `1px solid ${newScheduleTitleError ? "#e53935" : "var(--border-color)"}`,
                 borderRadius: "10px",
                 boxSizing: "border-box",
-                marginBottom: "8px",
+                marginBottom: newScheduleTitleError ? "4px" : "8px",
               }}
             />
+
+            {newScheduleTitleError && (
+              <p style={{ fontSize: "12px", color: "#e53935", margin: "0 0 8px 2px" }}>
+                {newScheduleTitleError}
+              </p>
+            )}
 
             <button
               onClick={handleCreateScheduleFromLocation}
               style={{
                 width: "100%",
-                padding: "12px",
-                backgroundColor: "var(--btn-bg)",
-                color: "var(--text-color)",
+                padding: "14px",
+                backgroundColor: "#7c79ff",
+                color: "#fff",
                 border: "none",
-                borderRadius: "10px",
+                borderRadius: "12px",
                 fontSize: "15px",
+                fontWeight: "600",
                 cursor: "pointer",
               }}
             >
               새로운 확정 일정 추가하기
             </button>
+          </div>
+        </div>
+      )}
+
+      {showNewScheduleConfirmModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1100,
+          }}
+        >
+          <div
+            style={{
+              width: "300px",
+              padding: "28px 24px",
+              borderRadius: "16px",
+              backgroundColor: "var(--bg-color)",
+              textAlign: "center",
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: "8px", fontSize: "18px" }}>
+              일정을 정하러 가시겠습니까?
+            </h3>
+            <p style={{ color: "var(--secondary-text)", fontSize: "13px", lineHeight: "1.6", marginBottom: "20px" }}>
+              만날 날짜와 일정 이름은 저장되었습니다.{"\n"}날짜와 시간은 나중에 입력할 수도 있습니다.
+            </p>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={handleScheduleConfirmLater}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  border: "none",
+                  borderRadius: "10px",
+                  backgroundColor: "var(--btn-bg)",
+                  color: "var(--btn-text)",
+                  fontSize: "14px",
+                  cursor: "pointer",
+                }}
+              >
+                나중에 하기
+              </button>
+              <button
+                type="button"
+                onClick={handleScheduleConfirmNow}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  border: "none",
+                  borderRadius: "10px",
+                  backgroundColor: "#7c79ff",
+                  color: "#fff",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }}
+              >
+                지금 위치 정하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showScheduleVoteLocationModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1100,
+          }}
+        >
+          <div
+            style={{
+              width: "300px",
+              padding: "28px 24px",
+              borderRadius: "16px",
+              backgroundColor: "var(--bg-color)",
+              textAlign: "center",
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: "8px", fontSize: "18px" }}>
+              위치를 정하시겠습니까?
+            </h3>
+            <p style={{ color: "var(--secondary-text)", fontSize: "13px", lineHeight: "1.6", marginBottom: "20px" }}>
+              만날 날짜와 일정 이름은 저장되었습니다.{"\n"}위치는 나중에 입력할 수도 있습니다.
+            </p>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowScheduleVoteLocationModal(false);
+                  navigate("/home");
+                }}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  border: "none",
+                  borderRadius: "10px",
+                  backgroundColor: "var(--btn-bg)",
+                  color: "var(--btn-text)",
+                  fontSize: "14px",
+                  cursor: "pointer",
+                }}
+              >
+                나중에 하기
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowScheduleVoteLocationModal(false);
+                  navigate(`/rooms/${roomid}?tab=location`, {
+                    state: { selectedScheduleId: createdScheduleId },
+                  });
+                }}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  border: "none",
+                  borderRadius: "10px",
+                  backgroundColor: "#7c79ff",
+                  color: "#fff",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }}
+              >
+                지금 위치 정하기
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1655,9 +1969,9 @@ function VoteDetailPage() {
               textAlign: "center",
             }}
           >
-            <h3 style={{ marginTop: 0 }}>일정을 정하러 가시겠습니까?</h3>
+            <h3 style={{ marginTop: 0 }}>위치를 정하러 가시겠습니까?</h3>
             <p style={{ color: "var(--secondary-text)", fontSize: "13px" }}>
-              만날 위치와 일정 이름은 저장되었습니다. 날짜와 시간은 나중에 입력할 수도 있습니다.
+              만날 날짜와 일정이름은 저장되었습니다. 위치는 나중에 입력할 수 있습니다.
             </p>
             <div style={{ display: "flex", gap: "8px" }}>
               <button
@@ -1688,7 +2002,7 @@ function VoteDetailPage() {
                   cursor: "pointer",
                 }}
               >
-                지금 일정 정하기
+                지금 위치 정하기
               </button>
             </div>
           </div>

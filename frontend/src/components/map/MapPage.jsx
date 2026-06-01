@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 
 import KakaoMapView from './KakaoMapView'
 import CurrentLocationButton from './CurrentLocationButton'
@@ -36,6 +36,7 @@ import {
 
 function MapPage({ roomId }) {
   const navigate = useNavigate()
+  const routerLocation = useLocation()
   const currentRoomId = Number(roomId)
 
   const [currentUserId, setCurrentUserId] = useState(null)
@@ -191,10 +192,16 @@ function MapPage({ roomId }) {
   useEffect(() => {
     if (!currentRoomId) return
 
+    const preferredId = routerLocation.state?.selectedScheduleId
+
     getRoomConfirmedSchedules(currentRoomId)
       .then((schedules) => {
         setRoomConfirmedSchedules(schedules)
         setSelectedScheduleId((previousId) => {
+          // navigation state로 전달된 일정 ID 우선 선택
+          if (preferredId && schedules.some((s) => Number(s.id) === Number(preferredId))) {
+            return Number(preferredId)
+          }
           if (schedules.some((schedule) => Number(schedule.id) === Number(previousId))) {
             return previousId
           }
