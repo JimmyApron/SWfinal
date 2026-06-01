@@ -340,6 +340,26 @@ export async function updateConfirmedScheduleLocation(
   }
 }
 
+export async function updateConfirmedScheduleTiming(
+  scheduleId,
+  { date, starttime, endtime, isallday }
+) {
+  const { error } = await supabase
+    .from("confirmed_schedules")
+    .update({
+      date,
+      starttime: isallday ? null : starttime || null,
+      endtime: isallday ? null : endtime || null,
+      isallday,
+    })
+    .eq("id", scheduleId);
+
+  if (error) {
+    console.error("확정 일정 날짜 및 시간 수정 실패:", error);
+    throw new Error("확정 일정 날짜 및 시간 수정 실패");
+  }
+}
+
 export async function cancelConfirmedSchedule(scheduleId, voteid) {
   const { error: deleteError } = await supabase
     .from("confirmed_schedules")

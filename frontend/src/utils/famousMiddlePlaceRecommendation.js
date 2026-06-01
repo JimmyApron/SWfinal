@@ -267,7 +267,12 @@ async function scorePlaceByTravelTime({
   const travelResults = []
 
   for (const member of memberLocations) {
-    const mode = memberTransportModes[member.userid] || 'transit'
+    const memberKey = member.userid || member.guestid || member.id
+    const mode = memberTransportModes[memberKey]
+
+    if (!mode) {
+      throw new Error('이동수단을 등록하지 않은 멤버가 있습니다.')
+    }
 
     const result = await getRouteTime({
       origin: {
@@ -283,7 +288,12 @@ async function scorePlaceByTravelTime({
 
     travelResults.push({
       userid: member.userid,
-      nickname: member.profiles?.nickname || '멤버',
+      guestid: member.guestid,
+      nickname:
+        member.profiles?.nickname ||
+        member.room_guests?.nickname ||
+        member.nickname ||
+        '멤버',
       mode,
       duration: result.duration,
       distance: result.distance,

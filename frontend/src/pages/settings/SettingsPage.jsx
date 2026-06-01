@@ -160,7 +160,24 @@ function SettingsPage() {
 
   return (
     <div className="setting-container" style={{ paddingBottom: '90px' }}>
-      <h2>마이페이지 👤</h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          aria-label="Back"
+          style={{
+            border: 'none',
+            background: 'none',
+            padding: 0,
+            fontSize: '24px',
+            cursor: 'pointer',
+            color: '#555',
+          }}
+        >
+          &larr;
+        </button>
+        <h2>마이페이지 👤</h2>
+      </div>
 
       <div className="profile-image-section">
         {userProfile?.profileimageurl ? (

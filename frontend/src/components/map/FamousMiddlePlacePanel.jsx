@@ -7,7 +7,6 @@ function FamousMiddlePlacePanel({
   onSelectMiddlePlace,
   onCreateMiddlePlaceVote,
 }) {
-  const [memberTransportModes, setMemberTransportModes] = useState({})
   const [recommendedPlaces, setRecommendedPlaces] = useState([])
   const [selectedPlaceIds, setSelectedPlaceIds] = useState([])
   const [message, setMessage] = useState('')
@@ -23,13 +22,6 @@ function FamousMiddlePlacePanel({
       member.nickname ||
       '멤버'
     )
-  }
-
-  const handleChangeMode = (memberKey, mode) => {
-    setMemberTransportModes((prev) => ({
-      ...prev,
-      [memberKey]: mode,
-    }))
   }
 
   const handleRecommend = async () => {
@@ -48,8 +40,9 @@ function FamousMiddlePlacePanel({
 
         if (!memberKey) return
 
-        fixedMemberTransportModes[memberKey] =
-          memberTransportModes[memberKey] || 'transit'
+        if (member.transportmode) {
+          fixedMemberTransportModes[memberKey] = member.transportmode
+        }
       })
 
       const result = await recommendFamousMiddlePlaces({
@@ -108,7 +101,7 @@ function FamousMiddlePlacePanel({
       <h2>유명 중간장소 추천</h2>
 
       <p>
-        멤버별 이동수단을 선택하면, 각자 이동시간이 비슷한 유명 장소를
+        멤버들이 등록한 이동수단을 기준으로 각자 이동시간이 비슷한 유명 장소를
         추천합니다.
       </p>
 
@@ -120,15 +113,7 @@ function FamousMiddlePlacePanel({
           <div key={memberKey}>
             <span>{nickname}</span>
 
-            <select
-              value={memberTransportModes[memberKey] || 'transit'}
-              onChange={(event) => {
-                handleChangeMode(memberKey, event.target.value)
-              }}
-            >
-              <option value="car">자동차</option>
-              <option value="transit">대중교통</option>
-            </select>
+            <span>{getModeLabel(member.transportmode)}</span>
           </div>
         )
       })}
