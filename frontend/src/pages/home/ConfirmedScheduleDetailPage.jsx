@@ -883,38 +883,36 @@ function ConfirmedScheduleDetailPage() {
           {schedule.voteid && voteExists === false && (
             <button
               type="button"
-              onClick={() =>
-                navigate(`/rooms/${schedule.roomid}/vote-create`, {
-                  state: {
-                    fromScheduleId: schedule.id,
-                    votePurpose: "schedule",
-                    voteType: "date",
-                    returnTab: "schedule",
-                  },
-                })
-              }
+              onClick={() => {
+                sessionStorage.setItem("confirmFromSchedule", JSON.stringify({
+                  id: schedule.id,
+                  title: schedule.title || "일정",
+                  hasLocation: !!(schedule.location),
+                  roomid: schedule.roomid,
+                }));
+                navigate(`/rooms/${schedule.roomid}?tab=schedule`);
+              }}
               style={{ ...shortcutButtonStyle, color: "#f44", borderColor: "#ffcccc" }}
             >
-              투표가 삭제됨. 새 투표 만들기
+              일정 탭에서 정하기
             </button>
           )}
           {/* 케이스 3: 직접 생성 */}
           {!schedule.voteid && (
             <button
               type="button"
-              onClick={() =>
-                navigate(`/rooms/${schedule.roomid}/vote-create`, {
-                  state: {
-                    fromScheduleId: schedule.id,
-                    votePurpose: "schedule",
-                    voteType: "date",
-                    returnTab: "schedule",
-                  },
-                })
-              }
+              onClick={() => {
+                sessionStorage.setItem("confirmFromSchedule", JSON.stringify({
+                  id: schedule.id,
+                  title: schedule.title || "일정",
+                  hasLocation: !!(schedule.location),
+                  roomid: schedule.roomid,
+                }));
+                navigate(`/rooms/${schedule.roomid}?tab=schedule`);
+              }}
               style={shortcutButtonStyle}
             >
-              새 투표 만들기
+              일정 탭에서 정하기
             </button>
           )}
         </div>

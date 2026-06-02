@@ -244,9 +244,10 @@ export async function submitVote(voteid, optionids, userid, nickname) {
  * 투표 종료
  */
 export async function closeVote(voteid) {
+  const now = new Date().toISOString();
   const { error } = await supabase
     .from("votes")
-    .update({ isclosed: true })
+    .update({ isclosed: true, endtime: now })
     .eq("id", Number(voteid));
 
   if (error) {
@@ -562,6 +563,7 @@ export async function updateVote(
     endtime: endtimeenabled ? endtime : null,
     endtimeenabled,
     reminderenabled,
+    updatedat: new Date().toISOString(),
   };
 
   if (ismultiple !== undefined) {
