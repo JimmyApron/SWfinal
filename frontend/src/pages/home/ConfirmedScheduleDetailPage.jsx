@@ -1057,7 +1057,7 @@ function ConfirmedScheduleDetailPage() {
           placeholder="지도에서 위치를 선택하세요"
           value={locationText}
           readOnly
-          style={inputStyle}
+          style={{ ...inputStyle, color: "#aaa", backgroundColor: "#fafafa" }}
         />
 
         {locationAddress && (
@@ -1092,6 +1092,7 @@ function ConfirmedScheduleDetailPage() {
               <>
                 <LocationPicker
                   initialPlace={draftMeetingPlace || selectedMeetingPlace}
+                  prefillKeywordFromInitialPlace={false}
                   onSelect={(name, address, place = {}) => {
                     setLocationText(name);
                     setLocationAddress(address || place.address || "");

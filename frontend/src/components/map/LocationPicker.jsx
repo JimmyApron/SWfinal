@@ -15,6 +15,7 @@ function LocationPicker({
   onSelect,
   allowMapClick = true,
   initialPlace = null,
+  prefillKeywordFromInitialPlace = true,
   showMap = true,
   mapHeight = "250px",
 }) {
@@ -129,8 +130,10 @@ function LocationPicker({
     }
 
     placeMarker(initialPlace.lat, initialPlace.lng, initialPlace);
-    setKeyword(initialPlace.name || "");
-  }, [initialPlace, isReady]);
+    if (prefillKeywordFromInitialPlace) {
+      setKeyword(initialPlace.name || "");
+    }
+  }, [initialPlace, isReady, prefillKeywordFromInitialPlace]);
 
   const handleSearch = () => {
     if (!keyword.trim()) return;
