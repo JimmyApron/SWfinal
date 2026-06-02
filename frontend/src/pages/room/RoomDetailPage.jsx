@@ -316,11 +316,20 @@ function RoomDetailPage() {
 
   if (!room) return <div>로딩 중...</div>;
   const isCurrentUserHost = String(room?.createdby) === String(currentUser?.id);
-  const sortedParticipants = [...members.map(m => ({ ...m, type: "member" })), ...guests.map(g => ({ ...g, type: "guest" }))].sort((a, b) => {
-    const idA = a.userid || a.id; const idB = b.userid || b.id;
-    if (String(room.createdby) === String(idA)) return -1;
-    if (String(room.createdby) === String(idB)) return 1;
-    return new Date(a.joinedat || a.createdat) - new Date(b.joinedat || b.createdat);
+  const sortedParticipants = [
+    ...members.map((m) => ({ ...m, type: "member", joinDate: m.joinedat })),
+    ...guests.map((g) => ({ ...g, type: "guest", joinDate: g.createdat })),
+  ].sort((a, b) => {
+    const idA = a.type === "member" ? a.userid : a.id;
+    const idB = b.type === "member" ? b.userid : b.id;
+
+    const isHostA = String(room?.createdby) === String(idA);
+    const isHostB = String(room?.createdby) === String(idB);
+
+    if (isHostA) return -1;
+    if (isHostB) return 1;
+
+    return new Date(a.joinDate) - new Date(b.joinDate);
   });
 
   return (
@@ -374,38 +383,219 @@ function RoomDetailPage() {
             <span style={{ fontSize: "14px", fontWeight: "bold" }}>초대코드: {room.invitecode}</span>
             <button onClick={handleCopyInviteCode} style={{ marginLeft: "8px", fontSize: "12px" }}>복사</button>
           </div>
-          <h4>👥 참여자 ({sortedParticipants.length}명)</h4>
-          <div style={{ minHeight: "50px", maxHeight: "250px", overflowY: "auto", border: "1px solid #ddd", padding: "8px", borderRadius: "8px", marginBottom: "20px", backgroundColor: "#fff" }}>
-            {sortedParticipants.length === 0 ? (
-              <div style={{ textAlign: "center", fontSize: "12px", color: "#999", padding: "10px" }}>참여자가 없습니다.</div>
-            ) : (
-              sortedParticipants.map(p => {
-                const pId = p.userid || p.id;
-                const isSelected = selectedParticipantId === pId;
-                // Supabase 조인 결과가 배열일 수도, 객체일 수도 있으므로 호환 처리
+          <div style={{ marginBottom: "25px" }}>
+            <h4 style={{ margin: "0 0 10px 0" }}>
+              👥 참여자 명단 ({members.length + guests.length}명)
+            </h4>
+
+            <div
+              style={{
+                maxHeight: "350px",
+                overflowY: "auto",
+                border: "1px solid #E5E7EB",
+                padding: "10px",
+                borderRadius: "5px",
+                backgroundColor: "#fff",
+              }}
+            >
+              {sortedParticipants.map((p) => {
+                const participantUniqueId = p.type === "member" ? p.userid : p.id;
+                const isHost = String(room?.createdby) === String(participantUniqueId);
+                const isSelected = selectedParticipantId === participantUniqueId;
+                const isMe = String(currentUser?.id) === String(participantUniqueId);
+
                 const profileObj = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles;
                 const profileImg = profileObj?.profileimageurl;
 
                 return (
-                  <div key={pId} onClick={() => handleClickParticipant(p)} style={{ padding: "8px 0", borderBottom: "1px solid #eee", cursor: "pointer", background: isSelected ? "#f0ebff" : "none" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <div style={{ width: "24px", height: "24px", borderRadius: "50%", background: "#ddd", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", overflow: "hidden" }}>
-                        {profileImg ? <img src={profileImg} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "👤"}
+                  <div
+                    key={`${p.type}-${p.id}`}
+                    onClick={() => handleClickParticipant(p)}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      padding: "8px 0",
+                      borderBottom: "1px solid #F3F4F6",
+                      cursor:
+                        (isCurrentUserHost && !isHost) ||
+                        (p.type === "member" &&
+                          currentUser?.type === "member" &&
+                          !isMe)
+                          ? "pointer"
+                          : "default",
+                      backgroundColor: isSelected ? "#f0ebff" : "transparent",
+                      borderRadius: "5px",
+                      transition: "background-color 0.2s",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        padding: "0 5px",
+                      }}
+                    >
+                      {p.type === "member" ? (
+                        profileImg ? (
+                          <img
+                            src={profileImg}
+                            alt="프로필"
+                            style={{
+                              width: "32px",
+                              height: "32px",
+                              borderRadius: "50%",
+                              objectFit: "cover",
+                              border: "1px solid #E5E7EB",
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: "32px",
+                              height: "32px",
+                              borderRadius: "50%",
+                              backgroundColor: "#F3F4F6",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "16px",
+                            }}
+                          >
+                            👤
+                          </div>
+                        )
+                      ) : (
+                        <div
+                          style={{
+                            width: "32px",
+                            height: "32px",
+                            borderRadius: "50%",
+                            backgroundColor: "#ffeaa7",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: "16px",
+                          }}
+                        >
+                          🐱
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                        }}
+                      >
+                        {isHost && (
+                          <span
+                            style={{
+                              color: "#8366F4",
+                              fontSize: "11px",
+                              fontWeight: "bold",
+                              marginBottom: "-2px",
+                            }}
+                          >
+                            방장
+                          </span>
+                        )}
+
+                        <span
+                          style={{
+                            fontSize: "14px",
+                            fontWeight: "600",
+                            color:
+                              p.type === "member" &&
+                              currentUser?.type === "member" &&
+                              !isMe &&
+                              !isCurrentUserHost
+                                ? "#7c79ff"
+                                : "#1F2937",
+                            textDecoration:
+                              p.type === "member" &&
+                              currentUser?.type === "member" &&
+                              !isMe &&
+                              !isCurrentUserHost
+                                ? "underline"
+                                : "none",
+                          }}
+                        >
+                          {p.nickname || "이름없음"}
+                          {isMe ? " (나)" : ""}
+                        </span>
+
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            color:
+                              p.type === "member" ? "#8366F4" : "#e67e22",
+                            fontWeight: "600",
+                          }}
+                        >
+                          {p.type === "member" ? "회원" : "게스트"}
+                        </span>
                       </div>
-                      <span style={{ fontSize: "14px", color: "#1F2937" }}>
-                        {p.nickname || "이름 없음"} {String(room.createdby) === String(pId) && "(방장)"}
-                      </span>
                     </div>
+
                     {isSelected && (
-                      <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
-                        <button onClick={(e) => { e.stopPropagation(); handleTransferHost(p); }} style={{ flex: 1, fontSize: "10px", padding: "4px", backgroundColor: "#7C5CFF", color: "#fff", border: "none", borderRadius: "4px" }}>위임</button>
-                        <button onClick={(e) => { e.stopPropagation(); handleKickParticipant(p); }} style={{ flex: 1, fontSize: "10px", color: "red", padding: "4px", backgroundColor: "#FEE2E2", border: "1px solid #FCA5A5", borderRadius: "4px" }}>추방</button>
+                      <div style={{ marginTop: "8px", padding: "0 5px", display: "flex", gap: "8px" }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTransferHost(p);
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: "6px",
+                            background: "#8366F4",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "5px",
+                            fontSize: "12px",
+                            fontWeight: "bold",
+                            cursor: "pointer",
+                          }}
+                        >
+                          위임
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleKickParticipant(p);
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: "6px",
+                            background: "#FEE2E2",
+                            color: "#EF4444",
+                            border: "1px solid #FCA5A5",
+                            borderRadius: "5px",
+                            fontSize: "12px",
+                            fontWeight: "bold",
+                            cursor: "pointer",
+                          }}
+                        >
+                          추방
+                        </button>
                       </div>
                     )}
                   </div>
                 );
-              })
-            )}
+              })}
+
+              {members.length === 0 && guests.length === 0 && (
+                <p
+                  style={{
+                    fontSize: "13px",
+                    color: "#9CA3AF",
+                    textAlign: "center",
+                  }}
+                >
+                  참여자가 없습니다.
+                </p>
+              )}
+            </div>
           </div>
           <button onClick={handleLeaveRoom} style={{ marginTop: "auto", padding: "12px", background: "#f44336", color: "#fff", border: "none", borderRadius: "8px", fontWeight: "bold" }}>방 나가기</button>
         </div>
