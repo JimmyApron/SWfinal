@@ -11,11 +11,22 @@ import {
   updateScheduleCandidate,
   deleteScheduleCandidate,
   getAdditionalConfirmedLocations,
+  deleteMemberAvailabilities,
 } from "../../api/scheduleApi";
 import { updateRoomLastActivity } from "../../api/roomApi";
 import { supabase } from "../../lib/supabaseClient";
 import { createNotification, createRoomNotifications } from "../../api/notificationApi";
 import ConfirmedScheduleCard from "../../components/ConfirmedScheduleCard";
+
+const memberColors = [
+  "#7C5CFF",
+  "#FF8A80",
+  "#4DD0E1",
+  "#81C784",
+  "#FFD54F",
+  "#BA68C8",
+  "#FFB74D",
+];
 
 function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const navigate = useNavigate();
@@ -34,13 +45,14 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const [newEndTime, setNewEndTime] = useState("");
   const [newIsAllDay, setNewIsAllDay] = useState(false);
   const [editingCandidateId, setEditingCandidateId] = useState(null);
-  const [showAllTimes, setShowAllTimes] = useState(false);
+  const [showAllTimes, setShowAllTimes] = useState(true);
   const [activeDragCandidateId, setActiveDragCandidateId] = useState(null);
   const [clickedSlot, setClickedSlot] = useState(null); // { candidate, time, availableMembers, unavailableMembers }
 
   const [confirmedSchedules, setConfirmedSchedules] = useState([]);
   const [additionalLocations, setAdditionalLocations] = useState([]);
   const [showConfirmedForm, setShowConfirmedForm] = useState(false);
+  const [showCandidateForm, setShowCandidateForm] = useState(false);
   const [showAddMethodSheet, setShowAddMethodSheet] = useState(false);
   const [candidateViewMode, setCandidateViewMode] = useState("timetable"); // "timetable" | "calendar"
   const [calYear, setCalYear] = useState(new Date().getFullYear());
@@ -53,16 +65,6 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const [isConfirmedExpanded, setIsConfirmedExpanded] = useState(false);
 
   const timetableScrollRef = useRef(null);
-
-  const memberColors = [
-    "#7C5CFF",
-    "#FF8A80",
-    "#4DD0E1",
-    "#81C784",
-    "#FFD54F",
-    "#BA68C8",
-    "#FFB74D",
-  ];
 
   const timeSlots = [];
   for (let hour = 0; hour < 24; hour++) {
@@ -78,20 +80,23 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     : timeSlots.filter((t) => t >= "09:00" && t <= "22:00");
 
   const getHeatmapColor = (count, total) => {
-    if (count === 0) return "#F3F4F6";
+    if (count === 0) return "transparent";
     const ratio = count / total;
-    if (ratio >= 1) return "#5B35E6";
-    if (ratio > 0.7) return "#7C5CFF";
-    if (ratio > 0.4) return "#A78BFA";
-    return "#EDE9FE";
+    let opacity = 0.2;
+    if (ratio >= 1) opacity = 0.9;
+    else if (ratio > 0.7) opacity = 0.7;
+    else if (ratio > 0.4) opacity = 0.5;
+    else if (ratio > 0.2) opacity = 0.3;
+    
+    return `rgba(109, 76, 255, ${opacity})`;
   };
 
   const getMemberColor = (userid) => {
-    const allIds = [
-      ...members.map((m) => m.userid),
-      ...guests.map((g) => g.id),
+    const allMembers = [
+      ...members.map((m) => ({ id: m.userid, name: m.nickname })),
+      ...guests.map((g) => ({ id: g.id, name: g.nickname })),
     ];
-    const index = allIds.findIndex((id) => id === userid);
+    const index = allMembers.findIndex((m) => m.id === userid);
     return memberColors[index >= 0 ? index % memberColors.length : 0];
   };
 
@@ -156,7 +161,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const handleSaveAvailability = async () => {
     try {
       if (selectedSlots.length === 0) {
-        alert("선택한 시간이 없습니다.");
+        alert("선택한 시간이 없습니다. 일정을 모두 삭제하시려면 '내 일정 삭제'를 이용해 주세요.");
         return;
       }
 
@@ -202,6 +207,27 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     }
   };
 
+  const handleDeleteMyAvailability = async () => {
+    if (!window.confirm("내가 등록한 모든 가능한 시간을 삭제할까요?")) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || localStorage.getItem("guest_id");
+      if (!userId) return;
+
+      await deleteMemberAvailabilities(roomId, userId);
+      await updateRoomLastActivity(roomId);
+
+      alert("내 일정이 모두 삭제되었습니다.");
+      setSelectedSlots([]);
+      setIsSelectMode(false);
+      const newAvailabilities = await getMemberAvailabilities(roomId);
+      setAvailabilities(newAvailabilities);
+    } catch (error) {
+      console.error(error);
+      alert("내 일정 삭제 실패");
+    }
+  };
+
   const getSelectedSummary = () => {
     if (selectedSlots.length === 0) return "선택한 시간이 없습니다.";
     const sorted = [...selectedSlots].sort((a, b) => {
@@ -213,36 +239,8 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     return selectedSlots.length > 1 ? `${rangeText} 외 ${selectedSlots.length - 1}개` : rangeText;
   };
 
-  const scrollToCandidate = (candidateId) => {
-    const element = document.getElementById(`candidate-col-${candidateId}`);
-    if (element && timetableScrollRef.current) {
-      const offsetLeft = element.offsetLeft;
-      timetableScrollRef.current.scrollTo({
-        left: offsetLeft - 100,
-        behavior: "smooth",
-      });
-    }
-  };
-
   const handleCellClick = (candidate, time) => {
-    if (isSelectMode) return;
-    
-    const slotAvails = getSlotAvailabilities(candidate.id, time);
-    const availableIds = slotAvails.map(a => a.userid);
-    const allParticipants = [
-      ...members.map(m => ({ id: m.userid, nickname: m.nickname, type: 'member' })),
-      ...guests.map(g => ({ id: g.id, nickname: g.nickname, type: 'guest' }))
-    ];
-    
-    const available = allParticipants.filter(p => availableIds.includes(p.id));
-    const unavailable = allParticipants.filter(p => !availableIds.includes(p.id));
-    
-    setClickedSlot({
-      candidate,
-      time,
-      available,
-      unavailable
-    });
+    // 상세 팝업 제거
   };
 
 
@@ -318,6 +316,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
       await updateRoomLastActivity(roomId);
       await reloadScheduleData();
       setNewDate(""); setNewDates([]); setNewStartTime(""); setNewEndTime(""); setNewIsAllDay(false); setEditingCandidateId(null);
+      setShowCandidateForm(false);
     } catch (error) {
       console.error(error);
       alert("후보 일정 저장 실패");
@@ -330,6 +329,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     setNewStartTime(candidate.starttime?.slice(0, 5) || "");
     setNewEndTime(candidate.endtime?.slice(0, 5) || "");
     setNewIsAllDay(candidate.isallday);
+    setShowCandidateForm(true);
   };
 
   const handleDeleteCandidate = async (candidateId) => {
@@ -623,7 +623,24 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
 
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "16px 0 10px" }}>
-        <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "700", color: "#1F2933" }}>일정 조율</h2>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "700", color: "#1F2933" }}>일정 조율</h2>
+          <button
+            onClick={() => setShowCandidateForm(!showCandidateForm)}
+            style={{
+              padding: "4px 8px",
+              backgroundColor: "transparent",
+              color: "#7C5CFF",
+              border: "none",
+              borderRadius: "4px",
+              fontSize: "13px",
+              fontWeight: "600",
+              cursor: "pointer",
+            }}
+          >
+            {showCandidateForm ? "취소" : "+ 직접 시간 추가"}
+          </button>
+        </div>
         <div style={{ display: "flex", backgroundColor: "#F3F4F6", borderRadius: "8px", padding: "2px" }}>
           {["timetable", "calendar"].map((v) => (
             <button
@@ -648,6 +665,49 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
         </div>
       </div>
 
+      {showCandidateForm && (
+        <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", padding: "16px", marginBottom: "16px", display: "flex", flexDirection: "column", gap: "10px", border: "1px solid #E5E7EB", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <span style={{ fontSize: "12px", color: "#6B7280", fontWeight: "600" }}>날짜 선택 (여러 개 선택 가능)</span>
+            <DatePicker
+              multiple
+              value={newDates}
+              onChange={setNewDates}
+              format="YYYY-MM-DD"
+              minDate={new Date()}
+              containerStyle={{ width: "100%" }}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "10px 12px",
+                border: "1px solid #E5E7EB",
+                borderRadius: "8px",
+                fontSize: "14px",
+              }}
+              placeholder="날짜를 선택하세요"
+            />
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", color: "#1F2933", cursor: "pointer" }}>
+            <input type="checkbox" checked={newIsAllDay} onChange={(e) => setNewIsAllDay(e.target.checked)} style={{ accentColor: "#7C5CFF" }} /> 하루종일
+          </label>
+          {!newIsAllDay && (
+            <div style={{ display: "flex", gap: "8px" }}>
+              <select value={newStartTime} onChange={(e) => setNewStartTime(e.target.value)} style={{ flex: 1, padding: "10px", border: "1px solid #E5E7EB", borderRadius: "8px", fontSize: "14px", outline: "none", backgroundColor: "#FFFFFF" }}>
+                <option value="">시작 시간</option>
+                {timeSlots.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <select value={newEndTime} onChange={(e) => setNewEndTime(e.target.value)} style={{ flex: 1, padding: "10px", border: "1px solid #E5E7EB", borderRadius: "8px", fontSize: "14px", outline: "none", backgroundColor: "#FFFFFF" }}>
+                <option value="">종료 시간</option>
+                {timeSlots.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          )}
+          <button onClick={handleAddOrUpdateCandidate} style={{ padding: "12px", backgroundColor: "#7C5CFF", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "14px", fontWeight: "700", marginTop: "4px" }}>
+            {editingCandidateId ? "수정하기" : "추가하기"}
+          </button>
+        </div>
+      )}
+
       {candidateViewMode === "timetable" && (
         <div style={{ paddingBottom: isSelectMode ? "100px" : "0" }}>
           <p style={{ margin: "4px 0 0", fontSize: "14px", fontWeight: "600", color: "#1F2933" }}>
@@ -656,71 +716,6 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
           <p style={{ margin: "2px 0 16px", fontSize: "12px", color: "#6B7280" }}>
             같은 날짜 안에서 세로 방향으로만 선택됩니다.
           </p>
-
-          {/* 날짜 선택 버튼 영역 */}
-          <div
-            style={{
-              display: "flex",
-              gap: "8px",
-              overflowX: "auto",
-              paddingBottom: "12px",
-              scrollbarWidth: "none",
-              msOverflowStyle: "none",
-            }}
-          >
-            {candidates.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => scrollToCandidate(c.id)}
-                style={{
-                  padding: "8px 14px",
-                  backgroundColor: "#FFFFFF",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: "20px",
-                  fontSize: "13px",
-                  fontWeight: "500",
-                  color: "#4B5563",
-                  whiteSpace: "nowrap",
-                  cursor: "pointer",
-                  boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                }}
-              >
-                {formatDateWithDay(c.date)}
-              </button>
-            ))}
-            <div style={{
-              padding: "0 4px",
-              display: "flex",
-              alignItems: "center",
-            }}>
-              <DatePicker
-                multiple
-                value={newDates}
-                onChange={setNewDates}
-                format="YYYY-MM-DD"
-                minDate={new Date()}
-                style={{ display: "none" }}
-                render={(value, openCalendar) => (
-                  <button
-                    onClick={openCalendar}
-                    style={{
-                      padding: "8px 14px",
-                      backgroundColor: "#F0ECFF",
-                      border: "1px dashed #7C5CFF",
-                      borderRadius: "20px",
-                      fontSize: "13px",
-                      fontWeight: "600",
-                      color: "#7C5CFF",
-                      whiteSpace: "nowrap",
-                      cursor: "pointer",
-                    }}
-                  >
-                    + 날짜 추가
-                  </button>
-                )}
-              />
-            </div>
-          </div>
 
           {/* 시간 선택 카드 그리드 */}
           <div
@@ -733,18 +728,6 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
               marginBottom: "20px",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "flex-end", padding: "12px 16px", borderBottom: "1px solid #F3F4F6" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#6B7280", cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={showAllTimes}
-                  onChange={(e) => setShowAllTimes(e.target.checked)}
-                  style={{ accentColor: "#7C5CFF" }}
-                />
-                전체 시간 보기
-              </label>
-            </div>
-
             <div
               ref={timetableScrollRef}
               style={{
@@ -841,13 +824,25 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                           ? selectedSlots.some(s => s.key === getSlotKey(candidate.id, prevTime))
                           : getSlotAvailabilities(candidate.id, prevTime).some(m => m.userid === currentUser?.id));
 
-                        const bgColor = !selectable ? "#F3F4F6" : getHeatmapColor(availableCount, totalParticipants);
+                        const isPastDate = candidate.date < new Date().toISOString().slice(0, 10);
+                        const bgColor = !selectable 
+                          ? (isPastDate ? "#F8F9FA" : "#D1D5DB") 
+                          : (availableCount === 0 ? "#F4F5F7" : getHeatmapColor(availableCount, totalParticipants));
+
+                        // 내 선택 외곽선 그림자 계산 (연결된 블록 효과)
+                        const selectionShadows = [];
+                        if (showMySelection) {
+                          selectionShadows.push("inset 2.5px 0 0 #6D4CFF"); // Left
+                          selectionShadows.push("inset -2.5px 0 0 #6D4CFF"); // Right
+                          if (!isPrevMySelection) selectionShadows.push("inset 0 2.5px 0 #6D4CFF"); // Top
+                          if (!isNextMySelection) selectionShadows.push("inset 0 -2.5px 0 #6D4CFF"); // Bottom
+                        }
 
                         return (
                           <td
                             key={key}
                             onMouseDown={() => {
-                              if (!isSelectMode || !selectable) return;
+                              if (!isSelectMode || !selectable || isPastDate) return;
                               const mode = isSelected ? "remove" : "add";
                               setDragMode(mode);
                               setIsDragging(true);
@@ -855,7 +850,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                               handleSelectSlot(candidate, time, mode);
                             }}
                             onMouseEnter={() => {
-                              if (isDragging && dragMode && selectable && activeDragCandidateId === candidate.id) {
+                              if (isDragging && dragMode && selectable && !isPastDate && activeDragCandidateId === candidate.id) {
                                 handleSelectSlot(candidate, time, dragMode);
                               }
                             }}
@@ -863,32 +858,30 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                             style={{
                               backgroundColor: bgColor,
                               borderRight: "1px solid #F3F4F6",
-                              borderBottom: (showMySelection ? (isNextMySelection ? "none" : "1px solid #F3F4F6") : "1px solid #F3F4F6"),
-                              borderTop: (showMySelection ? (isPrevMySelection ? "none" : "none") : "none"),
-                              borderTopLeftRadius: (showMySelection && !isPrevMySelection) ? "8px" : "0",
-                              borderTopRightRadius: (showMySelection && !isPrevMySelection) ? "8px" : "0",
-                              borderBottomLeftRadius: (showMySelection && !isNextMySelection) ? "8px" : "0",
-                              borderBottomRightRadius: (showMySelection && !isNextMySelection) ? "8px" : "0",
-                              boxShadow: showMySelection ? "inset 0 0 0 2px #7C5CFF" : "none",
-                              cursor: selectable ? "pointer" : "default",
+                              borderBottom: (showMySelection && isNextMySelection) ? "1px solid rgba(109, 76, 255, 0.1)" : "1px solid #F3F4F6",
+                              borderTopLeftRadius: (showMySelection && !isPrevMySelection) ? "10px" : "0",
+                              borderTopRightRadius: (showMySelection && !isPrevMySelection) ? "10px" : "0",
+                              borderBottomLeftRadius: (showMySelection && !isNextMySelection) ? "10px" : "0",
+                              borderBottomRightRadius: (showMySelection && !isNextMySelection) ? "10px" : "0",
+                              boxShadow: selectionShadows.length > 0 ? selectionShadows.join(", ") : "none",
+                              cursor: (selectable && !isPastDate) ? "pointer" : "default",
                               padding: 0,
                               height: "28px",
                               transition: "all 0.1s",
                               position: "relative",
-                              zIndex: showMySelection ? 1 : 0,
+                              zIndex: showMySelection ? 2 : 0,
+                              opacity: isPastDate ? 0.6 : 1,
                             }}
                           >
-                            {showMySelection && !isPrevMySelection && isNextMySelection && (
+                            {showMySelection && isNextMySelection && (
                               <div style={{
                                 position: "absolute",
-                                top: "50%",
-                                left: "50%",
-                                transform: "translate(-50%, -50%)",
-                                width: "12px",
-                                height: "2px",
-                                backgroundColor: "rgba(255,255,255,0.6)",
-                                borderRadius: "1px",
-                                display: (timeIdx % 2 === 0) ? "block" : "none"
+                                bottom: "-1px",
+                                left: "2.5px",
+                                right: "2.5px",
+                                height: "1px",
+                                backgroundColor: bgColor,
+                                zIndex: 3
                               }} />
                             )}
                           </td>
@@ -900,29 +893,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
               </table>
             </div>
 
-            {/* 범례 영역 */}
-            <div style={{ padding: "12px 16px", backgroundColor: "#F9FAFB", display: "flex", gap: "12px", flexWrap: "wrap", borderTop: "1px solid #F3F4F6" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                <div style={{ width: "12px", height: "12px", borderRadius: "2px", backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB", boxShadow: "inset 0 0 0 2px #7C5CFF" }} />
-                <span style={{ fontSize: "11px", color: "#6B7280" }}>내 선택</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                <div style={{ width: "12px", height: "12px", borderRadius: "2px", backgroundColor: "#F3F4F6" }} />
-                <span style={{ fontSize: "11px", color: "#6B7280" }}>선택 전</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                <div style={{ width: "12px", height: "12px", borderRadius: "2px", backgroundColor: "#EDE9FE" }} />
-                <span style={{ fontSize: "11px", color: "#6B7280" }}>다른 사람 가능</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                <div style={{ width: "12px", height: "12px", borderRadius: "2px", backgroundColor: "#A78BFA" }} />
-                <span style={{ fontSize: "11px", color: "#6B7280" }}>많이 겹침</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                <div style={{ width: "12px", height: "12px", borderRadius: "2px", backgroundColor: "#5B35E6" }} />
-                <span style={{ fontSize: "11px", color: "#6B7280" }}>전원 가능</span>
-              </div>
-            </div>
+            {/* 범례 영역 삭제됨 */}
           </div>
 
 
@@ -959,76 +930,6 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
               </button>
             ) : null}
           </div>
-
-          {/* 슬롯 상세 정보 팝업 (바텀 시트 느낌) */}
-          {clickedSlot && (
-            <>
-              <div
-                onClick={() => setClickedSlot(null)}
-                style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", zIndex: 2000 }}
-              />
-              <div
-                style={{
-                  position: "fixed",
-                  bottom: 0, left: 0, right: 0,
-                  backgroundColor: "#fff",
-                  borderTopLeftRadius: "24px", borderTopRightRadius: "24px",
-                  padding: "24px 20px 40px", zIndex: 2001,
-                  boxShadow: "0 -4px 20px rgba(0,0,0,0.15)",
-                  maxHeight: "80vh", overflowY: "auto"
-                }}
-              >
-                <div style={{ width: "40px", height: "4px", backgroundColor: "#E5E7EB", borderRadius: "2px", margin: "0 auto 20px" }} />
-                <h3 style={{ margin: "0 0 4px", fontSize: "18px", fontWeight: "700", color: "#1F2933" }}>
-                  {formatDateWithDay(clickedSlot.candidate.date)}
-                </h3>
-                <p style={{ margin: "0 0 24px", fontSize: "14px", color: "#6B7280", fontWeight: "500" }}>
-                  {clickedSlot.time} ~ {getNextTime(clickedSlot.time)}
-                </p>
-
-                <div style={{ marginBottom: "20px" }}>
-                  <p style={{ fontSize: "13px", fontWeight: "700", color: "#7C5CFF", marginBottom: "12px" }}>
-                    가능한 멤버 ({clickedSlot.available.length}명)
-                  </p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                    {clickedSlot.available.length > 0 ? (
-                      clickedSlot.available.map(p => (
-                        <div key={p.id} style={{ padding: "6px 12px", backgroundColor: "#F0ECFF", color: "#7C5CFF", borderRadius: "20px", fontSize: "13px", fontWeight: "600" }}>
-                          {p.nickname}{p.id === currentUser?.id ? "(나)" : ""}
-                        </div>
-                      ))
-                    ) : (
-                      <span style={{ fontSize: "13px", color: "#9CA3AF" }}>가능한 멤버가 없습니다.</span>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <p style={{ fontSize: "13px", fontWeight: "700", color: "#6B7280", marginBottom: "12px" }}>
-                    미등록 멤버 ({clickedSlot.unavailable.length}명)
-                  </p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                    {clickedSlot.unavailable.length > 0 ? (
-                      clickedSlot.unavailable.map(p => (
-                        <div key={p.id} style={{ padding: "6px 12px", backgroundColor: "#F3F4F6", color: "#6B7280", borderRadius: "20px", fontSize: "13px", fontWeight: "500" }}>
-                          {p.nickname}{p.id === currentUser?.id ? "(나)" : ""}
-                        </div>
-                      ))
-                    ) : (
-                      <span style={{ fontSize: "13px", color: "#9CA3AF" }}>모두가 가능합니다!</span>
-                    )}
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => setClickedSlot(null)}
-                  style={{ width: "100%", marginTop: "32px", padding: "14px", backgroundColor: "#F3F4F6", color: "#1F2933", border: "none", borderRadius: "12px", fontSize: "15px", fontWeight: "700", cursor: "pointer" }}
-                >
-                  닫기
-                </button>
-              </div>
-            </>
-          )}
 
           {/* 참여자 현황 */}
           <div style={{ marginBottom: "32px" }}>
@@ -1194,19 +1095,34 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                     {getSelectedSummary()}
                   </p>
                 </div>
-                <button
-                  onClick={() => setSelectedSlots([])}
-                  style={{
-                    padding: "6px 12px",
-                    backgroundColor: "transparent",
-                    color: "#6B7280",
-                    border: "1px solid #E5E7EB",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                    fontWeight: "600",
-                    cursor: "pointer"
-                  }}
-                >초기화</button>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    onClick={() => setSelectedSlots([])}
+                    style={{
+                      padding: "6px 12px",
+                      backgroundColor: "transparent",
+                      color: "#6B7280",
+                      border: "1px solid #E5E7EB",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      cursor: "pointer"
+                    }}
+                  >초기화</button>
+                  <button
+                    onClick={handleDeleteMyAvailability}
+                    style={{
+                      padding: "6px 12px",
+                      backgroundColor: "transparent",
+                      color: "#EF4444",
+                      border: "1px solid #FCA5A5",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      cursor: "pointer"
+                    }}
+                  >내 일정 삭제</button>
+                </div>
               </div>
               <div style={{ display: "flex", gap: "8px" }}>
                 <button
@@ -1258,25 +1174,56 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
 }
 
 function MemberTimeline({ candidate, availabilities, members }) {
-  const COLORS = ["#7c79ff", "#ff8a80", "#4dd0e1", "#81c784", "#ffd54f", "#ba68c8", "#ffb74d"];
-  const getColor = (uid) => { const idx = members.findIndex((m) => (m.userid || m.id) === uid); return COLORS[idx >= 0 ? idx % COLORS.length : 0]; };
-  const toDecimalHour = (timeStr) => { if (!timeStr) return 0; const [h, m] = timeStr.split(":").map(Number); return h + m / 60; };
+  const getColor = (uid) => {
+    const idx = members.findIndex((m) => (m.userid || m.id) === uid);
+    return memberColors[idx >= 0 ? idx % memberColors.length : 0];
+  };
+
+  const toDecimalHour = (timeStr) => {
+    if (!timeStr) return 0;
+    const [h, m] = timeStr.split(":").map(Number);
+    return h + m / 60;
+  };
+
   const startH = candidate.isallday ? 0 : toDecimalHour(candidate.starttime?.slice(0, 5));
   const endH = candidate.isallday ? 24 : toDecimalHour(candidate.endtime?.slice(0, 5));
   const range = endH - startH || 1;
   const slotsByMember = {};
-  availabilities.filter((a) => a.candidateid === candidate.id).forEach((a) => { if (!slotsByMember[a.userid]) slotsByMember[a.userid] = []; slotsByMember[a.userid].push(a); });
+  availabilities
+    .filter((a) => a.candidateid === candidate.id)
+    .forEach((a) => {
+      if (!slotsByMember[a.userid]) slotsByMember[a.userid] = [];
+      slotsByMember[a.userid].push(a);
+    });
+
   const ticks = [];
-  for (let h = Math.ceil(startH); h <= Math.floor(endH); h++) { ticks.push(h); }
+  for (let h = Math.ceil(startH); h <= Math.floor(endH); h++) {
+    ticks.push(h);
+  }
 
   return (
     <div style={{ marginTop: "12px" }}>
       <div style={{ fontSize: "12px", fontWeight: "600", color: "#666", marginBottom: "8px" }}>
         멤버별 가능 시간
-        <span style={{ fontWeight: "normal", color: "#aaa", marginLeft: "6px" }}>{candidate.isallday ? "00:00 ~ 24:00" : `${candidate.starttime?.slice(0, 5)} ~ ${candidate.endtime?.slice(0, 5)}`}</span>
+        <span style={{ fontWeight: "normal", color: "#aaa", marginLeft: "6px" }}>
+          {candidate.isallday ? "00:00 ~ 24:00" : `${candidate.starttime?.slice(0, 5)} ~ ${candidate.endtime?.slice(0, 5)}`}
+        </span>
       </div>
       <div style={{ marginLeft: "72px", position: "relative", height: "16px", marginBottom: "2px" }}>
-        {ticks.map((h) => (<div key={h} style={{ position: "absolute", left: `${((h - startH) / range) * 100}%`, transform: "translateX(-50%)", fontSize: "9px", color: "#bbb" }}>{h}</div>))}
+        {ticks.map((h) => (
+          <div
+            key={h}
+            style={{
+              position: "absolute",
+              left: `${((h - startH) / range) * 100}%`,
+              transform: "translateX(-50%)",
+              fontSize: "9px",
+              color: "#bbb",
+            }}
+          >
+            {h}
+          </div>
+        ))}
       </div>
       {members.map((member) => {
         const uid = member.userid || member.id;
@@ -1284,13 +1231,54 @@ function MemberTimeline({ candidate, availabilities, members }) {
         const color = getColor(uid);
         return (
           <div key={uid} style={{ display: "flex", alignItems: "center", marginBottom: "5px" }}>
-            <div style={{ width: "64px", fontSize: "11px", color: "#555", textAlign: "right", paddingRight: "8px", flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{member.nickname || "?"}</div>
-            <div style={{ flex: 1, height: "22px", backgroundColor: "#eeeeee", borderRadius: "4px", position: "relative", overflow: "hidden" }}>
-              {slots.length === 0 && <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", color: "#ccc" }}>미등록</div>}
+            <div
+              style={{
+                width: "64px",
+                fontSize: "11px",
+                color: "#555",
+                textAlign: "right",
+                paddingRight: "8px",
+                flexShrink: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {member.nickname || "?"}
+            </div>
+            <div
+              style={{
+                flex: 1,
+                height: "22px",
+                backgroundColor: "#eeeeee",
+                borderRadius: "4px",
+                position: "relative",
+                overflow: "hidden",
+              }}
+            >
+              {slots.length === 0 && (
+                <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", color: "#ccc" }}>
+                  미등록
+                </div>
+              )}
               {slots.map((slot, si) => {
-                const s = toDecimalHour(slot.starttime?.slice(0, 5)); const e = toDecimalHour(slot.endtime?.slice(0, 5));
-                const left = Math.max(0, ((s - startH) / range) * 100); const width = Math.min(100 - left, ((e - s) / range) * 100);
-                return (<div key={si} style={{ position: "absolute", left: `${left}%`, width: `${width}%`, height: "100%", backgroundColor: color, opacity: 0.85 }} />);
+                const s = toDecimalHour(slot.starttime?.slice(0, 5));
+                const e = toDecimalHour(slot.endtime?.slice(0, 5));
+                const left = Math.max(0, ((s - startH) / range) * 100);
+                const width = Math.min(100 - left, ((e - s) / range) * 100);
+                return (
+                  <div
+                    key={si}
+                    style={{
+                      position: "absolute",
+                      left: `${left}%`,
+                      width: `${width}%`,
+                      height: "100%",
+                      backgroundColor: color,
+                      opacity: 0.85,
+                    }}
+                  />
+                );
               })}
             </div>
           </div>
@@ -1305,14 +1293,26 @@ function CandidateCalendar({ candidates, availabilities, calYear, calMonth, onPr
   const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
   const firstDay = new Date(calYear, calMonth, 1).getDay();
   const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
   const cells = [...Array(firstDay).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
-  const candidateMap = {}; candidates.forEach((c) => { if (!candidateMap[c.date]) candidateMap[c.date] = []; candidateMap[c.date].push(c); });
-  const availMap = {}; availabilities.forEach(({ date, userid }) => { if (!availMap[date]) availMap[date] = new Set(); availMap[date].add(userid); });
-  const COLORS = ["#7c79ff", "#ff8a80", "#4dd0e1", "#81c784", "#ffd54f", "#ba68c8", "#ffb74d"];
+
+  const candidateMap = {};
+  candidates.forEach((c) => {
+    if (!candidateMap[c.date]) candidateMap[c.date] = [];
+    candidateMap[c.date].push(c);
+  });
+
+  const availMap = {};
+  availabilities.forEach(({ date, userid }) => {
+    if (!availMap[date]) availMap[date] = new Set();
+    availMap[date].add(userid);
+  });
+
   const pad = (n) => String(n).padStart(2, "0");
   const dateKey = (d) => `${calYear}-${pad(calMonth + 1)}-${pad(d)}`;
+  
   const selectedAvailUsers = selectedDate ? [...(availMap[selectedDate] || [])] : [];
   const selectedAvailCount = selectedAvailUsers.length;
 
@@ -1324,27 +1324,75 @@ function CandidateCalendar({ candidates, availabilities, calYear, calMonth, onPr
         <button onClick={onNextMonth} style={{ border: "none", background: "none", fontSize: "20px", cursor: "pointer", lineHeight: 1, padding: "0 2px" }}>›</button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", marginBottom: "4px" }}>
-        {WEEKDAYS.map((d, i) => (<div key={d} style={{ textAlign: "center", fontSize: "12px", fontWeight: "600", color: i === 0 ? "#f44" : i === 6 ? "#7c79ff" : "#555", padding: "4px 0" }}>{d}</div>))}
+        {WEEKDAYS.map((d, i) => (
+          <div key={d} style={{ textAlign: "center", fontSize: "12px", fontWeight: "600", color: i === 0 ? "#f44" : i === 6 ? "#7c79ff" : "#555", padding: "4px 0" }}>{d}</div>
+        ))}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px" }}>
         {cells.map((d, i) => {
           const key = d ? dateKey(d) : null;
-          const availUsers = key ? [...(availMap[key] || [])] : []; const availCount = availUsers.length; const hasCandidate = key ? !!candidateMap[key] : false;
-          const isClickable = availCount > 0 || hasCandidate; const isToday = key === todayStr; const isSelected = key === selectedDate; const col = i % 7;
+          const availUsers = key ? [...(availMap[key] || [])] : [];
+          const availCount = availUsers.length;
+          const hasCandidate = key ? !!candidateMap[key] : false;
+          const isClickable = availCount > 0 || hasCandidate;
+          const isToday = key === todayStr;
+          const isSelected = key === selectedDate;
+          const col = i % 7;
+
           return (
-            <div key={i} onClick={() => d && isClickable && setSelectedDate(isSelected ? null : key)} style={{ minHeight: "52px", padding: "4px", borderRadius: "8px", backgroundColor: isSelected ? "#f0f0ff" : hasCandidate ? "#fafaff" : "transparent", border: hasCandidate ? "1px solid #e0e0ff" : "1px solid transparent", cursor: isClickable ? "pointer" : "default", display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div
+              key={i}
+              onClick={() => d && isClickable && setSelectedDate(isSelected ? null : key)}
+              style={{
+                minHeight: "52px",
+                padding: "4px",
+                borderRadius: "8px",
+                backgroundColor: isSelected ? "#f0f0ff" : hasCandidate ? "#fafaff" : "transparent",
+                border: hasCandidate ? "1px solid #e0e0ff" : "1px solid transparent",
+                cursor: isClickable ? "pointer" : "default",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+              }}
+            >
               {d && (
                 <>
-                  <div style={{ width: "24px", height: "24px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: isToday ? "#7c79ff" : "transparent", color: isToday ? "#fff" : col === 0 ? "#f44" : col === 6 ? "#7c79ff" : "#222", fontSize: "12px", fontWeight: isToday ? "bold" : "normal" }}>{d}</div>
+                  <div
+                    style={{
+                      width: "24px",
+                      height: "24px",
+                      borderRadius: "50%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: isToday ? "#7c79ff" : "transparent",
+                      color: isToday ? "#fff" : col === 0 ? "#f44" : col === 6 ? "#7c79ff" : "#222",
+                      fontSize: "12px",
+                      fontWeight: isToday ? "bold" : "normal",
+                    }}
+                  >
+                    {d}
+                  </div>
                   {hasCandidate && (
-                    <div style={{ alignSelf: "stretch", display: "flex", flexDirection: "column", gap: "1px", marginTop: "2px" }}>
+                    <div style={{ alignSelf: "stretch", display: "flex", flexDirection: "column", gap: "2px", marginTop: "2px" }}>
                       {availUsers.slice(0, 3).map((uid) => {
                         const member = members.find((m) => (m.userid || m.id) === uid);
                         const colorIdx = members.findIndex((m) => (m.userid || m.id) === uid);
-                        const color = COLORS[colorIdx >= 0 ? colorIdx % COLORS.length : 0];
-                        return (<div key={uid} style={{ height: "13px", backgroundColor: color, borderRadius: "3px", fontSize: "9px", color: "#fff", paddingLeft: "3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: "13px" }}>{member?.nickname || ""}</div>);
+                        const color = memberColors[colorIdx >= 0 ? colorIdx % memberColors.length : 0];
+                        return (
+                          <div
+                            key={uid}
+                            style={{
+                              height: "4px",
+                              backgroundColor: color,
+                              borderRadius: "2px",
+                              width: "100%",
+                            }}
+                            title={member?.nickname || ""}
+                          />
+                        );
                       })}
-                      {availCount > 3 && <div style={{ fontSize: "9px", color: "#888", paddingLeft: "2px" }}>+{availCount - 3}명 더</div>}
+                      {availCount > 3 && <div style={{ fontSize: "8px", color: "#888", textAlign: "center" }}>+{availCount - 3}</div>}
                       {availCount === 0 && <div style={{ fontSize: "9px", color: "#bbb", textAlign: "center" }}>후보</div>}
                     </div>
                   )}
@@ -1356,8 +1404,17 @@ function CandidateCalendar({ candidates, availabilities, calYear, calMonth, onPr
       </div>
       {selectedDate && (candidateMap[selectedDate] || selectedAvailCount > 0) && (
         <div style={{ marginTop: "12px", padding: "12px", backgroundColor: "#f5f5ff", borderRadius: "10px" }}>
-          <p style={{ margin: "0 0 4px", fontWeight: "bold", fontSize: "14px", color: "#555" }}>{selectedDate}{selectedAvailCount > 0 && <span style={{ marginLeft: "8px", fontSize: "12px", color: "#7c79ff", fontWeight: "normal" }}>👥 {selectedAvailCount}명 가능</span>}</p>
-          {(candidateMap[selectedDate] || []).map((candidate) => (<MemberTimeline key={candidate.id} candidate={candidate} availabilities={availabilities} members={members} />))}
+          <p style={{ margin: "0 0 4px", fontWeight: "bold", fontSize: "14px", color: "#555" }}>
+            {selectedDate}
+            {selectedAvailCount > 0 && (
+              <span style={{ marginLeft: "8px", fontSize: "12px", color: "#7c79ff", fontWeight: "normal" }}>
+                👥 {selectedAvailCount}명 가능
+              </span>
+            )}
+          </p>
+          {(candidateMap[selectedDate] || []).map((candidate) => (
+            <MemberTimeline key={candidate.id} candidate={candidate} availabilities={availabilities} members={members} />
+          ))}
         </div>
       )}
     </div>

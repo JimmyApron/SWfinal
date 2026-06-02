@@ -56,11 +56,23 @@ export async function saveMemberAvailabilities(roomId, userId, rows) {
 
   if (deleteError) throw new Error("기존 일정 삭제 실패");
 
-  const { error: insertError } = await supabase
-    .from("member_availabilities")
-    .insert(rows);
+  if (rows.length > 0) {
+    const { error: insertError } = await supabase
+      .from("member_availabilities")
+      .insert(rows);
 
-  if (insertError) throw new Error("가능 일정 저장 실패");
+    if (insertError) throw new Error("가능 일정 저장 실패");
+  }
+}
+
+export async function deleteMemberAvailabilities(roomId, userId) {
+  const { error } = await supabase
+    .from("member_availabilities")
+    .delete()
+    .eq("roomid", Number(roomId))
+    .eq("userid", userId);
+
+  if (error) throw new Error("내 일정 삭제 실패");
 }
 export async function addScheduleCandidate(candidate) {
   const { error } = await supabase
