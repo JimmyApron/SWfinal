@@ -119,11 +119,13 @@ function NotificationListener() {
               const isRoomMuted = newNotification.roomid && mutedRooms.some(id => String(id) === String(newNotification.roomid));
 
               // 현재 보고 있는 방의 알림은 팝업을 띄우지 않음 (UX 개선)
+              // 단, 추방(kick) 알림은 예외적으로 무조건 표시
               const currentPath = locationRef.current.pathname;
               const isCurrentlyInRoom = newNotification.roomid && currentPath.includes(`/rooms/${newNotification.roomid}`);
+              const isKickNotif = newNotification.type === "kick";
 
-              // issilent가 아니고, 전역 설정이 켜져있고, 해당 방이 차단되지 않았으며, 현재 그 방에 있지 않은 경우만 Toast 표시
-              if (newNotification.issilent !== true && isGlobalPopupEnabled && !isRoomMuted && !isCurrentlyInRoom) {
+              // issilent가 아니고, 전역 설정이 켜져있고, 해당 방이 차단되지 않았으며, (현재 그 방에 있지 않거나 추방 알림인 경우) Toast 표시
+              if (newNotification.issilent !== true && isGlobalPopupEnabled && !isRoomMuted && (!isCurrentlyInRoom || isKickNotif)) {
                 console.log("✅ [App.js] Toast 띄움 로직 실행:", newNotification.title);
                 setToast({
                   message: newNotification.message,

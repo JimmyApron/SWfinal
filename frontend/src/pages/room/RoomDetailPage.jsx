@@ -175,7 +175,6 @@ function RoomDetailPage() {
 
       // 이미 방에 들어와있던 상태(myEntryId 존재)인데 목록에서 사라졌고, 스스로 나가는 중(isLeavingRef.current)이 아니라면 추방임
       if (myEntryId && !isStillThere && !isLeavingRef.current) {
-        alert(`${room?.roomname || "해당"} 방에서 추방되었습니다.`);
         navigate("/home");
         return;
       }
@@ -329,7 +328,6 @@ function RoomDetailPage() {
         () => {
           // 목록 갱신 구독과는 별개로 내 데이터 삭제만 감지하여 즉시 튕겨냄
           if (!isLeavingRef.current) {
-            alert(`${room?.roomname || "해당"} 방에서 추방되었습니다.`);
             navigate("/home");
           }
         }
@@ -700,6 +698,18 @@ function RoomDetailPage() {
     if (window.confirm(confirmMessage)) {
       try {
         await kickParticipantApi(roomId, participantId, p.type);
+
+        // 추방된 유저에게 알림 생성
+        await createNotification({
+          roomId: Number(roomId),
+          receiverId: participantId,
+          senderId: currentUser.id,
+          type: "kick",
+          title: "🚫 추방 알림",
+          message: `방에서 추방되었습니다.`,
+          link: "/home"
+        });
+
         alert(`${p.nickname}님이 추방되었습니다.`);
         setSelectedParticipantId(null);
         
