@@ -107,7 +107,6 @@ function VoteDetailPage() {
   const [showDateChangeWarningModal, setShowDateChangeWarningModal] = useState(false);
   const [showAfterLinkLocationModal, setShowAfterLinkLocationModal] = useState(false);
   const [pendingLocationScheduleId, setPendingLocationScheduleId] = useState(null);
-  const [showScheduleListInModal, setShowScheduleListInModal] = useState(false);
   const [showConfirmToast, setShowConfirmToast] = useState(false);
   const [showFromScheduleModal, setShowFromScheduleModal] = useState(false);
   const [showAfterUpdateLocationModal, setShowAfterUpdateLocationModal] = useState(false);
@@ -215,9 +214,6 @@ function VoteDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showScheduleModal, showLocationModal]);
 
-  useEffect(() => {
-    if (!showLocationModal) setShowScheduleListInModal(false);
-  }, [showLocationModal]);
 
   useEffect(() => {
     loadVote();
@@ -1733,7 +1729,11 @@ function VoteDetailPage() {
                 marginBottom: "16px",
               }}
             >
-              {existingHasLocation ? "기존 위치가 유지됩니다." : "만날 위치를 지금 정하시겠어요?"}
+              {existingHasLocation
+                ? "기존 위치가 유지됩니다."
+                : isReconfirmation
+                ? "만날 위치를 지금 정하시겠어요?"
+                : "일정을 등록할 일정을 선택하거나 새 일정을 만들어 주세요."}
             </p>
             {existingHasLocation ? (
               <button
@@ -1788,63 +1788,55 @@ function VoteDetailPage() {
               <>
                 {/* 1. 확정된 일정에서 정하기 */}
                 <div style={{ marginBottom: "20px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                    <p style={{ margin: 0, fontSize: "13px", fontWeight: "bold" }}>
-                      1. 확정된 일정에서 정하기
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setShowScheduleListInModal((v) => !v)}
-                      style={{ fontSize: "12px", padding: "3px 10px", border: "1px solid var(--border-color)", borderRadius: "8px", backgroundColor: "var(--card-bg)", color: "var(--text-color)", cursor: "pointer" }}
-                    >
-                      {showScheduleListInModal ? "목록 닫기" : "일정 목록 보기"}
-                    </button>
-                  </div>
+                  <p style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: "bold" }}>
+                    1. 확정된 일정에서 정하기
+                  </p>
 
-                  {showScheduleListInModal && (roomConfirmedSchedules.length === 0 ? (
+                  {roomConfirmedSchedules.length === 0 ? (
                     <p style={{ fontSize: "13px", color: "#aaa", margin: "8px 0" }}>
                       확정된 일정이 없습니다.
                     </p>
                   ) : (
-                    roomConfirmedSchedules.map((s) => (
-                      <button
-                        key={s.id}
-                        onClick={() => {
-                          if (s.date) {
-                            setPendingLinkSchedule(s);
-                            setShowDateChangeWarningModal(true);
-                          } else {
-                            handleLinkDatelessSchedule(s.id);
-                          }
-                        }}
-                        style={{
-                          width: "100%",
-                          padding: "10px 12px",
-                          marginBottom: "6px",
-                          backgroundColor: "var(--card-bg)",
-                          color: "var(--text-color)",
-                          border: "1px solid var(--border-color)",
-                          borderRadius: "10px",
-                          fontSize: "14px",
-                          cursor: "pointer",
-                          textAlign: "left",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          gap: "8px",
-                        }}
-                      >
-                        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {s.title || "제목 없음"}
-                        </span>
-                        {s.date && (
-                          <span style={{ fontSize: "12px", color: "#888", whiteSpace: "nowrap", flexShrink: 0 }}>
-                            {s.date}{s.starttime ? ` ${s.starttime}` : ""}
+                    <div style={{ maxHeight: "180px", overflowY: "auto" }}>
+                      {roomConfirmedSchedules.map((s) => (
+                        <button
+                          key={s.id}
+                          onClick={() => {
+                            if (s.date) {
+                              setPendingLinkSchedule(s);
+                              setShowDateChangeWarningModal(true);
+                            } else {
+                              handleLinkDatelessSchedule(s.id);
+                            }
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "10px 12px",
+                            marginBottom: "6px",
+                            backgroundColor: "var(--card-bg)",
+                            color: "var(--text-color)",
+                            border: "1px solid var(--border-color)",
+                            borderRadius: "10px",
+                            fontSize: "14px",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            gap: "8px",
+                            boxSizing: "border-box",
+                          }}
+                        >
+                          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {s.title || "제목 없음"}
                           </span>
-                        )}
-                      </button>
-                    ))
-                  ))}
+                          <span style={{ fontSize: "12px", color: "#888", whiteSpace: "nowrap", flexShrink: 0 }}>
+                            {s.date ? `${s.date}${s.starttime ? ` ${s.starttime}` : ""}` : "날짜 미정"}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* 2. 새로운 확정 일정 추가하기 */}
