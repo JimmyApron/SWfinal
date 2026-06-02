@@ -23,7 +23,12 @@ function VoteCreatePage() {
 
   const returnTab = location.state?.returnTab || 'vote';
   const locationKind = location.state?.locationKind || null;
-  const fromScheduleId = location.state?.fromScheduleId || null;
+  const fromScheduleId = location.state?.fromScheduleId || (() => {
+    try {
+      const s = sessionStorage.getItem("confirmFromSchedule");
+      return s ? JSON.parse(s).id : null;
+    } catch { return null; }
+  })();
   const scheduleId = location.state?.scheduleId || null;
   const scheduleTitle = location.state?.scheduleTitle || '';
 
@@ -368,12 +373,13 @@ function VoteCreatePage() {
       return;
     }
 
-    // 기존 확정일정에서 "새 투표 만들기"로 진입한 경우 → 확정일정의 voteid를 새 투표로 연결
+    // 기존 확정일정에서 진입한 경우 → 확정일정의 voteid를 새 투표로 연결
     if (fromScheduleId && createdVoteId) {
       await supabase
         .from("confirmed_schedules")
         .update({ voteid: createdVoteId })
         .eq("id", fromScheduleId);
+      sessionStorage.removeItem("confirmFromSchedule");
     }
 
     await sendVoteNotification({

@@ -70,6 +70,32 @@ button {
   cursor: pointer;
 }
 
+.location-confirmed-schedule-list {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 2px 7px 2px 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(124, 121, 255, 0.65) rgba(124, 121, 255, 0.08);
+}
+
+.location-confirmed-schedule-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.location-confirmed-schedule-list::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(124, 121, 255, 0.08);
+}
+
+.location-confirmed-schedule-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(124, 121, 255, 0.65);
+}
+
+.location-confirmed-schedule-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(124, 121, 255, 0.85);
+}
+
 .loading-container {
   color: var(--text-color);
   background-color: var(--bg-color);

@@ -1231,7 +1231,15 @@ function MapPage({ roomId }) {
   const handleOpenCreatedSchedule = () => {
     if (!createdLocationOnlySchedule) return
 
-    navigate(`/rooms/${currentRoomId}?tab=schedule`)
+    navigate('/confirmed-schedule', {
+      state: {
+        schedule: {
+          ...createdLocationOnlySchedule,
+          roomid: currentRoomId,
+          isLocationOnly: true,
+        },
+      },
+    })
   }
 
   const handleCreateMiddlePlaceVote = (selectedPlaces) => {
@@ -1384,6 +1392,10 @@ function MapPage({ roomId }) {
       setNewScheduleTitle('')
       setNewScheduleTitleError('')
       setShowNewScheduleModal(false)
+      setCreatedLocationOnlySchedule({
+        ...schedule,
+        isLocationOnly: true,
+      })
       setMessage(`${schedule.title} 일정을 만들었어요. 이제 만날 위치를 정해 주세요.`)
     } catch (error) {
       setNewScheduleTitleError(error.message)
@@ -1533,7 +1545,7 @@ function MapPage({ roomId }) {
           <div style={{ width: '300px', padding: '24px', borderRadius: '16px', backgroundColor: 'var(--bg-color)', textAlign: 'center' }}>
             <h3 style={{ marginTop: 0 }}>일정을 정하러 가시겠습니까?</h3>
             <p style={{ color: 'var(--secondary-text)', fontSize: '13px' }}>
-              만날 위치와 일정 이름은 저장되었습니다. 날짜와 시간은 나중에 입력할 수도 있습니다.
+              일정 이름은 저장되었습니다. 날짜와 시간은 나중에 입력할 수도 있습니다.
             </p>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
@@ -1549,14 +1561,14 @@ function MapPage({ roomId }) {
                   cursor: 'pointer',
                 }}
               >
-                나중에 하기
+                나중에 정하기
               </button>
               <button
                 type="button"
                 onClick={handleOpenCreatedSchedule}
                 style={{ flex: 1, padding: '10px', border: 'none', borderRadius: '8px', backgroundColor: '#7c79ff', color: '#fff', cursor: 'pointer' }}
               >
-                지금 일정 정하기
+                지금 날짜 정하기
               </button>
             </div>
           </div>
