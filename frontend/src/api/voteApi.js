@@ -151,7 +151,7 @@ export async function getVotes(roomid) {
       isclosed,
       confirmedoptionid,
       scheduleid,
-      confirmed_schedules:scheduleid(title, date),
+      confirmed_schedules:scheduleid(title, date, location),
       voteresponses(userid)
     `)
     .eq("roomid", Number(roomid))
@@ -173,7 +173,7 @@ export async function getVoteDetail(voteid) {
     .from("votes")
     .select(`
       *,
-      confirmed_schedules:scheduleid(title, date),
+      confirmed_schedules:scheduleid(title, date, location),
       voteoptions!vote_options_voteid_fkey(*),
       voteresponses(optionid, userid, nickname)
     `)
@@ -186,6 +186,32 @@ export async function getVoteDetail(voteid) {
   }
 
   return data;
+}
+
+export async function getVoteConfirmedAdditionalLocations(voteid) {
+  const { data, error } = await supabase
+    .from("confirmed_locations")
+    .select("id, scheduleid, placename")
+    .eq("voteid", Number(voteid));
+
+  if (error) {
+    console.error("추가 장소 등록 상태 조회 실패:", error);
+    throw error;
+  }
+
+  return data || [];
+}
+
+export async function removeVoteConfirmedAdditionalLocation(locationId) {
+  const { error } = await supabase
+    .from("confirmed_locations")
+    .delete()
+    .eq("id", Number(locationId));
+
+  if (error) {
+    console.error("추가 장소 등록 취소 실패:", error);
+    throw error;
+  }
 }
 
 /**
@@ -256,7 +282,8 @@ export async function confirmVote(
   option,
   roomid,
   votetype,
-  extraValue = null
+  extraValue = null,
+  locationKindOverride = null
 ) {
   const { error: updateError } = await supabase
     .from("votes")
@@ -359,11 +386,6 @@ export async function confirmVote(
         ? Number(option.placelng)
         : null;
 
-    await supabase
-      .from("confirmed_locations")
-      .delete()
-      .eq("voteid", Number(voteid));
-
     const { data: locationVote, error: voteError } = await supabase
       .from("votes")
       .select("title, votetype, locationkind, scheduleid")
@@ -383,13 +405,16 @@ export async function confirmVote(
         locationVote?.title?.trim() === MIDDLE_PLACE_VOTE_TITLE
       );
 
-    const scheduleId = locationVote?.locationkind
-      ? locationVote.scheduleid
-      : null;
+    const scheduleId = locationVote?.scheduleid || null;
+    const effectiveLocationKind =
+      locationKindOverride ||
+      locationVote?.locationkind ||
+      (isMiddlePlaceVote ? "middle" : "additional");
 
     if (!scheduleId) {
       return {
         isMiddlePlaceVote,
+        locationKind: effectiveLocationKind,
         confirmedLocation: {
           roomid: Number(roomid),
           voteid: Number(voteid),
@@ -409,7 +434,7 @@ export async function confirmVote(
      * room_middle_places 테이블에 kakaomapurl 컬럼이 없다면
      * 아래 upsert에서 에러가 날 수 있어서 kakaomapurl은 넣지 않음.
      */
-    if (isMiddlePlaceVote && placeLat !== null && placeLng !== null) {
+    if (effectiveLocationKind === "middle" && placeLat !== null && placeLng !== null) {
       const { error: middlePlaceError } = await supabase
         .from("confirmed_schedules")
         .update({
@@ -429,6 +454,24 @@ export async function confirmVote(
         await updateRoomLocationTransportModes(roomid, option.travelresults, scheduleId);
       }
     } else {
+      const { data: existingLocation, error: existingLocationError } =
+        await supabase
+          .from("confirmed_locations")
+          .select("id")
+          .eq("scheduleid", Number(scheduleId))
+          .eq("placename", placeName)
+          .limit(1)
+          .maybeSingle();
+
+      if (existingLocationError) {
+        console.error("추가 장소 중복 확인 실패:", existingLocationError);
+        throw existingLocationError;
+      }
+
+      if (existingLocation) {
+        throw new Error("이미 있는 추가장소입니다.");
+      }
+
       const { error: locationError } = await supabase
         .from("confirmed_locations")
         .insert([{
@@ -446,6 +489,7 @@ export async function confirmVote(
 
     return {
       isMiddlePlaceVote,
+      locationKind: effectiveLocationKind,
       confirmedLocation: {
         roomid: Number(roomid),
         voteid: Number(voteid),

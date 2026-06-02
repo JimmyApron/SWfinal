@@ -303,7 +303,8 @@ export async function applyConfirmedLocationToSchedule(
   scheduleId,
   location,
   isMiddlePlace,
-  linkVoteToSchedule = true
+  linkVoteToSchedule = true,
+  locationKind = null
 ) {
   if (isMiddlePlace) {
     const { error } = await supabase
@@ -318,6 +319,18 @@ export async function applyConfirmedLocationToSchedule(
 
     if (error) throw new Error("일정 위치 저장 실패");
   } else {
+    const { data: existingLocation, error: existingLocationError } =
+      await supabase
+        .from("confirmed_locations")
+        .select("id")
+        .eq("scheduleid", Number(scheduleId))
+        .eq("placename", location.placename)
+        .limit(1)
+        .maybeSingle();
+
+    if (existingLocationError) throw new Error("추가 장소 중복 확인 실패");
+    if (existingLocation) throw new Error("이미 있는 추가장소입니다.");
+
     const { error } = await supabase.from("confirmed_locations").insert([{
       roomid: Number(location.roomid),
       scheduleid: Number(scheduleId),
@@ -329,9 +342,12 @@ export async function applyConfirmedLocationToSchedule(
   }
 
   if (location.voteid && linkVoteToSchedule) {
+    const voteUpdates = { scheduleid: Number(scheduleId) };
+    if (locationKind) voteUpdates.locationkind = locationKind;
+
     const { error } = await supabase
       .from("votes")
-      .update({ scheduleid: Number(scheduleId) })
+      .update(voteUpdates)
       .eq("id", Number(location.voteid));
 
     if (error) throw new Error("투표 일정 연결 실패");
@@ -341,7 +357,8 @@ export async function applyConfirmedLocationToSchedule(
 export async function createLocationOnlyConfirmedSchedule(
   location,
   isMiddlePlace,
-  title = null
+  title = null,
+  locationKind = null
 ) {
   const { data, error } = await supabase
     .from("confirmed_schedules")
@@ -362,7 +379,13 @@ export async function createLocationOnlyConfirmedSchedule(
 
   if (error) throw new Error("날짜 없는 일정 생성 실패");
 
-  await applyConfirmedLocationToSchedule(data.id, location, isMiddlePlace, false);
+  await applyConfirmedLocationToSchedule(
+    data.id,
+    location,
+    isMiddlePlace,
+    true,
+    locationKind
+  );
 
   // 알림 생성
   try {

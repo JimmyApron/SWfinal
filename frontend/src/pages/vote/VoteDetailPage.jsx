@@ -3,6 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import {
   getVoteDetail,
+  getVoteConfirmedAdditionalLocations,
+  removeVoteConfirmedAdditionalLocation,
   deleteVote,
   updateVote,
   submitVote,
@@ -18,6 +20,7 @@ import {
   applyConfirmedLocationToSchedule,
   createDraftConfirmedSchedule,
   createLocationOnlyConfirmedSchedule,
+  clearConfirmedScheduleLocation,
   getRoomConfirmedSchedules,
   getMemberAvailabilities,
   getScheduleCandidates,
@@ -73,6 +76,8 @@ function VoteDetailPage() {
   const [pendingOption, setPendingOption] = useState(null);
   const [appointmentTitle, setAppointmentTitle] = useState("");
   const [pendingConfirmedLocation, setPendingConfirmedLocation] = useState(null);
+  const [pendingLocationKind, setPendingLocationKind] = useState(null);
+  const [confirmedAdditionalLocations, setConfirmedAdditionalLocations] = useState([]);
   const [isReconfirmation, setIsReconfirmation] = useState(false);
   const [existingHasLocation, setExistingHasLocation] = useState(false);
   const [showShareToast, setShowShareToast] = useState(false);
@@ -128,8 +133,11 @@ function VoteDetailPage() {
   const loadVote = async () => {
     try {
       const data = await getVoteDetail(Number(voteid));
+      const additionalLocations =
+        await getVoteConfirmedAdditionalLocations(Number(voteid));
 
       setVote(data);
+      setConfirmedAdditionalLocations(additionalLocations);
 
       // 응답자 전원의 프로필 닉네임을 profiles 테이블에서 조회 (이메일 저장 문제 방지)
       const responses = data.voteresponses || [];
@@ -220,6 +228,7 @@ function VoteDetailPage() {
       !vote.locationkind &&
       vote.title?.trim() === "중간 장소 투표"
     );
+  const isManualLocationVote = isLocationVote && !vote.locationkind && !isMiddlePlaceVote;
 
   const isClosed =
     vote.isclosed ||
@@ -616,10 +625,14 @@ function VoteDetailPage() {
     }
   };
 
-  const handleConfirm = async (option) => {
+  const handleConfirm = async (option, requestedLocationKind = null) => {
     const typeLabel =
       vote.votetype === "schedule"
         ? "일정"
+        : requestedLocationKind === "middle"
+        ? "중간위치"
+        : requestedLocationKind === "additional"
+        ? "추가장소"
         : isMiddlePlaceVote
         ? "중간위치"
         : "추가장소";
@@ -688,15 +701,17 @@ function VoteDetailPage() {
         option,
         Number(roomid),
         vote.votetype,
-        currentUser?.id
+        currentUser?.id,
+        requestedLocationKind
       );
 
       await loadVote();
 
-      if (!vote.locationkind) {
+      if (!result.confirmedLocation?.scheduleid) {
         setPendingConfirmedLocation(result.confirmedLocation);
         setRoomConfirmedSchedules(await getRoomConfirmedSchedules(roomid));
         setAppointmentTitle("");
+        setPendingLocationKind(result.locationKind);
         setShowScheduleModal(true);
         return;
       }
@@ -710,7 +725,11 @@ function VoteDetailPage() {
 
       alert(`${scheduleTitle}에 장소를 저장했어요.`);
     } catch (error) {
-      alert("확정 실패: " + (error.message || JSON.stringify(error)));
+      alert(
+        error.message === "이미 있는 추가장소입니다."
+          ? error.message
+          : "확정 실패: " + (error.message || JSON.stringify(error))
+      );
     }
   };
 
@@ -719,11 +738,14 @@ function VoteDetailPage() {
       await applyConfirmedLocationToSchedule(
         scheduleId,
         pendingConfirmedLocation,
-        isMiddlePlaceVote,
-        false
+        pendingLocationKind === "middle",
+        true,
+        isManualLocationVote ? null : pendingLocationKind
       );
+      await loadVote();
       setShowScheduleModal(false);
       setPendingConfirmedLocation(null);
+      setPendingLocationKind(null);
       setAppointmentTitle("");
       const schedule = roomConfirmedSchedules.find(
         (item) => Number(item.id) === Number(scheduleId)
@@ -738,7 +760,58 @@ function VoteDetailPage() {
 
       alert(`${schedule?.title || "대상 일정"}에 장소를 저장했어요.`);
     } catch (error) {
-      alert("일정 위치 저장 실패: " + error.message);
+      alert(
+        error.message === "이미 있는 추가장소입니다."
+          ? error.message
+          : "일정 위치 저장 실패: " + error.message
+      );
+    }
+  };
+
+  const getConfirmedAdditionalLocation = (option) =>
+    confirmedAdditionalLocations.find(
+      (location) =>
+        location.placename === (option.placename || option.optiontext)
+    );
+
+  const handleToggleAdditionalLocation = async (option, locationKind = null) => {
+    const confirmedLocation = getConfirmedAdditionalLocation(option);
+
+    if (!confirmedLocation) {
+      await handleConfirm(option, locationKind);
+      return;
+    }
+
+    if (!window.confirm("추가장소 등록을 취소하시겠습니까?")) return;
+
+    try {
+      await removeVoteConfirmedAdditionalLocation(confirmedLocation.id);
+      await loadVote();
+      alert("추가장소 등록을 취소했습니다.");
+    } catch (error) {
+      alert("추가장소 등록 취소 실패: " + error.message);
+    }
+  };
+
+  const isConfirmedMiddleLocation = (option) =>
+    vote.scheduleid &&
+    vote.confirmed_schedules?.location ===
+      (option.placename || option.optiontext);
+
+  const handleToggleMiddleLocation = async (option) => {
+    if (!isConfirmedMiddleLocation(option)) {
+      await handleConfirm(option, "middle");
+      return;
+    }
+
+    if (!window.confirm("중간위치 확정을 취소하시겠습니까?")) return;
+
+    try {
+      await clearConfirmedScheduleLocation(vote.scheduleid);
+      await loadVote();
+      alert("중간위치 확정을 취소했습니다.");
+    } catch (error) {
+      alert("중간위치 확정 취소 실패: " + error.message);
     }
   };
 
@@ -753,10 +826,23 @@ function VoteDetailPage() {
 
   const handleScheduleConfirmLater = async () => {
     try {
-      await createDraftConfirmedSchedule(Number(roomid), appointmentTitle.trim());
+      const schedule = await createDraftConfirmedSchedule(
+        Number(roomid),
+        appointmentTitle.trim()
+      );
+      if (pendingConfirmedLocation) {
+        await applyConfirmedLocationToSchedule(
+          schedule.id,
+          pendingConfirmedLocation,
+          pendingLocationKind === "middle",
+          true,
+          isManualLocationVote ? null : pendingLocationKind
+        );
+      }
       setShowNewScheduleConfirmModal(false);
       setShowScheduleModal(false);
       setPendingConfirmedLocation(null);
+      setPendingLocationKind(null);
       setAppointmentTitle("");
       setNewScheduleTitleError("");
       navigate(`/rooms/${roomid}?tab=schedule`);
@@ -770,8 +856,9 @@ function VoteDetailPage() {
       if (pendingConfirmedLocation) {
         await createLocationOnlyConfirmedSchedule(
           pendingConfirmedLocation,
-          isMiddlePlaceVote,
-          appointmentTitle.trim()
+          pendingLocationKind === "middle",
+          appointmentTitle.trim(),
+          isManualLocationVote ? null : pendingLocationKind
         );
       } else {
         await createDraftConfirmedSchedule(Number(roomid), appointmentTitle.trim());
@@ -779,6 +866,7 @@ function VoteDetailPage() {
       setShowNewScheduleConfirmModal(false);
       setShowScheduleModal(false);
       setPendingConfirmedLocation(null);
+      setPendingLocationKind(null);
       setAppointmentTitle("");
       setNewScheduleTitleError("");
       navigate(`/rooms/${roomid}?tab=location`);
@@ -1566,7 +1654,9 @@ function VoteDetailPage() {
             }}
           >
             <h3 style={{ marginBottom: "4px", textAlign: "center" }}>
-              위치가 확정되었습니다!
+              {pendingLocationKind === "middle"
+                ? "만날 위치가 확정되었습니다!"
+                : "추가 위치가 확정되었습니다!"}
             </h3>
 
             <p
@@ -1591,37 +1681,43 @@ function VoteDetailPage() {
                   연결할 확정 일정이 없습니다. 새 일정을 추가해주세요.
                 </p>
               ) : (
-                roomConfirmedSchedules.map((schedule) => (
-                  <button
-                    key={schedule.id}
-                    onClick={() => handleApplyLocationToSchedule(schedule.id)}
-                    style={{
-                      width: "100%",
-                      padding: "10px 12px",
-                      marginBottom: "6px",
-                      backgroundColor: "var(--card-bg)",
-                      color: "var(--text-color)",
-                      border: "1px solid var(--border-color)",
-                      borderRadius: "10px",
-                      fontSize: "14px",
-                      cursor: "pointer",
-                      textAlign: "left",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {schedule.title || "제목 없음"}
-                    </span>
-                    {schedule.date && (
-                      <span style={{ fontSize: "12px", color: "#888", whiteSpace: "nowrap", flexShrink: 0 }}>
-                        {schedule.date}{schedule.starttime ? ` ${schedule.starttime}` : ""}
+                <div className="location-confirmed-schedule-list">
+                  {roomConfirmedSchedules.map((schedule) => (
+                    <button
+                      key={schedule.id}
+                      onClick={() => handleApplyLocationToSchedule(schedule.id)}
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        marginBottom: "6px",
+                        backgroundColor: "var(--card-bg)",
+                        color: "var(--text-color)",
+                        border: "1px solid var(--border-color)",
+                        borderRadius: "10px",
+                        fontSize: "14px",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {schedule.title || "제목 없음"}
                       </span>
-                    )}
-                  </button>
-                ))
+                      <span
+                        style={{
+                          flexShrink: 0,
+                          fontSize: "12px",
+                          color: schedule.location ? "#888" : "#aaa",
+                        }}
+                      >
+                        {schedule.location || "장소 미정"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
 
@@ -2216,7 +2312,7 @@ function VoteDetailPage() {
           </p>
         ) : null}
 
-        {isLocationVote && vote.locationkind && vote.scheduleid && (
+        {isLocationVote && vote.scheduleid && (
           <p
             style={{
               color: "#555",
@@ -2246,7 +2342,11 @@ function VoteDetailPage() {
           >
             위치 투표는 투표 종료와 별개로, 생성자가
             <strong>
-              {isMiddlePlaceVote ? " 중간위치 확정하기 " : " 추가장소 확정하기 "}
+              {isManualLocationVote
+                ? " 중간위치 확정 또는 추가장소 등록 "
+                : isMiddlePlaceVote
+                ? " 중간위치 확정하기 "
+                : " 추가장소 확정하기 "}
             </strong>
             버튼을 눌러야 최종 확정됩니다.
           </p>
@@ -2356,7 +2456,11 @@ function VoteDetailPage() {
               {vote.isanonymous && <span style={badgeStyle}>익명투표</span>}
               {isLocationVote && (
                 <span style={badgeStyle}>
-                  {isMiddlePlaceVote ? "중간위치 투표" : "추가장소 투표"}
+                  {isManualLocationVote
+                    ? "일반 위치 투표"
+                    : isMiddlePlaceVote
+                    ? "중간위치 투표"
+                    : "추가장소 투표"}
                 </span>
               )}
             </div>
@@ -2662,6 +2766,10 @@ function VoteDetailPage() {
                   const voters = getOptionVoters(option.id);
                   const isShowingVoters = showVotersForOption === option.id;
                   const isConfirmed = vote.confirmedoptionid === option.id;
+                  const isAdditionalLocationRegistered =
+                    Boolean(getConfirmedAdditionalLocation(option));
+                  const isMiddleLocationRegistered =
+                    Boolean(isConfirmedMiddleLocation(option));
 
                   return (
                     <div key={option.id} style={{ marginBottom: "16px" }}>
@@ -2698,7 +2806,7 @@ function VoteDetailPage() {
                             </button>
                           )}
 
-                          {isConfirmed && (
+                          {isConfirmed && !isLocationVote && (
                             <span
                               style={{
                                 fontSize: "12px",
@@ -2722,7 +2830,98 @@ function VoteDetailPage() {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {vote.votetype !== "general" && (
+                          {isManualLocationVote ? (
+                            <>
+                              <button
+                                onClick={() => handleToggleMiddleLocation(option)}
+                                style={{
+                                  fontSize: "12px",
+                                  padding: "3px 10px",
+                                  border: "1px solid #7c79ff",
+                                  borderRadius: "12px",
+                                  backgroundColor: isMiddleLocationRegistered
+                                    ? "#7c79ff"
+                                    : "#fff",
+                                  color: isMiddleLocationRegistered
+                                    ? "#fff"
+                                    : "#7c79ff",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {isMiddleLocationRegistered
+                                  ? "중간위치 확정됨"
+                                  : "중간위치 확정"}
+                              </button>
+                              <button
+                                onClick={() =>
+                                  handleToggleAdditionalLocation(option, "additional")
+                                }
+                                style={{
+                                  fontSize: "12px",
+                                  padding: "3px 10px",
+                                  border: isAdditionalLocationRegistered
+                                    ? "1px solid #7c79ff"
+                                    : "1px solid #ddd",
+                                  borderRadius: "12px",
+                                  backgroundColor: isAdditionalLocationRegistered
+                                    ? "#7c79ff"
+                                    : "#fff",
+                                  color: isAdditionalLocationRegistered
+                                    ? "#fff"
+                                    : "#555",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {isAdditionalLocationRegistered
+                                  ? "추가장소 등록됨"
+                                  : "추가장소 등록"}
+                              </button>
+                            </>
+                          ) : vote.locationkind === "additional" ? (
+                            <button
+                              onClick={() => handleToggleAdditionalLocation(option)}
+                              style={{
+                                fontSize: "12px",
+                                padding: "3px 10px",
+                                border: isAdditionalLocationRegistered
+                                  ? "1px solid #7c79ff"
+                                  : "1px solid #ddd",
+                                borderRadius: "12px",
+                                backgroundColor: isAdditionalLocationRegistered
+                                  ? "#7c79ff"
+                                  : "#fff",
+                                color: isAdditionalLocationRegistered
+                                  ? "#fff"
+                                  : "#555",
+                                cursor: "pointer",
+                              }}
+                            >
+                              {isAdditionalLocationRegistered
+                                ? "추가장소 등록됨"
+                                : "추가장소 등록"}
+                            </button>
+                          ) : isMiddlePlaceVote ? (
+                            <button
+                              onClick={() => handleToggleMiddleLocation(option)}
+                              style={{
+                                fontSize: "12px",
+                                padding: "3px 10px",
+                                border: "1px solid #7c79ff",
+                                borderRadius: "12px",
+                                backgroundColor: isMiddleLocationRegistered
+                                  ? "#7c79ff"
+                                  : "#fff",
+                                color: isMiddleLocationRegistered
+                                  ? "#fff"
+                                  : "#7c79ff",
+                                cursor: "pointer",
+                              }}
+                            >
+                              {isMiddleLocationRegistered
+                                ? "중간위치 확정됨"
+                                : "중간위치 확정"}
+                            </button>
+                          ) : vote.votetype !== "general" && (
                             <button
                               onClick={() => !isConfirmed && handleConfirm(option)}
                               disabled={isConfirmed}
