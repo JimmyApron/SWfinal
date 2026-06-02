@@ -610,6 +610,7 @@ function RoomDetailPage() {
               overflowX: "hidden",
               display: "flex",
               flexDirection: "column",
+              backgroundColor: "#F7F7FA",
             }
           : {
               position: "relative",
@@ -617,6 +618,7 @@ function RoomDetailPage() {
               paddingBottom: "90px",
               boxSizing: "border-box",
               overflowX: "hidden",
+              backgroundColor: "#F7F7FA",
             }
       }
     >
@@ -625,10 +627,13 @@ function RoomDetailPage() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          padding: "10px",
-          backgroundColor: "var(--btn-bg)",
-          position: "relative",
+          padding: "12px 16px",
+          backgroundColor: "#FFFFFF",
+          position: "sticky",
+          top: 0,
+          zIndex: 100,
           minHeight: "44px",
+          borderBottom: "1px solid #E5E7EB",
         }}
       >
         <div style={{ flex: 1, display: "flex", alignItems: "center" }}>
@@ -638,9 +643,13 @@ function RoomDetailPage() {
               style={{
                 background: "none",
                 border: "none",
-                fontSize: "18px",
+                fontSize: "20px",
                 cursor: "pointer",
-                padding: "0",
+                padding: "4px",
+                color: "#1F2933",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
               ←
@@ -652,21 +661,27 @@ function RoomDetailPage() {
             position: "absolute",
             left: "50%",
             transform: "translateX(-50%)",
-            fontWeight: "bold",
+            fontWeight: "700",
+            fontSize: "17px",
+            color: "#1F2933",
           }}
         >
           {room.roomname}
         </span>
-        <div style={{ flex: 1, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "10px" }}>
-          <span style={{ fontSize: "14px" }}>총 {members.length + guests.length}명</span>
+        <div style={{ flex: 1, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "12px" }}>
+          <span style={{ fontSize: "13px", color: "#6B7280", fontWeight: "500" }}>총 {members.length + guests.length}명</span>
           <button
             onClick={() => setIsSidebarOpen(true)}
             style={{
               background: "none",
               border: "none",
-              fontSize: "18px",
+              fontSize: "20px",
               cursor: "pointer",
-              padding: "0",
+              padding: "4px",
+              color: "#1F2933",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
             ⚙
@@ -674,14 +689,55 @@ function RoomDetailPage() {
         </div>
       </header>
 
-      <div>
-        <button onClick={() => handleChangeTab("schedule")}>일정</button>
-        <button onClick={() => handleChangeTab("location")}>위치</button>
-        <button onClick={() => handleChangeTab("vote")}>투표</button>
-        <button onClick={() => handleChangeTab("chat")}>채팅</button>
+      <div
+        style={{
+          display: "flex",
+          backgroundColor: "#FFFFFF",
+          padding: "0 16px",
+          borderBottom: "1px solid #E5E7EB",
+        }}
+      >
+        {[
+          { id: "schedule", label: "일정" },
+          { id: "location", label: "위치" },
+          { id: "vote", label: "투표" },
+          { id: "chat", label: "채팅" },
+        ].map((t) => (
+          <button
+            key={t.id}
+            onClick={() => handleChangeTab(t.id)}
+            style={{
+              flex: 1,
+              padding: "14px 0",
+              background: "none",
+              border: "none",
+              fontSize: "15px",
+              fontWeight: tab === t.id ? "700" : "500",
+              color: tab === t.id ? "#7C5CFF" : "#6B7280",
+              cursor: "pointer",
+              position: "relative",
+              transition: "color 0.2s",
+            }}
+          >
+            {t.label}
+            {tab === t.id && (
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  left: "20%",
+                  right: "20%",
+                  height: "3px",
+                  backgroundColor: "#7C5CFF",
+                  borderRadius: "3px 3px 0 0",
+                }}
+              />
+            )}
+            {/* 알림 표시용 레드 닷 (필요 시 로직 추가 가능) */}
+            {/* <div style={{ position: "absolute", top: "12px", right: "25%", width: "5px", height: "5px", backgroundColor: "#EF4444", borderRadius: "50%" }} /> */}
+          </button>
+        ))}
       </div>
-
-      <hr style={{ margin: "0" }} />
 
       <div
         style={
@@ -693,7 +749,9 @@ function RoomDetailPage() {
                 minHeight: 0,
                 overflow: "hidden",
               }
-            : {}
+            : {
+                padding: "0 16px",
+              }
         }
       >
         {tab === "schedule" && (
@@ -703,6 +761,7 @@ function RoomDetailPage() {
             roomName={room?.roomname}
           />
         )}
+
         {tab === "location" && <MapPage roomId={roomId} />}
         {tab === "vote" && <VoteListPage roomid={roomId} />}
         {tab === "chat" && <ChatTab roomId={roomId} />}
