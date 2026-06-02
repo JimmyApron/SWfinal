@@ -3106,7 +3106,7 @@ function VoteDetailPage() {
                             </button>
                           )}
 
-                          {isConfirmed && !isLocationVote && (
+                          {isConfirmed && vote.votetype === "general" && (
                             <span
                               style={{
                                 fontSize: "12px",
