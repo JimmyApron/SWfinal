@@ -160,11 +160,6 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
 
   const handleSaveAvailability = async () => {
     try {
-      if (selectedSlots.length === 0) {
-        alert("선택한 시간이 없습니다. 일정을 모두 삭제하시려면 '내 일정 삭제'를 이용해 주세요.");
-        return;
-      }
-
       const { data: { user } } = await supabase.auth.getUser();
       let userId, userNickname;
 
@@ -932,7 +927,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
           </div>
 
           {/* 참여자 현황 */}
-          <div style={{ marginBottom: "32px" }}>
+          <div style={{ marginBottom: "20px" }}>
             <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#1F2933", marginBottom: "12px" }}>참여자 현황</h3>
             <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
               {members.map((member) => {
@@ -1069,6 +1064,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
             가능한 시간 분석 보기
           </button>
 
+
           {/* 하단 선택 요약 영역 (선택 모드일 때만 표시) */}
           {isSelectMode && (
             <div
@@ -1168,7 +1164,6 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
         />
       )}
 
-      <button onClick={handleShowAvailableResult}>가능한 시간 보기</button>
     </div>
   );
 }

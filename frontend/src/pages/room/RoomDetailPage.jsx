@@ -37,13 +37,8 @@ function RoomDetailPage() {
   const [members, setMembers] = useState([]);
   const [guests, setGuests] = useState([]);
   const [myEntryId, setMyEntryId] = useState(null);
+  const [notifications, setNotifications] = useState([]);
   
-  const [unreadTabs, setUnreadTabs] = useState({
-    schedule: false,
-    location: false,
-    vote: false,
-    chat: false,
-  });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
@@ -63,1743 +58,401 @@ function RoomDetailPage() {
     chat: true,
   });
 
+  // 실시간 리스너에서 최신 상태를 참조하기 위한 Refs
+  const tabRef = useRef(tab);
+  const currentUserRef = useRef(currentUser);
+
+  useEffect(() => { tabRef.current = tab; }, [tab]);
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+
+  // 파생 상태: 탭별 dot 표시 여부
+  const unreadTabs = {
+    schedule: notifications.some(n => n.isread !== true && n.issilent !== true && TAB_TYPE_MAP.schedule.includes(n.type)),
+    location: notifications.some(n => n.isread !== true && n.issilent !== true && TAB_TYPE_MAP.location.includes(n.type)),
+    vote: notifications.some(n => n.isread !== true && n.issilent !== true && TAB_TYPE_MAP.vote.includes(n.type)),
+    chat: notifications.some(n => n.isread !== true && n.issilent !== true && TAB_TYPE_MAP.chat.includes(n.type)),
+  };
+
   useEffect(() => {
     const queryTab = searchParams.get("tab");
-
-    if (
-      queryTab === "schedule" ||
-      queryTab === "location" ||
-      queryTab === "vote" ||
-      queryTab === "chat"
-    ) {
+    if (["schedule", "location", "vote", "chat"].includes(queryTab)) {
       setTab(queryTab);
     }
   }, [searchParams]);
 
   const fetchUnreadTabs = async (userId) => {
     if (!userId || !roomId) return;
-
     try {
       const { data, error } = await supabase
         .from("notifications")
-        .select("type")
+        .select("*")
         .eq("roomid", Number(roomId))
         .eq("receiverid", userId)
-        .eq("isread", false)
-        .eq("issilent", false);
-
+        .or("isread.is.null,isread.eq.false");
       if (error) throw error;
-
-      const unreadStatus = {
-        schedule: false,
-        location: false,
-        vote: false,
-        chat: false,
-      };
-
-      if (data) {
-        data.forEach((notif) => {
-          Object.entries(TAB_TYPE_MAP).forEach(([tabName, types]) => {
-            if (types.includes(notif.type)) {
-              unreadStatus[tabName] = true;
-            }
-          });
-        });
-      }
-
-      setUnreadTabs(unreadStatus);
+      setNotifications(data || []);
     } catch (err) {
-      console.error("탭별 알림 상태 조회 실패:", err);
+      console.error("알림 로드 실패:", err);
     }
   };
 
   const fetchRoomData = async () => {
+    console.log("🚀 [RoomDetailPage] fetchRoomData 시작, roomId:", roomId);
+    
     const { data: roomData, error: roomError } = await supabase
-      .from("rooms")
-      .select(`*, room_members(count)`)
-      .eq("id", roomId)
-      .single();
-
+      .from("rooms").select(`*, room_members(count)`).eq("id", Number(roomId)).single();
+    
     if (roomError) {
-      console.error("방 정보 조회 실패:", roomError);
+      console.error("❌ [RoomDetailPage] 방 정보 조회 실패:", roomError);
       return;
     }
-
+    
     setRoom(roomData);
     setNewRoomName(roomData.roomname);
 
-    const { data: memberData, error: memberError } = await supabase
-      .from("room_members")
-      .select(
-        `
-        id,
-        nickname,
-        userid,
-        joinedat,
-        profiles (
-          profileimageurl
-        )
-      `
-      )
-      .eq("roomid", roomId);
+    const [{ data: memberData, error: mError }, { data: guestData, error: gError }] = await Promise.all([
+      supabase.from("room_members").select(`id, nickname, userid, joinedat, profiles:userid(profileimageurl)`).eq("roomid", Number(roomId)),
+      supabase.from("room_guests").select("id, nickname, createdat").eq("roomid", Number(roomId))
+    ]);
 
-    if (!memberError) {
-      setMembers(memberData || []);
-    } else {
-      console.error("회원 목록 조회 실패:", memberError);
-    }
+    if (mError) console.error("❌ [RoomDetailPage] 멤버 조회 오류:", mError);
+    if (gError) console.error("❌ [RoomDetailPage] 게스트 조회 오류:", gError);
 
-    const { data: guestData, error: guestError } = await supabase
-      .from("room_guests")
-      .select("id, nickname, createdat")
-      .eq("roomid", roomId);
+    console.log("🚀 [RoomDetailPage] fetchRoomData - memberData:", memberData);
+    console.log("🚀 [RoomDetailPage] fetchRoomData - guestData:", guestData);
 
-    if (!guestError) {
-      setGuests(guestData || []);
-    } else {
-      console.error("게스트 목록 조회 실패:", guestError);
-    }
+    setMembers(memberData || []);
+    setGuests(guestData || []);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    // 추방 감지 로직
+    const { data: { user } } = await supabase.auth.getUser();
     const currentId = user?.id || localStorage.getItem("guest_id");
-    const currentType = user ? "member" : "guest";
 
     if (currentId) {
-      const isStillInMembers = (memberData || []).some(m => String(m.userid) === String(currentId));
-      const isStillInGuests = (guestData || []).some(g => String(g.id) === String(currentId));
-      const isStillThere = isStillInMembers || isStillInGuests;
-
-      // 이미 방에 들어와있던 상태(myEntryId 존재)인데 목록에서 사라졌고, 스스로 나가는 중(isLeavingRef.current)이 아니라면 추방임
+      const isStillThere = [...(memberData || []), ...(guestData || [])].some(p => String(p.userid || p.id) === String(currentId));
       if (myEntryId && !isStillThere && !isLeavingRef.current) {
+        console.warn("⚠️ [RoomDetailPage] 사용자가 목록에 없어 홈으로 튕겨냄");
         navigate("/home");
         return;
       }
     }
 
-    if (user && user.id) {
+    if (user?.id) {
       const uId = user.id;
       setCurrentUser({ ...user, type: "member" });
-      
-      const myMember = memberData.find(m => String(m.userid) === String(uId));
-      if (myMember) setMyEntryId(myMember.id);
-
-      // 현재 보고 있는 탭의 알림만 읽음 처리
-      await markNotificationsAsReadInRoomByType(roomId, uId, TAB_TYPE_MAP[tab]);
-      // 나머지 탭의 알림 상태 조회
+      const me = memberData?.find(m => String(m.userid) === String(uId));
+      if (me) setMyEntryId(me.id);
+      await markNotificationsAsReadInRoomByType(Number(roomId), uId, TAB_TYPE_MAP[tab]);
       fetchUnreadTabs(uId);
-
-      const { data: myMemberData, error: myMemberError } = await supabase
-        .from("room_members")
-        .select(
-          "schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled"
-        )
-        .eq("roomid", roomId)
-        .eq("userid", user.id)
-        .single();
-
-      if (!myMemberError && myMemberData) {
-        setNotifSettings({
-          schedule: myMemberData.schedulenotifenabled,
-          location: myMemberData.locationnotifenabled,
-          vote: myMemberData.votenotifenabled,
-          chat: myMemberData.chatnotifenabled,
-        });
-      }
+      
+      const { data: sett } = await supabase.from("room_members").select("schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled").eq("roomid", Number(roomId)).eq("userid", uId).maybeSingle();
+      if (sett) setNotifSettings({ schedule: sett.schedulenotifenabled, location: sett.locationnotifenabled, vote: sett.votenotifenabled, chat: sett.chatnotifenabled });
     } else {
       const guestId = localStorage.getItem("guest_id");
-
       if (guestId) {
         setCurrentUser({ id: guestId, type: "guest" });
-        
-        // 현재 보고 있는 탭의 알림만 읽음 처리
-        await markNotificationsAsReadInRoomByType(roomId, guestId, TAB_TYPE_MAP[tab]);
-        // 나머지 탭의 알림 상태 조회
+        await markNotificationsAsReadInRoomByType(Number(roomId), guestId, TAB_TYPE_MAP[tab]);
         fetchUnreadTabs(guestId);
-
-        const { data: myGuestData, error: myGuestError } = await supabase
-          .from("room_guests")
-          .select(
-            "schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled"
-          )
-          .eq("id", guestId)
-          .single();
-
-        if (!myGuestError && myGuestData) {
-          setNotifSettings({
-            schedule: myGuestData.schedulenotifenabled,
-            location: myGuestData.locationnotifenabled,
-            vote: myGuestData.votenotifenabled,
-            chat: myGuestData.chatnotifenabled,
-          });
-        }
-      } else {
-        setCurrentUser(null);
+        const { data: sett } = await supabase.from("room_guests").select("schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled").eq("id", guestId).maybeSingle();
+        if (sett) setNotifSettings({ schedule: sett.schedulenotifenabled, location: sett.locationnotifenabled, vote: sett.votenotifenabled, chat: sett.chatnotifenabled });
       }
     }
   };
 
   useEffect(() => {
     fetchRoomData();
+    const currentUserId = currentUserRef.current?.id || localStorage.getItem("guest_id");
+    if (!currentUserId) return;
 
-    // 1. 방 정보 및 알림 관련 구독
-    const roomInfoChannel = supabase
-      .channel(`room_info_${roomId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "rooms",
-          filter: `id=eq.${roomId}`,
-        },
-        () => fetchRoomData()
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "notifications",
-          filter: `roomid=eq.${roomId}`,
-        },
-        () => {
-          const currentUserId = currentUser?.id || localStorage.getItem("guest_id");
-          if (currentUserId) {
-            fetchUnreadTabs(currentUserId);
-          }
+    const channels = [
+      supabase.channel(`room_info_${roomId}`).on("postgres_changes", { event: "*", schema: "public", table: "rooms", filter: `id=eq.${roomId}` }, () => fetchRoomData()).subscribe(),
+      supabase.channel(`room_notifs_${roomId}_${currentUserId}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `receiverid=eq.${currentUserId}` }, async (payload) => {
+        const newNotif = payload.new;
+        if (Number(newNotif.roomid) !== Number(roomId)) return;
+        const types = TAB_TYPE_MAP[tabRef.current] || [];
+        if (types.includes(newNotif.type)) {
+          await markNotificationsAsReadInRoomByType(roomId, currentUserId, [newNotif.type]);
+          setNotifications(prev => [{ ...newNotif, isread: true }, ...prev]);
+        } else {
+          setNotifications(prev => [newNotif, ...prev]);
         }
-      )
-      .subscribe();
+      }).on("postgres_changes", { event: "UPDATE", schema: "public", table: "notifications", filter: `receiverid=eq.${currentUserId}` }, (p) => setNotifications(prev => prev.map(n => n.id === p.new.id ? p.new : n)))
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "notifications", filter: `receiverid=eq.${currentUserId}` }, (p) => setNotifications(prev => prev.filter(n => n.id !== p.old.id)))
+      .subscribe(),
+      supabase.channel(`room_parts_${roomId}`).on("postgres_changes", { event: "*", schema: "public", table: "room_members", filter: `roomid=eq.${roomId}` }, () => fetchRoomData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "room_guests", filter: `roomid=eq.${roomId}` }, () => fetchRoomData())
+      .on("broadcast", { event: "PARTICIPANTS_CHANGED" }, () => fetchRoomData()).subscribe()
+    ];
 
-    // 2. 참여자 목록 갱신 전용 구독 (단순 목록 업데이트용)
-    const participantListChannel = supabase
-      .channel(`room_participants_${roomId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "room_members",
-          filter: `roomid=eq.${roomId}`,
-        },
-        () => fetchRoomData()
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "room_guests",
-          filter: `roomid=eq.${roomId}`,
-        },
-        () => fetchRoomData()
-      )
-      // 브로드캐스트 메시지 수신 (더 빠른 동기화)
-      .on("broadcast", { event: "PARTICIPANTS_CHANGED" }, () => {
-        console.log("Participants changed broadcast received");
-        fetchRoomData();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(roomInfoChannel);
-      supabase.removeChannel(participantListChannel);
-    };
+    return () => channels.forEach(c => supabase.removeChannel(c));
   }, [roomId, currentUser?.id]);
 
-  // 3. 내 추방 감지 전용 구독 (보안 및 리다이렉트 전용)
   useEffect(() => {
     if (!myEntryId || !roomId) return;
-
-    const kickChannel = supabase
-      .channel(`room_kick_detect_${roomId}_${currentUser?.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: currentUser?.type === "member" ? "room_members" : "room_guests",
-          filter: `id=eq.${myEntryId}`,
-        },
-        () => {
-          // 목록 갱신 구독과는 별개로 내 데이터 삭제만 감지하여 즉시 튕겨냄
-          if (!isLeavingRef.current) {
-            navigate("/home");
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(kickChannel);
-    };
+    const kickChannel = supabase.channel(`kick_${roomId}_${currentUser?.id}`).on("postgres_changes", { event: "DELETE", schema: "public", table: currentUser?.type === "member" ? "room_members" : "room_guests", filter: `id=eq.${myEntryId}` }, () => {
+      if (!isLeavingRef.current) navigate("/home");
+    }).subscribe();
+    return () => { supabase.removeChannel(kickChannel); };
   }, [roomId, currentUser, myEntryId, navigate]);
 
   const handleChangeTab = async (nextTab) => {
     setTab(nextTab);
     setSearchParams({ tab: nextTab });
-
     const currentUserId = currentUser?.id || localStorage.getItem("guest_id");
     if (currentUserId) {
-      // 바뀐 탭의 알림 읽음 처리
-      await markNotificationsAsReadInRoomByType(roomId, currentUserId, TAB_TYPE_MAP[nextTab]);
-      // 상태 갱신
-      setUnreadTabs((prev) => ({
-        ...prev,
-        [nextTab]: false,
-      }));
+      await markNotificationsAsReadInRoomByType(Number(roomId), currentUserId, TAB_TYPE_MAP[nextTab]);
+      fetchUnreadTabs(currentUserId);
     }
   };
 
   const handleCopyInviteCode = async () => {
-    if (!room) return;
-
     try {
       await navigator.clipboard.writeText(room.invitecode);
       alert("초대코드가 복사되었습니다.");
     } catch (error) {
-      alert("복사에 실패했습니다.");
-      console.error(error);
+      alert("복사 실패");
     }
   };
 
   const handleOpenInviteModal = async () => {
-    if (!currentUser) return;
-
-    if (currentUser.type === "guest") {
-      alert("게스트는 친구 초대 기능을 사용할 수 없습니다.");
-      return;
-    }
-
+    if (currentUser?.type === "guest") { alert("게스트는 친구 초대 불가"); return; }
     setShowInviteModal(true);
-
     try {
       const [friends, { data: pendingNotifs }] = await Promise.all([
         getFriends(currentUser.id),
-        supabase
-          .from("notifications")
-          .select("id, receiverid")
-          .eq("type", "room_invite")
-          .eq("roomid", Number(roomId))
-          .eq("senderid", currentUser.id),
+        supabase.from("notifications").select("id, receiverid").eq("type", "room_invite").eq("roomid", Number(roomId)).eq("senderid", currentUser.id),
       ]);
-
-      const memberIds = new Set(members.map((m) => m.userid));
-
-      // 이미 초대한 사람들의 프로필 로드
-      const pendingRows = pendingNotifs || [];
-      const pendingReceiverIds = pendingRows.map((n) => n.receiverid);
+      const memberIds = new Set(members.map(m => m.userid));
+      const pendingReceiverIds = pendingNotifs?.map(n => n.receiverid) || [];
       let inviteProfiles = [];
       if (pendingReceiverIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id, nickname, profileimageurl")
-          .in("id", pendingReceiverIds);
-        inviteProfiles = pendingRows.map((n) => {
-          const profile = (profiles || []).find((p) => p.id === n.receiverid) || {};
-          return { notifId: n.id, ...profile };
-        });
+        const { data: pro } = await supabase.from("profiles").select("id, nickname, profileimageurl").in("id", pendingReceiverIds);
+        inviteProfiles = (pendingNotifs || []).map(n => ({ notifId: n.id, ...pro?.find(p => p.id === n.receiverid) }));
       }
       setSentInvites(inviteProfiles);
-
-      const pendingSet = new Set(pendingReceiverIds);
-      setFriendList(friends.filter((f) => !memberIds.has(f.id) && !pendingSet.has(f.id)));
-    } catch (e) {
-      console.error(e);
-    }
+      setFriendList(friends.filter(f => !memberIds.has(f.id) && !pendingReceiverIds.includes(f.id)));
+    } catch (e) { console.error(e); }
   };
 
   const handleInviteFriend = async (friend) => {
-    if (!currentUser || !room) return;
-
     setInvitingSending(true);
-
     try {
-      const { data: senderProfile } = await supabase
-        .from("profiles")
-        .select("nickname")
-        .eq("id", currentUser.id)
-        .single();
-
-      const senderNickname =
-        senderProfile?.nickname ||
-        currentUser.user_metadata?.nickname ||
-        currentUser.email ||
-        "알 수 없음";
-
-      await createNotification({
-        roomId: Number(roomId),
-        receiverId: friend.id,
-        senderId: currentUser.id,
-        type: "room_invite",
-        title: "🏠 방 초대",
-        message: `${senderNickname}님이 [${room.roomname}]에 초대했습니다`,
-        link: `/rooms/${roomId}`,
-      });
-
-      // 방금 생성된 알림 id를 가져와서 sentInvites에 추가
-      const { data: newNotif } = await supabase
-        .from("notifications")
-        .select("id")
-        .eq("type", "room_invite")
-        .eq("roomid", Number(roomId))
-        .eq("senderid", currentUser.id)
-        .eq("receiverid", friend.id)
-        .order("createdat", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      setSentInvites((prev) => [...prev, { notifId: newNotif?.id, ...friend }]);
-      setFriendList((prev) => prev.filter((f) => f.id !== friend.id));
-
-      alert(`${friend.nickname}님에게 초대를 보냈습니다.`);
-    } catch (e) {
-      alert("초대 전송 실패: " + e.message);
-    } finally {
-      setInvitingSending(false);
-    }
+      const senderNickname = currentUser.user_metadata?.nickname || currentUser.email || "알 수 없음";
+      await createNotification({ roomId: Number(roomId), receiverId: friend.id, senderId: currentUser.id, type: "room_invite", title: "🏠 방 초대", message: `${senderNickname}님이 [${room.roomname}]에 초대했습니다`, link: `/rooms/${roomId}` });
+      const { data: n } = await supabase.from("notifications").select("id").eq("type", "room_invite").eq("roomid", Number(roomId)).eq("senderid", currentUser.id).eq("receiverid", friend.id).order("createdat", { ascending: false }).limit(1).maybeSingle();
+      setSentInvites(prev => [...prev, { notifId: n?.id, ...friend }]);
+      setFriendList(prev => prev.filter(f => f.id !== friend.id));
+      alert(`${friend.nickname}님 초대 완료`);
+    } catch (e) { alert("초대 실패: " + e.message); } finally { setInvitingSending(false); }
   };
 
   const handleCancelInvite = async (invite) => {
     try {
-      if (invite.notifId) {
-        await deleteNotification(invite.notifId);
-      }
-      setSentInvites((prev) => prev.filter((i) => i.notifId !== invite.notifId));
-      setFriendList((prev) => [...prev, { id: invite.id, nickname: invite.nickname, profileimageurl: invite.profileimageurl }]);
-    } catch (e) {
-      alert("초대 취소 실패: " + e.message);
+      if (invite.notifId) await deleteNotification(invite.notifId);
+      setSentInvites(prev => prev.filter(i => i.notifId !== invite.notifId));
+      setFriendList(prev => [...prev, { id: invite.id, nickname: invite.nickname, profileimageurl: invite.profileimageurl }]);
+    } catch (e) { alert(e.message); }
+  };
+
+  const handleClickParticipant = (p) => {
+    const pId = p.type === "member" ? p.userid : p.id;
+    const isHost = String(room?.createdby) === String(pId);
+    if (isCurrentUserHost && !isHost) {
+      setSelectedParticipantId(selectedParticipantId === pId ? null : pId);
+    } else if (p.type === "member" && currentUser?.type === "member" && String(p.userid) !== String(currentUser.id)) {
+      setMemberPopup({ member: p, loading: true });
+      checkFriendStatus(currentUser.id, p.userid).then(d => setMemberPopup({ member: p, status: d?.status, requestId: d?.id, iSentRequest: d?.userid === currentUser.id, loading: false }));
     }
   };
 
-  const handleClickMember = async (member) => {
-    if (!currentUser || currentUser.type === "guest") return;
-    if (member.userid === currentUser.id) return;
-
-    setMemberPopup({ member, status: null, requestId: null, iSentRequest: false, loading: true });
-
-    const data = await checkFriendStatus(currentUser.id, member.userid);
-
-    setMemberPopup({
-      member,
-      status: data?.status || null,
-      requestId: data?.id || null,
-      iSentRequest: data ? data.userid === currentUser.id : false,
-      loading: false,
-    });
+  const handleLeaveRoom = async () => {
+    if (!window.confirm("정말 방을 나가시겠습니까?")) return;
+    isLeavingRef.current = true;
+    setIsLeaving(true);
+    if (String(room?.createdby) === String(currentUser?.id)) {
+      const others = members.filter(m => String(m.userid) !== String(currentUser.id)).sort((a, b) => new Date(a.joinedat) - new Date(b.joinedat));
+      if (others.length > 0) await transferRoomOwnership(roomId, others[0].userid);
+    }
+    const table = currentUser.type === "member" ? "room_members" : "room_guests";
+    const filter = currentUser.type === "member" ? { roomid: Number(roomId), userid: currentUser.id } : { roomid: Number(roomId), id: currentUser.id };
+    await supabase.from(table).delete().match(filter);
+    navigate("/home");
   };
 
-  const handleAddFriendFromRoom = async () => {
-    if (!memberPopup || !currentUser) return;
-
-    try {
-      await sendFriendRequestById(currentUser.id, memberPopup.member.userid);
-      setMemberPopup((prev) => ({ ...prev, status: "pending", iSentRequest: true }));
-      alert(`${memberPopup.member.nickname}님에게 친구 요청을 보냈습니다.`);
-    } catch (e) {
-      alert(e.message);
+  const handleKickParticipant = async (p) => {
+    if (window.confirm(`${p.nickname}님을 추방하시겠습니까?`)) {
+      try {
+        const pId = p.type === "member" ? p.userid : p.id;
+        await kickParticipantApi(Number(roomId), pId, p.type);
+        await createNotification({ roomId: Number(roomId), receiverId: pId, senderId: currentUser.id, type: "kick", title: "🚫 추방 알림", message: `방에서 추방되었습니다.`, link: "/home" });
+        alert("추방 완료");
+        setSelectedParticipantId(null);
+        fetchRoomData();
+        supabase.channel(`room_parts_${roomId}`).send({ type: "broadcast", event: "PARTICIPANTS_CHANGED", payload: {} });
+      } catch (e) { alert(e.message); }
     }
   };
 
-  const handleCancelFriendFromRoom = async () => {
-    if (!memberPopup?.requestId) return;
-
-    try {
-      await cancelFriendRequest(memberPopup.requestId);
-      setMemberPopup((prev) => ({ ...prev, status: null, requestId: null, iSentRequest: false }));
-    } catch (e) {
-      alert(e.message);
-    }
-  };
-
-  const handleImageChange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    if (!isCurrentUserHost) {
-      alert("방장만 대표 이미지를 변경할 수 있습니다.");
-      return;
-    }
-
-    try {
-      const result = await updateRoomImageApi(file, roomId, currentUser.id);
-      if (result.success) {
-        setRoom((prev) => ({ ...prev, roomimageurl: result.publicUrl }));
-        alert(result.message);
-      }
-    } catch (error) {
-      alert("이미지 업로드 중 오류가 발생했습니다.");
-      console.error(error);
-    }
-  };
-
-  const handleUpdateRoomName = async () => {
-    if (!newRoomName.trim()) return;
-
-    try {
-      await updateRoomNameApi(roomId, newRoomName);
-      setRoom({ ...room, roomname: newRoomName });
-      setIsEditingTitle(false);
-      alert("방 제목이 새롭게 변경되었습니다!");
-    } catch (error) {
-      alert("방 제목 변경 실패!");
-      console.error(error);
+  const handleTransferHost = async (p) => {
+    if (window.confirm(`${p.nickname}님에게 방장 권한을 넘기시겠습니까?`)) {
+      try {
+        const pId = p.type === "member" ? p.userid : p.id;
+        if (p.type === "guest") { alert("게스트에게는 방장을 넘길 수 없습니다."); return; }
+        await transferRoomOwnership(Number(roomId), pId);
+        alert("방장이 변경되었습니다.");
+        setSelectedParticipantId(null);
+        fetchRoomData();
+      } catch (e) { alert(e.message); }
     }
   };
 
   const handleToggleNotification = async (tabName) => {
-    if (!currentUser) return;
-
-    const nextValue = !notifSettings[tabName];
-
-    const dbColumnMap = {
-      schedule: "schedulenotifenabled",
-      location: "locationnotifenabled",
-      vote: "votenotifenabled",
-      chat: "chatnotifenabled",
-    };
-
-    const columnName = dbColumnMap[tabName];
-
-    if (currentUser.type === "member") {
-      const { error } = await supabase
-        .from("room_members")
-        .update({ [columnName]: nextValue })
-        .eq("roomid", roomId)
-        .eq("userid", currentUser.id);
-
-      if (error) {
-        console.error("회원 알림 설정 저장 실패:", error);
-        alert("알림 설정 변경에 실패했습니다.");
-        return;
-      }
-    } else {
-      const { error } = await supabase
-        .from("room_guests")
-        .update({ [columnName]: nextValue })
-        .eq("roomid", roomId)
-        .eq("id", currentUser.id);
-
-      if (error) {
-        console.error("게스트 알림 설정 저장 실패:", error);
-        alert("알림 설정 변경에 실패했습니다.");
-        return;
-      }
-    }
-
-    setNotifSettings((prev) => ({
-      ...prev,
-      [tabName]: nextValue,
-    }));
+    const next = !notifSettings[tabName];
+    const col = { schedule: "schedulenotifenabled", location: "locationnotifenabled", vote: "votenotifenabled", chat: "chatnotifenabled" }[tabName];
+    const table = currentUser.type === "member" ? "room_members" : "room_guests";
+    const filter = currentUser.type === "member" ? { roomid: Number(roomId), userid: currentUser.id } : { id: currentUser.id };
+    const { error } = await supabase.from(table).update({ [col]: next }).match(filter);
+    if (!error) setNotifSettings(prev => ({ ...prev, [tabName]: next }));
   };
 
-  const handleLeaveRoom = async () => {
-    if (
-      !window.confirm("정말 이 방을 나가시겠습니까? 나가면 내역이 삭제됩니다.")
-    ) {
-      return;
-    }
-
-    isLeavingRef.current = true;
-    setIsLeaving(true);
-
-    const isHost = String(room?.createdby) === String(currentUser?.id);
-
-    if (isHost) {
-      const others = [
-        ...members.map((m) => ({ ...m, type: "member", joinDate: m.joinedat })),
-        ...guests.map((g) => ({ ...g, type: "guest", joinDate: g.createdat })),
-      ]
-        .filter((p) => {
-          const participantId = p.type === "member" ? p.userid : p.id;
-          // 자신 제외 및 게스트 제외 (멤버 중에서만 다음 방장 선정)
-          return String(participantId) !== String(currentUser?.id) && p.type === "member";
-        })
-        .sort((a, b) => new Date(a.joinDate) - new Date(b.joinDate));
-
-      if (others.length > 0) {
-        const nextHost = others[0];
-        const nextHostId = nextHost.userid;
-
-        try {
-          await transferRoomOwnership(roomId, nextHostId);
-        } catch (error) {
-          console.error("방장 자동 위임 실패:", error);
-          alert("방장 위임 중 오류가 발생했습니다.");
-          return;
-        }
-      }
-    }
-
-    if (currentUser?.type === "member") {
-      const { error } = await supabase
-        .from("room_members")
-        .delete()
-        .eq("roomid", roomId)
-        .eq("userid", currentUser.id);
-
-      if (error) {
-        alert("방 나가기 실패!");
-        console.error(error);
-        return;
-      }
-    } else {
-      if (!currentUser?.id) {
-        alert("게스트 정보를 찾을 수 없습니다.");
-        return;
-      }
-
-      const { error } = await supabase
-        .from("room_guests")
-        .delete()
-        .eq("roomid", roomId)
-        .eq("id", currentUser.id);
-
-      if (error) {
-        alert("게스트 퇴장 실패!");
-        console.error(error);
-        return;
-      }
-    }
-
-    alert("방에서 성공적으로 퇴장했습니다.");
-    navigate("/home");
-  };
-
-  const handleTransferHost = async (p) => {
-    if (p.type === "guest") {
-      alert("게스트는 방장이 될 수 없습니다. 회원에게만 양도 가능합니다.");
-      return;
-    }
-
-    const newHostId = p.type === "member" ? p.userid : p.id;
-    const confirmMessage = `방장 권한을 ${p.nickname}님에게 양도하시겠습니까?`;
-
-    if (window.confirm(confirmMessage)) {
-      try {
-        await transferRoomOwnership(roomId, newHostId);
-        alert("방장 권한이 양도되었습니다.");
-        setRoom({ ...room, createdby: String(newHostId) });
-        setSelectedParticipantId(null);
-      } catch (error) {
-        alert(error.message);
-      }
-    }
-  };
-
-  const handleKickParticipant = async (p) => {
-    const participantId = p.type === "member" ? p.userid : p.id;
-    const confirmMessage = `정말 ${p.nickname}님을 추방하시겠습니까?`;
-
-    if (window.confirm(confirmMessage)) {
-      try {
-        await kickParticipantApi(roomId, participantId, p.type);
-
-        // 추방된 유저에게 알림 생성
-        await createNotification({
-          roomId: Number(roomId),
-          receiverId: participantId,
-          senderId: currentUser.id,
-          type: "kick",
-          title: "🚫 추방 알림",
-          message: `방에서 추방되었습니다.`,
-          link: "/home"
-        });
-
-        alert(`${p.nickname}님이 추방되었습니다.`);
-        setSelectedParticipantId(null);
-        
-        // 1. 내 화면 즉시 갱신
-        fetchRoomData();
-        
-        // 2. 다른 사람들에게 갱신 신호 보냄
-        const participantListChannel = supabase.channel(`room_participants_${roomId}`);
-        participantListChannel.send({
-          type: "broadcast",
-          event: "PARTICIPANTS_CHANGED",
-          payload: {},
-        });
-
-      } catch (error) {
-        alert(error.message);
-      }
-    }
-  };
-
-  const handleClickParticipant = (p) => {
-    const participantUniqueId = p.type === "member" ? p.userid : p.id;
-    const isHost =
-      String(room?.createdby) === String(participantUniqueId);
-    const isSelected = selectedParticipantId === participantUniqueId;
-
-    if (isCurrentUserHost && !isHost) {
-      setSelectedParticipantId(isSelected ? null : participantUniqueId);
-      return;
-    }
-
-    if (
-      p.type === "member" &&
-      currentUser?.type === "member" &&
-      String(p.userid) !== String(currentUser.id)
-    ) {
-      handleClickMember(p);
-    }
-  };
-
-  if (!room) {
-    return <div>로딩 중...</div>;
-  }
-
-  const sortedParticipants = [
-    ...members.map((m) => ({ ...m, type: "member", joinDate: m.joinedat })),
-    ...guests.map((g) => ({ ...g, type: "guest", joinDate: g.createdat })),
-  ].sort((a, b) => {
-    const idA = a.type === "member" ? a.userid : a.id;
-    const idB = b.type === "member" ? b.userid : b.id;
-
-    const isHostA = String(room?.createdby) === String(idA);
-    const isHostB = String(room?.createdby) === String(idB);
-
-    if (isHostA) return -1;
-    if (isHostB) return 1;
-
-    return new Date(a.joinDate) - new Date(b.joinDate);
+  if (!room) return <div>로딩 중...</div>;
+  const isCurrentUserHost = String(room?.createdby) === String(currentUser?.id);
+  const sortedParticipants = [...members.map(m => ({ ...m, type: "member" })), ...guests.map(g => ({ ...g, type: "guest" }))].sort((a, b) => {
+    const idA = a.userid || a.id; const idB = b.userid || b.id;
+    if (String(room.createdby) === String(idA)) return -1;
+    if (String(room.createdby) === String(idB)) return 1;
+    return new Date(a.joinedat || a.createdat) - new Date(b.joinedat || b.createdat);
   });
 
-  const isCurrentUserHost =
-    String(room?.createdby) === String(currentUser?.id);
-
   return (
-    <div
-      style={
-        tab === "chat"
-          ? {
-              position: "relative",
-              height: "calc(100dvh - 64px)",
-              paddingBottom: "0",
-              boxSizing: "border-box",
-              overflowX: "hidden",
-              display: "flex",
-              flexDirection: "column",
-              backgroundColor: "#F7F7FA",
-            }
-          : {
-              position: "relative",
-              minHeight: "100vh",
-              paddingBottom: "90px",
-              boxSizing: "border-box",
-              overflowX: "hidden",
-              backgroundColor: "#F7F7FA",
-            }
-      }
-    >
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: "12px 16px",
-          backgroundColor: "#FFFFFF",
-          position: "sticky",
-          top: 0,
-          zIndex: 100,
-          minHeight: "44px",
-          borderBottom: "1px solid #E5E7EB",
-        }}
-      >
-        <div style={{ flex: 1, display: "flex", alignItems: "center" }}>
-          {currentUser && currentUser.type === "member" && (
-            <button
-              onClick={() => navigate("/home")}
-              style={{
-                background: "none",
-                border: "none",
-                fontSize: "20px",
-                cursor: "pointer",
-                padding: "4px",
-                color: "#1F2933",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              ←
-            </button>
-          )}
-        </div>
-        <span
-          style={{
-            position: "absolute",
-            left: "50%",
-            transform: "translateX(-50%)",
-            fontWeight: "700",
-            fontSize: "17px",
-            color: "#1F2933",
-          }}
-        >
-          {room.roomname}
-        </span>
-        <div style={{ flex: 1, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "12px" }}>
-          <span style={{ fontSize: "13px", color: "#6B7280", fontWeight: "500" }}>총 {members.length + guests.length}명</span>
-          <button
-            onClick={() => setIsSidebarOpen(true)}
-            style={{
-              background: "none",
-              border: "none",
-              fontSize: "20px",
-              cursor: "pointer",
-              padding: "4px",
-              color: "#1F2933",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            ⚙
-          </button>
-        </div>
+    <div style={{ position: "relative", minHeight: "100vh", paddingBottom: "90px", boxSizing: "border-box", backgroundColor: "#F7F7FA" }}>
+      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", backgroundColor: "#fff", position: "sticky", top: 0, zIndex: 100, borderBottom: "1px solid #E5E7EB" }}>
+        <button onClick={() => navigate("/home")} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>←</button>
+        <span style={{ fontWeight: "700", fontSize: "17px" }}>{room.roomname}</span>
+        <button onClick={() => setIsSidebarOpen(true)} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>⚙</button>
       </header>
-
-      <div
-        style={{
-          display: "flex",
-          backgroundColor: "#FFFFFF",
-          padding: "0 16px",
-          borderBottom: "1px solid #E5E7EB",
-        }}
-      >
-        {[
-          { id: "schedule", label: "일정" },
-          { id: "location", label: "위치" },
-          { id: "vote", label: "투표" },
-          { id: "chat", label: "채팅" },
-        ].map((t) => (
-          <button
-            key={t.id}
-            onClick={() => handleChangeTab(t.id)}
-            style={{
-              flex: 1,
-              padding: "14px 0",
-              background: "none",
-              border: "none",
-              fontSize: "15px",
-              fontWeight: tab === t.id ? "700" : "500",
-              color: tab === t.id ? "#7C5CFF" : "#6B7280",
-              cursor: "pointer",
-              position: "relative",
-              transition: "color 0.2s",
-            }}
-          >
-            {t.label}
-            {unreadTabs[t.id] && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "14px",
-                  right: "10px",
-                  width: "7px",
-                  height: "7px",
-                  backgroundColor: "#EF4444",
-                  borderRadius: "50%",
-                }}
-              />
-            )}
-            {tab === t.id && (
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: 0,
-                  left: "20%",
-                  right: "20%",
-                  height: "3px",
-                  backgroundColor: "#7C5CFF",
-                  borderRadius: "3px 3px 0 0",
-                }}
-              />
-            )}
+      <div style={{ display: "flex", backgroundColor: "#fff", padding: "0 16px", borderBottom: "1px solid #E5E7EB" }}>
+        {["schedule", "location", "vote", "chat"].map(t => (
+          <button key={t} onClick={() => handleChangeTab(t)} style={{ flex: 1, padding: "14px 0", background: "none", border: "none", fontSize: "15px", fontWeight: tab === t ? "700" : "500", color: tab === t ? "#7C5CFF" : "#6B7280", position: "relative" }}>
+            {t === "schedule" ? "일정" : t === "location" ? "위치" : t === "vote" ? "투표" : "채팅"}
+            {unreadTabs[t] && <div style={{ position: "absolute", top: "14px", right: "10px", width: "7px", height: "7px", backgroundColor: "#EF4444", borderRadius: "50%" }} />}
+            {tab === t && <div style={{ position: "absolute", bottom: 0, left: "20%", right: "20%", height: "3px", backgroundColor: "#7C5CFF", borderRadius: "3px 3px 0 0" }} />}
           </button>
         ))}
       </div>
-
-      <div
-        style={
-          tab === "chat"
-            ? {
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                minHeight: 0,
-                overflow: "hidden",
-              }
-            : {
-                padding: "0 16px",
-              }
-        }
-      >
-        {tab === "schedule" && (
-          <ScheduleTab
-            roomId={roomId}
-            ownerUserId={room?.createdby}
-            roomName={room?.roomname}
-          />
-        )}
-
+      <div style={{ padding: tab === "chat" ? "0" : "0 16px" }}>
+        {tab === "schedule" && <ScheduleTab roomId={roomId} ownerUserId={room.createdby} roomName={room.roomname} />}
         {tab === "location" && <MapPage roomId={roomId} />}
         {tab === "vote" && <VoteListPage roomid={roomId} />}
         {tab === "chat" && <ChatTab roomId={roomId} />}
       </div>
-
       {isSidebarOpen && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            right: 0,
-            width: "270px",
-            height: "calc(100vh - 64px)",
-            backgroundColor: "var(--bg-color)",
-            boxShadow: "-2px 0 5px rgba(0,0,0,0.2)",
-            zIndex: 2000,
-            padding: "20px",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-            boxSizing: "border-box",
-            overflowY: "auto",
-          }}
-        >
-          <div>
-            <button
-              onClick={() => setIsSidebarOpen(false)}
-              style={{ float: "right" }}
-            >
-              X
-            </button>
-
-            <h3 style={{ marginTop: 0 }}>방 설정</h3>
-            <hr />
-
-            {/* 방 대표 이미지 변경 (방장 전용) */}
-            <div style={{ marginBottom: "25px", textAlign: "center", position: "relative" }}>
-              <div style={{
-                width: "100px",
-                height: "100px",
-                borderRadius: "24px",
-                backgroundColor: "var(--btn-bg)",
-                margin: "0 auto 10px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "40px",
-                overflow: "hidden",
-                position: "relative",
-                border: "2px solid var(--border-color)"
-              }}>
-                {room.roomimageurl ? (
-                  <img src={room.roomimageurl} alt="방 이미지" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                ) : (
-                  "🏠"
-                )}
-                
-                {isCurrentUserHost && (
-                  <label htmlFor="room-image-upload" style={{
-                    position: "absolute",
-                    bottom: 0,
-                    right: 0,
-                    left: 0,
-                    backgroundColor: "rgba(0,0,0,0.5)",
-                    color: "white",
-                    fontSize: "12px",
-                    padding: "4px 0",
-                    cursor: "pointer",
-                    fontWeight: "bold"
-                  }}>
-                    변경
-                  </label>
-                )}
-              </div>
-              {isCurrentUserHost && (
-                <input 
-                  id="room-image-upload" 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={handleImageChange} 
-                  style={{ display: "none" }} 
-                />
-              )}
+        <div style={{ position: "fixed", top: 0, right: 0, width: "270px", height: "100vh", backgroundColor: "#fff", boxShadow: "-2px 0 5px rgba(0,0,0,0.2)", zIndex: 2000, padding: "20px", display: "flex", flexDirection: "column", boxSizing: "border-box", overflowY: "auto" }}>
+          <button onClick={() => setIsSidebarOpen(false)} style={{ alignSelf: "flex-end", background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>✕</button>
+          <h3>방 설정</h3><hr/>
+          <div style={{ textAlign: "center", marginBottom: "20px" }}>
+            <div style={{ width: "100px", height: "100px", borderRadius: "24px", margin: "0 auto", overflow: "hidden", border: "1px solid #ddd", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "40px" }}>
+              {room.roomimageurl ? <img src={room.roomimageurl} alt="방" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "🏠"}
             </div>
-
-            <div style={{ marginBottom: "25px" }}>
-              <h4 style={{ margin: "0 0 10px 0" }}>✏️ 방 제목 변경</h4>
-
-              {isEditingTitle ? (
-                <div style={{ display: "flex", gap: "5px" }}>
-                  <input
-                    type="text"
-                    value={newRoomName}
-                    onChange={(e) => setNewRoomName(e.target.value)}
-                    style={{
-                      flex: 1,
-                      padding: "6px",
-                      border: "1px solid var(--border-color)",
-                      borderRadius: "5px",
-                    }}
-                  />
-
-                  <button
-                    onClick={handleUpdateRoomName}
-                    style={{
-                      background: "#8366F4",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "5px",
-                      padding: "6px 10px",
-                      cursor: "pointer",
-                      fontWeight: "600",
-                    }}
-                  >
-                    저장
-                  </button>
-
-                  <button
-                    onClick={() => setIsEditingTitle(false)}
-                    style={{
-                      background: "var(--btn-bg)",
-                      color: "var(--text-color)",
-                      border: "none",
-                      borderRadius: "5px",
-                      padding: "6px 10px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    취소
-                  </button>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <span style={{ fontWeight: "600" }}>{room.roomname}</span>
-
-                  <button
-                    onClick={() => setIsEditingTitle(true)}
-                    style={{
-                      background: "#8366F4",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "5px",
-                      padding: "4px 10px",
-                      cursor: "pointer",
-                      fontSize: "13px",
-                      fontWeight: "600",
-                    }}
-                  >
-                    수정
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div style={{ marginBottom: "25px" }}>
-              <h4 style={{ margin: "0 0 10px 0" }}>🔔 탭별 알림 온/오프</h4>
-
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
-                }}
-              >
-                {["schedule", "location", "vote", "chat"].map((t) => (
-                  <div
-                    key={t}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <span style={{ fontSize: "14px" }}>
-                      {t === "schedule" && "📅 일정 알림"}
-                      {t === "location" && "🗺️ 위치 알림"}
-                      {t === "vote" && "🗳️ 투표 알림"}
-                      {t === "chat" && "💬 채팅 알림"}
-                    </span>
-
-                    <button
-                      onClick={() => handleToggleNotification(t)}
-                      style={{
-                        background: notifSettings[t] ? "#8366F4" : "#E0E0E0",
-                        color: notifSettings[t] ? "white" : "var(--secondary-text)",
-                        border: "none",
-                        borderRadius: "20px",
-                        padding: "4px 12px",
-                        cursor: "pointer",
-                        fontSize: "12px",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      {notifSettings[t] ? "ON" : "OFF"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: "25px" }}>
-              <h4 style={{ margin: "0 0 10px 0" }}>👥 친구 초대</h4>
-              <button
-                onClick={handleOpenInviteModal}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  backgroundColor: "#7c79ff",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "bold",
-                  fontSize: "14px",
-                }}
-              >
-                친구 초대하기
-              </button>
-            </div>
-
-            <div style={{ marginBottom: "25px" }}>
-              <h4 style={{ margin: "0 0 10px 0" }}>🔗 초대코드</h4>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "10px 12px",
-                  backgroundColor: "var(--btn-bg)",
-                  borderRadius: "8px",
-                }}
-              >
-                <span
-                  style={{
-                    flex: 1,
-                    fontSize: "15px",
-                    fontWeight: "bold",
-                    letterSpacing: "2px",
-                    color: "var(--text-color)",
-                  }}
-                >
-                  {room.invitecode}
-                </span>
-                <button
-                  onClick={handleCopyInviteCode}
-                  style={{
-                    padding: "6px 12px",
-                    backgroundColor: "#7c79ff",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "13px",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  복사
-                </button>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: "25px" }}>
-              <h4 style={{ margin: "0 0 10px 0" }}>
-                👥 참여자 명단 ({members.length + guests.length}명)
-              </h4>
-
-              <div
-                style={{
-                  maxHeight: "350px",
-                  overflowY: "auto",
-                  border: "1px solid var(--border-color)",
-                  padding: "10px",
-                  borderRadius: "5px",
-                  backgroundColor: "var(--card-bg)",
-                }}
-              >
-                {sortedParticipants.map((p) => {
-                  const participantUniqueId =
-                    p.type === "member" ? p.userid : p.id;
-                  const isHost =
-                    String(room?.createdby) === String(participantUniqueId);
-                  const isSelected =
-                    selectedParticipantId === participantUniqueId;
-                  const isMe =
-                    String(currentUser?.id) === String(participantUniqueId);
-
-                  return (
-                    <div
-                      key={`${p.type}-${p.id}`}
-                      onClick={() => handleClickParticipant(p)}
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        padding: "8px 0",
-                        borderBottom: "1px solid var(--border-color)",
-                        cursor:
-                          (isCurrentUserHost && !isHost) ||
-                          (p.type === "member" &&
-                            currentUser?.type === "member" &&
-                            !isMe)
-                            ? "pointer"
-                            : "default",
-                        backgroundColor: isSelected ? "#f0ebff" : "transparent",
-                        borderRadius: "5px",
-                        transition: "background-color 0.2s",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "10px",
-                          padding: "0 5px",
-                        }}
-                      >
-                        {p.type === "member" ? (
-                          p.profiles?.profileimageurl ? (
-                            <img
-                              src={p.profiles.profileimageurl}
-                              alt="프로필"
-                              style={{
-                                width: "32px",
-                                height: "32px",
-                                borderRadius: "50%",
-                                objectFit: "cover",
-                                border: "1px solid var(--border-color)",
-                              }}
-                            />
-                          ) : (
-                            <div
-                              style={{
-                                width: "32px",
-                                height: "32px",
-                                borderRadius: "50%",
-                                backgroundColor: "var(--btn-bg)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontSize: "16px",
-                              }}
-                            >
-                              👤
-                            </div>
-                          )
-                        ) : (
-                          <div
-                            style={{
-                              width: "32px",
-                              height: "32px",
-                              borderRadius: "50%",
-                              backgroundColor: "#ffeaa7",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: "16px",
-                            }}
-                          >
-                            🐱
-                          </div>
-                        )}
-
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                          }}
-                        >
-                          {isHost && (
-                            <span
-                              style={{
-                                color: "#8366F4",
-                                fontSize: "11px",
-                                fontWeight: "bold",
-                                marginBottom: "-2px",
-                              }}
-                            >
-                              방장
-                            </span>
-                          )}
-
-                          <span
-                            style={{
-                              fontSize: "14px",
-                              fontWeight: "600",
-                              color:
-                                p.type === "member" &&
-                                currentUser?.type === "member" &&
-                                !isMe &&
-                                !isCurrentUserHost
-                                  ? "#7c79ff"
-                                  : "var(--text-color)",
-                              textDecoration:
-                                p.type === "member" &&
-                                currentUser?.type === "member" &&
-                                !isMe &&
-                                !isCurrentUserHost
-                                  ? "underline"
-                                  : "none",
-                            }}
-                          >
-                            {p.nickname || "이름없음"}
-                            {isMe ? " (나)" : ""}
-                          </span>
-
-                          <span
-                            style={{
-                              fontSize: "11px",
-                              color:
-                                p.type === "member" ? "#8366F4" : "#e67e22",
-                              fontWeight: "600",
-                            }}
-                          >
-                            {p.type === "member" ? "회원" : "게스트"}
-                          </span>
-                        </div>
-                      </div>
-
-                      {isSelected && (
-                        <div style={{ marginTop: "8px", padding: "0 5px", display: "flex", gap: "5px" }}>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleTransferHost(p);
-                            }}
-                            style={{
-                              flex: 1,
-                              padding: "6px",
-                              background: "#8366F4",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "5px",
-                              fontSize: "12px",
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                            }}
-                          >
-                            방장 위임
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleKickParticipant(p);
-                            }}
-                            style={{
-                              flex: 1,
-                              padding: "6px",
-                              background: "#f44336",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "5px",
-                              fontSize: "12px",
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                            }}
-                          >
-                            추방하기
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {members.length === 0 && guests.length === 0 && (
-                  <p
-                    style={{
-                      fontSize: "13px",
-                      color: "var(--secondary-text)",
-                      textAlign: "center",
-                    }}
-                  >
-                    참여자가 없습니다.
-                  </p>
-                )}
-              </div>
-            </div>
+            {isCurrentUserHost && <label htmlFor="img-up" style={{ display: "block", marginTop: "8px", fontSize: "12px", cursor: "pointer", color: "#7C5CFF" }}>이미지 변경</label>}
+            <input id="img-up" type="file" style={{ display: "none" }} onChange={async (e) => {
+              const file = e.target.files[0]; if (!file) return;
+              const res = await updateRoomImageApi(file, roomId, currentUser.id);
+              if (res.success) setRoom({ ...room, roomimageurl: res.publicUrl });
+            }} />
           </div>
+          <div style={{ marginBottom: "20px" }}>
+            <h4>🔔 알림 설정</h4>
+            {["schedule", "location", "vote", "chat"].map(t => (
+              <div key={t} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                <span style={{ fontSize: "14px" }}>{t === "schedule" ? "일정" : t === "location" ? "위치" : t === "vote" ? "투표" : "채팅"} 알림</span>
+                <button onClick={() => handleToggleNotification(t)} style={{ background: notifSettings[t] ? "#8366F4" : "#E0E0E0", color: "#fff", border: "none", borderRadius: "20px", padding: "4px 12px", cursor: "pointer" }}>{notifSettings[t] ? "ON" : "OFF"}</button>
+              </div>
+            ))}
+          </div>
+          <button onClick={handleOpenInviteModal} style={{ width: "100%", padding: "10px", background: "#7c79ff", color: "#fff", border: "none", borderRadius: "8px", fontWeight: "bold", marginBottom: "20px" }}>친구 초대</button>
+          <div style={{ background: "#f0f0f0", padding: "10px", borderRadius: "8px", marginBottom: "20px" }}>
+            <span style={{ fontSize: "14px", fontWeight: "bold" }}>초대코드: {room.invitecode}</span>
+            <button onClick={handleCopyInviteCode} style={{ marginLeft: "8px", fontSize: "12px" }}>복사</button>
+          </div>
+          <h4>👥 참여자 ({sortedParticipants.length}명)</h4>
+          <div style={{ minHeight: "50px", maxHeight: "250px", overflowY: "auto", border: "1px solid #ddd", padding: "8px", borderRadius: "8px", marginBottom: "20px", backgroundColor: "#fff" }}>
+            {sortedParticipants.length === 0 ? (
+              <div style={{ textAlign: "center", fontSize: "12px", color: "#999", padding: "10px" }}>참여자가 없습니다.</div>
+            ) : (
+              sortedParticipants.map(p => {
+                const pId = p.userid || p.id;
+                const isSelected = selectedParticipantId === pId;
+                // Supabase 조인 결과가 배열일 수도, 객체일 수도 있으므로 호환 처리
+                const profileObj = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles;
+                const profileImg = profileObj?.profileimageurl;
 
-          <div>
-            <hr />
-
-            <button
-              onClick={handleLeaveRoom}
-              style={{
-                width: "100%",
-                padding: "12px",
-                background: "#f44336",
-                color: "white",
-                border: "none",
-                borderRadius: "5px",
-                fontWeight: "bold",
-                cursor: "pointer",
-                fontSize: "14px",
-              }}
-            >
-              🚪 방 나가기
-            </button>
+                return (
+                  <div key={pId} onClick={() => handleClickParticipant(p)} style={{ padding: "8px 0", borderBottom: "1px solid #eee", cursor: "pointer", background: isSelected ? "#f0ebff" : "none" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <div style={{ width: "24px", height: "24px", borderRadius: "50%", background: "#ddd", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", overflow: "hidden" }}>
+                        {profileImg ? <img src={profileImg} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "👤"}
+                      </div>
+                      <span style={{ fontSize: "14px", color: "#1F2937" }}>
+                        {p.nickname || "이름 없음"} {String(room.createdby) === String(pId) && "(방장)"}
+                      </span>
+                    </div>
+                    {isSelected && (
+                      <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
+                        <button onClick={(e) => { e.stopPropagation(); handleTransferHost(p); }} style={{ flex: 1, fontSize: "10px", padding: "4px", backgroundColor: "#7C5CFF", color: "#fff", border: "none", borderRadius: "4px" }}>위임</button>
+                        <button onClick={(e) => { e.stopPropagation(); handleKickParticipant(p); }} style={{ flex: 1, fontSize: "10px", color: "red", padding: "4px", backgroundColor: "#FEE2E2", border: "1px solid #FCA5A5", borderRadius: "4px" }}>추방</button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <button onClick={handleLeaveRoom} style={{ marginTop: "auto", padding: "12px", background: "#f44336", color: "#fff", border: "none", borderRadius: "8px", fontWeight: "bold" }}>방 나가기</button>
+        </div>
+      )}
+      {showInviteModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 3000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", padding: "20px", borderRadius: "16px", width: "300px", maxHeight: "70vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}><b>친구 초대</b><button onClick={() => setShowInviteModal(false)}>✕</button></div>
+            {friendList.map(f => (
+              <div key={f.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
+                <span>{f.nickname}</span>
+                <button onClick={() => handleInviteFriend(f)} disabled={invitingSending} style={{ padding: "4px 8px", background: "#7C5CFF", color: "#fff", border: "none", borderRadius: "4px" }}>초대</button>
+              </div>
+            ))}
           </div>
         </div>
       )}
-
-      {showInviteModal && (
-        <>
-          <div
-            onClick={() => setShowInviteModal(false)}
-            style={{
-              position: "fixed",
-              inset: 0,
-              backgroundColor: "rgba(0,0,0,0.4)",
-              zIndex: 3000,
-            }}
-          />
-
-          <div
-            style={{
-              position: "fixed",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%,-50%)",
-              backgroundColor: "var(--bg-color)",
-              borderRadius: "16px",
-              padding: "24px",
-              width: "300px",
-              maxHeight: "70vh",
-              display: "flex",
-              flexDirection: "column",
-              zIndex: 3001,
-              boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "16px",
-              }}
-            >
-              <span style={{ fontSize: "16px", fontWeight: "bold" }}>
-                친구 초대
-              </span>
-              <button
-                onClick={() => setShowInviteModal(false)}
-                style={{
-                  border: "none",
-                  background: "none",
-                  fontSize: "20px",
-                  cursor: "pointer",
-                  color: "var(--secondary-text)",
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div style={{ flex: 1, overflowY: "auto" }}>
-              {sentInvites.length > 0 && (
-                <div style={{ marginBottom: "16px" }}>
-                  <p
-                    style={{
-                      margin: "0 0 8px",
-                      fontSize: "12px",
-                      fontWeight: "600",
-                      color: "var(--secondary-text)",
-                    }}
-                  >
-                    초대 대기 중
-                    <span
-                      style={{
-                        marginLeft: "6px",
-                        backgroundColor: "#bbb",
-                        color: "#fff",
-                        borderRadius: "10px",
-                        padding: "1px 6px",
-                        fontSize: "11px",
-                      }}
-                    >
-                      {sentInvites.length}
-                    </span>
-                  </p>
-
-                  {sentInvites.map((invite) => (
-                    <div
-                      key={invite.notifId}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "12px",
-                        padding: "8px 0",
-                        borderBottom: "1px solid var(--border-color)",
-                      }}
-                    >
-                      {invite.profileimageurl ? (
-                        <img
-                          src={invite.profileimageurl}
-                          alt={invite.nickname}
-                          style={{ width: "34px", height: "34px", borderRadius: "50%", objectFit: "cover" }}
-                        />
-                      ) : (
-                        <div
-                          style={{
-                            width: "34px",
-                            height: "34px",
-                            borderRadius: "50%",
-                            backgroundColor: "#e0e0ff",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "16px",
-                          }}
-                        >
-                          👤
-                        </div>
-                      )}
-
-                      <span style={{ flex: 1, fontSize: "14px" }}>{invite.nickname}</span>
-
-                      <span style={{ fontSize: "11px", color: "var(--secondary-text)", marginRight: "4px" }}>대기 중</span>
-
-                      <button
-                        onClick={() => handleCancelInvite(invite)}
-                        style={{
-                          padding: "4px 10px",
-                          backgroundColor: "var(--bg-color)",
-                          color: "var(--secondary-text)",
-                          border: "1px solid var(--border-color)",
-                          borderRadius: "6px",
-                          fontSize: "12px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        취소
-                      </button>
-                    </div>
-                  ))}
-
-                  <hr style={{ margin: "12px 0", borderColor: "var(--border-color)" }} />
-                </div>
-              )}
-
-              {friendList.length === 0 ? (
-                <p
-                  style={{
-                    color: "var(--secondary-text)",
-                    textAlign: "center",
-                    fontSize: "14px",
-                    marginTop: "20px",
-                  }}
-                >
-                  초대할 수 있는 친구가 없습니다
-                </p>
-              ) : (
-                friendList.map((friend) => (
-                  <div
-                    key={friend.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "12px",
-                      padding: "10px 0",
-                      borderBottom: "1px solid var(--border-color)",
-                    }}
-                  >
-                    {friend.profileimageurl ? (
-                      <img
-                        src={friend.profileimageurl}
-                        alt={friend.nickname}
-                        style={{
-                          width: "38px",
-                          height: "38px",
-                          borderRadius: "50%",
-                          objectFit: "cover",
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          width: "38px",
-                          height: "38px",
-                          borderRadius: "50%",
-                          backgroundColor: "#e0e0ff",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: "18px",
-                        }}
-                      >
-                        👤
-                      </div>
-                    )}
-
-                    <span style={{ flex: 1, fontSize: "14px" }}>
-                      {friend.nickname}
-                    </span>
-
-                    <button
-                      onClick={() => handleInviteFriend(friend)}
-                      disabled={invitingSending}
-                      style={{
-                        padding: "6px 14px",
-                        backgroundColor: "#7c79ff",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "8px",
-                        fontSize: "13px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      초대
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
       {memberPopup && (
-        <>
-          <div
-            onClick={() => setMemberPopup(null)}
-            style={{
-              position: "fixed",
-              inset: 0,
-              backgroundColor: "rgba(0,0,0,0.4)",
-              zIndex: 3000,
-            }}
-          />
-
-          <div
-            style={{
-              position: "fixed",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%,-50%)",
-              backgroundColor: "var(--bg-color)",
-              borderRadius: "16px",
-              padding: "24px",
-              width: "260px",
-              zIndex: 3001,
-              boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-              textAlign: "center",
-            }}
-          >
-            <div style={{ fontSize: "36px", marginBottom: "8px" }}>👤</div>
-
-            <p
-              style={{
-                margin: "0 0 4px",
-                fontSize: "16px",
-                fontWeight: "bold",
-              }}
-            >
-              {memberPopup.member.nickname}
-            </p>
-
-            <p
-              style={{
-                margin: "0 0 20px",
-                fontSize: "12px",
-                color: "#8366F4",
-              }}
-            >
-              회원
-            </p>
-
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 3000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", padding: "24px", borderRadius: "20px", width: "260px", textAlign: "center", boxShadow: "0 10px 25px rgba(0,0,0,0.1)" }}>
+            <div style={{ width: "60px", height: "60px", borderRadius: "50%", background: "#E5E7EB", margin: "0 auto 12px", overflow: "hidden" }}>
+              {memberPopup.member.profiles?.profileimageurl ? <img src={memberPopup.member.profiles.profileimageurl} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: "30px", lineHeight: "60px" }}>👤</span>}
+            </div>
+            <h3 style={{ margin: "0 0 16px", fontSize: "18px" }}>{memberPopup.member.nickname}</h3>
             {memberPopup.loading ? (
-              <p style={{ fontSize: "13px", color: "var(--secondary-text)" }}>확인 중...</p>
-            ) : memberPopup.status === "accepted" ? (
-              <p
-                style={{
-                  fontSize: "13px",
-                  color: "#4CAF50",
-                  fontWeight: "600",
-                }}
-              >
-                ✓ 이미 친구입니다
-              </p>
-            ) : memberPopup.status === "pending" ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "13px",
-                    color: "#f90",
-                    fontWeight: "600",
-                  }}
-                >
-                  {memberPopup.iSentRequest ? "요청 대기 중" : "친구 요청을 받았습니다"}
-                </p>
-                {memberPopup.iSentRequest && (
-                  <button
-                    onClick={handleCancelFriendFromRoom}
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      backgroundColor: "var(--bg-color)",
-                      color: "var(--secondary-text)",
-                      border: "1px solid var(--border-color)",
-                      borderRadius: "8px",
-                      fontSize: "13px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    요청 취소
-                  </button>
-                )}
-              </div>
+              <p style={{ fontSize: "14px", color: "#6B7280" }}>상태 확인 중...</p>
             ) : (
-              <button
-                onClick={handleAddFriendFromRoom}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  backgroundColor: "#7c79ff",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "10px",
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                  cursor: "pointer",
-                }}
-              >
-                친구 추가
-              </button>
+              memberPopup.status === "accepted" ? (
+                <p style={{ fontSize: "14px", color: "#7C5CFF", fontWeight: "bold" }}>친구가 된 사용자입니다.</p>
+              ) : (
+                <button 
+                  onClick={async () => {
+                    try {
+                      await sendFriendRequestById(currentUser.id, memberPopup.member.userid);
+                      alert("친구 요청을 보냈습니다.");
+                      setMemberPopup(null);
+                    } catch(e) { alert("요청 실패"); }
+                  }} 
+                  style={{ width: "100%", padding: "10px", background: "#7C5CFF", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", cursor: "pointer", marginBottom: "8px" }}
+                >
+                  친구 요청 보내기
+                </button>
+              )
             )}
-
-            <button
-              onClick={() => setMemberPopup(null)}
-              style={{
-                marginTop: "10px",
-                width: "100%",
-                padding: "8px",
-                backgroundColor: "var(--btn-bg)",
-                color: "var(--secondary-text)",
-                border: "none",
-                borderRadius: "10px",
-                fontSize: "13px",
-                cursor: "pointer",
-              }}
-            >
-              닫기
-            </button>
+            <button onClick={() => setMemberPopup(null)} style={{ width: "100%", padding: "10px", background: "#F3F4F6", color: "#4B5563", border: "none", borderRadius: "10px", fontWeight: "bold", cursor: "pointer" }}>닫기</button>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

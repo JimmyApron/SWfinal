@@ -66,39 +66,29 @@ function NotificationListener() {
 
   useEffect(() => {
     let isMounted = true;
+    console.log("🚀 [App.js] NotificationListener 로드됨 (v1.3 - 탭별 팝업 조건 정교화)");
 
     const setupRealtimeNotification = async () => {
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
+        const { data: { user } } = await supabase.auth.getUser();
         if (!isMounted) return;
 
-        let myUserId = user?.id;
-
-        // 로그인 유저가 아니면 게스트 id로 알림 수신
-        if (!myUserId) {
-          myUserId = localStorage.getItem("guest_id");
-        }
-
-        console.log("🚀 [App.js] NotificationListener 시작 - userId:", myUserId);
+        let myUserId = user?.id || localStorage.getItem("guest_id");
 
         if (!myUserId) {
-          console.log("알림 리스너 연결 생략: 로그인/게스트 정보 없음");
+          console.log("🚀 [App.js] currentReceiverId 없음 - 알림 구독 생략");
           return;
         }
 
-        // 기존 채널이 있다면 제거해서 중복 구독 방지
+        console.log("🚀 [App.js] currentReceiverId:", myUserId);
+
         if (channelRef.current) {
           supabase.removeChannel(channelRef.current);
           channelRef.current = null;
         }
 
-        const uniqueChannelName = `realtime-notifications-${myUserId}-${Date.now()}`;
-
         const channel = supabase
-          .channel(uniqueChannelName)
+          .channel(`notifications-${myUserId}-${Date.now()}`)
           .on(
             "postgres_changes",
             {
@@ -107,54 +97,72 @@ function NotificationListener() {
               table: "notifications",
               filter: `receiverid=eq.${myUserId}`,
             },
-            async (payload) => {
-              const newNotification = payload.new;
-              console.log("🚀 [App.js] 실시간 알림 수신됨:", newNotification);
+            (payload) => {
+              const notif = payload.new;
+              console.log("🚀 [App.js] 새 알림 수신:", notif);
 
-              // [알림 팝업 제어 로직]
               const isGlobalPopupEnabled = localStorage.getItem("global_popup_enabled") !== "false";
               const mutedRooms = JSON.parse(localStorage.getItem("muted_rooms") || "[]");
+              const isRoomMuted = notif.roomid && mutedRooms.some(id => String(id) === String(notif.roomid));
               
-              // 타입을 확실히 맞추기 위해 String으로 비교
-              const isRoomMuted = newNotification.roomid && mutedRooms.some(id => String(id) === String(newNotification.roomid));
-
-              // 현재 보고 있는 방의 알림은 팝업을 띄우지 않음 (UX 개선)
-              // 단, 추방(kick) 알림은 예외적으로 무조건 표시
               const currentPath = locationRef.current.pathname;
-              const isCurrentlyInRoom = newNotification.roomid && currentPath.includes(`/rooms/${newNotification.roomid}`);
-              const isKickNotif = newNotification.type === "kick";
+              const isCurrentlyInRoom = notif.roomid && currentPath.includes(`/rooms/${notif.roomid}`);
 
-              // issilent가 아니고, 전역 설정이 켜져있고, 해당 방이 차단되지 않았으며, (현재 그 방에 있지 않거나 추방 알림인 경우) Toast 표시
-              if (newNotification.issilent !== true && isGlobalPopupEnabled && !isRoomMuted && (!isCurrentlyInRoom || isKickNotif)) {
-                console.log("✅ [App.js] Toast 띄움 로직 실행:", newNotification.title);
-                setToast({
-                  message: newNotification.message,
-                  link: newNotification.link,
-                });
+              // 현재 보고 있는 탭 확인 (URL 쿼리 스트링 기준)
+              const searchParams = new URLSearchParams(locationRef.current.search);
+              const currentTab = searchParams.get("tab") || "schedule";
 
-                // 4초 후 자동 닫기
-                setTimeout(() => {
-                  if (isMounted) setToast(null);
-                }, 4000);
+              // 알림 타입별 관련 탭 매핑
+              const typeToTabMap = {
+                chat_new: "chat",
+                vote_new: "vote",
+                vote_closed: "vote",
+                vote_reminder: "vote",
+                schedule_confirmed: "schedule",
+                schedule_cancelled: "schedule",
+                schedule_new: "schedule",
+                location_request: "location",
+                member_departed: "location"
+              };
+
+              const targetTab = typeToTabMap[notif.type];
+              // 현재 해당 방의 해당 탭을 보고 있는지 여부
+              const isLookingAtRelevantTab = isCurrentlyInRoom && targetTab && currentTab === targetTab;
+
+              // 팝업 결정 조건
+              // 1. issilent가 명시적 true가 아닐 것
+              // 2. 전역 팝업 설정이 켜져 있을 것
+              // 3. 해당 방이 뮤트 상태가 아닐 것
+              // 4. (핵심) 현재 그 방의 해당 탭을 직접 보고 있는 상황이 아니어야 함
+              //    (예: 일정 탭을 보고 있는데 투표 알림이 오면 팝업 띄움 / 일정 탭을 보고 있는데 일정 알림이 오면 안 띄움)
+              
+              const showToast = 
+                notif.issilent !== true && 
+                isGlobalPopupEnabled && 
+                !isRoomMuted && 
+                (!isLookingAtRelevantTab || notif.type === "kick");
+
+              if (showToast) {
+                console.log("✅ [App.js] Toast 표시함");
+                setToast({ message: notif.message, link: notif.link });
+                setTimeout(() => { if (isMounted) setToast(null); }, 4000);
               } else {
-                 console.log("🤫 [App.js] 조용한 알림 또는 차단된 알림 - Toast 안 띄움");
+                console.log("🤫 [App.js] Toast 표시 건너뜜 (사유: 해당 탭 시청 중 또는 설정 차단)");
+                console.log(` - isLookingAtRelevantTab: ${isLookingAtRelevantTab}, issilent: ${notif.issilent}`);
               }
             }
           );
 
         channel.subscribe((status) => {
           if (!isMounted) return;
-          console.log("🚀 [App.js] Realtime 채널 상태:", status);
-          if (status === "SUBSCRIBED") {
-            channelRef.current = channel;
-          }
+          console.log("🚀 [App.js] Realtime 상태:", status);
+          if (status === "SUBSCRIBED") channelRef.current = channel;
         });
       } catch (err) {
-        console.error("실시간 알림 세팅 중 오류 발생:", err);
+        console.error("실시간 알림 세팅 중 오류:", err);
       }
     };
 
-    // auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
       setupRealtimeNotification();
     });
@@ -164,10 +172,7 @@ function NotificationListener() {
     return () => {
       isMounted = false;
       subscription.unsubscribe();
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
     };
   }, []);
 
@@ -175,34 +180,17 @@ function NotificationListener() {
 
   return (
     <div
-      onClick={() => {
-        if (toast.link) navigate(toast.link);
-        setToast(null);
-      }}
+      onClick={() => { if (toast.link) navigate(toast.link); setToast(null); }}
       style={{
-        position: "fixed",
-        top: "20px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 10000,
-        backgroundColor: "rgba(0, 0, 0, 0.9)",
-        color: "#fff",
-        padding: "14px 24px",
-        borderRadius: "16px",
-        boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
-        cursor: "pointer",
-        display: "flex",
-        flexDirection: "column",
-        gap: "4px",
-        minWidth: "300px",
-        maxWidth: "90vw",
-        animation: "toastSlideIn 0.4s cubic-bezier(0.23, 1, 0.32, 1)",
+        position: "fixed", top: "20px", left: "50%", transform: "translateX(-50%)",
+        zIndex: 10000, backgroundColor: "rgba(0,0,0,0.9)", color: "#fff",
+        padding: "14px 24px", borderRadius: "16px", boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
+        cursor: "pointer", display: "flex", flexDirection: "column", gap: "4px",
+        minWidth: "300px", maxWidth: "90vw", animation: "toastSlideIn 0.4s ease-out",
       }}
     >
-      <div style={{ fontSize: "14px", fontWeight: "bold", display: "flex", alignItems: "center", gap: "6px" }}>
-        🔔 <span style={{ color: "#7c79ff" }}>새 소식</span>
-      </div>
-      <div style={{ fontSize: "13px", opacity: 0.9, lineHeight: "1.4" }}>{toast.message}</div>
+      <div style={{ fontSize: "14px", fontWeight: "bold", color: "#7c79ff" }}>🔔 새 알림</div>
+      <div style={{ fontSize: "13px", lineHeight: "1.4" }}>{toast.message}</div>
       <style>{`
         @keyframes toastSlideIn {
           from { transform: translate(-50%, -100%); opacity: 0; }
@@ -216,74 +204,32 @@ function NotificationListener() {
 function App() {
   const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || "";
 
-  useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log("auth event:", event, session);
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
   return (
     <GoogleOAuthProvider clientId={googleClientId}>
       <ThemeProvider>
         <BrowserRouter>
           <NotificationListener />
-
           <Layout>
             <Routes>
-              {/* 첫 대문 화면 */}
               <Route path="/" element={<InviteCodePage />} />
-
-              {/* 인증 및 진입 파이프라인 */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/guest" element={<GuestLoginPage />} />
               <Route path="/home" element={<HomePage />} />
-
-              {/* 방 관련 기능 */}
               <Route path="/rooms/create" element={<RoomCreatePage />} />
               <Route path="/rooms/invite" element={<RoomInvitePage />} />
               <Route path="/rooms/:roomId" element={<RoomDetailPage />} />
-
-              {/* 방 내부 탭 기능 */}
               <Route path="/rooms/:roomid/schedule" element={<ScheduleTab />} />
               <Route path="/rooms/:roomid/location" element={<LocationTab />} />
               <Route path="/rooms/:roomid/votes" element={<VoteListPage />} />
               <Route path="/rooms/:roomid/chat" element={<ChatTab />} />
-
-              <Route
-                path="/rooms/:roomid/available-result"
-                element={<AvailableResultPage />}
-              />
-              <Route
-                path="/rooms/:roomid/vote-create"
-                element={<VoteCreatePage />}
-              />
-              <Route
-                path="/rooms/:roomid/votes/:voteid"
-                element={<VoteDetailPage />}
-              />
-
-              {/* 확정 일정 상세 */}
-              <Route
-                path="/confirmed-schedule"
-                element={<ConfirmedScheduleDetailPage />}
-              />
-
-              {/* 캘린더 / 친구 캘린더 / 알림 */}
+              <Route path="/rooms/:roomid/available-result" element={<AvailableResultPage />} />
+              <Route path="/rooms/:roomid/vote-create" element={<VoteCreatePage />} />
+              <Route path="/rooms/:roomid/votes/:voteid" element={<VoteDetailPage />} />
+              <Route path="/confirmed-schedule" element={<ConfirmedScheduleDetailPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
-              <Route
-                path="/calendar/friend/:friendId"
-                element={<FriendCalendarPage />}
-              />
+              <Route path="/calendar/friend/:friendId" element={<FriendCalendarPage />} />
               <Route path="/notifications" element={<NotificationPage />} />
-
-              {/* 설정 관련 기능 */}
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/settings/edit" element={<SettingEditPage />} />
             </Routes>

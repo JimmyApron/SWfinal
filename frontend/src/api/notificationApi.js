@@ -320,7 +320,7 @@ export async function getVisibleNotifications(recipientId, isGuest, unreadOnly =
     .in("type", NON_ROOM_NOTIFICATION_TYPES);
 
   if (unreadOnly) {
-    nonRoomQuery = nonRoomQuery.or("isread.is.null,isread.eq.false");
+    nonRoomQuery = nonRoomQuery.or("isread.is.null,isread.eq.false").or("issilent.is.null,issilent.eq.false");
   }
 
   const { data: nonRoomData, error: nonRoomError } = await nonRoomQuery;
@@ -341,7 +341,7 @@ export async function getVisibleNotifications(recipientId, isGuest, unreadOnly =
     .order("createdat", { ascending: false });
 
   if (unreadOnly) {
-    query = query.or("isread.is.null,isread.eq.false");
+    query = query.or("isread.is.null,isread.eq.false").or("issilent.is.null,issilent.eq.false");
   }
 
   const { data, error } = await query;
@@ -397,7 +397,7 @@ export async function markNotificationsAsReadInRoom(roomId, userId) {
     .update({ isread: true })
     .eq("roomid", Number(roomId))
     .eq("receiverid", userId)
-    .eq("isread", false);
+    .or("isread.is.null,isread.eq.false");
 }
 
 export async function markNotificationsAsReadInRoomByType(roomId, userId, types) {
@@ -408,7 +408,7 @@ export async function markNotificationsAsReadInRoomByType(roomId, userId, types)
     .eq("roomid", Number(roomId))
     .eq("receiverid", userId)
     .in("type", types)
-    .eq("isread", false);
+    .or("isread.is.null,isread.eq.false");
 }
 
 export async function markNotificationAsRead(notificationId) {
@@ -425,7 +425,7 @@ export async function markAllNotificationsAsRead(userId) {
     .from("notifications")
     .update({ isread: true })
     .eq("receiverid", userId)
-    .eq("isread", false);
+    .or("isread.is.null,isread.eq.false");
 }
 
 export async function getUnreadNotificationCount(userId) {
