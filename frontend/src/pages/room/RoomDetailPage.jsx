@@ -254,14 +254,25 @@ function RoomDetailPage() {
   };
 
   const handleClickParticipant = (p) => {
-    const pId = p.type === "member" ? p.userid : p.id;
-    const isHost = String(room?.createdby) === String(pId);
-    if (isCurrentUserHost && !isHost) {
-      setSelectedParticipantId(selectedParticipantId === pId ? null : pId);
-    } else if (p.type === "member" && currentUser?.type === "member" && String(p.userid) !== String(currentUser.id)) {
+    const pUniqueId = p.type === "member" ? p.userid : p.id;
+    const isMe = String(currentUser?.id) === String(pUniqueId);
+
+    // 본인이 아니고 대상이 회원인 경우 친구 요청 팝업 허용
+    if (p.type === "member" && currentUser?.type === "member" && !isMe) {
       setMemberPopup({ member: p, loading: true });
-      checkFriendStatus(currentUser.id, p.userid).then(d => setMemberPopup({ member: p, status: d?.status, requestId: d?.id, iSentRequest: d?.userid === currentUser.id, loading: false }));
+      checkFriendStatus(currentUser.id, p.userid).then(d => setMemberPopup({ 
+        member: p, 
+        status: d?.status, 
+        requestId: d?.id, 
+        iSentRequest: d?.userid === currentUser.id, 
+        loading: false 
+      }));
     }
+  };
+
+  const handleToggleManagement = (e, pUniqueId) => {
+    e.stopPropagation(); // 카드 클릭(친구 팝업) 방지
+    setSelectedParticipantId(selectedParticipantId === pUniqueId ? null : pUniqueId);
   };
 
   const handleLeaveRoom = async () => {
@@ -417,15 +428,15 @@ function RoomDetailPage() {
                       padding: "8px 0",
                       borderBottom: "1px solid #F3F4F6",
                       cursor:
-                        (isCurrentUserHost && !isHost) ||
-                        (p.type === "member" &&
-                          currentUser?.type === "member" &&
-                          !isMe)
+                        p.type === "member" &&
+                        currentUser?.type === "member" &&
+                        !isMe
                           ? "pointer"
                           : "default",
                       backgroundColor: isSelected ? "#f0ebff" : "transparent",
                       borderRadius: "5px",
                       transition: "background-color 0.2s",
+                      position: "relative", // 점 3개 버튼 배치를 위해 추가
                     }}
                   >
                     <div
@@ -434,6 +445,7 @@ function RoomDetailPage() {
                         alignItems: "center",
                         gap: "10px",
                         padding: "0 5px",
+                        paddingRight: (isCurrentUserHost && !isMe) ? "30px" : "5px", // 버튼 공간 확보
                       }}
                     >
                       {p.type === "member" ? (
@@ -508,15 +520,13 @@ function RoomDetailPage() {
                             color:
                               p.type === "member" &&
                               currentUser?.type === "member" &&
-                              !isMe &&
-                              !isCurrentUserHost
+                              !isMe
                                 ? "#7c79ff"
                                 : "#1F2937",
                             textDecoration:
                               p.type === "member" &&
                               currentUser?.type === "member" &&
-                              !isMe &&
-                              !isCurrentUserHost
+                              !isMe
                                 ? "underline"
                                 : "none",
                           }}
@@ -536,6 +546,27 @@ function RoomDetailPage() {
                           {p.type === "member" ? "회원" : "게스트"}
                         </span>
                       </div>
+
+                      {/* 방장인 경우 점 3개 버튼 표시 (본인 제외) */}
+                      {isCurrentUserHost && !isMe && (
+                        <button
+                          onClick={(e) => handleToggleManagement(e, participantUniqueId)}
+                          style={{
+                            position: "absolute",
+                            right: "8px",
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            background: "none",
+                            border: "none",
+                            fontSize: "18px",
+                            color: "#9CA3AF",
+                            cursor: "pointer",
+                            padding: "4px 8px",
+                          }}
+                        >
+                          ⋮
+                        </button>
+                      )}
                     </div>
 
                     {isSelected && (
