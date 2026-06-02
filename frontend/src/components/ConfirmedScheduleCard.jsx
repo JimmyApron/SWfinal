@@ -1,22 +1,22 @@
 import { FaCalendarAlt, FaClock, FaMapMarkerAlt, FaBell } from "react-icons/fa";
-import { FiMoreHorizontal } from "react-icons/fi";
+import { getTodayStr } from "../utils/scheduleUtils";
 
-function getTodayStr() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
+const isValidReminder = (value) => {
+  if (value === null || value === undefined || value === "" || isNaN(value)) return false;
+  const num = Number(value);
+  return Number.isFinite(num) && num >= 0;
+};
 
 function getTimeUntil(date, starttime) {
+  if (!date || !date.match(/^\d{4}-\d{2}-\d{2}$/)) return null;
+  
   const today = getTodayStr();
-
   if (date === today) return "오늘 약속";
 
   const target = new Date(`${date}T${starttime || "00:00:00"}`);
-  const diff = target - new Date();
+  if (isNaN(target.getTime())) return null;
 
+  const diff = target - new Date();
   if (diff < 0) return "지난 일정";
 
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -30,8 +30,9 @@ function getTimeUntil(date, starttime) {
 }
 
 function formatDateDisplay(dateStr) {
-  if (!dateStr) return "";
+  if (!dateStr || !dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) return "";
   const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "";
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
@@ -46,6 +47,18 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
     : `${schedule.starttime ?? ""} ~${
         schedule.endtime ? ` ${schedule.endtime}` : ""
       }`;
+
+  const timeUntil = getTimeUntil(schedule.date, schedule.starttime);
+  
+  // 알림 표시 여부 결정
+  // 1. timeUntil이 정상 계산되어야 함 (startTime, date 기반)
+  // 2. prompt에서 언급된 필드들이 있다면 유효성 검사 (null, undefined, NaN, 빈 문자열 방지)
+  const isTimeValid = (val) => val !== null && val !== undefined && val !== "" && !Number.isNaN(val);
+  
+  const showReminder = 
+    timeUntil !== null && 
+    isTimeValid(schedule.date) && 
+    (schedule.isallday || isTimeValid(schedule.starttime));
 
   return (
     <div
@@ -116,26 +129,9 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
                 </span>
               )}
             </p>
-            <button
-              style={{
-                background: "none",
-                border: "none",
-                color: "#9CA3AF",
-                cursor: "pointer",
-                padding: "4px",
-                marginTop: "-4px",
-                marginRight: "-4px",
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                // 더보기 기능 연결 시 사용
-              }}
-            >
-              <FiMoreHorizontal size={18} />
-            </button>
           </div>
           <p style={{ margin: "2px 0 0", fontSize: "13px", color: "#6B7280" }}>
-            {dateLabel} · {timeLabel}
+            {dateLabel}{dateLabel && timeLabel ? " · " : ""}{timeLabel}
           </p>
         </div>
       </div>
@@ -151,11 +147,16 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
             {schedule.location || "위치 미정"}
           </span>
         </div>
-        <div style={{ width: "1px", height: "12px", backgroundColor: "#E5E7EB" }} />
-        <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#F59E0B", fontWeight: "500" }}>
-          <FaBell size={12} />
-          <span>{getTimeUntil(schedule.date, schedule.starttime)} 알림</span>
-        </div>
+        
+        {showReminder && (
+          <>
+            <div style={{ width: "1px", height: "12px", backgroundColor: "#E5E7EB" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#F59E0B", fontWeight: "500" }}>
+              <FaBell size={12} />
+              <span>{timeUntil} 알림</span>
+            </div>
+          </>
+        )}
       </div>
 
       {schedule.additionalLocations && schedule.additionalLocations.length > 0 && (

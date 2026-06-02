@@ -651,6 +651,9 @@ function KakaoMapView({
       button.style.backgroundColor = '#7c79ff'
       button.style.color = '#fff'
       button.style.cursor = 'pointer'
+      button.style.fontSize = '12px'
+      button.style.fontWeight = 'bold'
+      button.style.width = '100%'
       button.addEventListener('click', () => onSetMeetingPlace(place))
       content.appendChild(button)
     }

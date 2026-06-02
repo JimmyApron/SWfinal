@@ -18,16 +18,14 @@ import { getRouteTime } from "../../api/routeTimeApi";
 import { decodePolyline } from "../../utils/decodePolyline";
 import KakaoMapView from "../../components/map/KakaoMapView";
 import LocationPicker from "../../components/map/LocationPicker";
-
-function getTodayStr() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
+import { getTodayStr } from "../../utils/scheduleUtils";
 
 function getTimeUntil(date, starttime) {
+  if (!date || !date.match(/^\d{4}-\d{2}-\d{2}$/)) return null;
   const today = getTodayStr();
   if (date === today) return "오늘 약속입니다";
   const target = new Date(`${date}T${starttime || "00:00:00"}`);
+  if (isNaN(target.getTime())) return null;
   const diff = target - new Date();
   if (diff < 0) return "지난 일정입니다";
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -830,18 +828,22 @@ function ConfirmedScheduleDetailPage() {
           </div>
         )}
 
-        {schedule.date && (
-          <p
-            style={{
-              margin: "0 0 4px",
-              fontSize: "13px",
-              fontWeight: schedule.date === getTodayStr() ? "bold" : "normal",
-              color: schedule.date === getTodayStr() ? "#7c79ff" : "#f90",
-            }}
-          >
-            {getTimeUntil(schedule.date, schedule.starttime)}
-          </p>
-        )}
+        {(() => {
+          const timeUntil = getTimeUntil(schedule.date, schedule.starttime);
+          if (!timeUntil) return null;
+          return (
+            <p
+              style={{
+                margin: "0 0 4px",
+                fontSize: "13px",
+                fontWeight: schedule.date === getTodayStr() ? "bold" : "normal",
+                color: schedule.date === getTodayStr() ? "#7c79ff" : "#f90",
+              }}
+            >
+              {timeUntil}
+            </p>
+          );
+        })()}
 
         <div
           style={{

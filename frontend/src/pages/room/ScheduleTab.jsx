@@ -17,6 +17,7 @@ import { updateRoomLastActivity } from "../../api/roomApi";
 import { supabase } from "../../lib/supabaseClient";
 import { createNotification, createRoomNotifications } from "../../api/notificationApi";
 import ConfirmedScheduleCard from "../../components/ConfirmedScheduleCard";
+import { getTodayStr } from "../../utils/scheduleUtils";
 
 const memberColors = [
   "#7C5CFF",
@@ -240,8 +241,17 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
 
 
   const reloadScheduleData = async () => {
-    const candidateData = await getScheduleCandidates(roomId);
+    let candidateData = await getScheduleCandidates(roomId);
     const availabilityData = await getMemberAvailabilities(roomId);
+    
+    // 오늘 이전 후보 자동 삭제
+    const today = getTodayStr();
+    const expired = candidateData.filter((c) => c.date && c.date < today);
+    if (expired.length > 0) {
+      await Promise.all(expired.map((c) => deleteScheduleCandidate(c.id)));
+      candidateData = await getScheduleCandidates(roomId);
+    }
+    
     setCandidates(candidateData);
     setAvailabilities(availabilityData);
   };
@@ -366,8 +376,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   };
 
   const loadConfirmedSchedules = async () => {
-    const now = new Date();
-    const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
+    const today = getTodayStr();
     const [{ data }, locations] = await Promise.all([
       supabase.from("confirmed_schedules").select("*").eq("roomid", roomId).or(`date.gte.${today},date.is.null`).order("date", { ascending: true }),
       getAdditionalConfirmedLocations(roomId),
@@ -442,22 +451,12 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
         }
         setCurrentUser(myUser);
 
-        let candidateData = await getScheduleCandidates(roomId);
         const memberData = await getRoomMembers(roomId);
         const guestData = await getRoomGuests(roomId);
-        const availabilityData = await getMemberAvailabilities(roomId);
-
-        // 오늘 이전 후보 자동 삭제 (확정일정과 무관)
-        const today = new Date().toISOString().slice(0, 10);
-        const expired = candidateData.filter((c) => c.date && c.date < today);
-        if (expired.length > 0) {
-          await Promise.all(expired.map((c) => deleteScheduleCandidate(c.id)));
-          candidateData = await getScheduleCandidates(roomId);
-        }
-        setCandidates(candidateData);
         setMembers(memberData);
         setGuests(guestData);
-        setAvailabilities(availabilityData);
+        
+        await reloadScheduleData();
         await loadConfirmedSchedules();
       } catch (error) { console.error("데이터 로드 실패:", error); }
     };
@@ -819,7 +818,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                           ? selectedSlots.some(s => s.key === getSlotKey(candidate.id, prevTime))
                           : getSlotAvailabilities(candidate.id, prevTime).some(m => m.userid === currentUser?.id));
 
-                        const isPastDate = candidate.date < new Date().toISOString().slice(0, 10);
+                        const isPastDate = candidate.date < getTodayStr();
                         const bgColor = !selectable 
                           ? (isPastDate ? "#F8F9FA" : "#D1D5DB") 
                           : (availableCount === 0 ? "#F4F5F7" : getHeatmapColor(availableCount, totalParticipants));

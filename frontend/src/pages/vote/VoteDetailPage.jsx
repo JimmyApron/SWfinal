@@ -25,7 +25,8 @@ import {
   getMemberAvailabilities,
   getScheduleCandidates,
 } from "../../api/scheduleApi";
-import { getTopAvailableTimes, sortAvailableTimes, getTopConsecutiveDays } from "../../utils/scheduleUtils";import KakaoMapView from "../../components/map/KakaoMapView";
+import { getTopAvailableTimes, sortAvailableTimes, getTopConsecutiveDays, getTodayStr } from "../../utils/scheduleUtils";
+import KakaoMapView from "../../components/map/KakaoMapView";
 import LocationPicker from "../../components/map/LocationPicker";
 
 function VoteDetailPage() {
@@ -676,7 +677,7 @@ function VoteDetailPage() {
 
     if (vote.votetype === "schedule") {
       if (option.optiondate) {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = getTodayStr();
         if (option.optiondate < today) {
           alert(`이미 지난 날짜(${option.optiondate})로는 일정을 확정할 수 없습니다.`);
           return;

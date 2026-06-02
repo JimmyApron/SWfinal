@@ -1066,8 +1066,16 @@ function MapPage({ roomId }) {
   }
 
   const handleSelectMiddlePlace = async (place) => {
+    // 만약 선택된 일정이 없으면, 일정을 선택하거나 새로 만들도록 모달을 띄움
     if (!selectedScheduleId) {
-      setMessage('먼저 새 일정을 만들거나 기존 일정을 선택해 주세요.')
+      setPendingMiddleLocation({
+        roomid: currentRoomId,
+        voteid: null,
+        placename: place.name,
+        placeaddress: place.address || null,
+        placelat: place.lat,
+        placelng: place.lng,
+      })
       return
     }
 
@@ -1082,6 +1090,7 @@ function MapPage({ roomId }) {
       }
 
       await applyConfirmedLocationToSchedule(selectedScheduleId, scheduleLocation, true)
+      
       const confirmedPlace = {
         ...place,
         id: `schedule-${selectedScheduleId}`,
@@ -1093,68 +1102,21 @@ function MapPage({ roomId }) {
       setSelectedPlace(confirmedPlace)
       setDestination(confirmedPlace)
       setPlaces([confirmedPlace])
-      setMemberRouteResults(confirmedPlace.travelResults || [])
+      setMemberRouteResults([])
       setMemberRoutePaths([])
-      setRoomConfirmedSchedules(await getRoomConfirmedSchedules(currentRoomId))
-      if (!selectedSchedule?.date) {
-        setCreatedLocationOnlySchedule(selectedSchedule || { id: selectedScheduleId })
+      
+      const schedules = await getRoomConfirmedSchedules(currentRoomId)
+      setRoomConfirmedSchedules(schedules)
+      
+      // 날짜가 없는 일정인 경우 날짜 설정 유도 모달 표시
+      const targetSchedule = schedules.find(s => s.id === selectedScheduleId)
+      if (targetSchedule && !targetSchedule.date) {
+        setCreatedLocationOnlySchedule(targetSchedule)
       }
-      setMessage(`${selectedSchedule?.title || '선택한 일정'}의 만날 위치로 저장했어요.`)
+
+      setMessage(`${targetSchedule?.title || '일정'}의 만날 위치로 저장했어요.`)
       await calculateAllMemberRoutesToMiddlePlace(confirmedPlace)
 
-      if (false) {
-      const savedMiddlePlace = await saveRoomMiddlePlace({
-        roomId: currentRoomId,
-        place,
-        confirmedBy: currentUserId || null,
-      })
-
-      const confirmedPlace = {
-        ...place,
-        id: savedMiddlePlace.id,
-        name: savedMiddlePlace.name,
-        address: savedMiddlePlace.address,
-        lat: savedMiddlePlace.lat,
-        lng: savedMiddlePlace.lng,
-        isConfirmedMiddlePlace: true,
-      }
-
-      setMiddlePlace(confirmedPlace)
-      setSelectedPlace(confirmedPlace)
-      setDestination(confirmedPlace)
-      setPlaces([confirmedPlace])
-      setMemberRouteResults(confirmedPlace.travelResults || [])
-      setMemberRoutePaths([])
-      setMessage(`${confirmedPlace.name}을(를) 중간 장소로 확정했습니다. 멤버별 경로를 계산합니다.`)
-
-      setPendingMiddleLocation({
-        roomid: currentRoomId,
-        voteid: null,
-        placename: confirmedPlace.name,
-        placeaddress: confirmedPlace.address || null,
-        placelat: confirmedPlace.lat,
-        placelng: confirmedPlace.lng,
-      })
-      setAppointmentTitle('')
-      setRoomConfirmedSchedules(await getRoomConfirmedSchedules(currentRoomId))
-
-      try {
-        if (currentUserId && currentRoomId) {
-          await createRoomNotifications({
-            roomId: currentRoomId,
-            senderId: currentUserId,
-            type: 'middle_place_confirmed',
-            title: '중간 장소가 확정되었습니다',
-            message: `방에 ${confirmedPlace.name}이(가) 중간 장소로 확정되었습니다.`,
-            link: `/rooms/${currentRoomId}?tab=location`,
-          })
-        }
-      } catch (error) {
-        console.error('중간 장소 확정 알림 생성 실패:', error)
-      }
-
-      await calculateAllMemberRoutesToMiddlePlace(confirmedPlace)
-      }
     } catch (error) {
       console.error('중간 장소 확정 저장 오류:', error)
       setMessage('중간 장소 확정 중 오류가 발생했습니다.')
@@ -1162,13 +1124,42 @@ function MapPage({ roomId }) {
   }
 
   const handleApplyMiddlePlaceToSchedule = async (scheduleId) => {
+    if (!pendingMiddleLocation) return
+
     try {
       await applyConfirmedLocationToSchedule(scheduleId, pendingMiddleLocation, true)
-      setRoomConfirmedSchedules(await getRoomConfirmedSchedules(currentRoomId))
+      
+      const schedules = await getRoomConfirmedSchedules(currentRoomId)
+      setRoomConfirmedSchedules(schedules)
       setSelectedScheduleId(scheduleId)
+      
+      const targetSchedule = schedules.find(s => s.id === scheduleId)
+      
+      // 만날 위치로 즉시 반영
+      const confirmedPlace = {
+        name: pendingMiddleLocation.placename,
+        address: pendingMiddleLocation.placeaddress,
+        lat: pendingMiddleLocation.placelat,
+        lng: pendingMiddleLocation.placelng,
+        id: `schedule-${scheduleId}`,
+        isConfirmedMiddlePlace: true,
+        scheduleid: scheduleId,
+      }
+
+      setMiddlePlace(confirmedPlace)
+      setSelectedPlace(confirmedPlace)
+      setDestination(confirmedPlace)
+      setPlaces([confirmedPlace])
+      
       setPendingMiddleLocation(null)
       setAppointmentTitle('')
-      setMessage('선택한 일정에 중간 장소를 추가했습니다.')
+      
+      if (targetSchedule && !targetSchedule.date) {
+        setCreatedLocationOnlySchedule(targetSchedule)
+      }
+      
+      setMessage('선택한 일정에 만날 위치를 저장했습니다.')
+      await calculateAllMemberRoutesToMiddlePlace(confirmedPlace)
     } catch (error) {
       setMessage(`일정 위치 저장 실패: ${error.message}`)
     }
@@ -1181,19 +1172,42 @@ function MapPage({ roomId }) {
     }
 
     try {
+      // API 수정됨: applyConfirmedLocationToSchedule를 내부에서 호출함
       const schedule = await createLocationOnlyConfirmedSchedule(
         pendingMiddleLocation,
         true,
         appointmentTitle
       )
+      
       setPendingMiddleLocation(null)
       setAppointmentTitle('')
+      
+      const schedules = await getRoomConfirmedSchedules(currentRoomId)
+      setRoomConfirmedSchedules(schedules)
+      setSelectedScheduleId(schedule.id)
+      
+      // 즉시 UI 반영
+      const confirmedPlace = {
+        name: schedule.location,
+        address: schedule.locationaddress,
+        lat: Number(schedule.locationlat),
+        lng: Number(schedule.locationlng),
+        id: `schedule-${schedule.id}`,
+        isConfirmedMiddlePlace: true,
+        scheduleid: schedule.id,
+      }
+      
+      setMiddlePlace(confirmedPlace)
+      setSelectedPlace(confirmedPlace)
+      setDestination(confirmedPlace)
+      setPlaces([confirmedPlace])
+
       setCreatedLocationOnlySchedule({
         ...schedule,
         isLocationOnly: true,
       })
-      setRoomConfirmedSchedules(await getRoomConfirmedSchedules(currentRoomId))
-      setSelectedScheduleId(schedule.id)
+      
+      await calculateAllMemberRoutesToMiddlePlace(confirmedPlace)
     } catch (error) {
       setMessage(`일정 생성 실패: ${error.message}`)
     }
@@ -1205,9 +1219,7 @@ function MapPage({ roomId }) {
       return
     }
 
-    await handleSelectMiddlePlace(place)
-
-    if (false) {
+    // 모달을 띄워 선택하게 함
     setPendingMiddleLocation({
       roomid: currentRoomId,
       voteid: null,
@@ -1219,13 +1231,11 @@ function MapPage({ roomId }) {
     setAppointmentTitle('')
 
     try {
-      setRoomConfirmedSchedules(await getRoomConfirmedSchedules(currentRoomId))
+      const schedules = await getRoomConfirmedSchedules(currentRoomId)
+      setRoomConfirmedSchedules(schedules)
     } catch (error) {
-      setPendingMiddleLocation(null)
-      setMessage(`확정 일정 조회 실패: ${error.message}`)
+      console.error('확정 일정 조회 실패:', error)
     }
-  }
-
   }
 
   const handleOpenCreatedSchedule = () => {
@@ -1404,12 +1414,71 @@ function MapPage({ roomId }) {
 
   return (
     <section className="map-section">
+      {/* 상단 일정 선택 스위처 */}
+      <div className="location-top-selector" style={{ 
+        padding: '16px', 
+        backgroundColor: 'var(--card-bg)', 
+        borderRadius: '16px', 
+        marginBottom: '16px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+        border: '1px solid var(--border-color)'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>📍 일정별 위치 및 경로</h3>
+          <button
+            type="button"
+            onClick={() => setShowNewScheduleModal(true)}
+            style={{ 
+              padding: '6px 12px', 
+              fontSize: '13px', 
+              backgroundColor: '#7c79ff', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '8px',
+              cursor: 'pointer'
+            }}
+          >
+            + 새 일정
+          </button>
+        </div>
+
+        {roomConfirmedSchedules.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '12px', color: 'var(--secondary-text)', fontSize: '14px' }}>
+            아직 확정된 일정이 없습니다.<br/>
+            장소를 검색해 일정을 만들거나 투표를 진행해 보세요!
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+            {roomConfirmedSchedules.map((schedule) => (
+              <button
+                key={schedule.id}
+                onClick={() => setSelectedScheduleId(schedule.id)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '20px',
+                  border: selectedScheduleId === schedule.id ? 'none' : '1px solid var(--border-color)',
+                  backgroundColor: selectedScheduleId === schedule.id ? '#7c79ff' : 'var(--bg-color)',
+                  color: selectedScheduleId === schedule.id ? 'white' : 'var(--text-color)',
+                  fontSize: '14px',
+                  whiteSpace: 'nowrap',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {schedule.title || '제목 없음'}
+                {schedule.date ? ` (${schedule.date.slice(5)})` : ''}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       {showNewScheduleModal && (
         <div className="transport-mode-overlay">
-          <div className="transport-mode-dialog">
-            <h3>새 일정 만들기</h3>
-            <p className="location-schedule-helper">
-              일정 이름만 먼저 저장하고 위치와 날짜는 이어서 정할 수 있어요.
+          <div className="transport-mode-dialog" style={{ borderRadius: '20px', padding: '24px' }}>
+            <h3 style={{ marginTop: 0 }}>새 일정 만들기</h3>
+            <p style={{ color: 'var(--secondary-text)', fontSize: '13px', marginBottom: '20px' }}>
+              일정 이름을 입력하면 바로 장소와 날짜를 정할 수 있어요.
             </p>
             <input
               className="location-schedule-input"
@@ -1418,23 +1487,98 @@ function MapPage({ roomId }) {
                 setNewScheduleTitle(event.target.value)
                 setNewScheduleTitleError('')
               }}
-              placeholder="일정 이름"
+              placeholder="예: 강남역 번개, 주말 회식..."
+              style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--border-color)', marginBottom: '8px', boxSizing: 'border-box' }}
             />
             {newScheduleTitleError && (
-              <p className="location-schedule-error">{newScheduleTitleError}</p>
+              <p style={{ color: '#ef4444', fontSize: '12px', margin: '0 0 16px' }}>{newScheduleTitleError}</p>
             )}
-            <div>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
               <button
                 type="button"
                 onClick={() => {
                   setShowNewScheduleModal(false)
                   setNewScheduleTitleError('')
                 }}
+                style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-color)', color: 'var(--text-color)', cursor: 'pointer' }}
               >
                 취소
               </button>
-              <button type="button" onClick={handleCreateDraftSchedule}>
+              <button 
+                type="button" 
+                onClick={handleCreateDraftSchedule}
+                style={{ flex: 1, padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: '#7c79ff', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}
+              >
                 만들기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {transportModePrompt && (
+        <div className="transport-mode-overlay">
+          <div className="transport-mode-dialog" style={{ borderRadius: '20px', padding: '24px', textAlign: 'center' }}>
+            <h3 style={{ marginTop: 0 }}>🚗 이동수단 선택</h3>
+            <p style={{ color: 'var(--secondary-text)', fontSize: '13px', marginBottom: '20px' }}>
+              정확한 도착 시간 계산을 위해<br />이동수단을 선택해 주세요.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => handleSelectTransportMode('car')}
+                style={{ 
+                  padding: '14px', 
+                  borderRadius: '12px', 
+                  border: '1px solid var(--border-color)', 
+                  backgroundColor: 'white', 
+                  color: 'var(--text-color)', 
+                  fontWeight: 'bold',
+                  fontSize: '15px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px'
+                }}
+              >
+                🚗 자동차
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectTransportMode('transit')}
+                style={{ 
+                  padding: '14px', 
+                  borderRadius: '12px', 
+                  border: '1px solid var(--border-color)', 
+                  backgroundColor: 'white', 
+                  color: 'var(--text-color)', 
+                  fontWeight: 'bold',
+                  fontSize: '15px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px'
+                }}
+              >
+                🚌 대중교통
+              </button>
+              <button
+                type="button"
+                onClick={() => setTransportModePrompt(null)}
+                style={{ 
+                  marginTop: '10px',
+                  padding: '10px', 
+                  backgroundColor: 'transparent', 
+                  color: 'var(--secondary-text)', 
+                  border: 'none',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  textDecoration: 'underline'
+                }}
+              >
+                취소
               </button>
             </div>
           </div>
@@ -1453,79 +1597,102 @@ function MapPage({ roomId }) {
             zIndex: 1000,
           }}
         >
-          <div style={{ width: '300px', padding: '24px', borderRadius: '16px', backgroundColor: 'var(--bg-color)' }}>
-            <h3 style={{ marginBottom: '4px', textAlign: 'center' }}>
-              위치가 확정되었습니다!
+          <div style={{ width: '320px', padding: '24px', borderRadius: '20px', backgroundColor: 'var(--bg-color)', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
+            <h3 style={{ marginBottom: '8px', textAlign: 'center' }}>
+              📍 만날 위치 설정
             </h3>
-            <p style={{ color: 'var(--secondary-text)', fontSize: '13px', textAlign: 'center', marginBottom: '12px' }}>
-              위치를 추가할 일정을 선택하거나 새 일정을 만들어 주세요.
+            <p style={{ color: 'var(--secondary-text)', fontSize: '13px', textAlign: 'center', marginBottom: '20px' }}>
+              <strong>{pendingMiddleLocation.placename}</strong><br/>
+              이 위치를 어떤 일정에 등록할까요?
             </p>
 
-            {roomConfirmedSchedules.length > 0 && (
-              <div style={{ marginBottom: '12px' }}>
-                <p style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: 'bold' }}>
-                  1. 확정된 일정에서 정하기
-                </p>
-                {roomConfirmedSchedules.map((schedule) => (
-                  <button
-                    key={schedule.id}
-                    type="button"
-                    onClick={() => handleApplyMiddlePlaceToSchedule(schedule.id)}
-                    style={{
-                      width: '100%',
-                      padding: '10px',
-                      marginBottom: '6px',
-                      backgroundColor: 'var(--card-bg)',
-                      color: 'var(--text-color)',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '10px',
-                      fontSize: '14px',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                    }}
-                  >
-                    {schedule.title || schedule.date || '날짜 미정 일정'}
-                  </button>
-                ))}
+            <div style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '20px', paddingRight: '4px' }}>
+              {roomConfirmedSchedules.map((schedule) => (
+                <button
+                  key={schedule.id}
+                  type="button"
+                  onClick={() => handleApplyMiddlePlaceToSchedule(schedule.id)}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    marginBottom: '8px',
+                    backgroundColor: 'var(--card-bg)',
+                    color: 'var(--text-color)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '12px',
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}
+                >
+                  <span style={{ fontWeight: '500' }}>{schedule.title || '제목 없음'}</span>
+                  <span style={{ fontSize: '12px', color: 'var(--secondary-text)' }}>{schedule.date || '날짜 미정'}</span>
+                </button>
+              ))}
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+              <p style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 'bold', color: '#7c79ff' }}>
+                + 새로운 일정으로 확정하기
+              </p>
+
+              <input
+                type="text"
+                placeholder="새 일정 이름 (예: 팀 회식...)"
+                value={appointmentTitle}
+                onChange={(event) => setAppointmentTitle(event.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  fontSize: '14px',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '10px',
+                  boxSizing: 'border-box',
+                  marginBottom: '10px',
+                  backgroundColor: 'var(--card-bg)',
+                  color: 'var(--text-color)'
+                }}
+              />
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setPendingMiddleLocation(null)}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    backgroundColor: 'var(--bg-color)',
+                    color: 'var(--text-color)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '10px',
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateScheduleFromMiddlePlace}
+                  style={{
+                    flex: 2,
+                    padding: '12px',
+                    backgroundColor: '#7c79ff',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                  }}
+                >
+                  일정 생성 및 확정
+                </button>
               </div>
-            )}
-
-            <p style={{ margin: '16px 0 8px', fontSize: '13px', fontWeight: 'bold' }}>
-              2. 새로운 확정 일정 추가하기
-            </p>
-
-            <input
-              type="text"
-              placeholder="일정 이름 (예: 팀 회식, 생일 파티...)"
-              value={appointmentTitle}
-              onChange={(event) => setAppointmentTitle(event.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                fontSize: '14px',
-                border: '1px solid var(--border-color)',
-                borderRadius: '10px',
-                boxSizing: 'border-box',
-                marginBottom: '8px',
-              }}
-            />
-
-            <button
-              type="button"
-              onClick={handleCreateScheduleFromMiddlePlace}
-              style={{
-                width: '100%',
-                padding: '12px',
-                backgroundColor: 'var(--btn-bg)',
-                color: 'var(--text-color)',
-                border: 'none',
-                borderRadius: '10px',
-                fontSize: '15px',
-                cursor: 'pointer',
-              }}
-            >
-              새로운 확정 일정 추가하기
-            </button>
+            </div>
           </div>
         </div>
       )}
@@ -1575,171 +1742,120 @@ function MapPage({ roomId }) {
         </div>
       )}
 
-      {shareToast && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            padding: '14px 18px',
-            borderRadius: '12px',
-            backgroundColor: 'rgba(0, 0, 0, 0.78)',
-            color: '#fff',
-            fontSize: '14px',
-            zIndex: 1100,
-          }}
-        >
-          {shareToast}
-        </div>
-      )}
-
-      {transportModePrompt && (
-        <div className="transport-mode-overlay">
-          <div className="transport-mode-dialog">
-            <h3>이동수단을 입력하세요</h3>
-            <div>
-              <button
-                type="button"
-                onClick={() => handleSelectTransportMode('transit')}
-              >
-                대중교통
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSelectTransportMode('car')}
-              >
-                자동차
-              </button>
-            </div>
-            {transportModePrompt.isEdit && (
-              <button
-                type="button"
-                className="transport-mode-cancel"
-                onClick={() => setTransportModePrompt(null)}
-              >
-                취소
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      <h2>위치 기능</h2>
-
-      <div className="location-schedule-selector">
-        {roomConfirmedSchedules.length === 0 ? (
-          <>
-            <strong>아직 일정이 없어요.</strong>
-            <span>새 일정을 만든 뒤 출발 위치와 만날 위치를 설정해 주세요.</span>
-          </>
-        ) : (
-          <>
-            <label htmlFor="location-schedule">경로를 확인할 일정</label>
-            <select
-              id="location-schedule"
-              value={selectedScheduleId || ''}
-              onChange={(event) => setSelectedScheduleId(Number(event.target.value))}
-            >
-              {roomConfirmedSchedules.map((schedule) => (
-                <option key={schedule.id} value={schedule.id}>
-                  {schedule.title || '제목 없는 일정'}
-                  {schedule.date ? ` · ${schedule.date}` : ''}
-                  {schedule.starttime ? ` ${schedule.starttime.slice(0, 5)}` : ''}
-                </option>
-              ))}
-            </select>
-            {!middlePlace && (
-              <span>선택한 일정의 만날 위치를 먼저 확정해 주세요.</span>
-            )}
-          </>
-        )}
-      </div>
-
-      <button
-        type="button"
-        className="location-new-schedule-button"
-        onClick={() => setShowNewScheduleModal(true)}
-      >
-        + 새 일정 만들기
-      </button>
-
       {selectedScheduleId && (
         <>
-      <CurrentLocationButton onClick={handleCurrentLocation} />
-
-      <div className="departure-location-picker">
-        <button
-          type="button"
-          className="departure-location-toggle"
-          onClick={() => setShowDepartureLocationPicker((isVisible) => !isVisible)}
-        >
-          {showDepartureLocationPicker ? '직접 입력 닫기' : '출발지 직접 입력'}
-        </button>
-
-        {showDepartureLocationPicker && (
-          <div className="departure-location-search">
-            <strong>출발 위치 검색</strong>
-            <LocationPicker
-              mapHeight="180px"
-              onSelect={handleSelectDepartureLocation}
-            />
-          </div>
-        )}
-      </div>
-
-      <button type="button" onClick={handleShareCurrentLocation}>
-        현재 위치 채팅에 공유
-      </button>
-
-      <div className="location-box">
-        <h3>출발 상태</h3>
-        <p>{getLocationStatusLabel(myLocationRecord)}</p>
-
-        {myLocationRecord?.transportmode && (
-          <p>
-            교통수단: {getModeLabel(myLocationRecord.transportmode)}{' '}
-            <button type="button" onClick={handleEditTransportMode}>
-              수정하기
+          <div className="location-action-bar" style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+            <button 
+              type="button" 
+              onClick={handleCurrentLocation}
+              style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#eef2ff', color: '#4f46e5', fontWeight: 'bold', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+            >
+              📡 현재 위치로 설정
             </button>
-          </p>
-        )}
+            <button
+              type="button"
+              onClick={() => setShowDepartureLocationPicker((isVisible) => !isVisible)}
+              style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: showDepartureLocationPicker ? '#7c79ff' : '#f3f4f6', color: showDepartureLocationPicker ? 'white' : '#374151', fontWeight: 'bold', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+            >
+              🔍 출발지 직접 입력
+            </button>
+          </div>
 
-        {myLocationRecord?.transportmode &&
-          myLocationRecord?.lastlocationupdatedat && (
-          <p>
-            마지막 갱신:{' '}
-            {new Date(myLocationRecord.lastlocationupdatedat).toLocaleString()}
-          </p>
-        )}
+          {showDepartureLocationPicker && (
+            <div className="departure-location-search" style={{ 
+              marginBottom: '16px', 
+              padding: '16px', 
+              backgroundColor: 'var(--card-bg)', 
+              borderRadius: '16px', 
+              border: '2px solid #7c79ff' 
+            }}>
+              <strong style={{ display: 'block', marginBottom: '12px', fontSize: '14px' }}>🏠 출발 위치 직접 검색</strong>
+              <LocationPicker
+                mapHeight="200px"
+                onSelect={handleSelectDepartureLocation}
+              />
+            </div>
+          )}
 
-        {(locationUpdateError || myLocationRecord?.locationerror) && (
-          <p style={{ color: '#c2410c' }}>
-            {locationUpdateError || myLocationRecord.locationerror}
-          </p>
-        )}
+          <div className="location-box" style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'var(--card-bg)', marginBottom: '16px', border: '1px solid var(--border-color)' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '12px', fontSize: '15px' }}>🚗 내 출발 상태</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <span style={{ 
+                padding: '4px 12px', 
+                borderRadius: '20px', 
+                backgroundColor: isTracking ? '#dcfce7' : '#f3f4f6', 
+                color: isTracking ? '#166534' : '#374151',
+                fontSize: '13px',
+                fontWeight: 'bold'
+              }}>
+                {getLocationStatusLabel(myLocationRecord)}
+              </span>
+              
+              {myLocationRecord?.transportmode && (
+                <button 
+                  type="button" 
+                  onClick={handleEditTransportMode}
+                  style={{ fontSize: '12px', color: '#7c79ff', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  교통수단 수정 ({getModeLabel(myLocationRecord.transportmode)})
+                </button>
+              )}
+            </div>
 
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            onClick={handleStartDeparture}
-            disabled={isTracking || isArrived || !middlePlace}
-          >
-            출발하기
-          </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={handleStartDeparture}
+                disabled={isTracking || isArrived || !middlePlace}
+                style={{ 
+                  flex: 2, 
+                  padding: '14px', 
+                  borderRadius: '12px', 
+                  border: 'none', 
+                  backgroundColor: isTracking || isArrived || !middlePlace ? '#f3f4f6' : '#7c79ff', 
+                  color: isTracking || isArrived || !middlePlace ? '#9ca3af' : 'white',
+                  fontWeight: 'bold',
+                  cursor: isTracking || isArrived || !middlePlace ? 'default' : 'pointer'
+                }}
+              >
+                출발하기
+              </button>
 
-          <button
-            type="button"
-            onClick={handleArrive}
-            disabled={!isTracking}
-          >
-            도착
-          </button>
-        </div>
-        {!middlePlace && <p>중간위치를 확정해주세요.</p>}
-      </div>
+              <button
+                type="button"
+                onClick={handleArrive}
+                disabled={!isTracking}
+                style={{ 
+                  flex: 1, 
+                  padding: '14px', 
+                  borderRadius: '12px', 
+                  border: '1px solid var(--border-color)', 
+                  backgroundColor: !isTracking ? '#f3f4f6' : 'white', 
+                  color: !isTracking ? '#9ca3af' : '#374151',
+                  fontWeight: 'bold',
+                  cursor: !isTracking ? 'default' : 'pointer'
+                }}
+              >
+                도착
+              </button>
+            </div>
+            {!middlePlace && <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '8px', textAlign: 'center' }}>⚠️ 만날 위치를 먼저 확정해 주세요.</p>}
+          </div>
 
-      {message && <p>{message}</p>}
+          {message && (
+            <div style={{ 
+              padding: '12px', 
+              backgroundColor: '#fffbeb', 
+              color: '#92400e', 
+              borderRadius: '10px', 
+              fontSize: '13px', 
+              marginBottom: '16px',
+              border: '1px solid #fef3c7',
+              textAlign: 'center'
+            }}>
+              {message}
+            </div>
+          )}
 
       {members.length > 0 && (
         <div className="location-box">
