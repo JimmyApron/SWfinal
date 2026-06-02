@@ -32,7 +32,7 @@ export async function createTodo({ userId, title, duedate, duetime, reminder }) 
 export async function toggleTodo(id, iscompleted) {
   const { error } = await supabase
     .from("todos")
-    .update({ iscompleted })
+    .update({ iscompleted, completedat: iscompleted ? new Date().toISOString() : null })
     .eq("id", id);
 
   if (error) throw new Error("할일 상태 변경 실패");

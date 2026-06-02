@@ -1187,7 +1187,11 @@ function CalendarPage() {
             </p>
           ))}
 
-          {selectedTodos.map((t) => (
+          {[...selectedTodos].sort((a, b) => {
+            if (a.iscompleted !== b.iscompleted) return Number(a.iscompleted) - Number(b.iscompleted);
+            if (a.iscompleted) return new Date(b.completedat || 0) - new Date(a.completedat || 0);
+            return 0;
+          }).map((t) => (
             <div
               key={t.id}
               style={{
