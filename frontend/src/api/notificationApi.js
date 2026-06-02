@@ -383,6 +383,13 @@ export async function getMyGuestNotifications(guestId) {
   }));
 }
 
+export const TAB_TYPE_MAP = {
+  schedule: ["schedule_confirmed", "schedule_cancelled", "schedule_new", "schedule_request"],
+  location: ["location_request", "member_departed", "arrival_approaching", "arrival_completed", "middle_place_confirmed"],
+  vote: ["vote_closed", "vote_reminder", "vote_new"],
+  chat: ["chat_new"],
+};
+
 export async function markNotificationsAsReadInRoom(roomId, userId) {
   if (!roomId || !userId) return;
   await supabase
@@ -390,6 +397,17 @@ export async function markNotificationsAsReadInRoom(roomId, userId) {
     .update({ isread: true })
     .eq("roomid", Number(roomId))
     .eq("receiverid", userId)
+    .eq("isread", false);
+}
+
+export async function markNotificationsAsReadInRoomByType(roomId, userId, types) {
+  if (!roomId || !userId || !types || types.length === 0) return;
+  await supabase
+    .from("notifications")
+    .update({ isread: true })
+    .eq("roomid", Number(roomId))
+    .eq("receiverid", userId)
+    .in("type", types)
     .eq("isread", false);
 }
 

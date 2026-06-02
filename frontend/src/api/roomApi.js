@@ -249,6 +249,22 @@ export async function transferRoomOwnership(roomId, newHostId) {
   }
 }
 
+export async function kickParticipantApi(roomId, participantId, type) {
+  const table = type === "member" ? "room_members" : "room_guests";
+  const idColumn = type === "member" ? "userid" : "id";
+
+  const { error } = await supabase
+    .from(table)
+    .delete()
+    .eq("roomid", Number(roomId))
+    .eq(idColumn, participantId);
+
+  if (error) {
+    console.error("추방 실패:", error);
+    throw new Error("참여자 추방에 실패했습니다.");
+  }
+}
+
 export async function updateRoomNameApi(roomId, newName) {
   const { error } = await supabase
     .from("rooms")

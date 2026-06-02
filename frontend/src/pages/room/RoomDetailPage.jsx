@@ -1,7 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+
 import { supabase } from "../../lib/supabaseClient";
-import { transferRoomOwnership, updateRoomNameApi, updateRoomImageApi } from "../../api/roomApi";
+import { 
+  transferRoomOwnership, 
+  updateRoomNameApi, 
+  updateRoomImageApi,
+  kickParticipantApi 
+} from "../../api/roomApi";
 import ScheduleTab from "./ScheduleTab";
 import MapPage from "../../components/map/MapPage";
 import ChatTab from "../Chat/ChatTab";
@@ -15,7 +21,9 @@ import {
 import { 
   createNotification, 
   deleteNotification, 
-  markNotificationsAsReadInRoom 
+  markNotificationsAsReadInRoom,
+  markNotificationsAsReadInRoomByType,
+  TAB_TYPE_MAP
 } from "../../api/notificationApi";
 
 function RoomDetailPage() {
@@ -25,22 +33,28 @@ function RoomDetailPage() {
 
   const [room, setRoom] = useState(null);
   const [tab, setTab] = useState(searchParams.get("tab") || "schedule");
-
+  const [currentUser, setCurrentUser] = useState(null);
+  const [members, setMembers] = useState([]);
+  const [guests, setGuests] = useState([]);
+  const [myEntryId, setMyEntryId] = useState(null);
+  
+  const [unreadTabs, setUnreadTabs] = useState({
+    schedule: false,
+    location: false,
+    vote: false,
+    chat: false,
+  });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
-
-  const [currentUser, setCurrentUser] = useState(null);
-
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [friendList, setFriendList] = useState([]);
   const [sentInvites, setSentInvites] = useState([]);
   const [invitingSending, setInvitingSending] = useState(false);
   const [memberPopup, setMemberPopup] = useState(null);
-
-  const [members, setMembers] = useState([]);
-  const [guests, setGuests] = useState([]);
   const [selectedParticipantId, setSelectedParticipantId] = useState(null);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const isLeavingRef = useRef(false);
 
   const [notifSettings, setNotifSettings] = useState({
     schedule: true,
@@ -61,6 +75,43 @@ function RoomDetailPage() {
       setTab(queryTab);
     }
   }, [searchParams]);
+
+  const fetchUnreadTabs = async (userId) => {
+    if (!userId || !roomId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("type")
+        .eq("roomid", Number(roomId))
+        .eq("receiverid", userId)
+        .eq("isread", false)
+        .eq("issilent", false);
+
+      if (error) throw error;
+
+      const unreadStatus = {
+        schedule: false,
+        location: false,
+        vote: false,
+        chat: false,
+      };
+
+      if (data) {
+        data.forEach((notif) => {
+          Object.entries(TAB_TYPE_MAP).forEach(([tabName, types]) => {
+            if (types.includes(notif.type)) {
+              unreadStatus[tabName] = true;
+            }
+          });
+        });
+      }
+
+      setUnreadTabs(unreadStatus);
+    } catch (err) {
+      console.error("탭별 알림 상태 조회 실패:", err);
+    }
+  };
 
   const fetchRoomData = async () => {
     const { data: roomData, error: roomError } = await supabase
@@ -113,11 +164,34 @@ function RoomDetailPage() {
       data: { user },
     } = await supabase.auth.getUser();
 
+    // 추방 감지 로직
+    const currentId = user?.id || localStorage.getItem("guest_id");
+    const currentType = user ? "member" : "guest";
+
+    if (currentId) {
+      const isStillInMembers = (memberData || []).some(m => String(m.userid) === String(currentId));
+      const isStillInGuests = (guestData || []).some(g => String(g.id) === String(currentId));
+      const isStillThere = isStillInMembers || isStillInGuests;
+
+      // 이미 방에 들어와있던 상태(myEntryId 존재)인데 목록에서 사라졌고, 스스로 나가는 중(isLeavingRef.current)이 아니라면 추방임
+      if (myEntryId && !isStillThere && !isLeavingRef.current) {
+        alert(`${room?.roomname || "해당"} 방에서 추방되었습니다.`);
+        navigate("/home");
+        return;
+      }
+    }
+
     if (user && user.id) {
+      const uId = user.id;
       setCurrentUser({ ...user, type: "member" });
       
-      // 방에 들어왔으니 해당 방의 알림을 모두 읽음 처리
-      markNotificationsAsReadInRoom(roomId, user.id);
+      const myMember = memberData.find(m => String(m.userid) === String(uId));
+      if (myMember) setMyEntryId(myMember.id);
+
+      // 현재 보고 있는 탭의 알림만 읽음 처리
+      await markNotificationsAsReadInRoomByType(roomId, uId, TAB_TYPE_MAP[tab]);
+      // 나머지 탭의 알림 상태 조회
+      fetchUnreadTabs(uId);
 
       const { data: myMemberData, error: myMemberError } = await supabase
         .from("room_members")
@@ -142,8 +216,10 @@ function RoomDetailPage() {
       if (guestId) {
         setCurrentUser({ id: guestId, type: "guest" });
         
-        // 게스트도 방에 들어왔으니 해당 방의 알림을 모두 읽음 처리
-        markNotificationsAsReadInRoom(roomId, guestId);
+        // 현재 보고 있는 탭의 알림만 읽음 처리
+        await markNotificationsAsReadInRoomByType(roomId, guestId, TAB_TYPE_MAP[tab]);
+        // 나머지 탭의 알림 상태 조회
+        fetchUnreadTabs(guestId);
 
         const { data: myGuestData, error: myGuestError } = await supabase
           .from("room_guests")
@@ -170,8 +246,9 @@ function RoomDetailPage() {
   useEffect(() => {
     fetchRoomData();
 
-    const channel = supabase
-      .channel(`room_detail_realtime_${roomId}`)
+    // 1. 방 정보 및 알림 관련 구독
+    const roomInfoChannel = supabase
+      .channel(`room_info_${roomId}`)
       .on(
         "postgres_changes",
         {
@@ -180,11 +257,28 @@ function RoomDetailPage() {
           table: "rooms",
           filter: `id=eq.${roomId}`,
         },
-        (payload) => {
-          console.log("Room updated:", payload);
-          fetchRoomData();
+        () => fetchRoomData()
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `roomid=eq.${roomId}`,
+        },
+        () => {
+          const currentUserId = currentUser?.id || localStorage.getItem("guest_id");
+          if (currentUserId) {
+            fetchUnreadTabs(currentUserId);
+          }
         }
       )
+      .subscribe();
+
+    // 2. 참여자 목록 갱신 전용 구독 (단순 목록 업데이트용)
+    const participantListChannel = supabase
+      .channel(`room_participants_${roomId}`)
       .on(
         "postgres_changes",
         {
@@ -193,10 +287,7 @@ function RoomDetailPage() {
           table: "room_members",
           filter: `roomid=eq.${roomId}`,
         },
-        (payload) => {
-          console.log("Member changed:", payload);
-          fetchRoomData();
-        }
+        () => fetchRoomData()
       )
       .on(
         "postgres_changes",
@@ -206,25 +297,64 @@ function RoomDetailPage() {
           table: "room_guests",
           filter: `roomid=eq.${roomId}`,
         },
-        (payload) => {
-          console.log("Guest changed:", payload);
-          fetchRoomData();
-        }
+        () => fetchRoomData()
       )
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          console.log("Successfully subscribed to room changes");
-        }
-      });
+      // 브로드캐스트 메시지 수신 (더 빠른 동기화)
+      .on("broadcast", { event: "PARTICIPANTS_CHANGED" }, () => {
+        console.log("Participants changed broadcast received");
+        fetchRoomData();
+      })
+      .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(roomInfoChannel);
+      supabase.removeChannel(participantListChannel);
     };
-  }, [roomId]);
+  }, [roomId, currentUser?.id]);
 
-  const handleChangeTab = (nextTab) => {
+  // 3. 내 추방 감지 전용 구독 (보안 및 리다이렉트 전용)
+  useEffect(() => {
+    if (!myEntryId || !roomId) return;
+
+    const kickChannel = supabase
+      .channel(`room_kick_detect_${roomId}_${currentUser?.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: currentUser?.type === "member" ? "room_members" : "room_guests",
+          filter: `id=eq.${myEntryId}`,
+        },
+        () => {
+          // 목록 갱신 구독과는 별개로 내 데이터 삭제만 감지하여 즉시 튕겨냄
+          if (!isLeavingRef.current) {
+            alert(`${room?.roomname || "해당"} 방에서 추방되었습니다.`);
+            navigate("/home");
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(kickChannel);
+    };
+  }, [roomId, currentUser, myEntryId, navigate]);
+
+  const handleChangeTab = async (nextTab) => {
     setTab(nextTab);
     setSearchParams({ tab: nextTab });
+
+    const currentUserId = currentUser?.id || localStorage.getItem("guest_id");
+    if (currentUserId) {
+      // 바뀐 탭의 알림 읽음 처리
+      await markNotificationsAsReadInRoomByType(roomId, currentUserId, TAB_TYPE_MAP[nextTab]);
+      // 상태 갱신
+      setUnreadTabs((prev) => ({
+        ...prev,
+        [nextTab]: false,
+      }));
+    }
   };
 
   const handleCopyInviteCode = async () => {
@@ -476,6 +606,9 @@ function RoomDetailPage() {
       return;
     }
 
+    isLeavingRef.current = true;
+    setIsLeaving(true);
+
     const isHost = String(room?.createdby) === String(currentUser?.id);
 
     if (isHost) {
@@ -485,14 +618,14 @@ function RoomDetailPage() {
       ]
         .filter((p) => {
           const participantId = p.type === "member" ? p.userid : p.id;
-          return String(participantId) !== String(currentUser?.id);
+          // 자신 제외 및 게스트 제외 (멤버 중에서만 다음 방장 선정)
+          return String(participantId) !== String(currentUser?.id) && p.type === "member";
         })
         .sort((a, b) => new Date(a.joinDate) - new Date(b.joinDate));
 
       if (others.length > 0) {
         const nextHost = others[0];
-        const nextHostId =
-          nextHost.type === "member" ? nextHost.userid : nextHost.id;
+        const nextHostId = nextHost.userid;
 
         try {
           await transferRoomOwnership(roomId, nextHostId);
@@ -540,6 +673,11 @@ function RoomDetailPage() {
   };
 
   const handleTransferHost = async (p) => {
+    if (p.type === "guest") {
+      alert("게스트는 방장이 될 수 없습니다. 회원에게만 양도 가능합니다.");
+      return;
+    }
+
     const newHostId = p.type === "member" ? p.userid : p.id;
     const confirmMessage = `방장 권한을 ${p.nickname}님에게 양도하시겠습니까?`;
 
@@ -549,6 +687,33 @@ function RoomDetailPage() {
         alert("방장 권한이 양도되었습니다.");
         setRoom({ ...room, createdby: String(newHostId) });
         setSelectedParticipantId(null);
+      } catch (error) {
+        alert(error.message);
+      }
+    }
+  };
+
+  const handleKickParticipant = async (p) => {
+    const participantId = p.type === "member" ? p.userid : p.id;
+    const confirmMessage = `정말 ${p.nickname}님을 추방하시겠습니까?`;
+
+    if (window.confirm(confirmMessage)) {
+      try {
+        await kickParticipantApi(roomId, participantId, p.type);
+        alert(`${p.nickname}님이 추방되었습니다.`);
+        setSelectedParticipantId(null);
+        
+        // 1. 내 화면 즉시 갱신
+        fetchRoomData();
+        
+        // 2. 다른 사람들에게 갱신 신호 보냄
+        const participantListChannel = supabase.channel(`room_participants_${roomId}`);
+        participantListChannel.send({
+          type: "broadcast",
+          event: "PARTICIPANTS_CHANGED",
+          payload: {},
+        });
+
       } catch (error) {
         alert(error.message);
       }
@@ -720,6 +885,19 @@ function RoomDetailPage() {
             }}
           >
             {t.label}
+            {unreadTabs[t.id] && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "14px",
+                  right: "10px",
+                  width: "7px",
+                  height: "7px",
+                  backgroundColor: "#EF4444",
+                  borderRadius: "50%",
+                }}
+              />
+            )}
             {tab === t.id && (
               <div
                 style={{
@@ -733,8 +911,6 @@ function RoomDetailPage() {
                 }}
               />
             )}
-            {/* 알림 표시용 레드 닷 (필요 시 로직 추가 가능) */}
-            {/* <div style={{ position: "absolute", top: "12px", right: "25%", width: "5px", height: "5px", backgroundColor: "#EF4444", borderRadius: "50%" }} /> */}
           </button>
         ))}
       </div>
@@ -1186,14 +1362,14 @@ function RoomDetailPage() {
                       </div>
 
                       {isSelected && (
-                        <div style={{ marginTop: "8px", padding: "0 5px" }}>
+                        <div style={{ marginTop: "8px", padding: "0 5px", display: "flex", gap: "5px" }}>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handleTransferHost(p);
                             }}
                             style={{
-                              width: "100%",
+                              flex: 1,
                               padding: "6px",
                               background: "#8366F4",
                               color: "white",
@@ -1204,7 +1380,26 @@ function RoomDetailPage() {
                               cursor: "pointer",
                             }}
                           >
-                            방장 권한 주기
+                            방장 위임
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleKickParticipant(p);
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: "6px",
+                              background: "#f44336",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "5px",
+                              fontSize: "12px",
+                              fontWeight: "bold",
+                              cursor: "pointer",
+                            }}
+                          >
+                            추방하기
                           </button>
                         </div>
                       )}
