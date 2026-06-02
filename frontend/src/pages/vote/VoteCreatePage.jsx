@@ -295,7 +295,7 @@ function VoteCreatePage() {
     }
 
     if (isLocationVoteType(votetype)) {
-      if (!scheduleId) {
+      if (locationKind && !scheduleId) {
         alert("위치 투표를 저장할 대상 일정이 없습니다.");
         return;
       }
@@ -609,7 +609,7 @@ function VoteCreatePage() {
       </div>
 
       <div style={{ padding: "20px" }}>
-        {isLocationVoteType(votetype) && (
+        {isLocationVoteType(votetype) && locationKind && scheduleId && (
           <p
             style={{
               padding: "10px",

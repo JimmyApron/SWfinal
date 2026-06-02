@@ -57,6 +57,31 @@
   opacity: 0.8;
 }
 
+.departure-location-picker {
+  max-width: 500px;
+  margin: 6px auto 12px;
+  text-align: left;
+}
+
+.departure-location-toggle {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background-color: var(--card-bg);
+  color: var(--secondary-text);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.departure-location-search {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background-color: var(--card-bg);
+  font-size: 13px;
+}
+
 .location-box {
   margin: 16px auto;
   padding: 12px;

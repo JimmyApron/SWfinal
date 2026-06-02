@@ -56,9 +56,7 @@ function ConfirmedScheduleDetailPage() {
     isallday: Boolean(schedule?.isallday),
   });
   const [timingDraft, setTimingDraft] = useState(scheduleTiming);
-  const [showMap, setShowMap] = useState(
-    schedule?.locationlat != null && schedule?.locationlng != null
-  );
+  const [showMap, setShowMap] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [roomOwnerId, setRoomOwnerId] = useState(null);
   const [attendees, setAttendees] = useState([]);
@@ -75,6 +73,16 @@ function ConfirmedScheduleDetailPage() {
   const [additionalPlace, setAdditionalPlace] = useState(null);
   const [showAdditionalPicker, setShowAdditionalPicker] = useState(false);
   const [selectedMeetingPlace, setSelectedMeetingPlace] = useState(
+    schedule?.locationlat != null && schedule?.locationlng != null
+      ? {
+          name: schedule.location,
+          address: schedule.locationaddress || "",
+          lat: schedule.locationlat,
+          lng: schedule.locationlng,
+        }
+      : null
+  );
+  const [draftMeetingPlace, setDraftMeetingPlace] = useState(
     schedule?.locationlat != null && schedule?.locationlng != null
       ? {
           name: schedule.location,
@@ -229,9 +237,9 @@ function ConfirmedScheduleDetailPage() {
         };
 
         setSelectedMeetingPlace(resolvedPlace);
+        setDraftMeetingPlace(resolvedPlace);
         setLocationText(resolvedPlace.name);
         setLocationAddress(resolvedPlace.address);
-        setShowMap(true);
       });
     };
 
@@ -310,11 +318,13 @@ function ConfirmedScheduleDetailPage() {
         schedule.id,
         locationText.trim(),
         locationAddress,
-        selectedMeetingPlace?.lat ?? null,
-        selectedMeetingPlace?.lng ?? null
+        draftMeetingPlace?.lat ?? null,
+        draftMeetingPlace?.lng ?? null
       );
 
-      await refreshRouteEstimates(selectedMeetingPlace);
+      setSelectedMeetingPlace(draftMeetingPlace);
+      setShowMap(false);
+      await refreshRouteEstimates(draftMeetingPlace);
 
       alert("위치가 저장되었습니다.");
     } catch (error) {
@@ -560,7 +570,7 @@ function ConfirmedScheduleDetailPage() {
 
   const middlePlaceSection = (
     <>
-      {schedule.location && (
+      {(selectedMeetingPlace?.name || schedule.location) && (
         <div
           style={{
             display: "flex",
@@ -571,15 +581,8 @@ function ConfirmedScheduleDetailPage() {
           }}
         >
           <p style={{ color: "#7c79ff", margin: 0 }}>
-            📍 현재 위치: {schedule.location}
+            📍 만날 위치: {selectedMeetingPlace?.name || schedule.location}
           </p>
-          <button
-            type="button"
-            onClick={() => navigate(`/rooms/${schedule.roomid}?tab=location`)}
-            style={shortcutButtonStyle}
-          >
-            위치탭 바로가기
-          </button>
         </div>
       )}
 
@@ -1038,7 +1041,9 @@ function ConfirmedScheduleDetailPage() {
         {middlePlaceSection}
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-          <p style={{ fontWeight: "bold", margin: 0 }}>만날 위치 설정</p>
+          <p style={{ fontWeight: "bold", margin: 0 }}>
+            {selectedMeetingPlace || schedule.location ? "만날 위치 재설정" : "만날 위치 설정"}
+          </p>
           <button
             onClick={() => navigate(`/rooms/${schedule.roomid}?tab=location`)}
             style={{ border: "none", background: "none", color: "#7c79ff", fontSize: "13px", cursor: "pointer", padding: 0 }}
@@ -1084,25 +1089,26 @@ function ConfirmedScheduleDetailPage() {
             </button>
 
             {showMap && (
-              <LocationPicker
-                initialPlace={selectedMeetingPlace}
-                onSelect={(name, address, place = {}) => {
-                  setLocationText(name);
-                  setLocationAddress(address || place.address || "");
-                  setSelectedMeetingPlace({
-                    name,
-                    address: address || place.address || "",
-                    lat: place.lat,
-                    lng: place.lng,
-                  });
-                  refreshRouteEstimates(place);
-                }}
-              />
-            )}
+              <>
+                <LocationPicker
+                  initialPlace={draftMeetingPlace || selectedMeetingPlace}
+                  onSelect={(name, address, place = {}) => {
+                    setLocationText(name);
+                    setLocationAddress(address || place.address || "");
+                    setDraftMeetingPlace({
+                      name,
+                      address: address || place.address || "",
+                      lat: place.lat,
+                      lng: place.lng,
+                    });
+                  }}
+                />
 
-            <button onClick={handleSave} disabled={saving} style={primaryButtonStyle}>
-              {saving ? "저장 중..." : "위치 저장"}
-            </button>
+                <button onClick={handleSave} disabled={saving} style={primaryButtonStyle}>
+                  {saving ? "저장 중..." : "위치 저장"}
+                </button>
+              </>
+            )}
           </>
         )}
 

@@ -41,6 +41,7 @@ function VoteDetailPage() {
   const [isForceVoting, setIsForceVoting] = useState(false);
   const [showVotersForOption, setShowVotersForOption] = useState(null);
   const [showParticipants, setShowParticipants] = useState(false);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   const [isEditMode, setIsEditMode] = useState(false);
   const [editTitle, setEditTitle] = useState("");
@@ -100,11 +101,21 @@ function VoteDetailPage() {
     supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user));
   }, []);
 
+  useEffect(() => {
+    const timerId = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timerId);
+  }, []);
+
   const makeEditablePlaceOptions = (options = []) =>
     options.map((option) => ({
       id: option.id,
-      optiontype: option.optiontype || "place",
+      optiontype: option.optiontype || "text",
       optiontext: option.optiontext || "",
+      optiondate: option.optiondate || "",
+      starttime: option.starttime || "",
+      endtime: option.endtime || "",
+      isallday: option.optiontype === "date" && !option.starttime,
+      availablecount: option.availablecount || 0,
       placename: option.placename || option.optiontext || "",
       placeaddress: option.placeaddress || "",
       placelat: option.placelat ?? "",
@@ -164,6 +175,22 @@ function VoteDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showScheduleModal, showLocationModal]);
 
+  useEffect(() => {
+    loadVote();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voteid]);
+
+  useEffect(() => {
+    const hasExpired =
+      vote?.endtimeenabled &&
+      vote.endtime &&
+      new Date(vote.endtime).getTime() <= currentTime;
+
+    if (isEditMode && (vote?.isclosed || hasExpired)) {
+      setIsEditMode(false);
+    }
+  }, [currentTime, isEditMode, vote]);
+
   const getTimeRemaining = (endtime) => {
     const diff = new Date(endtime) - new Date();
 
@@ -196,7 +223,7 @@ function VoteDetailPage() {
 
   const isClosed =
     vote.isclosed ||
-    (vote.endtimeenabled && vote.endtime && new Date(vote.endtime) < new Date());
+    (vote.endtimeenabled && vote.endtime && new Date(vote.endtime).getTime() <= currentTime);
 
   const showVotingUI = !isClosed && (!hasVoted || isForceVoting);
 
@@ -237,6 +264,8 @@ function VoteDetailPage() {
   };
 
   const handleEnterEditMode = () => {
+    if (isClosed) return;
+
     setEditTitle(vote.title);
     setEditEndtime(vote.endtime ? vote.endtime.slice(0, 16) : "");
     setEditEndtimeEnabled(vote.endtimeenabled || false);
@@ -277,12 +306,23 @@ function VoteDetailPage() {
   };
 
   const handleAddEditPlaceOption = () => {
+    const optiontype = isLocationVote
+      ? "place"
+      : vote.votetype === "schedule"
+      ? "date"
+      : editPlaceOptions[0]?.optiontype || "text";
+
     setEditPlaceOptions((prev) => [
       ...prev,
       {
         id: null,
-        optiontype: "place",
+        optiontype,
         optiontext: "",
+        optiondate: "",
+        starttime: "",
+        endtime: "",
+        isallday: false,
+        availablecount: 0,
         placename: "",
         placeaddress: "",
         placelat: "",
@@ -381,6 +421,51 @@ function VoteDetailPage() {
       placelng: lngValue,
       kakaomapurl: option.kakaomapurl.trim() || null,
       travelresults: option.travelresults || null,
+    };
+  };
+
+  const validateEditOptionForSave = (option) => {
+    if (option.optiontype === "place") {
+      return validatePlaceOptionForSave(option);
+    }
+
+    if (option.optiontype === "date") {
+      if (!option.optiondate) return "일정 선택지의 날짜를 모두 입력하세요.";
+      if (!option.isallday && !option.starttime) {
+        return "일정 선택지의 시작 시간을 모두 입력하세요.";
+      }
+      if (
+        !option.isallday &&
+        option.starttime &&
+        option.endtime &&
+        option.starttime >= option.endtime
+      ) {
+        return "일정 선택지의 종료 시간은 시작 시간보다 늦어야 합니다.";
+      }
+      return null;
+    }
+
+    if (!option.optiontext.trim()) return "투표 선택지 내용을 모두 입력하세요.";
+    return null;
+  };
+
+  const toEditOptionPayload = (option) => {
+    if (option.optiontype === "place") return toPlaceOptionPayload(option);
+
+    if (option.optiontype === "date") {
+      return {
+        optiontype: "date",
+        optiontext: option.optiondate,
+        optiondate: option.optiondate,
+        starttime: option.isallday ? null : option.starttime || null,
+        endtime: option.isallday ? null : option.endtime || null,
+        availablecount: option.availablecount || 0,
+      };
+    }
+
+    return {
+      optiontype: "text",
+      optiontext: option.optiontext.trim(),
     };
   };
 
@@ -598,7 +683,7 @@ function VoteDetailPage() {
     }
 
     try {
-      await confirmVote(
+      const result = await confirmVote(
         Number(voteid),
         option,
         Number(roomid),
@@ -607,6 +692,14 @@ function VoteDetailPage() {
       );
 
       await loadVote();
+
+      if (!vote.locationkind) {
+        setPendingConfirmedLocation(result.confirmedLocation);
+        setRoomConfirmedSchedules(await getRoomConfirmedSchedules(roomid));
+        setAppointmentTitle("");
+        setShowScheduleModal(true);
+        return;
+      }
 
       const scheduleTitle = vote.confirmed_schedules?.title || "대상 일정";
 
@@ -626,12 +719,24 @@ function VoteDetailPage() {
       await applyConfirmedLocationToSchedule(
         scheduleId,
         pendingConfirmedLocation,
-        isMiddlePlaceVote
+        isMiddlePlaceVote,
+        false
       );
       setShowScheduleModal(false);
       setPendingConfirmedLocation(null);
       setAppointmentTitle("");
-      navigate("/home");
+      const schedule = roomConfirmedSchedules.find(
+        (item) => Number(item.id) === Number(scheduleId)
+      );
+
+      if (!schedule?.date) {
+        setConfirmedLocationSchedulePrompt({
+          title: schedule?.title || "대상 일정",
+        });
+        return;
+      }
+
+      alert(`${schedule?.title || "대상 일정"}에 장소를 저장했어요.`);
     } catch (error) {
       alert("일정 위치 저장 실패: " + error.message);
     }
@@ -973,19 +1078,33 @@ function VoteDetailPage() {
   };
 
   const handleSaveEdit = async () => {
+    if (
+      vote.isclosed ||
+      (vote.endtimeenabled &&
+        vote.endtime &&
+        new Date(vote.endtime).getTime() <= Date.now())
+    ) {
+      setIsEditMode(false);
+      alert("종료된 투표는 수정할 수 없습니다.");
+      return;
+    }
+
     if (!editTitle.trim()) {
       alert("투표 제목을 입력하세요.");
       return;
     }
 
-    if (isLocationVote) {
-      for (const option of editPlaceOptions) {
-        const errorMessage = validatePlaceOptionForSave(option);
+    if (editPlaceOptions.length === 0) {
+      alert("투표 선택지를 1개 이상 입력하세요.");
+      return;
+    }
 
-        if (errorMessage) {
-          alert(errorMessage);
-          return;
-        }
+    for (const option of editPlaceOptions) {
+      const errorMessage = validateEditOptionForSave(option);
+
+      if (errorMessage) {
+        alert(errorMessage);
+        return;
       }
     }
 
@@ -1000,19 +1119,17 @@ function VoteDetailPage() {
         allowaddoption: editAllowaddoption,
       });
 
-      if (isLocationVote) {
-        for (const deletedOptionId of editDeletedOptionIds) {
-          await deleteVoteOptionFromDatabase(deletedOptionId);
-        }
+      for (const deletedOptionId of editDeletedOptionIds) {
+        await deleteVoteOptionFromDatabase(deletedOptionId);
+      }
 
-        for (const option of editPlaceOptions) {
-          const optionPayload = toPlaceOptionPayload(option);
+      for (const option of editPlaceOptions) {
+        const optionPayload = toEditOptionPayload(option);
 
-          if (option.id) {
-            await updateVoteOption(option.id, optionPayload);
-          } else {
-            await addVoteOption(Number(voteid), optionPayload);
-          }
+        if (option.id) {
+          await updateVoteOption(option.id, optionPayload);
+        } else {
+          await addVoteOption(Number(voteid), optionPayload);
         }
       }
 
@@ -1307,7 +1424,6 @@ function VoteDetailPage() {
             >
               {existingHasLocation ? "기존 위치가 유지됩니다." : "만날 위치를 지금 정하시겠어요?"}
             </p>
-
             {(existingHasLocation || isReconfirmation) ? (
               <button
                 onClick={() => handleConfirmWithLocation(false)}
@@ -2030,17 +2146,19 @@ function VoteDetailPage() {
 
         {isCreator && !isEditMode ? (
           <div style={{ display: "flex", gap: "8px" }}>
-            <button
-              onClick={handleEnterEditMode}
-              style={{
-                border: "none",
-                background: "none",
-                fontSize: "14px",
-                color: "#555",
-              }}
-            >
-              수정
-            </button>
+            {!isClosed && (
+              <button
+                onClick={handleEnterEditMode}
+                style={{
+                  border: "none",
+                  background: "none",
+                  fontSize: "14px",
+                  color: "#555",
+                }}
+              >
+                수정
+              </button>
+            )}
 
             <button
               onClick={handleDelete}
@@ -2098,7 +2216,7 @@ function VoteDetailPage() {
           </p>
         ) : null}
 
-        {isLocationVote && (
+        {isLocationVote && vote.locationkind && vote.scheduleid && (
           <p
             style={{
               color: "#555",
@@ -2149,11 +2267,25 @@ function VoteDetailPage() {
               }}
             />
 
+            <EditVoteOptionsPanel
+              votetype={vote.votetype}
+              editOptions={editPlaceOptions}
+              onChangeOption={handleChangeEditPlaceOption}
+              onAddOption={handleAddEditPlaceOption}
+              onRemoveOption={handleRemoveEditPlaceOption}
+            />
+
             <label style={editCheckLabelStyle}>
               <input
                 type="checkbox"
                 checked={editEndtimeEnabled}
-                onChange={(e) => setEditEndtimeEnabled(e.target.checked)}
+                onChange={(e) => {
+                  setEditEndtimeEnabled(e.target.checked);
+                  if (!e.target.checked) {
+                    setEditEndtime("");
+                    setEditReminderEnabled(false);
+                  }
+                }}
               />
               투표 종료시간 설정
             </label>
@@ -2179,6 +2311,7 @@ function VoteDetailPage() {
               <input
                 type="checkbox"
                 checked={editReminderEnabled}
+                disabled={!editEndtimeEnabled || !editEndtime}
                 onChange={(e) => setEditReminderEnabled(e.target.checked)}
               />
               종료 30분 전 알림
@@ -2211,14 +2344,6 @@ function VoteDetailPage() {
               항목 추가 허용
             </label>
 
-            {isLocationVote && (
-              <EditPlaceOptionsPanel
-                editPlaceOptions={editPlaceOptions}
-                onChangeOption={handleChangeEditPlaceOption}
-                onAddOption={handleAddEditPlaceOption}
-                onRemoveOption={handleRemoveEditPlaceOption}
-              />
-            )}
           </div>
         ) : (
           <h2 style={{ margin: "8px 0" }}>{vote.title}</h2>
@@ -2806,24 +2931,26 @@ function VoteDetailPage() {
           </>
         )}
 
-        <button
-          onClick={handleShareToChat}
-          style={{
-            width: "100%",
-            marginTop: "16px",
-            padding: "12px",
-            border: "1px solid #7c79ff",
-            borderRadius: "8px",
-            backgroundColor: "#fff",
-            color: "#7c79ff",
-            fontSize: "15px",
-            cursor: "pointer",
-          }}
-        >
-          💬 채팅에 공유
-        </button>
+        {!isEditMode && (
+          <button
+            onClick={handleShareToChat}
+            style={{
+              width: "100%",
+              marginTop: "16px",
+              padding: "12px",
+              border: "1px solid #7c79ff",
+              borderRadius: "8px",
+              backgroundColor: "#fff",
+              color: "#7c79ff",
+              fontSize: "15px",
+              cursor: "pointer",
+            }}
+          >
+            💬 채팅에 공유
+          </button>
+        )}
 
-        {showShareToast && (
+        {!isEditMode && showShareToast && (
           <div
             style={{
               position: "fixed",
@@ -2847,8 +2974,9 @@ function VoteDetailPage() {
   );
 }
 
-function EditPlaceOptionsPanel({
-  editPlaceOptions,
+function EditVoteOptionsPanel({
+  votetype,
+  editOptions,
   onChangeOption,
   onAddOption,
   onRemoveOption,
@@ -2870,6 +2998,21 @@ function EditPlaceOptionsPanel({
     setOpenPickerIndex(null);
   };
 
+  const isLocationVote = isLocationVoteType(votetype);
+  const generalOptionType = editOptions.length > 0 && editOptions.every(
+    (option) => option.optiontype === "date"
+  )
+    ? "date"
+    : editOptions.every((option) => option.optiontype === "text")
+    ? "text"
+    : null;
+
+  const handleChangeAllGeneralOptionTypes = (optiontype) => {
+    editOptions.forEach((_, index) => {
+      onChangeOption(index, "optiontype", optiontype);
+    });
+  };
+
   return (
     <div
       style={{
@@ -2880,13 +3023,38 @@ function EditPlaceOptionsPanel({
         backgroundColor: "#fafafa",
       }}
     >
-      <h4 style={{ marginTop: 0 }}>중간장소 후보 수정</h4>
+      {votetype === "general" && (
+        <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+          {[
+            { value: "text", label: "텍스트" },
+            { value: "date", label: "날짜" },
+          ].map((type) => (
+            <button
+              key={type.value}
+              type="button"
+              onClick={() => handleChangeAllGeneralOptionTypes(type.value)}
+              style={{
+                ...smallButtonStyle,
+                border:
+                  generalOptionType === type.value
+                    ? "2px solid #333"
+                    : "1px solid #ddd",
+                fontWeight: generalOptionType === type.value ? "bold" : "normal",
+              }}
+            >
+              {type.label}
+            </button>
+          ))}
+        </div>
+      )}
 
-      <p style={{ fontSize: "12px", color: "#888" }}>
-        장소는 카카오맵 검색 결과에서 선택해야 합니다.
-      </p>
+      {isLocationVote && (
+        <p style={{ fontSize: "12px", color: "#888" }}>
+          장소는 카카오맵 검색 결과에서 선택해야 합니다.
+        </p>
+      )}
 
-      {editPlaceOptions.map((option, index) => (
+      {editOptions.map((option, index) => (
         <div
           key={option.id || `new-${index}`}
           style={{
@@ -2916,50 +3084,123 @@ function EditPlaceOptionsPanel({
             ×
           </button>
 
-          <input
-            value={option.placename}
-            readOnly
-            placeholder="장소명"
-            style={editInputStyle}
-          />
-
-          <button
-            type="button"
-            onClick={() =>
-              setOpenPickerIndex((prev) => (prev === index ? null : index))
-            }
-            style={placeSearchButtonStyle}
-          >
-            {openPickerIndex === index ? "장소 검색 닫기" : "카카오맵에서 장소 검색"}
-          </button>
-
-          {openPickerIndex === index && (
-            <LocationPicker
-              allowMapClick={false}
-              onSelect={(name, address, place) =>
-                handleSelectPlace(index, name, address, place)
+          {option.optiontype === "text" && (
+            <input
+              value={option.optiontext}
+              onChange={(event) =>
+                onChangeOption(index, "optiontext", event.target.value)
               }
+              placeholder="텍스트 입력"
+              style={editInputStyle}
             />
           )}
 
-          <input
-            value={option.placeaddress}
-            readOnly
-            placeholder="주소 선택 입력"
-            style={editInputStyle}
-          />
+          {option.optiontype === "date" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <input
+                type="date"
+                value={option.optiondate}
+                onChange={(event) =>
+                  onChangeOption(index, "optiondate", event.target.value)
+                }
+                style={editInputStyle}
+              />
 
-          <input
-            value={option.kakaomapurl}
-            readOnly
-            placeholder="카카오맵 URL 선택 입력"
-            style={editInputStyle}
-          />
+              <button
+                type="button"
+                onClick={() => {
+                  const isAllDay = !option.isallday;
+                  onChangeOption(index, "isallday", isAllDay);
+                  if (isAllDay) {
+                    onChangeOption(index, "starttime", "");
+                    onChangeOption(index, "endtime", "");
+                  }
+                }}
+                style={{
+                  ...smallButtonStyle,
+                  alignSelf: "flex-start",
+                  backgroundColor: option.isallday ? "#333" : "#fff",
+                  color: option.isallday ? "#fff" : "#333",
+                  fontWeight: option.isallday ? "bold" : "normal",
+                }}
+              >
+                하루종일
+              </button>
+
+              {!option.isallday && (
+                <>
+                  <input
+                    type="time"
+                    value={option.starttime}
+                    onChange={(event) =>
+                      onChangeOption(index, "starttime", event.target.value)
+                    }
+                    style={editInputStyle}
+                  />
+                  <input
+                    type="time"
+                    value={option.endtime}
+                    onChange={(event) =>
+                      onChangeOption(index, "endtime", event.target.value)
+                    }
+                    style={editInputStyle}
+                  />
+                  <p style={{ margin: 0, fontSize: "11px", color: "#bbb" }}>
+                    종료시간은 선택사항입니다
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+
+          {option.optiontype === "place" && (
+            <>
+              <input
+                value={option.placename}
+                readOnly
+                placeholder="장소명"
+                style={editInputStyle}
+              />
+
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenPickerIndex((prev) => (prev === index ? null : index))
+                }
+                style={placeSearchButtonStyle}
+              >
+                {openPickerIndex === index ? "장소 검색 닫기" : "카카오맵에서 장소 검색"}
+              </button>
+
+              {openPickerIndex === index && (
+                <LocationPicker
+                  allowMapClick={false}
+                  onSelect={(name, address, place) =>
+                    handleSelectPlace(index, name, address, place)
+                  }
+                />
+              )}
+
+              <input
+                value={option.placeaddress}
+                readOnly
+                placeholder="주소 선택 입력"
+                style={editInputStyle}
+              />
+
+              <input
+                value={option.kakaomapurl}
+                readOnly
+                placeholder="카카오맵 URL 선택 입력"
+                style={editInputStyle}
+              />
+            </>
+          )}
         </div>
       ))}
 
       <button type="button" onClick={onAddOption} style={smallButtonStyle}>
-        후보 추가
+        선택지 추가
       </button>
     </div>
   );

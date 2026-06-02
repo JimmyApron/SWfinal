@@ -147,6 +147,7 @@ export async function getVotes(roomid) {
       endtimeenabled,
       createdat,
       votetype,
+      locationkind,
       isclosed,
       confirmedoptionid,
       scheduleid,
@@ -382,10 +383,23 @@ export async function confirmVote(
         locationVote?.title?.trim() === MIDDLE_PLACE_VOTE_TITLE
       );
 
-    const scheduleId = locationVote?.scheduleid;
+    const scheduleId = locationVote?.locationkind
+      ? locationVote.scheduleid
+      : null;
 
     if (!scheduleId) {
-      throw new Error("대상 일정이 없는 위치 투표입니다.");
+      return {
+        isMiddlePlaceVote,
+        confirmedLocation: {
+          roomid: Number(roomid),
+          voteid: Number(voteid),
+          scheduleid: null,
+          placename: placeName,
+          placeaddress: placeAddress,
+          placelat: placeLat,
+          placelng: placeLng,
+        },
+      };
     }
 
     /**
