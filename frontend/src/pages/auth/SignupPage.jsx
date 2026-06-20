@@ -173,6 +173,8 @@ function SignupPage() {
       setMessageType('success');
       setTimeout(() => navigate('/login'), 2000);
     } catch (error) {
+      
+      
       setMessage(error.message || '회원가입에 실패했습니다.');
       setMessageType('error');
     } finally {
@@ -193,10 +195,11 @@ function SignupPage() {
         <form onSubmit={handleSignup} className="signup-form">
           {/* 이메일 */}
           <div className="signup-field-group">
+            <label className="signup-label">이메일</label>
             <div className="signup-input-wrapper">
               <div style={{ position: 'relative', flex: 1 }}>
                 <FaEnvelope className="signup-icon" />
-                <input type="email" placeholder="이메일을 입력해주세요" className="signup-input" value={email} onChange={handleEmailChange} disabled={emailVerified} aria-label="이메일" />
+                <input type="email" placeholder="이메일 입력" className="signup-input" value={email} onChange={handleEmailChange} disabled={emailVerified} aria-label="이메일" />
               </div>
               <button type="button" onClick={handleCheckEmail} disabled={loading || emailVerified} className="signup-check-button" aria-label="이메일 중복 확인">
                 {emailVerified ? '인증완료' : '중복 확인'}
@@ -212,27 +215,18 @@ function SignupPage() {
             {otpSent && !emailVerified && (
               <div style={{ marginTop: '10px' }}>
                 <div className="signup-input-wrapper">
-                  <div style={{ position: 'relative', flex: 1 }}>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={6}
-                      autoComplete="one-time-code"
-                      placeholder="인증 코드 6자리"
-                      className="signup-input"
-                      style={{ width: '100%', paddingRight: '52px', boxSizing: 'border-box' }}
-                      value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      aria-label="인증 코드"
-                    />
-                    <span style={{
-                      position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
-                      fontSize: '13px', color: timeLeft <= 60 ? '#e53935' : '#888', fontWeight: 'bold'
-                    }}>
-                      {formatTime(timeLeft)}
-                    </span>
-                  </div>
-                  <button type="button" className="signup-check-button" onClick={handleVerifyOtp} disabled={loading || timeLeft === 0}>확인</button>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    autoComplete="one-time-code"
+                    placeholder="인증 코드 6자리"
+                    className="signup-input"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    aria-label="인증 코드"
+                  />
+                  <button type="button" className="signup-check-button" onClick={handleVerifyOtp} disabled={loading}>확인 ({formatTime(timeLeft)})</button>
                 </div>
                 {timeLeft === 0 && (
                   <p style={{ fontSize: '12px', color: '#e53935', textAlign: 'center', marginTop: '5px' }}>
@@ -245,10 +239,11 @@ function SignupPage() {
 
           {/* 닉네임 */}
           <div className="signup-field-group">
+            <label className="signup-label">닉네임</label>
             <div className="signup-input-wrapper">
               <div style={{ position: 'relative', flex: 1 }}>
                 <FaUser className="signup-icon" />
-                <input type="text" placeholder="닉네임을 입력해주세요" className="signup-input" value={nickname} onChange={(e) => { setNickname(e.target.value); setIsNicknameChecked(false); }} disabled={!emailVerified} aria-label="닉네임" />
+                <input type="text" placeholder="닉네임 입력" className="signup-input" value={nickname} onChange={(e) => { setNickname(e.target.value); setIsNicknameChecked(false); }} disabled={!emailVerified} aria-label="닉네임" />
               </div>
               <button type="button" className="signup-check-button" onClick={handleNicknameCheck} disabled={!emailVerified || loading} aria-label="닉네임 중복 확인">
                 중복 확인
@@ -258,9 +253,10 @@ function SignupPage() {
 
           {/* 비밀번호 */}
           <div className="signup-field-group">
+            <label className="signup-label">비밀번호</label>
             <div className="signup-password-wrapper">
               <FaLock className="signup-icon" />
-              <input type={showPassword ? 'text' : 'password'} placeholder="비밀번호를 입력해주세요" className="signup-input" value={password} onChange={(e) => setPassword(e.target.value)} disabled={!emailVerified} aria-label="비밀번호" />
+              <input type={showPassword ? 'text' : 'password'} placeholder="비밀번호 입력" className="signup-input" value={password} onChange={(e) => setPassword(e.target.value)} disabled={!emailVerified} aria-label="비밀번호" />
               <button type="button" className="signup-password-toggle" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 표시하기'}>
                 {showPassword ? <FaEyeSlash size={18} /> : <FaEye size={18} />}
               </button>
@@ -269,9 +265,10 @@ function SignupPage() {
 
           {/* 비밀번호 확인 */}
           <div className="signup-field-group">
+            <label className="signup-label">비밀번호 확인</label>
             <div className="signup-password-wrapper">
               <FaLock className="signup-icon" />
-              <input type={showPasswordCheck ? 'text' : 'password'} placeholder="비밀번호를 다시 입력해주세요" className="signup-input" value={passwordCheck} onChange={(e) => setPasswordCheck(e.target.value)} disabled={!emailVerified} aria-label="비밀번호 확인" />
+              <input type={showPasswordCheck ? 'text' : 'password'} placeholder="비밀번호 재입력" className="signup-input" value={passwordCheck} onChange={(e) => setPasswordCheck(e.target.value)} disabled={!emailVerified} aria-label="비밀번호 확인" />
               <button type="button" className="signup-password-toggle" onClick={() => setShowPasswordCheck(!showPasswordCheck)} aria-label={showPasswordCheck ? '비밀번호 숨기기' : '비밀번호 표시하기'}>
                 {showPasswordCheck ? <FaEyeSlash size={18} /> : <FaEye size={18} />}
               </button>
@@ -284,17 +281,9 @@ function SignupPage() {
 
         {message && <div className={`message-area message-${messageType}`}>{message}</div>}
 
-        <div className="signup-divider" aria-hidden="true">
-          <span className="signup-divider-line" />
-          <span className="signup-divider-text">또는</span>
-          <span className="signup-divider-line" />
-        </div>
-
         <div className="signup-login-row">
           <span>이미 계정이 있으신가요?</span>
-          <button type="button" onClick={() => navigate('/login')} className="signup-login-link">
-            로그인
-          </button>
+          <button type="button" onClick={() => navigate('/login')}>로그인</button>
         </div>
       </section>
     </div>
