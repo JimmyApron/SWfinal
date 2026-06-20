@@ -1,8 +1,17 @@
 import { useEffect, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
-import { FaHome, FaCalendarAlt, FaBell, FaCog } from "react-icons/fa";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import {
+  FaBell,
+  FaCalendarAlt,
+  FaCog,
+  FaComments,
+  FaHome,
+  FaMapMarkerAlt,
+  FaVoteYea,
+} from "react-icons/fa";
 import { supabase } from "../lib/supabaseClient";
 import {
+  TAB_TYPE_MAP,
   getUnreadNotificationCount,
   getUnreadGuestNotificationCount,
 } from "../api/notificationApi";
@@ -10,10 +19,21 @@ import "./BottomNav.css";
 
 function BottomNav() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [currentUserId, setCurrentUserId] = useState(null);
   const [isGuestUser, setIsGuestUser] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [roomUnreadTabs, setRoomUnreadTabs] = useState({
+    schedule: false,
+    location: false,
+    vote: false,
+    chat: false,
+  });
   const [showGuestModal, setShowGuestModal] = useState(false);
+  const roomMatch = location.pathname.match(/^\/rooms\/([^/]+)$/);
+  const roomId = roomMatch?.[1] ?? null;
+  const isRoomPage = Boolean(roomId);
+  const currentRoomTab = new URLSearchParams(location.search).get("tab") || "schedule";
 
   useEffect(() => {
     const loadUserAndCount = async (userParam) => {
@@ -94,6 +114,51 @@ function BottomNav() {
     };
   }, [currentUserId, isGuestUser]);
 
+  useEffect(() => {
+    if (!isRoomPage || !roomId || !currentUserId) return;
+
+    const reloadRoomUnreadTabs = async () => {
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("type, isread, issilent")
+        .eq("roomid", Number(roomId))
+        .eq("receiverid", currentUserId)
+        .or("isread.is.null,isread.eq.false");
+
+      if (error) {
+        console.error("방 탭 알림 조회 실패:", error);
+        return;
+      }
+
+      setRoomUnreadTabs({
+        schedule: data?.some((n) => n.issilent !== true && TAB_TYPE_MAP.schedule.includes(n.type)) ?? false,
+        location: data?.some((n) => n.issilent !== true && TAB_TYPE_MAP.location.includes(n.type)) ?? false,
+        vote: data?.some((n) => n.issilent !== true && TAB_TYPE_MAP.vote.includes(n.type)) ?? false,
+        chat: data?.some((n) => n.issilent !== true && TAB_TYPE_MAP.chat.includes(n.type)) ?? false,
+      });
+    };
+
+    reloadRoomUnreadTabs();
+
+    const channel = supabase
+      .channel(`bottom-room-tabs-${roomId}-${currentUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `receiverid=eq.${currentUserId}`,
+        },
+        reloadRoomUnreadTabs
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isRoomPage, roomId, currentUserId]);
+
   const displayCount = unreadCount > 9 ? "9+" : `${unreadCount}`;
 
   const handleRestrictedClick = async (e, path) => {
@@ -108,34 +173,66 @@ function BottomNav() {
     setShowGuestModal(true);
   };
 
+  const handleRoomTabClick = (tab) => {
+    navigate(`/rooms/${roomId}?tab=${tab}`);
+  };
+
+  const roomNavItems = [
+    { key: "schedule", label: "일정", icon: FaCalendarAlt },
+    { key: "location", label: "위치", icon: FaMapMarkerAlt },
+    { key: "vote", label: "투표", icon: FaVoteYea },
+    { key: "chat", label: "채팅", icon: FaComments },
+  ];
+
   return (
     <>
-      <nav className="bottom-nav">
-        <NavLink to="/home" className="bottom-nav-item" onClick={(e) => handleRestrictedClick(e, "/home")}>
-          <FaHome />
-          <span>홈</span>
-        </NavLink>
+      {isRoomPage ? (
+        <nav className="bottom-nav bottom-nav-room">
+          {roomNavItems.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              className={`bottom-nav-item bottom-nav-tab-button ${
+                currentRoomTab === key ? "active" : ""
+              }`}
+              onClick={() => handleRoomTabClick(key)}
+            >
+              <div className="bottom-nav-icon-wrap">
+                <Icon />
+                {roomUnreadTabs[key] && <span className="bottom-nav-dot" />}
+              </div>
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+      ) : (
+        <nav className="bottom-nav">
+          <NavLink to="/home" className="bottom-nav-item" onClick={(e) => handleRestrictedClick(e, "/home")}>
+            <FaHome />
+            <span>홈</span>
+          </NavLink>
 
-        <NavLink to="/calendar" className="bottom-nav-item" onClick={(e) => handleRestrictedClick(e, "/calendar")}>
-          <FaCalendarAlt />
-          <span>캘린더</span>
-        </NavLink>
+          <NavLink to="/calendar" className="bottom-nav-item" onClick={(e) => handleRestrictedClick(e, "/calendar")}>
+            <FaCalendarAlt />
+            <span>캘린더</span>
+          </NavLink>
 
-        <NavLink to="/notifications" className="bottom-nav-item">
-          <div className="bottom-nav-icon-wrap">
-            <FaBell />
-            {unreadCount > 0 && (
-              <span className="bottom-nav-badge">{displayCount}</span>
-            )}
-          </div>
-          <span>알림</span>
-        </NavLink>
+          <NavLink to="/notifications" className="bottom-nav-item">
+            <div className="bottom-nav-icon-wrap">
+              <FaBell />
+              {unreadCount > 0 && (
+                <span className="bottom-nav-badge">{displayCount}</span>
+              )}
+            </div>
+            <span>알림</span>
+          </NavLink>
 
-        <NavLink to="/settings" className="bottom-nav-item" onClick={(e) => handleRestrictedClick(e, "/settings")}>
-          <FaCog />
-          <span>설정</span>
-        </NavLink>
-      </nav>
+          <NavLink to="/settings" className="bottom-nav-item" onClick={(e) => handleRestrictedClick(e, "/settings")}>
+            <FaCog />
+            <span>설정</span>
+          </NavLink>
+        </nav>
+      )}
 
       {showGuestModal && (
         <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>

@@ -11,6 +11,13 @@ function PlaceSearchPanel({
   onSelectPlace,
   onSharePlace,
   onCreateAdditionalPlaceVote,
+  variant = 'panel',
+  onResultStateChange,
+  sheetSnap = 'collapsed',
+  sheetStyle,
+  sheetDragProps = {},
+  sheetHandleProps = {},
+  onOpenFriends,
 }) {
   const [selectedCategory, setSelectedCategory] = useState('restaurant')
   const [radius, setRadius] = useState('1000')
@@ -19,6 +26,14 @@ function PlaceSearchPanel({
   const [places, setPlaces] = useState([])
   const [selectedPlaceIds, setSelectedPlaceIds] = useState([])
   const [message, setMessage] = useState('')
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
+
+  const handleChangeCategory = (category) => {
+    setSelectedCategory(category)
+    if (variant === 'mapOverlay') {
+      setIsFilterOpen(true)
+    }
+  }
 
   const handleSearchPlaces = async () => {
     if (!searchLocation) {
@@ -27,7 +42,7 @@ function PlaceSearchPanel({
     }
 
     try {
-      setMessage('확정된 중간 장소 주변에서 장소를 검색하고, 구글맵 평점 정보를 불러오는 중입니다.')
+      setMessage('')
 
       const kakaoPlaces = await searchNearbyPlaces({
         lat: searchLocation.lat,
@@ -63,11 +78,15 @@ function PlaceSearchPanel({
       setPlaces(filteredPlaces)
       setSelectedPlaceIds(filteredPlaces.map((place) => String(place.id)))
       onSearchResult(filteredPlaces)
+      onResultStateChange?.(filteredPlaces.length > 0)
+      if (variant === 'mapOverlay') {
+        setIsFilterOpen(false)
+      }
 
       if (filteredPlaces.length === 0) {
         setMessage('조건에 맞는 장소가 없습니다. 거리 반경을 넓히거나 별점/리뷰 조건을 바꿔보세요.')
       } else {
-        setMessage(`검색 완료: ${filteredPlaces.length}개`)
+        setMessage('')
       }
     } catch (error) {
       console.error('장소 검색 오류:', error)
@@ -99,7 +118,7 @@ function PlaceSearchPanel({
 
   if (!searchLocation) {
     return (
-      <section>
+      <section className={variant === 'mapOverlay' ? 'map-place-search-panel is-empty' : undefined}>
         <h2>주변 장소 추천</h2>
         <p>
           먼저 유명 중간 장소를 추천받고, 그중 하나를 중간 장소로 확정해주세요.
@@ -110,50 +129,92 @@ function PlaceSearchPanel({
   }
 
   return (
-    <section>
-      <h2>확정된 중간 장소 주변 추천</h2>
+    <section className={variant === 'mapOverlay' ? 'map-place-search-panel' : undefined}>
+      <div className={variant === 'mapOverlay' ? 'map-search-control-card' : undefined}>
+        {variant !== 'mapOverlay' && <h2>확정된 중간 장소 주변 추천</h2>}
 
-      <p>
-        기준 장소: {searchLocation.name || '확정된 중간 장소'}
-      </p>
+        {variant !== 'mapOverlay' && (
+          <p>
+            기준 장소: {searchLocation.name || '확정된 중간 장소'}
+          </p>
+        )}
 
-      <PlaceCategoryTabs
-        selectedCategory={selectedCategory}
-        onChangeCategory={setSelectedCategory}
-      />
+        <div className="map-category-strip">
+          {variant === 'mapOverlay' && onOpenFriends && (
+            <button
+              type="button"
+              className="map-friend-chip"
+              onClick={onOpenFriends}
+            >
+              친구위치
+            </button>
+          )}
+          <PlaceCategoryTabs
+            selectedCategory={selectedCategory}
+            onChangeCategory={handleChangeCategory}
+          />
+        </div>
 
-      <PlaceFilter
-        radius={radius}
-        ratingFilter={ratingFilter}
-        reviewCountFilter={reviewCountFilter}
-        onChangeRadius={setRadius}
-        onChangeRatingFilter={setRatingFilter}
-        onChangeReviewCountFilter={setReviewCountFilter}
-      />
+        {(variant !== 'mapOverlay' || isFilterOpen) && (
+          <div className={variant === 'mapOverlay' ? 'map-filter-popover' : undefined}>
+            <PlaceFilter
+              radius={radius}
+              ratingFilter={ratingFilter}
+              reviewCountFilter={reviewCountFilter}
+              onChangeRadius={setRadius}
+              onChangeRatingFilter={setRatingFilter}
+              onChangeReviewCountFilter={setReviewCountFilter}
+            />
 
-      <p style={{ fontSize: '13px', color: '#666' }}>
-        거리 반경은 카카오맵 장소 검색 기준이고, 별점과 리뷰 수는 구글맵 기준입니다.
-      </p>
+            {variant !== 'mapOverlay' && (
+              <p style={{ fontSize: '13px', color: '#666' }}>
+                거리 반경은 카카오맵 장소 검색 기준이고, 별점과 리뷰 수는 구글맵 기준입니다.
+              </p>
+            )}
 
-      <button type="button" onClick={handleSearchPlaces}>
-        중간 장소 주변 검색
-      </button>
+            <div className="map-filter-actions">
+              {variant === 'mapOverlay' && (
+                <button type="button" onClick={() => setIsFilterOpen(false)}>
+                  닫기
+                </button>
+              )}
+              <button type="button" onClick={handleSearchPlaces}>
+                검색하기
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {message && <p>{message}</p>}
 
-      {places.length > 0 && onCreateAdditionalPlaceVote && (
-        <button type="button" onClick={handleCreateVote}>
-          선택한 장소로 추가 장소 투표 만들기
-        </button>
+      {places.length > 0 && (
+        <div
+          className={variant === 'mapOverlay' ? `map-bottom-sheet map-results-sheet is-${sheetSnap}` : undefined}
+          style={variant === 'mapOverlay' ? sheetStyle : undefined}
+          {...(variant === 'mapOverlay' ? sheetDragProps : {})}
+        >
+          {variant === 'mapOverlay' && <div className="map-sheet-handle" {...sheetHandleProps} />}
+          <div className="map-sheet-header">
+            <div>
+              <strong>검색 결과</strong>
+              <span>{places.length}개 장소</span>
+            </div>
+            {onCreateAdditionalPlaceVote && (
+              <button type="button" onClick={handleCreateVote}>
+                추가 장소 투표 만들기
+              </button>
+            )}
+          </div>
+          <PlaceList
+            places={places}
+            onSelectPlace={onSelectPlace}
+            onSharePlace={onSharePlace}
+            selectedPlaceIds={selectedPlaceIds}
+            onToggleVotePlace={onCreateAdditionalPlaceVote ? handleToggleVotePlace : null}
+          />
+        </div>
       )}
-
-      <PlaceList
-        places={places}
-        onSelectPlace={onSelectPlace}
-        onSharePlace={onSharePlace}
-        selectedPlaceIds={selectedPlaceIds}
-        onToggleVotePlace={onCreateAdditionalPlaceVote ? handleToggleVotePlace : null}
-      />
     </section>
   )
 }

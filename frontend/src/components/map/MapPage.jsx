@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 
 import KakaoMapView from './KakaoMapView'
@@ -53,6 +53,7 @@ function MapPage({ roomId }) {
   const [middlePlace, setMiddlePlace] = useState(null)
   const [memberRouteResults, setMemberRouteResults] = useState([])
   const [memberRoutePaths, setMemberRoutePaths] = useState([])
+  const [memberLocationLabels, setMemberLocationLabels] = useState({})
 
   const [message, setMessage] = useState('')
   const [shareToast, setShareToast] = useState('')
@@ -67,6 +68,18 @@ function MapPage({ roomId }) {
   const [createdLocationOnlySchedule, setCreatedLocationOnlySchedule] = useState(null)
   const [transportModePrompt, setTransportModePrompt] = useState(null)
   const [showDepartureLocationPicker, setShowDepartureLocationPicker] = useState(false)
+  const [showLocationRegisterModal, setShowLocationRegisterModal] = useState(false)
+  const [showCancelDepartureConfirm, setShowCancelDepartureConfirm] = useState(false)
+  const [activeMapPanel, setActiveMapPanel] = useState('default')
+  const [hasSearchResultsSheet, setHasSearchResultsSheet] = useState(false)
+  const [sheetSnap, setSheetSnap] = useState('collapsed')
+  const [sheetDragOffset, setSheetDragOffset] = useState(0)
+  const [showParticipantLocationPanel, setShowParticipantLocationPanel] = useState(false)
+  const [friendMapFitRequest, setFriendMapFitRequest] = useState(0)
+  const [mapCenterRequest, setMapCenterRequest] = useState(1)
+  const [mapCenterLevel, setMapCenterLevel] = useState(4)
+  const sheetDragStartRef = useRef(null)
+  const lastDefaultCenterKeyRef = useRef('')
   const selectedSchedule = roomConfirmedSchedules.find(
     (schedule) => Number(schedule.id) === Number(selectedScheduleId)
   )
@@ -551,6 +564,7 @@ function MapPage({ roomId }) {
 
     setCurrentLocation(location)
     setShowDepartureLocationPicker(false)
+    setShowLocationRegisterModal(false)
     setTransportModePrompt({ location, isEdit: false, source: 'manual' })
     setMessage('이동수단을 입력하세요.')
   }
@@ -574,23 +588,11 @@ function MapPage({ roomId }) {
       }
 
       if (transportModePrompt.source === 'manual') {
-        setMessage(
-          middlePlace
-            ? '출발 위치와 이동수단을 저장하고 경로를 다시 계산했습니다.'
-            : '출발 위치와 이동수단을 저장했습니다.'
-        )
+        setMessage('')
         return
       }
 
-      setMessage(
-        transportModePrompt.isEdit
-          ? middlePlace
-            ? '이동수단을 수정하고 경로를 다시 계산했습니다.'
-            : '이동수단을 수정했습니다.'
-          : middlePlace
-          ? '현재 위치와 이동수단을 저장하고 경로를 다시 계산했습니다.'
-          : '현재 위치와 이동수단을 저장했습니다.'
-      )
+      setMessage('')
     } catch (error) {
       console.error('이동수단 저장 오류:', error)
       setMessage('이동수단을 저장하지 못했습니다.')
@@ -648,6 +650,82 @@ function MapPage({ roomId }) {
 
       await loadMemberLocations()
     }
+  }
+
+  const getSavedLocationSnapshot = () => {
+    if (isValidMapPoint(currentLocation?.lat, currentLocation?.lng)) {
+      return currentLocation
+    }
+
+    if (isValidMapPoint(myLocationRecord?.latitude, myLocationRecord?.longitude)) {
+      return {
+        lat: Number(myLocationRecord.latitude),
+        lng: Number(myLocationRecord.longitude),
+        accuracy: myLocationRecord.accuracy ?? null,
+      }
+    }
+
+    return null
+  }
+
+  const handleCancelDeparture = async () => {
+    if (!currentUserId && !currentGuestId) {
+      setMessage('로그인 또는 게스트 정보를 찾을 수 없습니다.')
+      return
+    }
+
+    if (!currentRoomId) {
+      setMessage('방 정보를 찾을 수 없습니다.')
+      return
+    }
+
+    try {
+      setMessage('출발을 취소하는 중입니다.')
+
+      const location = getSavedLocationSnapshot()
+
+      await saveCurrentUserLocation(location, {
+        isDeparted: false,
+        departedAt: null,
+        arrivedAt: null,
+        locationStatus: 'idle',
+        locationError: null,
+      })
+
+      try {
+        await updateLocationStatus({
+          roomId: currentRoomId,
+          scheduleId: selectedScheduleId,
+          userId: currentUserId,
+          guestId: currentGuestId,
+          status: 'idle',
+          isDeparted: false,
+        })
+      } catch (statusError) {
+        console.warn('출발 취소 보조 업데이트 실패:', statusError)
+      }
+
+      setLocationUpdateError('')
+      await loadMemberLocations()
+
+      if (middlePlace) {
+        await calculateAllMemberRoutesToMiddlePlace(middlePlace, { silent: true })
+      }
+
+      setMessage('출발을 취소했습니다.')
+    } catch (error) {
+      console.error('출발 취소 실패:', error)
+      setMessage('출발 취소 중 오류가 발생했습니다.')
+    }
+  }
+
+  const handleDepartureButtonClick = () => {
+    if (isTracking) {
+      setShowCancelDepartureConfirm(true)
+      return
+    }
+
+    handleStartDeparture()
   }
 
   const handleStartDeparture = async () => {
@@ -913,20 +991,20 @@ function MapPage({ roomId }) {
     }
   }
 
-  const calculateAllMemberRoutesToMiddlePlace = async (place) => {
+  const calculateAllMemberRoutesToMiddlePlace = async (place, options = {}) => {
+    const { silent = false } = options
+
     if (!place) {
-      setMessage('중간 장소 정보가 없습니다.')
+      if (!silent) setMessage('중간 장소 정보가 없습니다.')
       return
     }
 
     const latestLocations = await loadMemberLocations()
 
     if (!latestLocations || latestLocations.length === 0) {
-      setMessage('멤버 위치 정보가 없습니다.')
+      if (!silent) setMessage('멤버 위치 정보가 없습니다.')
       return
     }
-
-    setMessage('모든 멤버의 경로와 이동시간을 계산하는 중입니다.')
 
     const routeResults = []
     const routePaths = []
@@ -1036,11 +1114,11 @@ function MapPage({ roomId }) {
     setMemberRoutePaths(routePaths)
 
     if (routeResults.some((result) => result.error)) {
-      setMessage('일부 멤버의 경로 계산에 실패했지만 위치 정보는 표시합니다.')
+      if (!silent) setMessage('일부 멤버의 경로 계산에 실패했지만 위치 정보는 표시합니다.')
       return
     }
 
-    setMessage('중간 장소까지 모든 멤버의 이동시간과 경로를 계산했습니다.')
+    if (!silent) setMessage('')
   }
 
   const getCarRoutePath = async ({ origin, destination }) => {
@@ -1377,15 +1455,6 @@ function MapPage({ roomId }) {
     setMessage(`${place.name}을(를) 목적지로 설정했습니다.`)
   }
 
-  const handleRefreshMemberRoutes = async () => {
-    if (!middlePlace) {
-      setMessage('먼저 중간 장소를 확정해주세요.')
-      return
-    }
-
-    await calculateAllMemberRoutesToMiddlePlace(middlePlace)
-  }
-
   const handleCreateDraftSchedule = async () => {
     if (!newScheduleTitle.trim()) {
       setNewScheduleTitleError('일정 이름을 입력해 주세요.')
@@ -1411,6 +1480,289 @@ function MapPage({ roomId }) {
       setNewScheduleTitleError(error.message)
     }
   }
+
+  const isFriendPanelOpen = activeMapPanel === 'friends'
+  const mapMemberLocations = isFriendPanelOpen ? registeredMemberLocations : []
+  const mapMemberRoutePaths = isFriendPanelOpen ? memberRoutePaths : []
+  const registeredMemberCount = members.filter(isMemberLocationRegistered).length
+  const myLocationStatusLabel = getLocationStatusLabel(myLocationRecord)
+  const routeAutoRecalculateSignature = [
+    selectedScheduleId || '',
+    middlePlace?.lat || '',
+    middlePlace?.lng || '',
+    registeredMemberLocations
+      .map((location) => [
+        location.userid || '',
+        location.guestid || '',
+        location.latitude || '',
+        location.longitude || '',
+        location.transportmode || '',
+        location.isdeparted ? 'departed' : '',
+        location.arrivedat || '',
+        location.locationstatus || '',
+        location.lastlocationupdatedat || '',
+      ].join(':'))
+      .sort()
+      .join('|'),
+  ].join('::')
+  const memberLocationLabelSignature = registeredMemberLocations
+    .map((location) => [
+      location.userid || '',
+      location.guestid || '',
+      location.latitude || '',
+      location.longitude || '',
+      getRegisteredLocationLabel(location),
+    ].join(':'))
+    .sort()
+    .join('|')
+  const defaultMapCenter = getDefaultMapCenter({
+    middlePlace,
+    myLocationRecord,
+  })
+
+  const openFriendsPanel = () => {
+    setActiveMapPanel('friends')
+    setHasSearchResultsSheet(false)
+    setShowParticipantLocationPanel(false)
+    setSheetSnap('collapsed')
+    setFriendMapFitRequest((request) => request + 1)
+    if (middlePlace) calculateAllMemberRoutesToMiddlePlace(middlePlace)
+  }
+
+  const closeFriendsPanel = () => {
+    setActiveMapPanel('default')
+    setShowParticipantLocationPanel(false)
+    setSheetSnap('collapsed')
+    setMapCenterLevel(5)
+    setMapCenterRequest((request) => request + 1)
+  }
+
+  const handleCloseFriendsPanel = (event) => {
+    if (event?.button !== undefined && event.button !== 0) return
+    event?.preventDefault()
+    event?.stopPropagation()
+    sheetDragStartRef.current = null
+    setSheetDragOffset(0)
+    closeFriendsPanel()
+  }
+
+  const toggleSheetSnap = () => {
+    setSheetSnap((current) => (current === 'expanded' ? 'collapsed' : 'expanded'))
+  }
+
+  const getSheetDragLimits = (snap) => {
+    if (snap === 'expanded') {
+      return { min: 0, max: 640 }
+    }
+
+    if (snap === 'hidden') {
+      return { min: -640, max: 0 }
+    }
+
+    return { min: -640, max: 640 }
+  }
+
+  const handleSheetPointerDown = (event) => {
+    if (event.button !== undefined && event.button !== 0) return
+    if (isInteractiveSheetTarget(event.target)) return
+
+    const sheetRect = event.currentTarget.getBoundingClientRect()
+    const dragZoneHeight = sheetSnap === 'expanded' ? 140 : 170
+
+    if (event.clientY - sheetRect.top > dragZoneHeight) return
+
+    sheetDragStartRef.current = {
+      y: event.clientY,
+      snap: sheetSnap,
+    }
+
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+
+  const handleSheetPointerMove = (event) => {
+    const start = sheetDragStartRef.current
+    if (!start) return
+
+    const deltaY = event.clientY - start.y
+    const limits = getSheetDragLimits(start.snap)
+    const nextOffset = Math.max(limits.min, Math.min(limits.max, deltaY))
+
+    setSheetDragOffset(nextOffset)
+  }
+
+  const handleSheetPointerUp = (event) => {
+    const start = sheetDragStartRef.current
+    sheetDragStartRef.current = null
+    setSheetDragOffset(0)
+
+    event.currentTarget.releasePointerCapture?.(event.pointerId)
+
+    if (!start) return
+
+    const deltaY = event.clientY - start.y
+
+    if (Math.abs(deltaY) < 8) {
+      toggleSheetSnap()
+      return
+    }
+
+    if (deltaY < -80) {
+      setSheetSnap('expanded')
+      return
+    }
+
+    if (deltaY > 110) {
+      setSheetSnap('hidden')
+      return
+    }
+
+    setSheetSnap(start.snap === 'expanded' ? 'collapsed' : start.snap)
+  }
+
+  const handleSheetPointerCancel = (event) => {
+    sheetDragStartRef.current = null
+    setSheetDragOffset(0)
+    event.currentTarget.releasePointerCapture?.(event.pointerId)
+  }
+
+  const sheetDragProps = {
+    onPointerDown: handleSheetPointerDown,
+    onPointerMove: handleSheetPointerMove,
+    onPointerUp: handleSheetPointerUp,
+    onPointerCancel: handleSheetPointerCancel,
+  }
+
+  const sheetHandleProps = {
+    role: 'button',
+    tabIndex: 0,
+    'aria-label': sheetSnap === 'expanded' ? '패널 내리기' : '패널 올리기',
+    onPointerDown: (event) => {
+      event.stopPropagation()
+      handleSheetPointerDown(event)
+    },
+    onPointerMove: (event) => {
+      event.stopPropagation()
+      handleSheetPointerMove(event)
+    },
+    onPointerUp: (event) => {
+      event.stopPropagation()
+      handleSheetPointerUp(event)
+    },
+    onPointerCancel: (event) => {
+      event.stopPropagation()
+      handleSheetPointerCancel(event)
+    },
+    onKeyDown: (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        toggleSheetSnap()
+      }
+    },
+  }
+  const sheetStyle = {
+    '--sheet-drag-offset': `${sheetDragOffset}px`,
+  }
+
+  useEffect(() => {
+    if (!isFriendPanelOpen || !middlePlace || registeredMemberLocations.length === 0) return
+
+    const timeoutId = setTimeout(() => {
+      calculateAllMemberRoutesToMiddlePlace(middlePlace, { silent: true })
+    }, 250)
+
+    return () => {
+      clearTimeout(timeoutId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFriendPanelOpen, routeAutoRecalculateSignature])
+
+  useEffect(() => {
+    if (!isFriendPanelOpen || registeredMemberLocations.length === 0) return
+
+    let isCancelled = false
+    const geocoder =
+      window.kakao?.maps?.services
+        ? new window.kakao.maps.services.Geocoder()
+        : null
+
+    const getCoordinateLabel = (location) => {
+      const lat = Number(location.latitude)
+      const lng = Number(location.longitude)
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return '좌표 정보 없음'
+      }
+
+      return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
+    }
+
+    const resolveLocationLabel = (location) =>
+      new Promise((resolve) => {
+        const savedLabel = getRegisteredLocationLabel(location)
+
+        if (savedLabel) {
+          resolve(savedLabel)
+          return
+        }
+
+        const lat = Number(location.latitude)
+        const lng = Number(location.longitude)
+
+        if (!Number.isFinite(lat) || !Number.isFinite(lng) || !geocoder) {
+          resolve(getCoordinateLabel(location))
+          return
+        }
+
+        geocoder.coord2Address(lng, lat, (result, status) => {
+          if (status === window.kakao.maps.services.Status.OK) {
+            const road = result?.[0]?.road_address?.address_name || ''
+            const jibun = result?.[0]?.address?.address_name || ''
+            resolve(road || jibun || getCoordinateLabel(location))
+            return
+          }
+
+          resolve(getCoordinateLabel(location))
+        })
+      })
+
+    Promise.all(
+      registeredMemberLocations.map(async (location) => [
+        location.userid || location.guestid || location.id,
+        await resolveLocationLabel(location),
+      ])
+    ).then((entries) => {
+      if (isCancelled) return
+      setMemberLocationLabels(Object.fromEntries(entries))
+    })
+
+    return () => {
+      isCancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFriendPanelOpen, memberLocationLabelSignature])
+
+  useEffect(() => {
+    if (isFriendPanelOpen || !selectedScheduleId) return
+
+    const centerKey = [
+      selectedScheduleId,
+      defaultMapCenter.lat,
+      defaultMapCenter.lng,
+      middlePlace?.lat ? 'meeting' : 'fallback',
+    ].join(':')
+
+    if (lastDefaultCenterKeyRef.current === centerKey) return
+
+    lastDefaultCenterKeyRef.current = centerKey
+    setMapCenterLevel(4)
+    setMapCenterRequest((request) => request + 1)
+  }, [
+    defaultMapCenter.lat,
+    defaultMapCenter.lng,
+    isFriendPanelOpen,
+    middlePlace?.lat,
+    selectedScheduleId,
+  ])
 
   return (
     <section className="map-section">
@@ -1452,7 +1804,19 @@ function MapPage({ roomId }) {
             {roomConfirmedSchedules.map((schedule) => (
               <button
                 key={schedule.id}
-                onClick={() => setSelectedScheduleId(schedule.id)}
+                onClick={() => {
+                  setSelectedScheduleId(schedule.id)
+                  setMiddlePlace(null)
+                  setSelectedPlace(null)
+                  setDestination(null)
+                  setPlaces([])
+                  setMemberRouteResults([])
+                  setMemberRoutePaths([])
+                  setHasSearchResultsSheet(false)
+                  setActiveMapPanel('default')
+                  setMapCenterLevel(4)
+                  setMapCenterRequest((request) => request + 1)
+                }}
                 style={{
                   padding: '8px 16px',
                   borderRadius: '20px',
@@ -1466,7 +1830,6 @@ function MapPage({ roomId }) {
                 }}
               >
                 {schedule.title || '제목 없음'}
-                {schedule.date ? ` (${schedule.date.slice(5)})` : ''}
               </button>
             ))}
           </div>
@@ -1579,6 +1942,32 @@ function MapPage({ roomId }) {
                 }}
               >
                 취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCancelDepartureConfirm && (
+        <div className="transport-mode-overlay">
+          <div className="departure-cancel-dialog">
+            <h3>출발을 취소할까요?</h3>
+            <p>취소하면 내 상태가 미출발로 바뀌고 위치 자동 갱신이 멈춰요.</p>
+            <div className="departure-cancel-actions">
+              <button
+                type="button"
+                onClick={() => setShowCancelDepartureConfirm(false)}
+              >
+                계속 출발
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCancelDepartureConfirm(false)
+                  handleCancelDeparture()
+                }}
+              >
+                출발 취소
               </button>
             </div>
           </div>
@@ -1742,347 +2131,408 @@ function MapPage({ roomId }) {
         </div>
       )}
 
-      {selectedScheduleId && (
-        <>
-          <div className="location-action-bar" style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
-            <button 
-              type="button" 
-              onClick={handleCurrentLocation}
-              style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#eef2ff', color: '#4f46e5', fontWeight: 'bold', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-            >
-              📡 현재 위치로 설정
-            </button>
+      {showLocationRegisterModal && (
+        <div className="transport-mode-overlay">
+          <div className="location-register-dialog">
+            <div className="map-sheet-handle" />
+            <h3>내 위치 등록</h3>
+            <p>위치를 등록할 방법을 선택해주세요.</p>
+
+            {!showDepartureLocationPicker ? (
+              <div className="location-register-options">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setShowLocationRegisterModal(false)
+                    await handleCurrentLocation()
+                  }}
+                >
+                  <span className="location-register-icon">⌖</span>
+                  <span>
+                    <strong>현재 위치로 등록</strong>
+                    <small>GPS를 이용해 현재 위치를 불러옵니다.</small>
+                  </span>
+                  <b>›</b>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDepartureLocationPicker(true)}
+                >
+                  <span className="location-register-icon">⌨</span>
+                  <span>
+                    <strong>직접 입력해서 등록</strong>
+                    <small>장소명이나 주소를 검색해 등록합니다.</small>
+                  </span>
+                  <b>›</b>
+                </button>
+              </div>
+            ) : (
+              <div className="location-register-search">
+                <LocationPicker
+                  mapHeight="220px"
+                  onSelect={handleSelectDepartureLocation}
+                />
+              </div>
+            )}
+
             <button
               type="button"
-              onClick={() => setShowDepartureLocationPicker((isVisible) => !isVisible)}
-              style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: showDepartureLocationPicker ? '#7c79ff' : '#f3f4f6', color: showDepartureLocationPicker ? 'white' : '#374151', fontWeight: 'bold', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+              className="location-register-cancel"
+              onClick={() => {
+                setShowLocationRegisterModal(false)
+                setShowDepartureLocationPicker(false)
+              }}
             >
-              🔍 출발지 직접 입력
+              취소
             </button>
           </div>
+        </div>
+      )}
 
-          {showDepartureLocationPicker && (
-            <div className="departure-location-search" style={{ 
-              marginBottom: '16px', 
-              padding: '16px', 
-              backgroundColor: 'var(--card-bg)', 
-              borderRadius: '16px', 
-              border: '2px solid #7c79ff' 
-            }}>
-              <strong style={{ display: 'block', marginBottom: '12px', fontSize: '14px' }}>🏠 출발 위치 직접 검색</strong>
+      {selectedScheduleId && (
+        <div className="map-experience">
+          <KakaoMapView
+            className="map-fullscreen-view"
+            height="100%"
+            currentLocation={currentLocation}
+            memberLocations={mapMemberLocations}
+            places={places}
+            selectedPlace={selectedPlace}
+            destination={destination}
+            memberRoutePaths={mapMemberRoutePaths}
+            fitBoundsRequest={isFriendPanelOpen ? friendMapFitRequest : 0}
+            centerRequest={!isFriendPanelOpen ? mapCenterRequest : 0}
+            centerLevel={mapCenterLevel}
+            preferredCenter={!isFriendPanelOpen ? defaultMapCenter : null}
+            onSetMeetingPlace={handleSetMeetingPlace}
+          />
+
+          {!isFriendPanelOpen && (
+            <div className="map-floating-search">
               <LocationPicker
-                mapHeight="200px"
-                onSelect={handleSelectDepartureLocation}
+                allowMapClick={false}
+                showMap={false}
+                placeholder={
+                  middlePlace
+                    ? `${middlePlace.name || '확정된 중간 장소'}`
+                    : '장소 검색 (예: 홍대입구역)'
+                }
+                onSelect={(name, address, place = {}) => {
+                  const selected = {
+                    ...place,
+                    name,
+                    address: address || place.address || '',
+                  }
+
+                  setActiveMapPanel('default')
+                  handleSelectPlace(selected)
+                  setPlaces([selected])
+                }}
               />
             </div>
           )}
 
-          <div className="location-box" style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'var(--card-bg)', marginBottom: '16px', border: '1px solid var(--border-color)' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '12px', fontSize: '15px' }}>🚗 내 출발 상태</h3>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <span style={{ 
-                padding: '4px 12px', 
-                borderRadius: '20px', 
-                backgroundColor: isTracking ? '#dcfce7' : '#f3f4f6', 
-                color: isTracking ? '#166534' : '#374151',
-                fontSize: '13px',
-                fontWeight: 'bold'
-              }}>
-                {getLocationStatusLabel(myLocationRecord)}
-              </span>
-              
-              {myLocationRecord?.transportmode && (
-                <button 
-                  type="button" 
-                  onClick={handleEditTransportMode}
-                  style={{ fontSize: '12px', color: '#7c79ff', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
-                >
-                  교통수단 수정 ({getModeLabel(myLocationRecord.transportmode)})
-                </button>
+          {isFriendPanelOpen && (
+            <div className="map-participant-layer">
+              <button
+                type="button"
+                className="participant-location-toggle"
+                onClick={() => setShowParticipantLocationPanel((previous) => !previous)}
+              >
+                <span>👥 {registeredMemberCount}/{members.length || 0}</span>
+                <b>{showParticipantLocationPanel ? '⌃' : '⌄'}</b>
+              </button>
+
+              {showParticipantLocationPanel && (
+                <div className="participant-location-dialog">
+                  <div className="participant-location-header">
+                    <strong>멤버 위치 등록 현황</strong>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        members
+                          .filter((member) => !isMemberLocationRegistered(member))
+                          .forEach((member) => handleRequestLocation(member))
+                      }}
+                    >
+                      미등록자 전체 요청
+                    </button>
+                  </div>
+
+                  <div className="participant-location-list">
+                    {members.map((member) => {
+                      const isRegistered = isMemberLocationRegistered(member)
+                      const isMe =
+                        (member.userid && member.userid === currentUserId) ||
+                        (member.guestid && member.guestid === currentGuestId)
+                      const canRequestLocation = Boolean(member.userid || member.guestid)
+
+                      return (
+                        <div className="participant-location-row" key={getMemberKey(member)}>
+                          <div className="friend-avatar">👤</div>
+                          <strong>{member.nickname || '닉네임 없음'}</strong>
+                          {isRegistered ? (
+                            <b>완료</b>
+                          ) : !isMe && canRequestLocation ? (
+                            <button type="button" onClick={() => handleRequestLocation(member)}>
+                              요청
+                            </button>
+                          ) : (
+                            <span>미등록</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
               )}
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                type="button"
-                onClick={handleStartDeparture}
-                disabled={isTracking || isArrived || !middlePlace}
-                style={{ 
-                  flex: 2, 
-                  padding: '14px', 
-                  borderRadius: '12px', 
-                  border: 'none', 
-                  backgroundColor: isTracking || isArrived || !middlePlace ? '#f3f4f6' : '#7c79ff', 
-                  color: isTracking || isArrived || !middlePlace ? '#9ca3af' : 'white',
-                  fontWeight: 'bold',
-                  cursor: isTracking || isArrived || !middlePlace ? 'default' : 'pointer'
-                }}
-              >
-                출발하기
-              </button>
-
-              <button
-                type="button"
-                onClick={handleArrive}
-                disabled={!isTracking}
-                style={{ 
-                  flex: 1, 
-                  padding: '14px', 
-                  borderRadius: '12px', 
-                  border: '1px solid var(--border-color)', 
-                  backgroundColor: !isTracking ? '#f3f4f6' : 'white', 
-                  color: !isTracking ? '#9ca3af' : '#374151',
-                  fontWeight: 'bold',
-                  cursor: !isTracking ? 'default' : 'pointer'
-                }}
-              >
-                도착
-              </button>
-            </div>
-            {!middlePlace && <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '8px', textAlign: 'center' }}>⚠️ 만날 장소를 먼저 확정해 주세요.</p>}
-          </div>
-
-          {message && (
-            <div style={{ 
-              padding: '12px', 
-              backgroundColor: '#fffbeb', 
-              color: '#92400e', 
-              borderRadius: '10px', 
-              fontSize: '13px', 
-              marginBottom: '16px',
-              border: '1px solid #fef3c7',
-              textAlign: 'center'
-            }}>
-              {message}
             </div>
           )}
 
-      {members.length > 0 && (
-        <div className="location-box">
-          <h3>멤버 위치 등록 현황</h3>
+          {!isFriendPanelOpen && (
+            <>
+              {middlePlace ? (
+                <PlaceSearchPanel
+                  variant="mapOverlay"
+                  searchLocation={middlePlace}
+                  onSearchResult={(results) => {
+                    setPlaces(results)
+                    setActiveMapPanel('default')
+                    setSheetSnap('collapsed')
+                  }}
+                  onResultStateChange={setHasSearchResultsSheet}
+                  sheetSnap={sheetSnap}
+                  sheetStyle={sheetStyle}
+                  sheetDragProps={sheetDragProps}
+                  sheetHandleProps={sheetHandleProps}
+                  onSelectPlace={handleSelectPlace}
+                  onSharePlace={handleShareNearbyPlace}
+                  onCreateAdditionalPlaceVote={handleCreateAdditionalPlaceVote}
+                  onOpenFriends={openFriendsPanel}
+                />
+              ) : (
+                <div className="map-place-search-panel is-empty">
+                  <div className="map-search-control-card">
+                    <h2>중간 장소 주변 추천</h2>
+                    <p>먼저 중간 장소를 확정하면 주변 음식점, 카페, 놀거리를 검색할 수 있습니다.</p>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
 
-          {members.map((member) => {
-            const isRegistered = isMemberLocationRegistered(member)
-            const isMe =
-              (member.userid && member.userid === currentUserId) ||
-              (member.guestid && member.guestid === currentGuestId)
-            const canRequestLocation = Boolean(member.userid || member.guestid)
+          {!isFriendPanelOpen && !hasSearchResultsSheet && (
+            <div
+              className={`map-bottom-sheet map-default-sheet is-${sheetSnap}`}
+              style={sheetStyle}
+              {...sheetDragProps}
+            >
+              <div className="map-sheet-handle" {...sheetHandleProps} />
+              <div className="map-sheet-header">
+                <div>
+                  <div className="map-sheet-title-row">
+                    <strong>{selectedSchedule?.title || '선택한 일정'}</strong>
+                    {selectedSchedule?.date && (
+                      <small className="map-sheet-date">
+                        {formatScheduleDateLabel(selectedSchedule.date)}
+                      </small>
+                    )}
+                  </div>
+                  <span>{middlePlace ? middlePlace.name : '만날 장소 미정'}</span>
+                </div>
+                <button type="button" onClick={() => setShowNewScheduleModal(true)}>
+                  + 새 일정
+                </button>
+              </div>
 
-            return (
-              <div
-                key={getMemberKey(member)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  marginBottom: '6px',
-                }}
-              >
-                <span>👤</span>
-                <span>{member.nickname || '닉네임 없음'}</span>
-                <span>
-                  {isRegistered
-                    ? '위치 등록 완료'
-                    : isMe
-                    ? '내 위치 미등록'
-                    : '위치 미등록'}
-                </span>
+              <div className="map-quick-actions">
+                <button
+                  type="button"
+                  onClick={openFriendsPanel}
+                >
+                  <strong>친구위치</strong>
+                  <span>{registeredMemberCount}/{members.length || 0}</span>
+                </button>
+                <button type="button" onClick={() => setShowLocationRegisterModal(true)}>
+                  <strong>{myLocationRecord?.transportmode ? '내 위치' : '내 위치 등록'}</strong>
+                  <span>{myLocationStatusLabel}</span>
+                </button>
+              </div>
 
-                {!isRegistered && !isMe && canRequestLocation && (
-                  <button type="button" onClick={() => handleRequestLocation(member)}>
-                    위치 등록 요청
+              {!middlePlace && (
+                <FamousMiddlePlacePanel
+                  memberLocations={registeredMemberLocations}
+                  onRecommendPlaces={setPlaces}
+                  onSelectMiddlePlace={handleSelectMiddlePlace}
+                  onCreateMiddlePlaceVote={handleCreateMiddlePlaceVote}
+                />
+              )}
+
+              {middlePlace && (
+                <div className="middle-place-summary">
+                  <div>
+                    <strong>확정된 중간 장소</strong>
+                    <p>{middlePlace.name}</p>
+                  </div>
+                  <button type="button" onClick={handleShareMiddlePlace}>
+                    채팅 공유
+                  </button>
+                  <button type="button" onClick={handleCancelMiddlePlace}>
+                    취소
+                  </button>
+                </div>
+              )}
+
+              {message && <p className="map-inline-message">{message}</p>}
+            </div>
+          )}
+
+          {isFriendPanelOpen && (
+            <div
+              className={`map-bottom-sheet map-friends-sheet is-${sheetSnap}`}
+              style={sheetStyle}
+              {...sheetDragProps}
+            >
+              <div className="map-sheet-handle" {...sheetHandleProps} />
+              <div className="map-sheet-header map-friends-sheet-header">
+                <button
+                  type="button"
+                  className="map-sheet-back-button"
+                  onPointerDown={handleCloseFriendsPanel}
+                  onClick={handleCloseFriendsPanel}
+                  aria-label="지도 보기로 돌아가기"
+                >
+                  <span aria-hidden="true">←</span>
+                </button>
+                <div>
+                  <small className="map-sheet-place-label">
+                    {middlePlace?.name || '만날 장소 미정'}
+                  </small>
+                  <strong>친구위치</strong>
+                  <span>멤버 위치와 만날 장소까지의 이동 정보를 확인해요.</span>
+                </div>
+              </div>
+
+              <div className="my-departure-card">
+                <div>
+                  <strong>내 출발 상태</strong>
+                  <span>{getLocationStatusLabel(myLocationRecord)}</span>
+                </div>
+                {myLocationRecord?.transportmode && (
+                  <button type="button" onClick={handleEditTransportMode}>
+                    교통수단 수정
                   </button>
                 )}
               </div>
-            )
-          })}
-        </div>
-      )}
 
-      {members.length > 0 && (
-        <div className="location-box">
-          <h3>멤버 출발 여부</h3>
-
-          {members.map((member) => {
-            const memberLocation = getMemberLocationRecord(member)
-            const routeResult = getMemberRouteResult(member)
-            const isRegistered = Boolean(memberLocation?.transportmode)
-
-            return (
-              <div
-                key={`departure-${getMemberKey(member)}`}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  marginBottom: '6px',
-                  flexWrap: 'wrap',
-                }}
-              >
-                <span>{member.nickname || '닉네임 없음'}</span>
-                <strong>{getLocationStatusLabel(memberLocation)}</strong>
-                {isRegistered && (
-                  <span>
-                    교통수단: {getModeLabel(memberLocation.transportmode)}
-                  </span>
-                )}
-
-                {middlePlace && isRegistered && (
-                  <span>{getRemainingTimeLabel(memberLocation, routeResult)}</span>
-                )}
-
-                {isRegistered && memberLocation?.lastlocationupdatedat && (
-                  <span>
-                    마지막 갱신:{' '}
-                    {new Date(memberLocation.lastlocationupdatedat).toLocaleString()}
-                  </span>
-                )}
-
-                {isRegistered && memberLocation?.locationerror && (
-                  <span style={{ color: '#c2410c' }}>
-                    {memberLocation.locationerror}
-                  </span>
-                )}
+              <div className="departure-actions">
+                <button
+                  type="button"
+                  onClick={handleDepartureButtonClick}
+                  disabled={isArrived || !middlePlace}
+                >
+                  {isTracking ? '출발 취소' : '출발하기'}
+                </button>
+                <button type="button" onClick={handleArrive} disabled={!isTracking}>
+                  도착
+                </button>
               </div>
-            )
-          })}
-        </div>
-      )}
 
-      {currentLocation && (
-        <div className="location-box">
-          <h3>브라우저 현재 위치</h3>
-          <p>정확도: {Math.round(currentLocation.accuracy)}m</p>
-        </div>
-      )}
-
-      {memberLocations.length > 0 && (
-        <div className="location-box">
-          <h3>DB에 저장된 멤버 현재 위치</h3>
-
-          {memberLocations.map((location) => (
-            <div key={getMemberKey(location)}>
-              <p>닉네임: {getMemberNickname(location)}</p>
-              <p>출발 여부: {getLocationStatusLabel(location)}</p>
-
-              {location.transportmode && location.lastlocationupdatedat && (
-                <p>
-                  마지막 갱신:{' '}
-                  {new Date(location.lastlocationupdatedat).toLocaleString()}
-                </p>
+              {!middlePlace && (
+                <p className="map-inline-message">만날 장소를 먼저 확정해 주세요.</p>
               )}
 
-              {location.transportmode && location.locationerror && (
-                <p style={{ color: '#c2410c' }}>{location.locationerror}</p>
-              )}
+              <section className="friend-location-list">
+                <div className="friend-list-title">
+                  <div>
+                    <strong>멤버 위치 현황</strong>
+                    <small>만날 장소까지 이동시간</small>
+                  </div>
+                  <div className="friend-list-actions">
+                    <span>{registeredMemberCount}/{members.length || 0}</span>
+                  </div>
+                </div>
+
+                {members.map((member) => {
+                  const memberLocation = getMemberLocationRecord(member)
+                  const routeResult = getMemberRouteResult(member)
+                  const statusText = getFriendLocationSummary(memberLocation, routeResult)
+                  const currentLocationLabel = memberLocation
+                    ? memberLocationLabels[getMemberKey(member)] ||
+                      getRegisteredLocationLabel(memberLocation)
+                    : ''
+
+                  return (
+                    <div className="friend-location-row" key={getMemberKey(member)}>
+                      <div className="friend-avatar">👤</div>
+                      <div>
+                        <strong>{member.nickname || '닉네임 없음'}</strong>
+                        {currentLocationLabel && (
+                          <span className="friend-current-location">
+                            현재 위치: {currentLocationLabel}
+                          </span>
+                        )}
+                        <span>{statusText}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </section>
+
+              {message && <p className="map-inline-message">{message}</p>}
             </div>
-          ))}
+          )}
         </div>
-      )}
-
-      {middlePlace && (
-        <div className="location-box">
-          <h3>확정된 중간 장소</h3>
-          <p>장소명: {middlePlace.name}</p>
-          <p>주소: {middlePlace.address || '주소 정보 없음'}</p>
-
-          <button type="button" onClick={handleShareMiddlePlace}>
-            확정된 중간 장소 채팅에 공유
-          </button>
-
-          <button type="button" onClick={handleCancelMiddlePlace}>
-            중간 장소 확정 취소
-          </button>
-        </div>
-      )}
-
-      {memberRouteResults.length > 0 && (
-        <div className="location-box">
-          <h3>중간 장소까지 멤버별 이동시간</h3>
-
-          <button type="button" onClick={handleRefreshMemberRoutes}>
-            멤버 위치 기준으로 다시 계산
-          </button>
-
-          {memberRouteResults.map((result) => (
-            <div key={result.userid || result.guestid}>
-              <p>
-                {result.nickname} / {getModeLabel(result.mode)} /{' '}
-                {result.durationMinutes !== null
-                  ? `${result.durationMinutes}분`
-                  : '계산 실패'}
-                {result.distanceKm ? ` / ${result.distanceKm}km` : ''}
-              </p>
-            </div>
-          ))}
-
-          <p style={{ fontSize: '13px', color: '#666' }}>
-            자동차는 카카오 경로 API, 대중교통은 Google Directions 경로 데이터를 이용해 지도에 표시합니다.
-          </p>
-        </div>
-      )}
-
-      <LocationPicker
-        allowMapClick={false}
-        showMap={false}
-        onSelect={(name, address, place = {}) => {
-          const selected = {
-            ...place,
-            name,
-            address: address || place.address || '',
-          }
-
-          handleSelectPlace(selected)
-          setPlaces([selected])
-        }}
-      />
-
-      <KakaoMapView
-        currentLocation={currentLocation}
-        memberLocations={registeredMemberLocations}
-        places={places}
-        selectedPlace={selectedPlace}
-        destination={destination}
-        memberRoutePaths={memberRoutePaths}
-        onSetMeetingPlace={handleSetMeetingPlace}
-      />
-
-      {!middlePlace && (
-        <FamousMiddlePlacePanel
-          memberLocations={registeredMemberLocations}
-          onRecommendPlaces={setPlaces}
-          onSelectMiddlePlace={handleSelectMiddlePlace}
-          onCreateMiddlePlaceVote={handleCreateMiddlePlaceVote}
-        />
-      )}
-
-      {middlePlace ? (
-        <PlaceSearchPanel
-          searchLocation={middlePlace}
-          onSearchResult={setPlaces}
-          onSelectPlace={handleSelectPlace}
-          onSharePlace={handleShareNearbyPlace}
-          onCreateAdditionalPlaceVote={handleCreateAdditionalPlaceVote}
-        />
-      ) : (
-        <section>
-          <h2>확정된 중간 장소 주변 추천</h2>
-          <p>
-            먼저 유명 중간 장소를 추천받고, 그중 하나를 중간 장소로 확정해주세요.
-            중간 장소가 확정되면 주변 음식점, 카페, 놀거리를 검색할 수 있습니다.
-          </p>
-        </section>
-      )}
-        </>
       )}
     </section>
   )
 }
 
-function getModeLabel(mode) {
-  if (mode === 'car') return '자동차'
-  if (mode === 'transit') return '대중교통'
-  return mode
+function formatScheduleDateLabel(date) {
+  if (!date) return ''
+
+  const [year, month, day] = String(date).split('-')
+  if (!month || !day) return String(date)
+
+  return year ? `${year}.${month}.${day}` : `${month}.${day}`
+}
+
+function getRegisteredLocationLabel(location) {
+  if (!location) return ''
+
+  return (
+    location.locationname ||
+    location.locationaddress ||
+    location.address ||
+    location.placename ||
+    location.placeaddress ||
+    ''
+  )
+}
+
+function getDefaultMapCenter({ middlePlace, myLocationRecord }) {
+  if (isValidMapPoint(middlePlace?.lat, middlePlace?.lng)) {
+    return {
+      lat: Number(middlePlace.lat),
+      lng: Number(middlePlace.lng),
+    }
+  }
+
+  if (isValidMapPoint(myLocationRecord?.latitude, myLocationRecord?.longitude)) {
+    return {
+      lat: Number(myLocationRecord.latitude),
+      lng: Number(myLocationRecord.longitude),
+    }
+  }
+
+  return {
+    lat: 35.1796,
+    lng: 129.0756,
+  }
+}
+
+function isValidMapPoint(lat, lng) {
+  return Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))
 }
 
 function getLocationStatusLabel(location) {
@@ -2101,29 +2551,39 @@ function getLocationStatusLabel(location) {
   return '출발 전'
 }
 
-function getRemainingTimeLabel(location, routeResult) {
-  if (!location) return '남은 시간: 위치 미등록'
+function getFriendLocationSummary(location, routeResult) {
+  if (!location?.transportmode) return '위치 미등록'
 
   if (location.arrivedat || location.locationstatus === 'arrived') {
-    return '남은 시간: 도착 완료'
+    return '도착 완료'
   }
 
-  if (location.locationstatus === 'denied') {
-    return '남은 시간: 위치 권한 필요'
+  const isDeparted =
+    location.isdeparted ||
+    location.locationstatus === 'tracking' ||
+    location.locationstatus === 'departed' ||
+    location.locationstatus === 'approaching'
+
+  if (!isDeparted) return '미출발'
+
+  if (routeResult?.durationMinutes !== null && routeResult?.durationMinutes !== undefined) {
+    const distance = routeResult.distanceKm ? ` · ${routeResult.distanceKm}km` : ''
+    return `현재 위치 · ${routeResult.durationMinutes}분 남음${distance}`
   }
 
-  if (location.locationstatus === 'error') {
-    return '남은 시간: 위치 갱신 실패'
-  }
+  if (routeResult?.error) return '현재 위치 · 계산 실패'
 
-  if (!routeResult) return '남은 시간: 계산 전'
+  return '현재 위치 · 계산 전'
+}
 
-  if (routeResult.error || routeResult.durationMinutes === null) {
-    return '남은 시간: 계산 실패'
-  }
+function isInteractiveSheetTarget(target) {
+  if (!target || typeof target.closest !== 'function') return false
 
-  const distance = routeResult.distanceKm ? ` / ${routeResult.distanceKm}km` : ''
-  return `남은 시간: ${routeResult.durationMinutes}분 (${getModeLabel(routeResult.mode)}${distance})`
+  return Boolean(
+    target.closest(
+      'button, input, select, textarea, a, label, [role="button"], .map-results-sheet li'
+    )
+  )
 }
 
 export default MapPage

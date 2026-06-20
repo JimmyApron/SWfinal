@@ -29,7 +29,7 @@ import {
 function RoomDetailPage() {
   const navigate = useNavigate();
   const { roomId } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
 
   const [room, setRoom] = useState(null);
   const [tab, setTab] = useState(searchParams.get("tab") || "schedule");
@@ -37,7 +37,6 @@ function RoomDetailPage() {
   const [members, setMembers] = useState([]);
   const [guests, setGuests] = useState([]);
   const [myEntryId, setMyEntryId] = useState(null);
-  const [notifications, setNotifications] = useState([]);
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -65,14 +64,6 @@ function RoomDetailPage() {
   useEffect(() => { tabRef.current = tab; }, [tab]);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
-  // 파생 상태: 탭별 dot 표시 여부
-  const unreadTabs = {
-    schedule: notifications.some(n => n.isread !== true && n.issilent !== true && TAB_TYPE_MAP.schedule.includes(n.type)),
-    location: notifications.some(n => n.isread !== true && n.issilent !== true && TAB_TYPE_MAP.location.includes(n.type)),
-    vote: notifications.some(n => n.isread !== true && n.issilent !== true && TAB_TYPE_MAP.vote.includes(n.type)),
-    chat: notifications.some(n => n.isread !== true && n.issilent !== true && TAB_TYPE_MAP.chat.includes(n.type)),
-  };
-
   useEffect(() => {
     const queryTab = searchParams.get("tab");
     if (["schedule", "location", "vote", "chat"].includes(queryTab)) {
@@ -80,21 +71,14 @@ function RoomDetailPage() {
     }
   }, [searchParams]);
 
-  const fetchUnreadTabs = async (userId) => {
-    if (!userId || !roomId) return;
-    try {
-      const { data, error } = await supabase
-        .from("notifications")
-        .select("*")
-        .eq("roomid", Number(roomId))
-        .eq("receiverid", userId)
-        .or("isread.is.null,isread.eq.false");
-      if (error) throw error;
-      setNotifications(data || []);
-    } catch (err) {
-      console.error("알림 로드 실패:", err);
-    }
-  };
+  useEffect(() => {
+    const currentUserId = currentUser?.id || localStorage.getItem("guest_id");
+    if (!currentUserId || !roomId) return;
+
+    markNotificationsAsReadInRoomByType(Number(roomId), currentUserId, TAB_TYPE_MAP[tab])
+      .catch((error) => console.error("탭 알림 읽음 처리 실패:", error));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, currentUser?.id, roomId]);
 
   const fetchRoomData = async () => {
     console.log("🚀 [RoomDetailPage] fetchRoomData 시작, roomId:", roomId);
@@ -142,7 +126,6 @@ function RoomDetailPage() {
       const me = memberData?.find(m => String(m.userid) === String(uId));
       if (me) setMyEntryId(me.id);
       await markNotificationsAsReadInRoomByType(Number(roomId), uId, TAB_TYPE_MAP[tab]);
-      fetchUnreadTabs(uId);
       
       const { data: sett } = await supabase.from("room_members").select("schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled").eq("roomid", Number(roomId)).eq("userid", uId).maybeSingle();
       if (sett) setNotifSettings({ schedule: sett.schedulenotifenabled, location: sett.locationnotifenabled, vote: sett.votenotifenabled, chat: sett.chatnotifenabled });
@@ -151,7 +134,6 @@ function RoomDetailPage() {
       if (guestId) {
         setCurrentUser({ id: guestId, type: "guest" });
         await markNotificationsAsReadInRoomByType(Number(roomId), guestId, TAB_TYPE_MAP[tab]);
-        fetchUnreadTabs(guestId);
         const { data: sett } = await supabase.from("room_guests").select("schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled").eq("id", guestId).maybeSingle();
         if (sett) setNotifSettings({ schedule: sett.schedulenotifenabled, location: sett.locationnotifenabled, vote: sett.votenotifenabled, chat: sett.chatnotifenabled });
       }
@@ -171,13 +153,8 @@ function RoomDetailPage() {
         const types = TAB_TYPE_MAP[tabRef.current] || [];
         if (types.includes(newNotif.type)) {
           await markNotificationsAsReadInRoomByType(roomId, currentUserId, [newNotif.type]);
-          setNotifications(prev => [{ ...newNotif, isread: true }, ...prev]);
-        } else {
-          setNotifications(prev => [newNotif, ...prev]);
         }
-      }).on("postgres_changes", { event: "UPDATE", schema: "public", table: "notifications", filter: `receiverid=eq.${currentUserId}` }, (p) => setNotifications(prev => prev.map(n => n.id === p.new.id ? p.new : n)))
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "notifications", filter: `receiverid=eq.${currentUserId}` }, (p) => setNotifications(prev => prev.filter(n => n.id !== p.old.id)))
-      .subscribe(),
+      }).subscribe(),
       supabase.channel(`room_parts_${roomId}`).on("postgres_changes", { event: "*", schema: "public", table: "room_members", filter: `roomid=eq.${roomId}` }, () => fetchRoomData())
       .on("postgres_changes", { event: "*", schema: "public", table: "room_guests", filter: `roomid=eq.${roomId}` }, () => fetchRoomData())
       .on("broadcast", { event: "PARTICIPANTS_CHANGED" }, () => fetchRoomData()).subscribe()
@@ -193,16 +170,6 @@ function RoomDetailPage() {
     }).subscribe();
     return () => { supabase.removeChannel(kickChannel); };
   }, [roomId, currentUser, myEntryId, navigate]);
-
-  const handleChangeTab = async (nextTab) => {
-    setTab(nextTab);
-    setSearchParams({ tab: nextTab });
-    const currentUserId = currentUser?.id || localStorage.getItem("guest_id");
-    if (currentUserId) {
-      await markNotificationsAsReadInRoomByType(Number(roomId), currentUserId, TAB_TYPE_MAP[nextTab]);
-      fetchUnreadTabs(currentUserId);
-    }
-  };
 
   const handleCopyInviteCode = async () => {
     try {
@@ -342,24 +309,42 @@ function RoomDetailPage() {
 
     return new Date(a.joinDate) - new Date(b.joinDate);
   });
+  const isLocationTab = tab === "location";
 
   return (
-    <div style={{ position: "relative", minHeight: "100vh", paddingBottom: "90px", boxSizing: "border-box", backgroundColor: "#F7F7FA" }}>
+    <div
+      style={{
+        position: "relative",
+        minHeight: isLocationTab ? "100%" : "100vh",
+        height: isLocationTab ? "100%" : undefined,
+        paddingBottom: isLocationTab ? 0 : "90px",
+        boxSizing: "border-box",
+        backgroundColor: "#F7F7FA",
+        overflow: isLocationTab ? "hidden" : undefined,
+        display: isLocationTab ? "flex" : undefined,
+        flexDirection: isLocationTab ? "column" : undefined,
+      }}
+    >
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", backgroundColor: "#fff", position: "sticky", top: 0, zIndex: 100, borderBottom: "1px solid #E5E7EB" }}>
         <button onClick={() => navigate("/home")} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>←</button>
         <span style={{ fontWeight: "700", fontSize: "17px" }}>{room.roomname}</span>
         <button onClick={() => setIsSidebarOpen(true)} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>⚙</button>
       </header>
-      <div style={{ display: "flex", backgroundColor: "#fff", padding: "0 16px", borderBottom: "1px solid #E5E7EB" }}>
-        {["schedule", "location", "vote", "chat"].map(t => (
-          <button key={t} onClick={() => handleChangeTab(t)} style={{ flex: 1, padding: "14px 0", background: "none", border: "none", fontSize: "15px", fontWeight: tab === t ? "700" : "500", color: tab === t ? "#7C5CFF" : "#6B7280", position: "relative" }}>
-            {t === "schedule" ? "일정" : t === "location" ? "위치" : t === "vote" ? "투표" : "채팅"}
-            {unreadTabs[t] && <div style={{ position: "absolute", top: "14px", right: "10px", width: "7px", height: "7px", backgroundColor: "#EF4444", borderRadius: "50%" }} />}
-            {tab === t && <div style={{ position: "absolute", bottom: 0, left: "20%", right: "20%", height: "3px", backgroundColor: "#7C5CFF", borderRadius: "3px 3px 0 0" }} />}
-          </button>
-        ))}
-      </div>
-      <div style={{ padding: tab === "chat" ? "0" : "0 16px" }}>
+      <div
+        className={isLocationTab ? "room-location-tab-content" : undefined}
+        style={{
+          padding: tab === "chat" || isLocationTab ? "0" : "0 16px",
+          ...(isLocationTab
+            ? {
+                flex: 1,
+                minHeight: 0,
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column",
+              }
+            : {}),
+        }}
+      >
         {tab === "schedule" && <ScheduleTab roomId={roomId} ownerUserId={room.createdby} roomName={room.roomname} />}
         {tab === "location" && <MapPage roomId={roomId} />}
         {tab === "vote" && <VoteListPage roomid={roomId} />}

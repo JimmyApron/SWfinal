@@ -41,10 +41,17 @@ const AUTH_PATHS = ["/", "/login", "/signup", "/guest"];
 function Layout({ children }) {
   const location = useLocation();
   const showNav = !AUTH_PATHS.includes(location.pathname);
+  const isRoomLocationTab =
+    /^\/rooms\/[^/]+$/.test(location.pathname) &&
+    new URLSearchParams(location.search).get("tab") === "location";
+  const contentClassName = [
+    showNav ? "app-content-with-bottom-nav" : "",
+    isRoomLocationTab ? "app-content-room-location" : "",
+  ].filter(Boolean).join(" ");
 
   return (
     <>
-      <div className={showNav ? "app-content-with-bottom-nav" : ""}>
+      <div className={contentClassName}>
         {children}
       </div>
 

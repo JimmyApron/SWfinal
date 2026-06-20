@@ -18,22 +18,40 @@ function LocationPicker({
   prefillKeywordFromInitialPlace = true,
   showMap = true,
   mapHeight = "250px",
+  placeholder = "장소 검색 (예: 홍대입구역)",
 }) {
   const mapRef = useRef(null);
   const mapObjectRef = useRef(null);
   const markerRef = useRef(null);
   const infoWindowRef = useRef(null);
+  const pickerRef = useRef(null);
 
   const [isReady, setIsReady] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  const visiblePlaceholder = String(placeholder).replace(/^기준 장소:\s*/, "");
 
   useEffect(() => {
     loadKakaoScript()
       .then(() => setIsReady(true))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (results.length === 0) return;
+
+    const handlePointerDown = (event) => {
+      if (pickerRef.current?.contains(event.target)) return;
+      setResults([]);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [results.length]);
 
   useEffect(() => {
     if (!isReady || !mapRef.current || mapObjectRef.current) return;
@@ -176,11 +194,16 @@ function LocationPicker({
   };
 
   return (
-    <div style={{ marginTop: "12px" }}>
-      <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+    <div
+      ref={pickerRef}
+      className={`location-picker ${results.length > 0 ? "has-results" : ""}`}
+      style={{ marginTop: "12px" }}
+    >
+      <div className="location-picker-search-row" style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
         <input
+          className="location-picker-input"
           type="text"
-          placeholder="장소 검색 (예: 홍대입구역)"
+          placeholder={visiblePlaceholder}
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
           onKeyDown={(event) => event.key === "Enter" && handleSearch()}
@@ -194,6 +217,7 @@ function LocationPicker({
         />
 
         <button
+          className="location-picker-search-button"
           type="button"
           onClick={handleSearch}
           disabled={searching}
@@ -213,6 +237,7 @@ function LocationPicker({
 
       {results.length > 0 && (
         <div
+          className="location-picker-results"
           style={{
             border: "1px solid #eee",
             borderRadius: "10px",
@@ -224,6 +249,7 @@ function LocationPicker({
           {results.map((place) => (
             <div
               key={place.id}
+              className="location-picker-result-item"
               onClick={() => handleSelectResult(place)}
               style={{
                 padding: "10px 14px",

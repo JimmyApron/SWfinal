@@ -39,6 +39,12 @@
   font-weight: bold;
 }
 
+.bottom-nav-tab-button {
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+}
+
 .bottom-nav-icon-wrap {
   position: relative;
   display: flex;
@@ -63,4 +69,14 @@
   font-weight: bold;
   line-height: 18px;
   text-align: center;
+}
+
+.bottom-nav-dot {
+  position: absolute;
+  top: -4px;
+  right: -8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #ef4444;
 }

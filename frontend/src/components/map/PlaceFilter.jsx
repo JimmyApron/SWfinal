@@ -7,7 +7,7 @@ function PlaceFilter({
   onChangeReviewCountFilter,
 }) {
   return (
-    <div>
+    <div className="place-filter">
       <h3>필터</h3>
 
       <div>
