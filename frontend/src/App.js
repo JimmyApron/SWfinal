@@ -60,27 +60,57 @@ async function isRoomNotificationPopupAllowed(roomId, type) {
   const settingColumn = NOTIFICATION_SETTING_COLUMNS[type];
   if (!roomId || !settingColumn) return true;
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (user?.id) {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.id) {
+      const { data } = await supabase
+        .from("room_members")
+        .select(settingColumn)
+        .eq("roomid", Number(roomId))
+        .eq("userid", user.id)
+        .maybeSingle();
+      return data?.[settingColumn] !== false;
+    }
+
+    const guestId = localStorage.getItem("guest_id");
+    if (!guestId) return true;
+
     const { data } = await supabase
-      .from("room_members")
+      .from("room_guests")
       .select(settingColumn)
       .eq("roomid", Number(roomId))
-      .eq("userid", user.id)
+      .eq("id", guestId)
       .maybeSingle();
     return data?.[settingColumn] !== false;
+  } catch (error) {
+    console.error("방 알림 설정 확인 실패:", error);
+    return true;
   }
+}
 
-  const guestId = localStorage.getItem("guest_id");
-  if (!guestId) return true;
+function hasRoomPopupSetting(roomId, type) {
+  return Boolean(roomId && NOTIFICATION_SETTING_COLUMNS[type]);
+}
 
-  const { data } = await supabase
-    .from("room_guests")
-    .select(settingColumn)
-    .eq("roomid", Number(roomId))
-    .eq("id", guestId)
-    .maybeSingle();
-  return data?.[settingColumn] !== false;
+async function isCurrentUserInRoom(roomId, userId) {
+  if (!roomId || !userId) return false;
+
+  const [{ data: member }, { data: guest }] = await Promise.all([
+    supabase
+      .from("room_members")
+      .select("id")
+      .eq("roomid", Number(roomId))
+      .eq("userid", userId)
+      .maybeSingle(),
+    supabase
+      .from("room_guests")
+      .select("id")
+      .eq("roomid", Number(roomId))
+      .eq("id", userId)
+      .maybeSingle(),
+  ]);
+
+  return Boolean(member || guest);
 }
 
 function Layout({ children }) {
@@ -114,6 +144,21 @@ function NotificationListener() {
   const location = useLocation();
   const locationRef = useRef(location);
   const channelRef = useRef(null);
+  const pollIntervalRef = useRef(null);
+  const recentToastRef = useRef({ key: "", time: 0 });
+  const shownNotificationIdsRef = useRef(new Set());
+
+  const displayToast = (message, link) => {
+    const key = `${message || ""}|${link || ""}`;
+    const now = Date.now();
+    if (recentToastRef.current.key === key && now - recentToastRef.current.time < 2000) {
+      return;
+    }
+
+    recentToastRef.current = { key, time: now };
+    setToast({ message, link });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   useEffect(() => {
     locationRef.current = location;
@@ -128,11 +173,15 @@ function NotificationListener() {
       const mutedRooms = JSON.parse(localStorage.getItem("muted_rooms") || "[]");
       const isRoomMuted = nextToast.roomId && mutedRooms.some(id => String(id) === String(nextToast.roomId));
       const isSettingAllowed = await isRoomNotificationPopupAllowed(nextToast.roomId, nextToast.type);
+      const usesRoomSetting = hasRoomPopupSetting(nextToast.roomId, nextToast.type);
 
-      if (!isGlobalPopupEnabled || isRoomMuted || !isSettingAllowed) return;
+      if (usesRoomSetting) {
+        if (!isSettingAllowed) return;
+      } else if (!isGlobalPopupEnabled || isRoomMuted) {
+        return;
+      }
 
-      setToast({ message: nextToast.message, link: nextToast.link });
-      setTimeout(() => setToast(null), 4000);
+      displayToast(nextToast.message, nextToast.link);
     };
 
     window.addEventListener("app-toast", handleAppToast);
@@ -161,6 +210,37 @@ function NotificationListener() {
           supabase.removeChannel(channelRef.current);
           channelRef.current = null;
         }
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+
+        const shouldShowNotificationToast = async (notif) => {
+          const isGlobalPopupEnabled = localStorage.getItem("global_popup_enabled") !== "false";
+          const mutedRooms = JSON.parse(localStorage.getItem("muted_rooms") || "[]");
+          const isRoomMuted = notif.roomid && mutedRooms.some(id => String(id) === String(notif.roomid));
+          const isSettingAllowed = await isRoomNotificationPopupAllowed(notif.roomid, notif.type);
+          const usesRoomSetting = hasRoomPopupSetting(notif.roomid, notif.type);
+
+          return usesRoomSetting
+            ? isSettingAllowed
+            : notif.issilent !== true &&
+              isGlobalPopupEnabled &&
+              !isRoomMuted;
+        };
+
+        const handleIncomingNotification = async (notif) => {
+          if (!notif || String(notif.receiverid) !== String(myUserId)) return;
+          if (notif.id && shownNotificationIdsRef.current.has(notif.id)) return;
+
+          const showToast = await shouldShowNotificationToast(notif);
+          if (!showToast) return;
+
+          if (notif.id) shownNotificationIdsRef.current.add(notif.id);
+          displayToast(notif.message, notif.link);
+        };
+
+        const pollStartedAt = new Date(Date.now() - 1000).toISOString();
 
         const channel = supabase
           .channel(`notifications-${myUserId}-${Date.now()}`)
@@ -170,40 +250,47 @@ function NotificationListener() {
               event: "INSERT",
               schema: "public",
               table: "notifications",
-              filter: `receiverid=eq.${myUserId}`,
             },
             async (payload) => {
               const notif = payload.new;
               console.log("🚀 [App.js] 새 알림 수신:", notif);
+              await handleIncomingNotification(notif);
+            }
+          )
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "confirmed_schedules",
+            },
+            async (payload) => {
+              const schedule = payload.new;
+              const roomId = schedule?.roomid;
+              if (!roomId) return;
 
-              const isGlobalPopupEnabled = localStorage.getItem("global_popup_enabled") !== "false";
-              const mutedRooms = JSON.parse(localStorage.getItem("muted_rooms") || "[]");
-              const isRoomMuted = notif.roomid && mutedRooms.some(id => String(id) === String(notif.roomid));
-              const isSettingAllowed = await isRoomNotificationPopupAllowed(notif.roomid, notif.type);
-              
-              // Room settings alone decide whether room popups are shown.
+              const isParticipant = await isCurrentUserInRoom(roomId, myUserId);
+              if (!isParticipant) return;
 
-              // 팝업 결정 조건
-              // 1. issilent가 명시적 true가 아닐 것
-              // 2. 전역 팝업 설정이 켜져 있을 것
-              // 3. 해당 방이 뮤트 상태가 아닐 것
-              // 4. (핵심) 현재 그 방의 해당 탭을 직접 보고 있는 상황이 아니어야 함
-              //    (예: 일정 탭을 보고 있는데 투표 알림이 오면 팝업 띄움 / 일정 탭을 보고 있는데 일정 알림이 오면 안 띄움)
-              
-              const showToast = 
-                notif.issilent !== true && 
-                isGlobalPopupEnabled && 
-                !isRoomMuted &&
-                isSettingAllowed;
+              const isSettingAllowed = await isRoomNotificationPopupAllowed(
+                roomId,
+                "schedule_confirmed"
+              );
+              if (!isSettingAllowed) return;
 
-              if (showToast) {
-                console.log("✅ [App.js] Toast 표시함");
-                setToast({ message: notif.message, link: notif.link });
-                setTimeout(() => { if (isMounted) setToast(null); }, 4000);
-              } else {
-                console.log("🤫 [App.js] Toast 표시 건너뜜 (사유: 해당 탭 시청 중 또는 설정 차단)");
-                console.log(` - isSettingAllowed: ${isSettingAllowed}, issilent: ${notif.issilent}`);
-              }
+              const { data: roomData } = await supabase
+                .from("rooms")
+                .select("roomname")
+                .eq("id", Number(roomId))
+                .maybeSingle();
+
+              const roomName = roomData?.roomname || "방";
+              const scheduleTitle = schedule?.title?.trim()
+                ? `'${schedule.title}' `
+                : "";
+              const message = `[${roomName}] 방에 ${scheduleTitle}일정이 확정되었습니다.`;
+
+              displayToast(message, `/rooms/${roomId}?tab=schedule`);
             }
           );
 
@@ -212,6 +299,25 @@ function NotificationListener() {
           console.log("🚀 [App.js] Realtime 상태:", status);
           if (status === "SUBSCRIBED") channelRef.current = channel;
         });
+
+        pollIntervalRef.current = setInterval(async () => {
+          const { data, error } = await supabase
+            .from("notifications")
+            .select("*")
+            .eq("receiverid", myUserId)
+            .gt("createdat", pollStartedAt)
+            .order("createdat", { ascending: true })
+            .limit(10);
+
+          if (error) {
+            console.error("팝업 알림 백업 조회 실패:", error);
+            return;
+          }
+
+          for (const notif of data || []) {
+            await handleIncomingNotification(notif);
+          }
+        }, 3000);
       } catch (err) {
         console.error("실시간 알림 세팅 중 오류:", err);
       }
@@ -227,6 +333,7 @@ function NotificationListener() {
       isMounted = false;
       subscription.unsubscribe();
       if (channelRef.current) supabase.removeChannel(channelRef.current);
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
   }, []);
 
