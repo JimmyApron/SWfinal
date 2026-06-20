@@ -6,8 +6,11 @@ function KakaoMapView({
   places = [],
   selectedPlace,
   destination,
+  confirmedMeetingPlace,
   routePath = [],
   memberRoutePaths = [],
+  memberRouteResults = [],
+  memberLocationLabels = {},
   onMapClick,
   pickedPlace,
   onSetMeetingPlace,
@@ -26,6 +29,7 @@ function KakaoMapView({
   const placeMarkerRefs = useRef([])
   const pickedMarkerRef = useRef(null)
   const selectedPlaceMarkerRef = useRef(null)
+  const onSetMeetingPlaceRef = useRef(onSetMeetingPlace)
 
   const selectedInfoWindowRef = useRef(null)
   const selectedInfoWindowKeyRef = useRef('')
@@ -43,6 +47,10 @@ function KakaoMapView({
   const selectedPlaceViewportKey = selectedPlace
     ? `${selectedPlace.id || selectedPlace.name}-${selectedPlace.lat}-${selectedPlace.lng}`
     : ''
+
+  useEffect(() => {
+    onSetMeetingPlaceRef.current = onSetMeetingPlace
+  }, [onSetMeetingPlace])
 
   const closeActiveInfoWindow = useCallback(() => {
     if (selectedInfoWindowRef.current) {
@@ -75,7 +83,7 @@ function KakaoMapView({
 
     closeActiveInfoWindow()
 
-    const kakaoMapUrl = place.kakaoMapUrl || place.kakaomapurl
+    const kakaoMapUrl = getKakaoMapUrl(place)
 
     const content = document.createElement('div')
     content.style.padding = '10px'
@@ -106,7 +114,19 @@ function KakaoMapView({
       content.appendChild(link)
     }
 
-    if (onSetMeetingPlace && !place.isConfirmedMiddlePlace) {
+    resolveKakaoPlaceUrl(place).then((resolvedUrl) => {
+      if (!resolvedUrl) return
+
+      const link = content.querySelector('a[target="_blank"]')
+      if (link) {
+        link.href = resolvedUrl
+      }
+    })
+
+    const isCurrentMeetingPlace =
+      place.isConfirmedMiddlePlace || isSameMapPlace(place, confirmedMeetingPlace)
+
+    if (onSetMeetingPlaceRef.current && !isCurrentMeetingPlace) {
       const button = document.createElement('button')
       button.type = 'button'
       button.textContent = '만날 장소로 설정하기'
@@ -123,7 +143,7 @@ function KakaoMapView({
       button.style.width = '100%'
       button.style.boxSizing = 'border-box'
       button.style.lineHeight = '1.2'
-      button.addEventListener('click', () => onSetMeetingPlace(place))
+      button.addEventListener('click', () => onSetMeetingPlaceRef.current?.(place))
       content.appendChild(button)
     }
 
@@ -133,11 +153,15 @@ function KakaoMapView({
     selectedInfoWindowKeyRef.current = infoKey
 
     selectedInfoWindowRef.current.open(mapObjectRef.current, marker)
-  }, [closeActiveInfoWindow, onSetMeetingPlace])
+  }, [closeActiveInfoWindow, confirmedMeetingPlace])
 
   useEffect(() => {
     autoFitPendingRef.current = true
   }, [placeViewportKey, selectedPlaceViewportKey])
+
+  useEffect(() => {
+    closeActiveInfoWindow()
+  }, [confirmedMeetingPlace, closeActiveInfoWindow])
 
   useEffect(() => {
     if (!fitBoundsRequest) return
@@ -424,7 +448,11 @@ function KakaoMapView({
       return
     }
 
-    memberMarkerRefs.current.forEach((marker) => marker.setMap(null))
+    memberMarkerRefs.current.forEach((marker) => {
+      if (marker?.overlay) marker.overlay.setMap(null)
+      if (marker?.anchor) marker.anchor.setMap(null)
+      if (marker?.setMap) marker.setMap(null)
+    })
     memberMarkerRefs.current = []
 
     if (!memberLocations || memberLocations.length === 0) {
@@ -449,31 +477,52 @@ function KakaoMapView({
       bounds.extend(position)
       validLocationCount += 1
 
-      const marker = new window.kakao.maps.Marker({
+      const anchorMarker = new window.kakao.maps.Marker({
         position,
         map: mapObjectRef.current,
         title: nickname,
       })
+      anchorMarker.setOpacity?.(0)
+      const profileImageUrl = getMemberProfileImageUrl(memberLocation)
+      const isDeparted = isMemberDeparted(memberLocation)
+      const routeResult = getMemberRouteResult(memberLocation, memberRouteResults)
+      const locationLabel =
+        memberLocationLabels[getMemberKey(memberLocation)] ||
+        getRegisteredLocationLabel(memberLocation) ||
+        getCoordinateLabel(memberLocation)
+      const markerContent = createMemberMarkerContent({
+        nickname,
+        profileImageUrl,
+        isDeparted,
+      })
+      const overlay = new window.kakao.maps.CustomOverlay({
+        position,
+        content: markerContent,
+        yAnchor: 1,
+        zIndex: 4,
+      })
+
+      overlay.setMap(mapObjectRef.current)
 
       const infoWindow = new window.kakao.maps.InfoWindow({
-        content: `
-          <div style="padding:10px; font-size:13px; line-height:1.5;">
-            <strong>${escapeHtml(nickname)}</strong>
-            <p style="margin:4px 0;">현재 위치</p>
-            <p style="margin:4px 0;">정확도: ${
-              memberLocation.accuracy
-                ? `${Math.round(Number(memberLocation.accuracy))}m`
-                : '정보 없음'
-            }</p>
-          </div>
-        `,
+        content: createMemberInfoContent({
+          nickname,
+          locationLabel,
+          routeResult,
+        }),
       })
 
-      window.kakao.maps.event.addListener(marker, 'click', () => {
-        toggleInfoWindow(infoWindow, marker, getMarkerInfoKey('member', memberLocation))
+      markerContent.addEventListener('click', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        toggleInfoWindow(infoWindow, anchorMarker, getMarkerInfoKey('member', memberLocation))
       })
 
-      memberMarkerRefs.current.push(marker)
+      window.kakao.maps.event.addListener(anchorMarker, 'click', () => {
+        toggleInfoWindow(infoWindow, anchorMarker, getMarkerInfoKey('member', memberLocation))
+      })
+
+      memberMarkerRefs.current.push({ overlay, anchor: anchorMarker, position })
     })
 
     if (
@@ -481,7 +530,7 @@ function KakaoMapView({
       validLocationCount === 1 &&
       memberMarkerRefs.current[0]
     ) {
-      const position = memberMarkerRefs.current[0].getPosition()
+      const position = memberMarkerRefs.current[0].position
       mapObjectRef.current.setCenter(position)
       mapObjectRef.current.setLevel(5)
       autoFitPendingRef.current = false
@@ -500,6 +549,8 @@ function KakaoMapView({
     mapObjectRef.current.relayout()
   }, [
     memberLocations,
+    memberLocationLabels,
+    memberRouteResults,
     places.length,
     memberRoutePaths.length,
     isMapReady,
@@ -617,25 +668,25 @@ function KakaoMapView({
       )
     })
 
-    if (matchedMarker) {
-      openPlaceInfoWindow(selectedPlace, matchedMarker)
-    } else {
-      const marker = new window.kakao.maps.Marker({
+    let activeMarker = matchedMarker
+
+    if (!activeMarker) {
+      activeMarker = new window.kakao.maps.Marker({
         position: selectedLocation,
         map: mapObjectRef.current,
         title: selectedPlace.name || '장소',
       })
 
-      window.kakao.maps.event.addListener(marker, 'click', () => {
-        openPlaceInfoWindow(selectedPlace, marker)
+      window.kakao.maps.event.addListener(activeMarker, 'click', () => {
+        openPlaceInfoWindow(selectedPlace, activeMarker)
       })
 
-      selectedPlaceMarkerRef.current = marker
-      openPlaceInfoWindow(selectedPlace, marker)
+      selectedPlaceMarkerRef.current = activeMarker
     }
 
     mapObjectRef.current.relayout()
     mapObjectRef.current.setCenter(selectedLocation)
+    openPlaceInfoWindow(selectedPlace, activeMarker)
   }, [selectedPlace, isMapReady, closeActiveInfoWindow, openPlaceInfoWindow])
 
   // 기존 단일 경로 선 표시
@@ -882,6 +933,176 @@ function getMemberNickname(memberLocation) {
   )
 }
 
+function getMemberProfileImageUrl(memberLocation) {
+  return (
+    memberLocation.profiles?.profileimageurl ||
+    memberLocation.room_guests?.profileimageurl ||
+    memberLocation.profileimageurl ||
+    ''
+  )
+}
+
+function getMemberKey(memberLocation) {
+  return memberLocation.userid || memberLocation.guestid || memberLocation.id || ''
+}
+
+function isMemberDeparted(memberLocation) {
+  return Boolean(
+    memberLocation.isdeparted ||
+      memberLocation.locationstatus === 'tracking' ||
+      memberLocation.locationstatus === 'departed' ||
+      memberLocation.locationstatus === 'approaching'
+  )
+}
+
+function getMemberRouteResult(memberLocation, memberRouteResults = []) {
+  return memberRouteResults.find((result) => {
+    if (memberLocation.userid) return result.userid === memberLocation.userid
+    if (memberLocation.guestid) return result.guestid === memberLocation.guestid
+    return false
+  })
+}
+
+function getRegisteredLocationLabel(location) {
+  return (
+    location.locationname ||
+    location.locationaddress ||
+    location.address ||
+    location.placename ||
+    location.placeaddress ||
+    ''
+  )
+}
+
+function getCoordinateLabel(location) {
+  const lat = Number(location.latitude)
+  const lng = Number(location.longitude)
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return '위치 정보 없음'
+  }
+
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
+}
+
+function createMemberMarkerContent({ nickname, profileImageUrl, isDeparted }) {
+  const container = document.createElement('button')
+  container.type = 'button'
+  container.style.display = 'flex'
+  container.style.flexDirection = 'column'
+  container.style.alignItems = 'center'
+  container.style.gap = '4px'
+  container.style.border = 'none'
+  container.style.background = 'transparent'
+  container.style.padding = '0'
+  container.style.cursor = 'pointer'
+  container.style.font = 'inherit'
+  container.style.color = '#111827'
+
+  const avatarWrap = document.createElement('span')
+  avatarWrap.style.position = 'relative'
+  avatarWrap.style.display = 'block'
+  avatarWrap.style.width = '42px'
+  avatarWrap.style.height = '42px'
+
+  const avatar = document.createElement('span')
+  avatar.style.display = 'flex'
+  avatar.style.alignItems = 'center'
+  avatar.style.justifyContent = 'center'
+  avatar.style.width = '42px'
+  avatar.style.height = '42px'
+  avatar.style.borderRadius = '50%'
+  avatar.style.overflow = 'hidden'
+  avatar.style.background = '#f1f5f9'
+  avatar.style.border = '2px solid #fff'
+  avatar.style.boxShadow = '0 4px 12px rgba(15, 23, 42, 0.28)'
+  avatar.style.boxSizing = 'border-box'
+  avatar.style.fontSize = '16px'
+  avatar.style.fontWeight = '800'
+
+  if (profileImageUrl) {
+    const image = document.createElement('img')
+    image.src = profileImageUrl
+    image.alt = ''
+    image.referrerPolicy = 'no-referrer'
+    image.style.width = '100%'
+    image.style.height = '100%'
+    image.style.objectFit = 'cover'
+    avatar.appendChild(image)
+  } else {
+    avatar.textContent = getMemberInitial(nickname)
+  }
+
+  const statusDot = document.createElement('span')
+  statusDot.style.position = 'absolute'
+  statusDot.style.right = '0'
+  statusDot.style.bottom = '1px'
+  statusDot.style.width = '11px'
+  statusDot.style.height = '11px'
+  statusDot.style.borderRadius = '50%'
+  statusDot.style.background = isDeparted ? '#16c75b' : '#9ca3af'
+  statusDot.style.border = '2px solid #fff'
+  statusDot.style.boxShadow = '0 1px 3px rgba(15, 23, 42, 0.24)'
+  statusDot.style.boxSizing = 'border-box'
+
+  const label = document.createElement('span')
+  label.textContent = nickname
+  label.style.maxWidth = '72px'
+  label.style.padding = '1px 5px'
+  label.style.borderRadius = '999px'
+  label.style.background = 'rgba(255, 255, 255, 0.92)'
+  label.style.boxShadow = '0 2px 8px rgba(15, 23, 42, 0.16)'
+  label.style.fontSize = '12px'
+  label.style.fontWeight = '700'
+  label.style.lineHeight = '1.35'
+  label.style.whiteSpace = 'nowrap'
+  label.style.overflow = 'hidden'
+  label.style.textOverflow = 'ellipsis'
+
+  avatarWrap.appendChild(avatar)
+  avatarWrap.appendChild(statusDot)
+  container.appendChild(avatarWrap)
+  container.appendChild(label)
+
+  return container
+}
+
+function getMemberInitial(nickname) {
+  const trimmedNickname = String(nickname || '').trim()
+  return trimmedNickname ? trimmedNickname.charAt(0) : '멤'
+}
+
+function createMemberInfoContent({ nickname, locationLabel, routeResult }) {
+  const hasRemainingTime =
+    routeResult?.durationMinutes !== null && routeResult?.durationMinutes !== undefined
+  const remainingDistance = routeResult?.distanceKm
+    ? `${routeResult.distanceKm}km`
+    : routeResult?.distance
+      ? `${(Number(routeResult.distance) / 1000).toFixed(1)}km`
+      : ''
+  const routeSummary = hasRemainingTime
+    ? [
+        `${routeResult.durationMinutes}분`,
+        remainingDistance,
+      ].filter(Boolean).join(' · ')
+    : ''
+
+  return `
+    <div style="width:220px; padding:12px; box-sizing:border-box; font-size:13px; line-height:1.45; color:#111827;">
+      <strong style="display:block; margin-bottom:8px; font-size:14px;">${escapeHtml(nickname)}</strong>
+      <p style="margin:0 0 6px; word-break:keep-all; overflow-wrap:anywhere;">
+        <span style="display:block; color:#6b7280; font-size:12px;">현재 위치</span>
+        ${escapeHtml(locationLabel || '위치 정보 없음')}
+      </p>
+      ${
+        routeSummary
+          ? `<p style="margin:0; font-weight:700;">${escapeHtml(routeSummary)}</p>`
+          : ''
+      }
+    </div>
+  `
+}
+
 function isValidLatLng(lat, lng) {
   const numberLat = Number(lat)
   const numberLng = Number(lng)
@@ -894,6 +1115,139 @@ function isValidLatLng(lat, lng) {
     numberLng >= -180 &&
     numberLng <= 180
   )
+}
+
+function getKakaoMapUrl(place = {}) {
+  const explicitUrl = place.kakaoMapUrl || place.kakaomapurl
+  if (explicitUrl) return explicitUrl
+
+  const lat = place.lat ?? place.latitude ?? place.placelat ?? place.locationlat
+  const lng = place.lng ?? place.longitude ?? place.placelng ?? place.locationlng
+
+  if (!isValidLatLng(lat, lng)) return ''
+
+  const name =
+    place.name ||
+    place.placename ||
+    place.place_name ||
+    place.location ||
+    place.address ||
+    '선택한 장소'
+
+  return `https://map.kakao.com/link/map/${encodeURIComponent(name)},${Number(lat)},${Number(lng)}`
+}
+
+function resolveKakaoPlaceUrl(place = {}) {
+  const explicitUrl = place.kakaoMapUrl || place.kakaomapurl
+  if (explicitUrl) return Promise.resolve(explicitUrl)
+
+  if (!window.kakao?.maps?.services) return Promise.resolve('')
+
+  const keyword = String(
+    place.name ||
+    place.placename ||
+    place.location ||
+    place.address ||
+    place.placeaddress ||
+    place.locationaddress ||
+    ''
+  ).trim()
+
+  if (!keyword) return Promise.resolve('')
+
+  return new Promise((resolve) => {
+    const placesService = new window.kakao.maps.services.Places()
+    const lat = Number(place.lat ?? place.latitude ?? place.placelat ?? place.locationlat)
+    const lng = Number(place.lng ?? place.longitude ?? place.placelng ?? place.locationlng)
+    const searchOptions = isValidLatLng(lat, lng)
+      ? {
+          location: new window.kakao.maps.LatLng(lat, lng),
+          radius: 2000,
+        }
+      : {}
+
+    placesService.keywordSearch(
+      keyword,
+      (data, status) => {
+        if (status !== window.kakao.maps.services.Status.OK || !data?.length) {
+          resolve('')
+          return
+        }
+
+        const matchedPlace = findBestKakaoPlaceMatch(data, place)
+        resolve(matchedPlace?.place_url || '')
+      },
+      searchOptions
+    )
+  })
+}
+
+function findBestKakaoPlaceMatch(results, place = {}) {
+  const targetLat = Number(place.lat ?? place.latitude ?? place.placelat ?? place.locationlat)
+  const targetLng = Number(place.lng ?? place.longitude ?? place.placelng ?? place.locationlng)
+  const targetName = normalizePlaceText(place.name || place.placename || place.location)
+  const targetAddress = normalizePlaceText(place.address || place.placeaddress || place.locationaddress)
+
+  const scoredResults = results.map((result, index) => {
+    const resultName = normalizePlaceText(result.place_name)
+    const resultAddress = normalizePlaceText(result.road_address_name || result.address_name)
+    const resultLat = Number(result.y)
+    const resultLng = Number(result.x)
+    let score = 0
+
+    if (targetName && resultName === targetName) score += 100
+    if (targetName && resultName.includes(targetName)) score += 40
+    if (targetName && targetName.includes(resultName)) score += 25
+    if (targetAddress && resultAddress === targetAddress) score += 80
+    if (targetAddress && resultAddress.includes(targetAddress)) score += 30
+
+    if (isValidLatLng(targetLat, targetLng) && isValidLatLng(resultLat, resultLng)) {
+      const distanceScore = Math.max(0, 30 - getCoordinateDistance(targetLat, targetLng, resultLat, resultLng) * 100000)
+      score += distanceScore
+    }
+
+    return { result, score, index }
+  })
+
+  scoredResults.sort((a, b) => b.score - a.score || a.index - b.index)
+  return scoredResults[0]?.result || results[0]
+}
+
+function getCoordinateDistance(latA, lngA, latB, lngB) {
+  return Math.hypot(Number(latA) - Number(latB), Number(lngA) - Number(lngB))
+}
+
+function isSameMapPlace(place, target) {
+  if (!place || !target) return false
+
+  const placeLat = Number(place.lat ?? place.latitude)
+  const placeLng = Number(place.lng ?? place.longitude)
+  const targetLat = Number(target.lat ?? target.latitude ?? target.locationlat)
+  const targetLng = Number(target.lng ?? target.longitude ?? target.locationlng)
+  const placeName = normalizePlaceText(place.name || place.placename || place.location)
+  const targetName = normalizePlaceText(target.name || target.placename || target.location)
+
+  if (placeName && targetName && placeName === targetName) {
+    return true
+  }
+
+  if (
+    Number.isFinite(placeLat) &&
+    Number.isFinite(placeLng) &&
+    Number.isFinite(targetLat) &&
+    Number.isFinite(targetLng)
+  ) {
+    return Math.abs(placeLat - targetLat) < 0.0005 && Math.abs(placeLng - targetLng) < 0.0005
+  }
+
+  const placeAddress = normalizePlaceText(place.address || place.placeaddress || place.locationaddress)
+  const targetAddress = normalizePlaceText(target.address || target.placeaddress || target.locationaddress)
+
+  return Boolean(placeAddress && targetAddress && placeAddress === targetAddress)
+}
+
+function normalizePlaceText(value) {
+  return String(value || '').replace(/\s+/g, '').trim()
 }
 
 function getFirstValidLatLng({

@@ -19,7 +19,7 @@ function PlaceSearchPanel({
   sheetHandleProps = {},
   onOpenFriends,
 }) {
-  const [selectedCategory, setSelectedCategory] = useState('restaurant')
+  const [selectedCategory, setSelectedCategory] = useState('')
   const [radius, setRadius] = useState('1000')
   const [ratingFilter, setRatingFilter] = useState('all')
   const [reviewCountFilter, setReviewCountFilter] = useState('all')
@@ -35,7 +35,7 @@ function PlaceSearchPanel({
     }
   }
 
-  const handleSearchPlaces = async () => {
+  const handleSearchPlaces = async (categoryOverride) => {
     if (!searchLocation) {
       setMessage('먼저 중간 장소를 확정해주세요.')
       return
@@ -43,11 +43,15 @@ function PlaceSearchPanel({
 
     try {
       setMessage('')
+      const categoryToSearch =
+        typeof categoryOverride === 'string'
+          ? categoryOverride
+          : selectedCategory || 'restaurant'
 
       const kakaoPlaces = await searchNearbyPlaces({
         lat: searchLocation.lat,
         lng: searchLocation.lng,
-        category: selectedCategory,
+        category: categoryToSearch,
         radius,
       })
 
@@ -178,7 +182,7 @@ function PlaceSearchPanel({
                   닫기
                 </button>
               )}
-              <button type="button" onClick={handleSearchPlaces}>
+              <button type="button" onClick={() => handleSearchPlaces()}>
                 검색하기
               </button>
             </div>

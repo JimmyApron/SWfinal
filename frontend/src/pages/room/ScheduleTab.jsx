@@ -940,11 +940,15 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                 overflowX: "auto",
                 maxWidth: "100%",
                 position: "relative",
+                userSelect: "none",
+                WebkitUserSelect: "none",
+                msUserSelect: "none",
               }}
+              onDragStart={(e) => e.preventDefault()}
               onMouseLeave={() => { setIsDragging(false); setDragMode(null); setActiveDragCandidateId(null); }}
               onMouseUp={() => { setIsDragging(false); setDragMode(null); setActiveDragCandidateId(null); }}
             >
-              <table style={{ borderCollapse: "separate", borderSpacing: 0, minWidth: "100%" }}>
+              <table style={{ borderCollapse: "separate", borderSpacing: 0, minWidth: "100%", userSelect: "none" }}>
                 <thead>
                   <tr>
                     <th style={{
@@ -1129,7 +1133,8 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                         return (
                           <td
                             key={key}
-                            onMouseDown={() => {
+                            onMouseDown={(e) => {
+                              e.preventDefault();
                               if (!isSelectMode || !selectable) return;
                               const mode = isSelected ? "remove" : "add";
                               setDragMode(mode);

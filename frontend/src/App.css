@@ -53,6 +53,30 @@
   margin: 14px auto 12px;
 }
 
+.location-top-selector,
+.location-schedule-chip-row,
+.location-schedule-chip-row *,
+.location-apply-schedule-list,
+.location-apply-schedule-list *,
+.map-bottom-sheet,
+.map-bottom-sheet * {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.map-bottom-sheet input,
+.map-bottom-sheet textarea,
+.map-bottom-sheet select,
+.location-top-selector input,
+.location-top-selector textarea,
+.location-top-selector select,
+.location-apply-schedule-list input,
+.location-apply-schedule-list textarea,
+.location-apply-schedule-list select {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .map-experience {
   position: relative;
   width: 100%;
@@ -419,7 +443,7 @@
   border-radius: 999px !important;
   background: rgba(255, 255, 255, 0.96) !important;
   color: #374151 !important;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16) !important;
+  box-shadow: none !important;
   font-size: 14px !important;
   font-weight: 800 !important;
 }
@@ -436,7 +460,7 @@
   border-radius: 999px !important;
   background: rgba(255, 255, 255, 0.96) !important;
   color: #374151 !important;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16) !important;
+  box-shadow: none !important;
   font-size: 14px !important;
   font-weight: 800 !important;
 }
@@ -451,7 +475,7 @@
 .map-place-search-panel .place-category-tabs button.is-selected {
   background: #7c79ff !important;
   color: #fff !important;
-  box-shadow: 0 10px 24px rgba(124, 121, 255, 0.28) !important;
+  box-shadow: none !important;
 }
 
 .map-filter-popover {
@@ -580,10 +604,15 @@
 }
 
 .map-bottom-sheet.is-hidden {
-  transform: translateY(calc(100% - 34px + var(--sheet-drag-offset, 0px)));
+  transform: translateY(calc(100% - 54px + var(--sheet-drag-offset, 0px)));
   max-height: calc(100% - var(--sheet-expanded-top));
   overflow: hidden;
   box-shadow: 0 -6px 16px rgba(15, 23, 42, 0.08);
+}
+
+.map-bottom-sheet.is-hidden .map-sheet-handle {
+  height: 42px;
+  margin-bottom: 14px;
 }
 
 .map-sheet-handle {
@@ -816,6 +845,7 @@
 }
 
 .map-results-sheet {
+  --sheet-expanded-top: 170px;
   max-height: calc(100% - var(--sheet-expanded-top));
 }
 
@@ -826,15 +856,16 @@
 
 .map-results-sheet ul {
   display: flex;
+  flex-direction: column;
   gap: 10px;
   margin: 0;
-  padding: 0 0 6px;
-  overflow-x: auto;
+  padding: 0 0 10px;
+  overflow: visible;
   list-style: none;
 }
 
 .map-results-sheet li {
-  flex: 0 0 230px;
+  flex: 0 0 auto;
   padding: 12px;
   border: 1px solid #ececf3;
   border-radius: 16px;
@@ -858,12 +889,36 @@
 
 .map-friends-sheet {
   --sheet-collapsed-height: 176px;
-  max-height: calc(100% - var(--sheet-expanded-top));
+  --friend-sheet-top: var(--sheet-expanded-top);
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - var(--friend-sheet-top));
+  max-height: calc(100% - var(--friend-sheet-top));
+  overflow: hidden;
+}
+
+.map-friends-sheet.is-expanded {
+  height: calc(100% - var(--friend-sheet-top));
+  max-height: calc(100% - var(--friend-sheet-top));
+  overflow: hidden;
+}
+
+.map-friends-sheet.is-member-list-mode {
+  --sheet-collapsed-height: 176px;
+}
+
+.map-friends-sheet.is-member-list-mode.is-expanded {
+  height: calc(100% - var(--friend-sheet-top));
 }
 
 .map-friends-sheet.is-collapsed > :not(.map-sheet-handle):not(.map-sheet-header) {
   visibility: hidden;
   pointer-events: none;
+}
+
+.map-member-list-only-header {
+  flex: 0 0 auto;
+  margin-bottom: 8px;
 }
 
 .departure-actions {
@@ -890,8 +945,49 @@
 .friend-route-list {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   gap: 8px;
   margin-top: 14px;
+}
+
+.friend-location-list.is-member-list-only {
+  flex: 1 1 auto;
+  margin-top: 0;
+}
+
+.friend-location-list-preview,
+.friend-location-list-body {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.friend-location-list-preview {
+  position: relative;
+  overflow: hidden;
+}
+
+.friend-location-list.has-more-members .friend-location-list-preview::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 54px;
+  pointer-events: none;
+  background: linear-gradient(rgba(255, 255, 255, 0), #fff);
+}
+
+.friend-location-list-body.is-scrollable {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding-bottom: 8px;
+  scrollbar-width: none;
+}
+
+.friend-location-list-body.is-scrollable::-webkit-scrollbar {
+  display: none;
 }
 
 .friend-list-title {
@@ -928,6 +1024,17 @@
   font-weight: 800;
 }
 
+.friend-location-more-button {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd7ff;
+  border-radius: 12px;
+  background: #fff;
+  color: #6d5dfc;
+  font-size: 13px;
+  font-weight: 900;
+}
+
 .friend-avatar {
   width: 38px;
   height: 38px;
@@ -947,12 +1054,15 @@
 }
 
 .friend-location-row button {
+  flex: 0 0 auto;
   padding: 7px 10px;
   border: 1px solid #ddd7ff;
   border-radius: 10px;
   background: #fff;
   color: #6d5dfc;
+  font-size: 12px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .map-participant-layer {
@@ -1238,6 +1348,18 @@
   border: 0;
   background: #7c79ff;
   color: #fff;
+}
+
+.meeting-place-confirm-actions button:first-child {
+  border: 0;
+  background: #7c79ff;
+  color: #fff;
+}
+
+.meeting-place-confirm-actions button:last-child {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #374151;
 }
 
 .map-wrapper {

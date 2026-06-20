@@ -200,54 +200,6 @@ function ConfirmedScheduleDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberLocations]);
 
-  useEffect(() => {
-    if (selectedMeetingPlace || !schedule?.location) return;
-
-    let isCancelled = false;
-
-    const findSavedMeetingPlace = () => {
-      if (!window.kakao?.maps?.services) {
-        setTimeout(findSavedMeetingPlace, 100);
-        return;
-      }
-
-      const placesService = new window.kakao.maps.services.Places();
-
-      placesService.keywordSearch(schedule.location, (data, status) => {
-        if (
-          isCancelled ||
-          status !== window.kakao.maps.services.Status.OK ||
-          !data?.[0]
-        ) {
-          return;
-        }
-
-        const place = data[0];
-        const resolvedPlace = {
-          name: place.place_name || schedule.location,
-          address:
-            place.road_address_name ||
-            place.address_name ||
-            schedule.locationaddress ||
-            "",
-          lat: Number(place.y),
-          lng: Number(place.x),
-        };
-
-        setSelectedMeetingPlace(resolvedPlace);
-        setDraftMeetingPlace(resolvedPlace);
-        setLocationText(resolvedPlace.name);
-        setLocationAddress(resolvedPlace.address);
-      });
-    };
-
-    findSavedMeetingPlace();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [schedule, selectedMeetingPlace]);
-
   if (!schedule) return null;
 
   const isRoomOwner = currentUser?.id && currentUser.id === roomOwnerId;
@@ -346,34 +298,49 @@ function ConfirmedScheduleDetailPage() {
               memberLocation.transportmode
           )
           .map(async (memberLocation) => {
-          const mode = memberLocation.transportmode;
-          const result = await getRouteTime({
-            origin: {
-              lat: Number(memberLocation.latitude),
-              lng: Number(memberLocation.longitude),
-            },
-            destination: {
-              lat: Number(place.lat),
-              lng: Number(place.lng),
-            },
-            mode,
-          });
+            const mode = normalizeTransportMode(memberLocation.transportmode);
+            if (!mode) return null;
 
-          if (mode === "transit" && result.encodedPolyline) {
-            pathResults.push({
-              userid: memberLocation.userid,
-              guestid: memberLocation.guestid,
+            let hasPath = false;
+            const result = await getRouteTime({
+              origin: {
+                lat: Number(memberLocation.latitude),
+                lng: Number(memberLocation.longitude),
+              },
+              destination: {
+                lat: Number(place.lat),
+                lng: Number(place.lng),
+              },
               mode,
-              path: decodePolyline(result.encodedPolyline),
+            }).catch((error) => {
+              console.error("멤버 이동시간 계산 실패:", error);
+              return null;
             });
-          }
 
-          if (mode === "car") {
-            const apiBaseUrl = process.env.REACT_APP_API_BASE_URL;
-            const response = await fetch(`${apiBaseUrl}/kakao/route`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
+            if (mode === "transit" && result) {
+              const encodedPaths = [
+                result.encodedPolyline,
+                ...(result.steps || []).map((step) => step.encodedPolyline),
+              ].filter(Boolean);
+              const transitPath = encodedPaths.flatMap((encodedPath) =>
+                decodePolyline(encodedPath)
+              );
+
+              if (transitPath.length > 0) {
+                pathResults.push({
+                  userid: memberLocation.userid,
+                  guestid: memberLocation.guestid,
+                  mode,
+                  path: transitPath,
+                });
+                hasPath = true;
+              }
+            }
+
+            if (mode === "car") {
+              const apiBaseUrl = getApiBaseUrl();
+              const url = `${apiBaseUrl}/kakao/route`;
+              const requestBody = {
                 origin: {
                   lat: Number(memberLocation.latitude),
                   lng: Number(memberLocation.longitude),
@@ -382,29 +349,73 @@ function ConfirmedScheduleDetailPage() {
                   lat: Number(place.lat),
                   lng: Number(place.lng),
                 },
-              }),
-            });
+              };
+              const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(requestBody),
+              }).catch((error) => {
+                console.error("[Kakao Route API] 멤버 자동차 경로선 서버 연결 실패:", {
+                  url,
+                  requestBody,
+                  error,
+                });
+                return null;
+              });
 
-            if (response.ok) {
-              const pathResult = await response.json();
+              if (response?.ok) {
+                const pathResult = await response.json();
 
-              if (pathResult.path?.length > 0) {
+                if (pathResult.path?.length > 0) {
+                  pathResults.push({
+                    userid: memberLocation.userid,
+                    guestid: memberLocation.guestid,
+                    mode,
+                    path: pathResult.path,
+                  });
+                  hasPath = true;
+                }
+              } else if (response) {
+                const responseBody = await readRouteResponseBody(response);
+
+                console.error("[Kakao Route API] 멤버 자동차 경로선 계산 실패:", {
+                  url,
+                  status: response.status,
+                  statusText: response.statusText,
+                  requestBody,
+                  responseBody,
+                });
+              }
+            }
+
+            if (!hasPath) {
+              const fallbackPath = buildFallbackRoutePath(
+                {
+                  lat: Number(memberLocation.latitude),
+                  lng: Number(memberLocation.longitude),
+                },
+                {
+                  lat: Number(place.lat),
+                  lng: Number(place.lng),
+                }
+              );
+
+              if (fallbackPath.length > 0) {
                 pathResults.push({
                   userid: memberLocation.userid,
                   guestid: memberLocation.guestid,
                   mode,
-                  path: pathResult.path,
+                  path: fallbackPath,
                 });
               }
             }
-          }
 
-          return {
-            userid: memberLocation.userid,
-            guestid: memberLocation.guestid,
-            mode,
-            durationMinutes: Math.round(result.duration / 60),
-          };
+            return {
+              userid: memberLocation.userid,
+              guestid: memberLocation.guestid,
+              mode,
+              durationMinutes: result?.duration ? Math.round(result.duration / 60) : null,
+            };
           })
       );
 
@@ -1045,7 +1056,11 @@ function ConfirmedScheduleDetailPage() {
             {selectedMeetingPlace || schedule.location ? "만날 장소 재설정" : "만날 장소 설정"}
           </p>
           <button
-            onClick={() => navigate(`/rooms/${schedule.roomid}?tab=location`)}
+            onClick={() =>
+              navigate(`/rooms/${schedule.roomid}?tab=location`, {
+                state: { selectedScheduleId: schedule.id },
+              })
+            }
             style={{ border: "none", background: "none", color: "#7c79ff", fontSize: "13px", cursor: "pointer", padding: 0 }}
           >
             위치 탭에서 정하기
@@ -1248,5 +1263,53 @@ const shortcutButtonStyle = {
   cursor: "pointer",
   fontSize: "12px",
 };
+
+function getApiBaseUrl() {
+  return (process.env.REACT_APP_API_BASE_URL || "http://localhost:5000/api").replace(/\/$/, "");
+}
+
+async function readRouteResponseBody(response) {
+  const contentType = response.headers.get("content-type") || "";
+
+  try {
+    if (contentType.includes("application/json")) {
+      return await response.json();
+    }
+
+    return await response.text();
+  } catch (error) {
+    return {
+      message: "응답 본문을 읽지 못했습니다.",
+      error: error.message,
+    };
+  }
+}
+
+function normalizeTransportMode(mode) {
+  if (mode === "car" || mode === "자동차") return "car";
+  if (mode === "transit" || mode === "대중교통") return "transit";
+  return mode || "";
+}
+
+function buildFallbackRoutePath(origin, destination) {
+  if (!isValidMapPoint(origin?.lat, origin?.lng) || !isValidMapPoint(destination?.lat, destination?.lng)) {
+    return [];
+  }
+
+  return [
+    {
+      lat: Number(origin.lat),
+      lng: Number(origin.lng),
+    },
+    {
+      lat: Number(destination.lat),
+      lng: Number(destination.lng),
+    },
+  ];
+}
+
+function isValidMapPoint(lat, lng) {
+  return Number.isFinite(Number(lat)) && Number.isFinite(Number(lng));
+}
 
 export default ConfirmedScheduleDetailPage;

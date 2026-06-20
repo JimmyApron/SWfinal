@@ -318,8 +318,10 @@ export async function applyConfirmedLocationToSchedule(
   linkVoteToSchedule = true,
   locationKind = null
 ) {
+  let updatedSchedule = null;
+
   if (isMiddlePlace) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("confirmed_schedules")
       .update({
         location: location.placename,
@@ -327,9 +329,13 @@ export async function applyConfirmedLocationToSchedule(
         locationlat: location.placelat ?? null,
         locationlng: location.placelng ?? null,
       })
-      .eq("id", Number(scheduleId));
+      .eq("id", Number(scheduleId))
+      .select("*")
+      .maybeSingle();
 
     if (error) throw new Error("일정 장소 저장 실패");
+    if (!data) throw new Error("Schedule location was not updated");
+    updatedSchedule = data;
   } else {
     const { data: existingLocation, error: existingLocationError } =
       await supabase
@@ -364,6 +370,7 @@ export async function applyConfirmedLocationToSchedule(
 
     if (error) throw new Error("투표 일정 연결 실패");
   }
+  return updatedSchedule;
 }
 
 export async function createLocationOnlyConfirmedSchedule(
@@ -433,7 +440,7 @@ export async function updateConfirmedScheduleLocation(
   locationLat = null,
   locationLng = null
 ) {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("confirmed_schedules")
     .update({
       location,
@@ -441,12 +448,19 @@ export async function updateConfirmedScheduleLocation(
       locationlat: locationLat,
       locationlng: locationLng,
     })
-    .eq("id", scheduleId);
+    .eq("id", scheduleId)
+    .select("*")
+    .maybeSingle();
 
   if (error) {
     console.error("장소 저장 실패 상세:", JSON.stringify(error));
     throw new Error("장소 저장 실패");
   }
+  if (!data) {
+    throw new Error("Schedule location was not updated");
+  }
+
+  return data;
 }
 
 export async function updateConfirmedScheduleTiming(
