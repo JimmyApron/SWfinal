@@ -179,7 +179,7 @@ function BottomNav() {
 
   const roomNavItems = [
     { key: "schedule", label: "일정", icon: FaCalendarAlt },
-    { key: "location", label: "위치", icon: FaMapMarkerAlt },
+    { key: "location", label: "장소", icon: FaMapMarkerAlt },
     { key: "vote", label: "투표", icon: FaVoteYea },
     { key: "chat", label: "채팅", icon: FaComments },
   ];

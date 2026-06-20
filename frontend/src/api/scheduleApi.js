@@ -237,7 +237,7 @@ export async function createDraftConfirmedSchedule(roomId, title) {
 export async function getAdditionalConfirmedLocations(roomId, scheduleId = null) {
   let query = supabase
     .from("confirmed_locations")
-    .select("id, placename, voteid, scheduleid, placeaddress, placelat, placelng, kakaomapurl")
+    .select("id, placename, voteid, scheduleid")
     .eq("roomid", Number(roomId))
     .order("createdat", { ascending: true });
 
@@ -245,23 +245,7 @@ export async function getAdditionalConfirmedLocations(roomId, scheduleId = null)
     query = query.eq("scheduleid", Number(scheduleId));
   }
 
-  let { data, error } = await query;
-
-  if (error && isMissingConfirmedLocationCoordinateColumn(error)) {
-    query = supabase
-      .from("confirmed_locations")
-      .select("id, placename, voteid, scheduleid")
-      .eq("roomid", Number(roomId))
-      .order("createdat", { ascending: true });
-
-    if (scheduleId !== null) {
-      query = query.eq("scheduleid", Number(scheduleId));
-    }
-
-    const fallbackResult = await query;
-    data = fallbackResult.data;
-    error = fallbackResult.error;
-  }
+  const { data, error } = await query;
 
   if (error) {
     console.error("추가 장소 조회 실패:", error);
@@ -331,12 +315,6 @@ function normalizePlaceName(value) {
   return String(value || "").replace(/\s+/g, "").trim();
 }
 
-function isMissingConfirmedLocationCoordinateColumn(error) {
-  return /placeaddress|placelat|placelng|kakaomapurl|schema cache|column/i.test(
-    `${error?.message || ""} ${error?.details || ""}`
-  );
-}
-
 export async function addAdditionalConfirmedLocation(roomId, scheduleId, place) {
   const placeData = typeof place === "string" ? { name: place } : place || {};
   const insertRow = {
@@ -344,16 +322,12 @@ export async function addAdditionalConfirmedLocation(roomId, scheduleId, place) 
     scheduleid: Number(scheduleId),
     placename: placeData.placename || placeData.name,
     voteid: null,
-    placeaddress: placeData.placeaddress || placeData.address || null,
-    placelat: placeData.placelat ?? placeData.lat ?? null,
-    placelng: placeData.placelng ?? placeData.lng ?? null,
-    kakaomapurl: placeData.kakaomapurl || placeData.kakaoMapUrl || null,
   };
 
   const { data, error } = await supabase
     .from("confirmed_locations")
     .insert([insertRow])
-    .select("id, placename, scheduleid, placeaddress, placelat, placelng, kakaomapurl")
+    .select("id, placename, scheduleid")
     .single();
 
   if (error) {
