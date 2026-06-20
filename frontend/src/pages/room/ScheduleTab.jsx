@@ -398,14 +398,22 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     // 📢 확정 일정 추가 알림 전송
     try {
       const scheduleTitle = confirmedTitle?.trim() ? `'${confirmedTitle}' ` : "";
+      const scheduleMessage = `[${roomName}] 방에 ${scheduleTitle}일정이 확정되었습니다.`;
       await createRoomNotifications({
         roomId: Number(roomId),
-        senderId: currentUser?.id,
+        senderId: currentUser?.id || localStorage.getItem("guest_id"),
         type: "schedule_confirmed",
         title: "🗓️ 일정 확정",
-        message: `[${roomName}] 방에 ${scheduleTitle}일정이 확정되었습니다.`,
+        message: scheduleMessage,
         link: `/rooms/${roomId}?tab=schedule`,
+        includeSender: true,
       });
+      window.dispatchEvent(new CustomEvent("app-toast", {
+        detail: {
+          message: scheduleMessage,
+          link: `/rooms/${roomId}?tab=schedule`,
+        },
+      }));
     } catch (notifError) {
       console.error("확정 일정 알림 생성 실패:", notifError);
     }

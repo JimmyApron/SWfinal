@@ -188,6 +188,7 @@ export async function createRoomNotifications({
   message,
   link,
   targetUserIds,
+  includeSender = false,
 }) {
   if (!roomId) throw new Error("roomId가 필요합니다.");
 
@@ -208,7 +209,7 @@ export async function createRoomNotifications({
 
   if (targetUserIds && targetUserIds.length > 0) {
     targetReceivers = targetUserIds
-      .filter((id) => id && String(id) !== String(senderId))
+      .filter((id) => id && (includeSender || String(id) !== String(senderId)))
       .map((id) => ({ receiverid: String(id) }));
   } else {
     const [{ data: members }, { data: guests }] = await Promise.all([
@@ -217,11 +218,11 @@ export async function createRoomNotifications({
     ]);
 
     const memberIds = (members || [])
-      .filter((m) => m.userid && String(m.userid) !== String(senderId))
+      .filter((m) => m.userid && (includeSender || String(m.userid) !== String(senderId)))
       .map((m) => ({ receiverid: String(m.userid) }));
 
     const guestIds = (guests || [])
-      .filter((g) => g.id && String(g.id) !== String(senderId))
+      .filter((g) => g.id && (includeSender || String(g.id) !== String(senderId)))
       .map((g) => ({ receiverid: String(g.id) }));
 
     targetReceivers = [...memberIds, ...guestIds];

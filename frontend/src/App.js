@@ -66,6 +66,19 @@ function NotificationListener() {
   }, [location]);
 
   useEffect(() => {
+    const handleAppToast = (event) => {
+      const nextToast = event.detail;
+      if (!nextToast?.message) return;
+
+      setToast({ message: nextToast.message, link: nextToast.link });
+      setTimeout(() => setToast(null), 4000);
+    };
+
+    window.addEventListener("app-toast", handleAppToast);
+    return () => window.removeEventListener("app-toast", handleAppToast);
+  }, []);
+
+  useEffect(() => {
     let isMounted = true;
     console.log("🚀 [App.js] NotificationListener 로드됨 (v1.3 - 탭별 팝업 조건 정교화)");
 
@@ -140,7 +153,7 @@ function NotificationListener() {
                 notif.issilent !== true && 
                 isGlobalPopupEnabled && 
                 !isRoomMuted && 
-                (!isLookingAtRelevantTab || notif.type === "kick");
+                (!isLookingAtRelevantTab || notif.type === "kick" || notif.type === "schedule_confirmed");
 
               if (showToast) {
                 console.log("✅ [App.js] Toast 표시함");
