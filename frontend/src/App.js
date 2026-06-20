@@ -39,6 +39,47 @@ import SettingEditPage from "./pages/settings/SettingEditPage";
 
 const AUTH_PATHS = ["/", "/login", "/signup", "/guest"];
 
+const NOTIFICATION_SETTING_COLUMNS = {
+  schedule_confirmed: "schedulenotifenabled",
+  schedule_cancelled: "schedulenotifenabled",
+  schedule_new: "schedulenotifenabled",
+  schedule_request: "schedulenotifenabled",
+  location_request: "locationnotifenabled",
+  middle_place_confirmed: "locationnotifenabled",
+  location_schedule_created: "locationnotifenabled",
+  vote_new: "votenotifenabled",
+  vote_closed: "votenotifenabled",
+  vote_reminder: "votenotifenabled",
+  chat_new: "chatnotifenabled",
+};
+
+async function isRoomNotificationPopupAllowed(roomId, type) {
+  const settingColumn = NOTIFICATION_SETTING_COLUMNS[type];
+  if (!roomId || !settingColumn) return true;
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user?.id) {
+    const { data } = await supabase
+      .from("room_members")
+      .select(settingColumn)
+      .eq("roomid", Number(roomId))
+      .eq("userid", user.id)
+      .maybeSingle();
+    return data?.[settingColumn] !== false;
+  }
+
+  const guestId = localStorage.getItem("guest_id");
+  if (!guestId) return true;
+
+  const { data } = await supabase
+    .from("room_guests")
+    .select(settingColumn)
+    .eq("roomid", Number(roomId))
+    .eq("id", guestId)
+    .maybeSingle();
+  return data?.[settingColumn] !== false;
+}
+
 function Layout({ children }) {
   const location = useLocation();
   const showNav = !AUTH_PATHS.includes(location.pathname);
@@ -66,9 +107,16 @@ function NotificationListener() {
   }, [location]);
 
   useEffect(() => {
-    const handleAppToast = (event) => {
+    const handleAppToast = async (event) => {
       const nextToast = event.detail;
       if (!nextToast?.message) return;
+
+      const isGlobalPopupEnabled = localStorage.getItem("global_popup_enabled") !== "false";
+      const mutedRooms = JSON.parse(localStorage.getItem("muted_rooms") || "[]");
+      const isRoomMuted = nextToast.roomId && mutedRooms.some(id => String(id) === String(nextToast.roomId));
+      const isSettingAllowed = await isRoomNotificationPopupAllowed(nextToast.roomId, nextToast.type);
+
+      if (!isGlobalPopupEnabled || isRoomMuted || !isSettingAllowed) return;
 
       setToast({ message: nextToast.message, link: nextToast.link });
       setTimeout(() => setToast(null), 4000);

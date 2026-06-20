@@ -154,6 +154,9 @@ function RoomListPage() {
         (payload) => {
           if (payload.eventType === "INSERT") {
             const newNotif = payload.new;
+            if (newNotif.issilent === true) {
+              return;
+            }
             if (newNotif.roomid) {
               setRooms((prevRooms) => {
                 const targetIdx = prevRooms.findIndex(r => String(r.id) === String(newNotif.roomid));

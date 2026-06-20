@@ -412,6 +412,8 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
         detail: {
           message: scheduleMessage,
           link: `/rooms/${roomId}?tab=schedule`,
+          roomId: Number(roomId),
+          type: "schedule_confirmed",
         },
       }));
     } catch (notifError) {

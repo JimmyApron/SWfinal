@@ -580,6 +580,8 @@ function MapPage({ roomId }) {
       detail: {
         message,
         link,
+        roomId: currentRoomId,
+        type: 'middle_place_confirmed',
       },
     }))
   }
@@ -1241,6 +1243,8 @@ function MapPage({ roomId }) {
         detail: {
           message: `${schedule.location || pendingMiddleLocation.placename} 장소가 확정되었습니다.`,
           link: `/rooms/${currentRoomId}?tab=location`,
+          roomId: currentRoomId,
+          type: 'middle_place_confirmed',
         },
       }))
       
@@ -1462,6 +1466,8 @@ function MapPage({ roomId }) {
         detail: {
           message: scheduleMessage,
           link: scheduleLink,
+          roomId: currentRoomId,
+          type: 'location_schedule_created',
         },
       }))
       setMessage(`${schedule.title} 일정을 만들었어요. 이제 만날 위치를 정해 주세요.`)

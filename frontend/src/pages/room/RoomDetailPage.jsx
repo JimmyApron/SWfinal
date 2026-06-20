@@ -169,6 +169,7 @@ function RoomDetailPage() {
       supabase.channel(`room_notifs_${roomId}_${currentUserId}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `receiverid=eq.${currentUserId}` }, async (payload) => {
         const newNotif = payload.new;
         if (Number(newNotif.roomid) !== Number(roomId)) return;
+        if (newNotif.issilent === true) return;
         const types = TAB_TYPE_MAP[tabRef.current] || [];
         if (types.includes(newNotif.type)) {
           await markNotificationsAsReadInRoomByType(roomId, currentUserId, [newNotif.type]);
@@ -345,7 +346,11 @@ function RoomDetailPage() {
     const table = currentUser.type === "member" ? "room_members" : "room_guests";
     const filter = currentUser.type === "member" ? { roomid: Number(roomId), userid: currentUser.id } : { id: currentUser.id };
     const { error } = await supabase.from(table).update({ [col]: next }).match(filter);
-    if (!error) setNotifSettings(prev => ({ ...prev, [tabName]: next }));
+    if (error) {
+      alert("알림 설정 저장 실패: " + error.message);
+      return;
+    }
+    setNotifSettings(prev => ({ ...prev, [tabName]: next }));
   };
 
   if (!room) return <div>로딩 중...</div>;

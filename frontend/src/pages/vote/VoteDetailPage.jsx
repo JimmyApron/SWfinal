@@ -800,6 +800,8 @@ function VoteDetailPage() {
       detail: {
         message,
         link,
+        roomId: Number(roomid),
+        type: "middle_place_confirmed",
       },
     }));
   };
@@ -812,6 +814,8 @@ function VoteDetailPage() {
       detail: {
         message: `${placeName} 장소가 확정되었습니다.`,
         link,
+        roomId: Number(roomid),
+        type: "middle_place_confirmed",
       },
     }));
   };
