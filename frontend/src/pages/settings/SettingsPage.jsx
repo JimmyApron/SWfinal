@@ -108,53 +108,51 @@ function SettingsPage() {
           {loginProvider === 'google' && <div className="provider-badge provider-google"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="16" /> Google</div>}
           {loginProvider === 'kakao' && <div className="provider-badge provider-kakao">카카오</div>}
           
-          <button type="button" className="profile-edit-button" onClick={() => navigate('/settings/edit')}>
+          <button type="button" className="edit-btn" onClick={() => navigate('/settings/edit')}>
             <FaPen size={12} /> 프로필 편집
           </button>
         </section>
 
-        <h3 className="settings-section-title">앱 설정</h3>
+        <h3 className="section-title">앱 설정</h3>
         <div className="settings-card">
           <div className="settings-row">
             <div className="row-info">
-              <div className="settings-icon-circle"><FaMoon /></div>
+              <div className="icon-box"><FaMoon /></div>
               <span className="row-label">다크 모드</span>
             </div>
-            <button type="button" className="settings-toggle" role="switch" aria-checked={isDarkMode} onClick={toggleTheme}>
-              <div className="settings-toggle-thumb" />
+            <button type="button" className="toggle-btn" role="switch" aria-checked={isDarkMode} onClick={toggleTheme}>
+              <div className="toggle-knob" />
             </button>
           </div>
           <div className="settings-row">
             <div className="row-info">
-              <div className="settings-icon-circle"><FaBell /></div>
+              <div className="icon-box"><FaBell /></div>
               <span className="row-label">알림 팝업</span>
             </div>
-            <button type="button" className="settings-toggle" role="switch" aria-checked={isNotifEnabled} onClick={toggleNotif}>
-              <div className="settings-toggle-thumb" />
+            <button type="button" className="toggle-btn" role="switch" aria-checked={isNotifEnabled} onClick={toggleNotif}>
+              <div className="toggle-knob" />
             </button>
           </div>
         </div>
 
-        <h3 className="settings-section-title">계정</h3>
-        <div className="account-menu-list">
-          <button type="button" className="account-menu-card" onClick={() => navigate('/settings/edit')}>
-            <div className="row-info">
-              <div className="account-menu-icon"><FaUser /></div>
-              <span className="row-label">내 정보 수정</span>
-            </div>
-            <FaChevronRight color="#9ca3af" />
-          </button>
+        <h3 className="section-title">계정</h3>
+        <button type="button" className="menu-card" onClick={() => navigate('/settings/edit')}>
+          <div className="row-info">
+            <div className="icon-box"><FaUser /></div>
+            <span className="row-label">내 정보 수정</span>
+          </div>
+          <FaChevronRight color="#9ca3af" />
+        </button>
 
-          <button type="button" className="account-menu-card logout-card" onClick={handleLogout}>
-            <div className="row-info">
-              <div className="account-menu-icon"><FaSignOutAlt /></div>
-              <span className="row-label">로그아웃</span>
-            </div>
-            <FaChevronRight color="#9ca3af" />
-          </button>
-        </div>
+        <button type="button" className="menu-card logout-card" onClick={handleLogout}>
+          <div className="row-info">
+            <div className="icon-box"><FaSignOutAlt /></div>
+            <span className="row-label">로그아웃</span>
+          </div>
+          <FaChevronRight color="#9ca3af" />
+        </button>
 
-        <p className="settings-version">버전 1.0.0</p>
+        <p className="version">버전 1.0.0</p>
       </div>
     </div>
   )
