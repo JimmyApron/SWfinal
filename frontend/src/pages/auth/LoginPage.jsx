@@ -29,7 +29,7 @@ function LoginPage() {
       localStorage.setItem('user_id', loggedInUserId)
       localStorage.removeItem('guest_id')
 
-      setMessage(`🎉 ${result.profile?.nickname || '회원'}님 환영합니다! 잠시 후 홈 화면으로 이동합니다.`)
+      setMessage(`${result.profile?.nickname || '회원'}님 환영합니다! 잠시 후 홈 화면으로 이동합니다.`)
 
       // 3. 💡 [핵심 개편] 성공 즉시 HomePage(/home)로 다이렉트 페이지 이동시킵니다.
       setTimeout(() => {
@@ -44,6 +44,7 @@ function LoginPage() {
   return (
     <div
       style={{
+        position: 'relative',
         minHeight: '100vh',
         backgroundColor: '#ffffff',
         padding: '24px',
@@ -53,6 +54,9 @@ function LoginPage() {
       <button
         onClick={() => navigate('/')}
         style={{
+          position: 'absolute',
+          top: '16px',
+          left: '16px',
           width: '40px',
           height: '40px',
           display: 'flex',
@@ -63,14 +67,13 @@ function LoginPage() {
           cursor: 'pointer',
           color: '#16142B',
           padding: 0,
-          marginBottom: '28px',
         }}
       >
         <FaChevronLeft size={20} />
       </button>
 
-      <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 800, color: '#16142B' }}>이메일로 로그인</h1>
-      <p style={{ margin: '12px 0 36px', fontSize: '14px', color: '#6B687A' }}>
+      <h1 style={{ margin: '50px 0 0', fontSize: '28px', fontWeight: 800, color: '#16142B' }}>이메일로 로그인</h1>
+      <p style={{ margin: '20px 0 36px', fontSize: '14px', color: '#6B687A' }}>
         가입한 이메일과 비밀번호를 입력해주세요.
       </p>
 

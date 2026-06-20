@@ -364,6 +364,18 @@ export async function addAdditionalConfirmedLocation(roomId, scheduleId, place) 
   return data;
 }
 
+export async function deleteAdditionalConfirmedLocation(locationId) {
+  const { error } = await supabase
+    .from("confirmed_locations")
+    .delete()
+    .eq("id", Number(locationId));
+
+  if (error) {
+    console.error("추가 위치 삭제 실패:", error);
+    throw new Error("추가 위치 삭제 실패");
+  }
+}
+
 export async function getRoomConfirmedSchedules(roomId) {
   const today = new Date().toISOString().slice(0, 10);
   const { data, error } = await supabase

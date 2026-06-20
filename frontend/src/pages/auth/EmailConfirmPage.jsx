@@ -61,8 +61,7 @@ function EmailConfirmPage() {
 
   return (
     <section style={{ textAlign: 'center', marginTop: '100px' }}>
-    
-      <h2>🎉 인증 성공! 환영합니다, {userNickname}님!</h2>
+      <h2>인증 성공! 환영합니다, {userNickname}님!</h2>
       <p>이메일 인증이 완벽하게 완료되었습니다.</p>
       <p>잠시 후 서비스 화면으로 안전하게 이동합니다...</p>
     </section>

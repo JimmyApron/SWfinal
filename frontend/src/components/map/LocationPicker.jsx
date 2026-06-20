@@ -209,6 +209,7 @@ function LocationPicker({
           onKeyDown={(event) => event.key === "Enter" && handleSearch()}
           style={{
             flex: 1,
+            minWidth: 0,
             padding: "10px 12px",
             fontSize: "14px",
             border: "1px solid #ddd",

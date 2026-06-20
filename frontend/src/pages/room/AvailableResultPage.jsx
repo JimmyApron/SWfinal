@@ -31,9 +31,9 @@ function AvailableResultPage() {
   const allBlocks = useMemo(() => getTopAvailableTimes(availabilities), [availabilities]);
   const topTimes = useMemo(() => sortAvailableTimes(allBlocks, "count"), [allBlocks]);
 
-  // 일별: N일 연속 결과
+  // 일별: N일 연속 결과 (가능 인원이 0명인 조합은 제외)
   const consecutiveResults = useMemo(
-    () => getTopConsecutiveDays(availabilities, candidates, nDays),
+    () => getTopConsecutiveDays(availabilities, candidates, nDays).filter((r) => r.availableCount > 0),
     [availabilities, candidates, nDays]
   );
 
@@ -118,10 +118,7 @@ function AvailableResultPage() {
         {/* 당일 모드 */}
         {mode === "당일" && (
           <>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <p style={{ margin: 0, fontSize: "13px", color: "#888" }}>
-                사람 많은 순 → 오래 있는 순으로 순위를 매깁니다.
-              </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
               {topTimes.length > 0 && (
                 <button
                   type="button"
@@ -191,7 +188,7 @@ function AvailableResultPage() {
         {mode === "일별" && (
           <>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
-              <label style={{ fontSize: "14px", fontWeight: "600", color: "#333", whiteSpace: "nowrap" }}>며칠 연속?</label>
+              <label style={{ fontSize: "14px", fontWeight: "600", color: "#333", whiteSpace: "nowrap" }}>연속</label>
               <input
                 type="number"
                 min="2"
@@ -204,8 +201,10 @@ function AvailableResultPage() {
                 }}
                 style={{
                   width: "70px",
-                  padding: "8px 10px",
-                  fontSize: "15px",
+                  padding: "0 10px",
+                  fontSize: "14px",
+                  lineHeight: "20px",
+                  height: "20px",
                   border: "1px solid #ddd",
                   borderRadius: "8px",
                   outline: "none",
@@ -233,7 +232,7 @@ function AvailableResultPage() {
 
             {consecutiveResults.length === 0 && (
               <p style={{ color: "#aaa", textAlign: "center", marginTop: "40px" }}>
-                {`${nDays}일 연속 가능한 조합이 없습니다.`}
+                가능한 일정이 없습니다.
               </p>
             )}
 

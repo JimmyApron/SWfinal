@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { FiUser } from "react-icons/fi";
+import { FaBell } from "react-icons/fa";
 
 import { supabase } from "../../lib/supabaseClient";
 import {
@@ -375,7 +376,6 @@ function RoomDetailPage() {
 
     if (isHostA) return -1;
     if (isHostB) return 1;
-
     return new Date(a.joinDate) - new Date(b.joinDate);
   });
   const isLocationTab = tab === "location";
@@ -436,9 +436,12 @@ function RoomDetailPage() {
         {tab === "chat" && <ChatTab roomId={roomId} />}
       </div>
       {isSidebarOpen && (
-        <div style={{ position: "fixed", top: 0, right: 0, width: "270px", height: "100vh", backgroundColor: "#fff", boxShadow: "-2px 0 5px rgba(0,0,0,0.2)", zIndex: 2000, padding: "20px", display: "flex", flexDirection: "column", boxSizing: "border-box", overflowY: "auto" }}>
-          <button onClick={() => setIsSidebarOpen(false)} style={{ alignSelf: "flex-end", background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>✕</button>
-          <h3>방 설정</h3><hr/>
+        <div style={{ position: "fixed", top: 0, right: 0, width: "270px", height: "100vh", backgroundColor: "#fff", boxShadow: "-2px 0 5px rgba(0,0,0,0.2)", zIndex: 2000, padding: "20px", paddingBottom: "84px", display: "flex", flexDirection: "column", boxSizing: "border-box", overflowY: "auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h3 style={{ margin: 0 }}>방 설정</h3>
+            <button onClick={() => setIsSidebarOpen(false)} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", lineHeight: 1 }}>✕</button>
+          </div>
+          <hr style={{ margin: "12px 0" }} />
           <div style={{ textAlign: "center", marginBottom: "20px" }}>
             <div style={{ width: "100px", height: "100px", borderRadius: "24px", margin: "0 auto", overflow: "hidden", border: "1px solid #ddd", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "40px", backgroundColor: "#f3f4f6" }}>
               {room.roomimageurl ? <img src={room.roomimageurl} alt="방" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "🏠"}
@@ -451,18 +454,18 @@ function RoomDetailPage() {
             }} />
           </div>
           <div style={{ marginBottom: "20px" }}>
-            <h4>🔔 알림 설정</h4>
+            <h4 style={{ display: "flex", alignItems: "center", gap: "6px" }}><FaBell size={13} color="#F59E0B" /> 알림 설정</h4>
             {["schedule", "location", "vote", "chat"].map(t => (
               <div key={t} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                 <span style={{ fontSize: "14px" }}>{t === "schedule" ? "일정" : t === "location" ? "장소" : t === "vote" ? "투표" : "채팅"} 알림</span>
-                <button onClick={() => handleToggleNotification(t)} style={{ background: notifSettings[t] ? "#8366F4" : "#E0E0E0", color: "#fff", border: "none", borderRadius: "20px", padding: "4px 12px", cursor: "pointer" }}>{notifSettings[t] ? "ON" : "OFF"}</button>
+                <button onClick={() => handleToggleNotification(t)} style={{ background: notifSettings[t] ? "#8366F4" : "#E0E0E0", color: "#fff", border: "none", borderRadius: "20px", padding: "4px 12px", width: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>{notifSettings[t] ? "ON" : "OFF"}</button>
               </div>
             ))}
           </div>
           <button onClick={handleOpenInviteModal} style={{ width: "100%", padding: "10px", background: "#7c79ff", color: "#fff", border: "none", borderRadius: "8px", fontWeight: "bold", marginBottom: "20px" }}>친구 초대</button>
-          <div style={{ background: "#f0f0f0", padding: "10px", borderRadius: "8px", marginBottom: "20px" }}>
+          <div style={{ background: "#f0f0f0", padding: "10px", borderRadius: "8px", marginBottom: "20px", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px" }}>
             <span style={{ fontSize: "14px", fontWeight: "bold" }}>초대코드: {room.invitecode}</span>
-            <button onClick={handleCopyInviteCode} style={{ marginLeft: "8px", fontSize: "12px" }}>복사</button>
+            <button onClick={handleCopyInviteCode} style={{ background: "#fafafa", border: "1px solid #e0e0e0", borderRadius: "6px", padding: "4px 10px", fontSize: "12px", cursor: "pointer" }}>복사</button>
           </div>
           <div style={{ marginBottom: "25px" }}>
             <h4 style={{ margin: "0 0 10px 0" }}>

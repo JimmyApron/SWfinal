@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useGoogleLogin } from "@react-oauth/google";
+import { FaCalendarAlt } from "react-icons/fa";
 import { supabase } from "../../lib/supabaseClient";
 import { getMyConfirmedSchedules } from "../../api/scheduleApi";
 import {
@@ -17,7 +18,10 @@ import {
   getAcceptedShares,
   removeCalendarShare,
   getSentPendingCalendarShares,
+  getReceivedPendingCalendarShares,
   cancelCalendarShareRequest,
+  acceptCalendarShare,
+  rejectCalendarShare,
 } from "../../api/calendarShareApi";
 import LocationPicker from "../../components/map/LocationPicker";
 
@@ -44,8 +48,9 @@ const PRESET_COLORS = [
   "#4CAF50",
   "#e91e63",
   "#9c27b0",
-  "#00bcd4",
 ];
+// 할일(todo) 전용 색상(민트) — 일정 색상 목록(PRESET_COLORS)에서는 제외해서 겹치지 않게 한다
+const TODO_COLOR = "#1ABC9C";
 const REMINDER_OPTIONS = [
   { value: "none", label: "알림 없음" },
   { value: "0", label: "일정 시작 전" },
@@ -236,6 +241,7 @@ function CalendarPage() {
   const [sharingFriends, setSharingFriends] = useState([]);
   const [friendListForShare, setFriendListForShare] = useState([]);
   const [sentCalendarShareRequests, setSentCalendarShareRequests] = useState([]);
+  const [receivedCalendarShareRequests, setReceivedCalendarShareRequests] = useState([]);
   const [shareLoading, setShareLoading] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
 
@@ -325,28 +331,68 @@ function CalendarPage() {
     }
   };
 
-  const handleOpenSidePanel = async () => {
-    setShowSidePanel(true);
-
+  const loadCalendarShareData = useCallback(async () => {
     if (!currentUser) return;
 
     try {
-      const [sharing, friends, sentPending] = await Promise.all([
+      const [sharing, friends, sentPending, receivedPending] = await Promise.all([
         getAcceptedShares(currentUser.id),
         getFriends(currentUser.id),
         getSentPendingCalendarShares(currentUser.id),
+        getReceivedPendingCalendarShares(currentUser.id),
       ]);
 
       setSharingFriends(sharing);
       setSentCalendarShareRequests(sentPending);
+      setReceivedCalendarShareRequests(receivedPending);
 
       const sharingIds = new Set(sharing.map((s) => s.id));
       const sentIds = new Set(sentPending.map((s) => s.receiverId));
-      setFriendListForShare(friends.filter((f) => !sharingIds.has(f.id) && !sentIds.has(f.id)));
+      const receivedIds = new Set(receivedPending.map((s) => s.senderId));
+      setFriendListForShare(
+        friends.filter((f) => !sharingIds.has(f.id) && !sentIds.has(f.id) && !receivedIds.has(f.id))
+      );
     } catch (e) {
       console.error(e);
     }
+  }, [currentUser]);
+
+  const handleOpenSidePanel = async () => {
+    setShowSidePanel(true);
+    await loadCalendarShareData();
   };
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const channel = supabase
+      .channel(`calendar-shares-${currentUser.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "calendar_shares",
+          filter: `receiverid=eq.${currentUser.id}`,
+        },
+        loadCalendarShareData
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "calendar_shares",
+          filter: `senderid=eq.${currentUser.id}`,
+        },
+        loadCalendarShareData
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser, loadCalendarShareData]);
 
   const handleShareRequest = async (friend) => {
     if (!currentUser) return;
@@ -389,6 +435,25 @@ function CalendarPage() {
       await cancelCalendarShareRequest(req.shareId, currentUser.id, req.receiverId);
       setSentCalendarShareRequests((prev) => prev.filter((r) => r.shareId !== req.shareId));
       setFriendListForShare((prev) => [...prev, { id: req.receiverId, nickname: req.nickname, profileimageurl: req.profileimageurl }]);
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
+  const handleAcceptCalendarShareRequest = async (req) => {
+    try {
+      await acceptCalendarShare(currentUser.id, req.senderId);
+      setReceivedCalendarShareRequests((prev) => prev.filter((r) => r.shareId !== req.shareId));
+      await loadCalendarShareData();
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
+  const handleRejectCalendarShareRequest = async (req) => {
+    try {
+      await rejectCalendarShare(req.senderId, currentUser.id);
+      setReceivedCalendarShareRequests((prev) => prev.filter((r) => r.shareId !== req.shareId));
     } catch (e) {
       alert(e.message);
     }
@@ -1033,7 +1098,7 @@ function CalendarPage() {
                           width: "5px",
                           height: "5px",
                           borderRadius: "50%",
-                          backgroundColor: "#f90",
+                          backgroundColor: TODO_COLOR,
                         }}
                       />
                     ))}
@@ -1101,26 +1166,19 @@ function CalendarPage() {
                 <div style={{ fontWeight: "600" }}>
                   📌 {s.title || s.date}{" "}
                   {s.starttime
-                    ? `${s.starttime}~${s.endtime ? s.endtime : ""}`
+                    ? `(${s.starttime.slice(0, 5)})${
+                        s.endtime ? `~(${s.endtime.slice(0, 5)})` : ""
+                      }`
                     : "(하루종일)"}
                 </div>
-                <div style={{ display: "flex", gap: "8px", marginTop: "3px", flexWrap: "wrap" }}>
-                  {s.roomname && (
-                    <span style={{ color: "#aaa", fontSize: "12px" }}>
-                      🏠 {s.roomname}
-                    </span>
-                  )}
-                  {s.location && (
-                    <span style={{ fontSize: "12px", color: "#888" }}>
-                      📍 {s.location}
-                    </span>
-                  )}
-                  {s.memberCount > 0 && (
-                    <span style={{ fontSize: "12px", color: "#888" }}>
-                      👥 {attendees}명 참여
-                    </span>
-                  )}
-                </div>
+                {[s.roomname, s.location, s.memberCount > 0 ? `${attendees}명 참여` : null]
+                  .filter(Boolean).length > 0 && (
+                  <div style={{ fontSize: "12px", color: "#888", marginTop: "3px" }}>
+                    {[s.roomname, s.location, s.memberCount > 0 ? `${attendees}명 참여` : null]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1207,8 +1265,8 @@ function CalendarPage() {
                   width: "20px",
                   height: "20px",
                   borderRadius: "50%",
-                  border: `2px solid ${t.iscompleted ? "#f90" : "#ddd"}`,
-                  backgroundColor: t.iscompleted ? "#f90" : "transparent",
+                  border: `2px solid ${t.iscompleted ? TODO_COLOR : "#ddd"}`,
+                  backgroundColor: t.iscompleted ? TODO_COLOR : "transparent",
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
@@ -1235,7 +1293,7 @@ function CalendarPage() {
                   <span style={{ marginLeft: "5px", fontSize: "11px", color: "#aaa" }}>{t.duetime}</span>
                 )}
                 {t.reminder && t.reminder !== "none" && !t.iscompleted && (
-                  <span style={{ marginLeft: "3px", fontSize: "11px", color: "#f90" }}>🔔</span>
+                  <span style={{ marginLeft: "3px", fontSize: "11px", color: TODO_COLOR }}>🔔</span>
                 )}
               </span>
             </div>
@@ -1283,7 +1341,7 @@ function CalendarPage() {
                 justifyContent: "center",
               }}
             >
-              📅
+              <FaCalendarAlt color="#fff" size={18} />
             </button>
           </div>
           {/* 할일 버튼 */}
@@ -1315,12 +1373,12 @@ function CalendarPage() {
                 width: "46px",
                 height: "46px",
                 borderRadius: "50%",
-                backgroundColor: "#f90",
+                backgroundColor: TODO_COLOR,
                 color: "#fff",
                 border: "none",
                 fontSize: "22px",
                 cursor: "pointer",
-                boxShadow: "0 3px 10px rgba(255,153,0,0.4)",
+                boxShadow: "0 3px 10px rgba(141,110,99,0.4)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -1621,6 +1679,85 @@ function CalendarPage() {
               >
                 공개 중인 친구가 없습니다
               </p>
+            )}
+
+            {receivedCalendarShareRequests.length > 0 && (
+              <div style={{ marginBottom: "12px" }}>
+                <p
+                  style={{
+                    margin: "0 0 8px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    color: "var(--secondary-text)",
+                  }}
+                >
+                  받은 공개 요청
+                </p>
+                {receivedCalendarShareRequests.map((req) => (
+                  <div
+                    key={req.shareId}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "7px 0",
+                      borderBottom: "1px solid var(--border-color)",
+                    }}
+                  >
+                    {req.profileimageurl ? (
+                      <img
+                        src={req.profileimageurl}
+                        alt={req.nickname}
+                        style={{ width: "28px", height: "28px", borderRadius: "50%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: "28px",
+                          height: "28px",
+                          borderRadius: "50%",
+                          backgroundColor: "#e0e0ff",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "14px",
+                        }}
+                      >
+                        👤
+                      </div>
+                    )}
+                    <span style={{ flex: 1, fontSize: "13px" }}>{req.nickname}</span>
+                    <button
+                      onClick={() => handleAcceptCalendarShareRequest(req)}
+                      style={{
+                        fontSize: "11px",
+                        color: "#fff",
+                        border: "none",
+                        backgroundColor: "#7c79ff",
+                        borderRadius: "6px",
+                        padding: "3px 8px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      수락
+                    </button>
+                    <button
+                      onClick={() => handleRejectCalendarShareRequest(req)}
+                      style={{
+                        fontSize: "11px",
+                        color: "var(--secondary-text)",
+                        border: "1px solid var(--border-color)",
+                        background: "none",
+                        borderRadius: "6px",
+                        padding: "3px 8px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      거절
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
 
             {sentCalendarShareRequests.length > 0 && (
@@ -2063,7 +2200,7 @@ function CalendarPage() {
               style={{
                 width: "100%",
                 padding: "13px",
-                backgroundColor: todoTitle.trim() ? "#f90" : "#eee",
+                backgroundColor: todoTitle.trim() ? TODO_COLOR : "#eee",
                 color: todoTitle.trim() ? "#fff" : "#aaa",
                 border: "none",
                 borderRadius: "10px",
@@ -2139,7 +2276,7 @@ function CalendarPage() {
               <button
                 onClick={handleTodoUpdate}
                 disabled={!editTodoTitle.trim()}
-                style={{ flex: 2, padding: "13px", backgroundColor: editTodoTitle.trim() ? "#f90" : "#eee", color: editTodoTitle.trim() ? "#fff" : "#aaa", border: "none", borderRadius: "10px", fontSize: "15px", fontWeight: "bold", cursor: editTodoTitle.trim() ? "pointer" : "default" }}
+                style={{ flex: 2, padding: "13px", backgroundColor: editTodoTitle.trim() ? TODO_COLOR : "#eee", color: editTodoTitle.trim() ? "#fff" : "#aaa", border: "none", borderRadius: "10px", fontSize: "15px", fontWeight: "bold", cursor: editTodoTitle.trim() ? "pointer" : "default" }}
               >저장</button>
             </div>
           </div>
@@ -2164,9 +2301,10 @@ function CalendarPage() {
               backgroundColor: "var(--bg-color)",
               borderRadius: "20px 20px 0 0",
               width: "100%",
-              maxHeight: "90vh",
+              maxHeight: "calc(100vh - 0px)",
               overflowY: "auto",
               padding: "24px 20px 80px",
+              boxSizing: "border-box",
             }}
           >
             <div

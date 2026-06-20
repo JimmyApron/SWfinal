@@ -27,7 +27,8 @@ function InviteCodePage() {
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: '24px',
+        padding: '16px',
+        boxSizing: 'border-box',
       }}
     >
       <div
@@ -41,29 +42,29 @@ function InviteCodePage() {
       >
         <div
           style={{
-            width: '88px',
-            height: '88px',
-            borderRadius: '28px 28px 28px 6px',
+            width: '90px',
+            height: '90px',
+            borderRadius: '20px 20px 20px 4px',
             backgroundColor: '#ffffff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            marginBottom: '20px',
+            marginBottom: '7px',
             overflow: 'hidden',
           }}
         >
           <img src="/logo.png" alt="MeetUp" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         </div>
 
-        <h1 style={{ margin: 0, fontSize: '38px', fontWeight: 800, color: '#16142B' }}>MeetUp</h1>
+        <h1 style={{ margin: 0, fontSize: '45px', fontWeight: 800, color: '#16142B' }}>MeetUp</h1>
 
         <p
           style={{
-            margin: '12px 0 32px',
-            fontSize: '14px',
+            margin: '8px 0 14px',
+            fontSize: '12px',
             color: '#6B687A',
             textAlign: 'center',
-            lineHeight: 1.6,
+            lineHeight: 1.4,
           }}
         >
           친구들과 시간과 장소를 함께 정해요.
@@ -79,18 +80,18 @@ function InviteCodePage() {
             alignItems: 'center',
             justifyContent: 'center',
             gap: '8px',
-            padding: '15px',
+            padding: '11px',
             backgroundColor: '#EFEAFB',
             border: 'none',
-            borderRadius: '14px',
-            fontSize: '15px',
+            borderRadius: '12px',
+            fontSize: '14px',
             fontWeight: 600,
             color: '#16142B',
             cursor: 'pointer',
-            marginBottom: '10px',
+            marginBottom: '8px',
           }}
         >
-          <FaEnvelope size={16} color="#6C5CE7" />
+          <FaEnvelope size={14} color="#6C5CE7" />
           이메일로 로그인
         </button>
 
@@ -102,21 +103,21 @@ function InviteCodePage() {
             alignItems: 'center',
             justifyContent: 'center',
             gap: '8px',
-            padding: '15px',
+            padding: '11px',
             backgroundColor: '#FEE500',
             border: 'none',
-            borderRadius: '14px',
-            fontSize: '15px',
+            borderRadius: '12px',
+            fontSize: '14px',
             fontWeight: 700,
             color: '#191919',
             cursor: 'pointer',
-            marginBottom: '10px',
+            marginBottom: '8px',
           }}
         >
           <img
             src="https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_small.png"
             alt="Kakao"
-            width="20"
+            width="18"
           />
           카카오 간편로그인
         </button>
@@ -129,26 +130,26 @@ function InviteCodePage() {
             alignItems: 'center',
             justifyContent: 'center',
             gap: '8px',
-            padding: '15px',
+            padding: '11px',
             backgroundColor: '#ffffff',
             border: '1px solid #ddd9e8',
-            borderRadius: '14px',
-            fontSize: '15px',
+            borderRadius: '12px',
+            fontSize: '14px',
             fontWeight: 600,
             color: '#16142B',
             cursor: 'pointer',
-            marginBottom: '24px',
+            marginBottom: '14px',
           }}
         >
           <img
             src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
             alt="Google"
-            width="20"
+            width="18"
           />
           구글 간편로그인
         </button>
 
-        <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+        <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
           <div style={{ flex: 1, height: '1px', backgroundColor: '#ddd9e8' }} />
           <span style={{ fontSize: '13px', color: '#B3B0C2' }}>또는</span>
           <div style={{ flex: 1, height: '1px', backgroundColor: '#ddd9e8' }} />
@@ -158,13 +159,13 @@ function InviteCodePage() {
           style={{
             width: '100%',
             backgroundColor: '#F7F5FC',
-            borderRadius: '14px',
-            padding: '16px',
+            borderRadius: '12px',
+            padding: '10px',
             textAlign: 'center',
-            marginBottom: '28px',
+            marginBottom: '16px',
           }}
         >
-          <p style={{ margin: '0 0 6px', fontSize: '14px', color: '#7A7787' }}>처음이신가요?</p>
+          <p style={{ margin: '0 0 4px', fontSize: '12px', color: '#7A7787' }}>처음이신가요?</p>
 
           <button
             onClick={() => navigate('/signup')}
@@ -172,7 +173,7 @@ function InviteCodePage() {
               background: 'none',
               border: 'none',
               padding: 0,
-              fontSize: '15px',
+              fontSize: '13px',
               fontWeight: 700,
               color: '#6C5CE7',
               cursor: 'pointer',
@@ -181,7 +182,7 @@ function InviteCodePage() {
               gap: '4px',
             }}
           >
-            회원가입하기 <FaChevronRight size={12} />
+            회원가입하기 <FaChevronRight size={11} />
           </button>
         </div>
 
@@ -189,7 +190,7 @@ function InviteCodePage() {
           style={{
             width: '100%',
             borderTop: '1px dashed #bdbac4ef',
-            paddingTop: '28px',
+            paddingTop: '14px',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -197,24 +198,24 @@ function InviteCodePage() {
         >
           <div
             style={{
-              width: '56px',
-              height: '56px',
+              width: '40px',
+              height: '40px',
               borderRadius: '50%',
               backgroundColor: '#F0EDF9',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: '14px',
+              marginBottom: '8px',
             }}
           >
-            <FaUserPlus size={22} color="#6C5CE7" />
+            <FaUserPlus size={18} color="#6C5CE7" />
           </div>
 
-          <h3 style={{ margin: '0 0 6px', fontSize: '17px', fontWeight: 700, color: '#16142B' }}>
+          <h3 style={{ margin: '0 0 4px', fontSize: '14px', fontWeight: 700, color: '#16142B' }}>
             초대받으셨나요?
           </h3>
 
-          <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#9491A4', textAlign: 'center' }}>
+          <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#9491A4', textAlign: 'center' }}>
             회원가입 없이 초대 코드로 참여할 수 있어요.
           </p>
 
@@ -226,17 +227,17 @@ function InviteCodePage() {
               alignItems: 'center',
               justifyContent: 'center',
               gap: '8px',
-              padding: '14px',
+              padding: '11px',
               backgroundColor: '#ffffff',
               border: '1.5px solid #6C5CE7',
-              borderRadius: '14px',
-              fontSize: '15px',
+              borderRadius: '12px',
+              fontSize: '14px',
               fontWeight: 700,
               color: '#6C5CE7',
               cursor: 'pointer',
             }}
           >
-            <FaTicketAlt size={16} />
+            <FaTicketAlt size={14} />
             초대 코드로 참여하기
           </button>
         </div>

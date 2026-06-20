@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { FaCalendarAlt } from "react-icons/fa";
 import { supabase } from "../../lib/supabaseClient";
 import {
   getAdditionalConfirmedLocations,
@@ -18,6 +19,8 @@ import {
 import { createNotification, deleteFriendRequestNotification } from "../../api/notificationApi";
 import RoomListPage from "../room/RoomListPage";
 import ConfirmedScheduleCard from "../../components/ConfirmedScheduleCard";
+import RoomCreateForm from "../../components/room/RoomCreateForm";
+import RoomInviteForm from "../../components/room/RoomInviteForm";
 
 function getTodayStr() {
   const now = new Date();
@@ -67,6 +70,9 @@ function HomePage() {
   const [confirmedSchedules, setConfirmedSchedules] = useState([]);
   const [isConfirmedExpanded, setIsConfirmedExpanded] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [myNickname, setMyNickname] = useState("");
+  const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
+  const [showInviteRoomModal, setShowInviteRoomModal] = useState(false);
 
   const [showFriendPanel, setShowFriendPanel] = useState(false);
   const [friends, setFriends] = useState([]);
@@ -151,18 +157,26 @@ function HomePage() {
 
       setCurrentUser(user);
 
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("nickname")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      setMyNickname(profile?.nickname || "");
+
       const provider = user.app_metadata?.provider;
 
-      if (provider === "google" || provider === "kakao") {
-        const { data: profile } = await supabase
+      if ((provider === "google" || provider === "kakao") && !profile?.nickname) {
+        await assignUniqueNickname(user);
+
+        const { data: updatedProfile } = await supabase
           .from("profiles")
           .select("nickname")
           .eq("id", user.id)
           .maybeSingle();
 
-        if (!profile?.nickname) {
-          await assignUniqueNickname(user);
-        }
+        setMyNickname(updatedProfile?.nickname || "");
       }
 
       try {
@@ -341,16 +355,22 @@ function HomePage() {
   );
 
   return (
-    <div className="home-container" style={{ backgroundColor: "var(--bg-color)", color: "var(--text-color)", minHeight: "100vh" }}>
+    <div className="home-container" style={{ backgroundColor: "var(--bg-color)", color: "var(--text-color)", minHeight: "100vh", padding: "14px 14px 0" }}>
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: "8px",
         }}
       >
-        <h1 style={{ margin: 0, color: "var(--text-color)" }}>홈</h1>
+        <div>
+          <h1 style={{ margin: 0, fontSize: "20px", color: "var(--accent-color)" }}>
+            안녕하세요, {myNickname || "회원"}님
+          </h1>
+          <p style={{ margin: "2px 0 0", fontSize: "13px", color: "var(--secondary-text)" }}>
+            오늘도 즐거운 하루 보내세요
+          </p>
+        </div>
 
         <button
           onClick={handleOpenFriendPanel}
@@ -358,7 +378,7 @@ function HomePage() {
             position: "relative",
             border: "none",
             background: "none",
-            fontSize: "22px",
+            fontSize: "20px",
             cursor: "pointer",
             color: "var(--text-color)",
             lineHeight: 1,
@@ -390,6 +410,8 @@ function HomePage() {
           )}
         </button>
       </div>
+
+      <div style={{ height: "1px", backgroundColor: "var(--border-color)", margin: "10px 0 6px" }} />
 
       {showFriendPanel && (
         <>
@@ -732,11 +754,14 @@ function HomePage() {
         </>
       )}
 
-      <div style={{ marginBottom: "20px" }}>
-        <h3 style={{ marginBottom: "8px", color: "var(--text-color)" }}>확정된 일정</h3>
+      <div style={{ marginBottom: "14px" }}>
+        <h3 style={{ marginBottom: "6px", fontSize: "16px", fontWeight: "700", color: "var(--text-color)", display: "flex", alignItems: "center", gap: "6px" }}>
+          <FaCalendarAlt color="#7C5CFF" size={15} />
+          다가오는 일정
+        </h3>
 
         {upcomingSchedules.length === 0 ? (
-          <p style={{ color: "var(--secondary-text)", fontSize: "14px" }}>
+          <p style={{ color: "var(--secondary-text)", fontSize: "13px" }}>
             확정된 일정이 없습니다
           </p>
         ) : (
@@ -745,10 +770,10 @@ function HomePage() {
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: "10px",
+                gap: "8px",
               }}
             >
-              {(isConfirmedExpanded ? upcomingSchedules : upcomingSchedules.slice(0, 3)).map((schedule) => (
+              {(isConfirmedExpanded ? upcomingSchedules : upcomingSchedules.slice(0, 2)).map((schedule) => (
                 <ConfirmedScheduleCard
                   key={schedule.id}
                   schedule={schedule}
@@ -760,23 +785,23 @@ function HomePage() {
                 />
               ))}
             </div>
-            {upcomingSchedules.length > 3 && (
+            {upcomingSchedules.length > 2 && (
               <button
                 onClick={() => setIsConfirmedExpanded(!isConfirmedExpanded)}
                 style={{
                   width: "100%",
                   padding: "8px",
-                  marginTop: "8px",
+                  marginTop: "6px",
                   backgroundColor: "transparent",
                   color: "var(--accent-color)",
-                  border: "1px solid var(--accent-color)",
-                  borderRadius: "8px",
+                  border: "none",
+                  borderTop: "1px solid var(--border-color)",
                   cursor: "pointer",
-                  fontSize: "13px",
+                  fontSize: "12px",
                   fontWeight: "bold"
                 }}
               >
-                {isConfirmedExpanded ? "접기 ▲" : `더보기 (+${upcomingSchedules.length - 3}) ▼`}
+                {isConfirmedExpanded ? "접기 ▲" : `더보기 (+${upcomingSchedules.length - 2}) ▼`}
               </button>
             )}
           </div>
@@ -785,10 +810,92 @@ function HomePage() {
 
       <RoomListPage />
 
-      <button onClick={() => navigate("/rooms/create")} style={{ backgroundColor: "var(--accent-color)", color: "var(--accent-text)", padding: "12px", borderRadius: "8px", border: "none", width: "100%", marginBottom: "8px", fontWeight: "bold" }}>방 만들기</button>
-      <button onClick={() => navigate("/rooms/invite")} style={{ backgroundColor: "var(--btn-bg)", color: "var(--btn-text)", padding: "12px", borderRadius: "8px", border: "1px solid var(--border-color)", width: "100%", fontWeight: "bold" }}>
+      <button onClick={() => setShowCreateRoomModal(true)} style={{ backgroundColor: "var(--accent-color)", color: "var(--accent-text)", padding: "10px", borderRadius: "8px", border: "none", width: "100%", marginTop: "10px", marginBottom: "6px", fontWeight: "bold", fontSize: "14px" }}>방 만들기</button>
+      <button onClick={() => setShowInviteRoomModal(true)} style={{ backgroundColor: "var(--btn-bg)", color: "var(--btn-text)", padding: "10px", borderRadius: "8px", border: "1px solid var(--border-color)", width: "100%", marginBottom: "12px", fontWeight: "bold", fontSize: "14px" }}>
         초대코드 입력하기
       </button>
+
+      {showCreateRoomModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            zIndex: 3000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+          }}
+          onClick={() => setShowCreateRoomModal(false)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: "20px",
+              borderRadius: "18px",
+              width: "min(92vw, 360px)",
+              maxHeight: "85vh",
+              overflowY: "auto",
+              boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
+              boxSizing: "border-box",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 14px", fontSize: "16px", color: "#1F2933", textAlign: "center" }}>
+              방 만들기
+            </h3>
+
+            <RoomCreateForm
+              onCancel={() => setShowCreateRoomModal(false)}
+              onCreated={(roomId) => {
+                setShowCreateRoomModal(false);
+                navigate(`/rooms/${roomId}`);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {showInviteRoomModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            zIndex: 3000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+          }}
+          onClick={() => setShowInviteRoomModal(false)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: "20px",
+              borderRadius: "18px",
+              width: "min(92vw, 320px)",
+              boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
+              boxSizing: "border-box",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 14px", fontSize: "16px", color: "#1F2933", textAlign: "center" }}>
+              초대코드 입력하기
+            </h3>
+
+            <RoomInviteForm
+              onCancel={() => setShowInviteRoomModal(false)}
+              onJoined={(roomId) => {
+                setShowInviteRoomModal(false);
+                navigate(`/rooms/${roomId}`);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -18,6 +18,7 @@ function KakaoMapView({
   onSetMeetingPlace,
   className = '',
   height = '500px',
+  mapHeight,
   fitBoundsRequest = 0,
   centerRequest = 0,
   centerLevel = 4,
@@ -1153,8 +1154,17 @@ function KakaoMapView({
     return <p>{mapError}</p>
   }
 
+  const effectiveMapHeight = mapHeight || height
+
   return (
-    <div className={className} style={{ width: '100%', height }}>
+    <div
+      className={className}
+      style={{
+        width: '100%',
+        height: effectiveMapHeight,
+        minHeight: effectiveMapHeight,
+      }}
+    >
       {!isMapReady && <p>지도 불러오는 중...</p>}
 
       <div

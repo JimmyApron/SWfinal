@@ -92,6 +92,29 @@ export async function getSentPendingCalendarShares(userId) {
   });
 }
 
+export async function getReceivedPendingCalendarShares(userId) {
+  const { data, error } = await supabase
+    .from("calendar_shares")
+    .select("id, senderid")
+    .eq("receiverid", userId)
+    .eq("status", "pending");
+
+  if (error) throw new Error("받은 공유 요청 조회 실패");
+
+  const rows = data || [];
+  if (!rows.length) return [];
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, nickname, profileimageurl")
+    .in("id", rows.map((r) => r.senderid));
+
+  return rows.map((row) => {
+    const profile = (profiles || []).find((p) => p.id === row.senderid) || {};
+    return { shareId: row.id, senderId: row.senderid, ...profile };
+  });
+}
+
 export async function cancelCalendarShareRequest(shareId, senderId, receiverId) {
   const { error } = await supabase
     .from("calendar_shares")
