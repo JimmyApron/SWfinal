@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { FaUserFriends } from "react-icons/fa";
 
 import { supabase } from "../../lib/supabaseClient";
 import { 
@@ -448,49 +449,33 @@ function RoomDetailPage() {
                         paddingRight: (isCurrentUserHost && !isMe) ? "30px" : "5px", // 버튼 공간 확보
                       }}
                     >
-                      {p.type === "member" ? (
-                        profileImg ? (
-                          <img
-                            src={profileImg}
-                            alt="프로필"
-                            style={{
-                              width: "32px",
-                              height: "32px",
-                              borderRadius: "50%",
-                              objectFit: "cover",
-                              border: "1px solid #E5E7EB",
-                            }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: "32px",
-                              height: "32px",
-                              borderRadius: "50%",
-                              backgroundColor: "#F3F4F6",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: "16px",
-                            }}
-                          >
-                            👤
-                          </div>
-                        )
+                      {p.type === "member" && p.nickname !== "알 수 없음" && profileImg ? (
+                        <img
+                          src={profileImg}
+                          alt="프로필"
+                          style={{
+                            width: "32px",
+                            height: "32px",
+                            borderRadius: "50%",
+                            objectFit: "cover",
+                            border: "1px solid #E5E7EB",
+                          }}
+                        />
                       ) : (
                         <div
                           style={{
                             width: "32px",
                             height: "32px",
                             borderRadius: "50%",
-                            backgroundColor: "#ffeaa7",
+                            backgroundColor: "#F3F4F6",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             fontSize: "16px",
+                            color: "#8B8799"
                           }}
                         >
-                          🐱
+                          <FaUserFriends size={16} />
                         </div>
                       )}
 

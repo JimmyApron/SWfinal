@@ -317,18 +317,21 @@ function GuestLoginPage() {
                 ) : (
                   existingMembers.map((member, index) => (
                     <div key={index} className="guest-participant-item">
-                      <div className="participant-info">
-                        <div className="avatar">
-                          {member.profileimageurl ? (
-                            <img src={member.profileimageurl} alt={member.nickname} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                          ) : (
-                            member.nickname.charAt(0)
-                          )}
-                        </div>
-                        <span>{member.nickname}</span>
+                    <div className="participant-info">
+                      <div className="avatar">
+                        {/* 회원이고 프로필 이미지가 있는 경우에만 이미지 표시 */}
+                        {member.type === '회원' && member.nickname !== '알 수 없음' && member.profileimageurl ? (
+                          <img src={member.profileimageurl} alt={member.nickname} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                        ) : (
+                          /* 비회원, 탈퇴한 유저('알 수 없음'), 또는 프로필 이미지가 없는 회원은 기본 아바타 */
+                          <FaUserFriends size={16} />
+                        )}
                       </div>
-                      <span className={`badge ${member.type === '회원' ? 'badge-member' : 'badge-guest'}`}>{member.type}</span>
+                      <span>{member.nickname}</span>
                     </div>
+                    <span className={`badge ${member.type === '회원' ? 'badge-member' : 'badge-guest'}`}>{member.type}</span>
+                    </div>
+
                   ))
                 )}
               </div>
