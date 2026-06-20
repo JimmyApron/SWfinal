@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { FaCalendarAlt, FaMapMarkerAlt } from "react-icons/fa";
+import { FaCalendarAlt, FaMapMarkerAlt, FaBell } from "react-icons/fa";
 import { supabase } from "../../lib/supabaseClient";
 import {
   addAdditionalConfirmedLocation,
@@ -1021,7 +1021,7 @@ function ConfirmedScheduleDetailPage() {
                   gap: "4px",
                 }}
               >
-                <span>🔔</span>
+                <FaBell size={11} color="#F59E0B" />
                 <span>{timeUntil}</span>
               </p>
             )}

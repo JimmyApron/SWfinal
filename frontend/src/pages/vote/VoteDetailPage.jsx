@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { FaRegComment, FaMapMarkerAlt, FaChevronRight, FaChevronDown, FaRegClock } from "react-icons/fa";
 import { supabase } from "../../lib/supabaseClient";
 import {
   getVoteDetail,
@@ -204,6 +205,34 @@ function VoteDetailPage() {
 
   useEffect(() => {
     loadVote();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voteid]);
+
+  useEffect(() => {
+    if (!voteid) return;
+
+    const channel = supabase
+      .channel(`vote-detail-${voteid}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "votes", filter: `id=eq.${voteid}` },
+        loadVote
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "voteoptions", filter: `voteid=eq.${voteid}` },
+        loadVote
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "voteresponses", filter: `voteid=eq.${voteid}` },
+        loadVote
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voteid]);
 
@@ -2641,14 +2670,31 @@ function VoteDetailPage() {
               borderRadius: "8px",
             }}
           >
-            위치 투표는 투표 종료와 별개로, 생성자가
+            장소 투표는 투표 종료와 별개로, 생성자가
             <strong>
               {isManualLocationVote
-                ? " 중간위치 확정 또는 추가장소 등록 "
+                ? " 중간 장소 확정 또는 주변 장소 등록 "
                 : isMiddlePlaceVote
-                ? " 중간위치 확정하기 "
-                : " 추가장소 확정하기 "}
+                ? " 중간 장소 확정하기 "
+                : " 주변 장소 확정하기 "}
             </strong>
+            버튼을 눌러야 최종 확정됩니다.
+          </p>
+        )}
+
+        {vote.votetype === "schedule" && (
+          <p
+            style={{
+              color: "#666",
+              fontSize: "14px",
+              padding: "10px",
+              backgroundColor: "#fafafa",
+              border: "1px solid #eee",
+              borderRadius: "8px",
+            }}
+          >
+            일정 투표는 투표 종료와 별개로, 생성자가
+            <strong> 일정 확정 </strong>
             버튼을 눌러야 최종 확정됩니다.
           </p>
         )}
@@ -2758,10 +2804,10 @@ function VoteDetailPage() {
               {isLocationVote && (
                 <span style={badgeStyle}>
                   {isManualLocationVote
-                    ? "일반 위치 투표"
+                    ? "일반 장소 투표"
                     : isMiddlePlaceVote
-                    ? "중간위치 투표"
-                    : "추가장소 투표"}
+                    ? "중간 장소 투표"
+                    : "주변 장소 투표"}
                 </span>
               )}
             </div>
@@ -3444,9 +3490,13 @@ function VoteDetailPage() {
               color: "#7c79ff",
               fontSize: "15px",
               cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "6px",
             }}
           >
-            💬 채팅에 공유
+            <FaRegComment size={15} /> 채팅에 공유
           </button>
         )}
 
@@ -3519,7 +3569,6 @@ function EditVoteOptionsPanel({
     setOpenPickerIndex(null);
   };
 
-  const isLocationVote = isLocationVoteType(votetype);
   const generalOptionType = editOptions.length > 0 && editOptions.every(
     (option) => option.optiontype === "date"
   )
@@ -3569,37 +3618,44 @@ function EditVoteOptionsPanel({
         </div>
       )}
 
-      {isLocationVote && (
-        <p style={{ fontSize: "12px", color: "#888" }}>
-          장소는 카카오맵 검색 결과에서 선택해야 합니다.
-        </p>
-      )}
-
       {editOptions.map((option, index) => (
         <div
           key={option.id || `new-${index}`}
-          style={{
-            position: "relative",
-            marginBottom: "16px",
-            padding: "12px",
-            paddingTop: "36px",
-            border: "1px solid #ddd",
-            borderRadius: "8px",
-            backgroundColor: "#fff",
-          }}
+          style={
+            option.optiontype === "date"
+              ? {
+                  position: "relative",
+                  marginBottom: "16px",
+                  padding: "14px",
+                  border: "1px solid #E5E7EB",
+                  borderRadius: "14px",
+                  backgroundColor: "#fff",
+                }
+              : {
+                  position: "relative",
+                  marginBottom: "16px",
+                  padding: "12px",
+                  paddingTop: "36px",
+                  border: "1px solid #ddd",
+                  borderRadius: "8px",
+                  backgroundColor: "#fff",
+                }
+          }
         >
           <button
             type="button"
             onClick={() => onRemoveOption(index)}
             style={{
               position: "absolute",
-              top: "8px",
-              right: "8px",
+              top: option.optiontype === "date" ? "10px" : "8px",
+              right: option.optiontype === "date" ? "10px" : "8px",
               border: "none",
               background: "none",
               fontSize: "18px",
               cursor: "pointer",
-              color: "#f44",
+              color: "#9CA3AF",
+              padding: 0,
+              lineHeight: 1,
             }}
           >
             ×
@@ -3617,56 +3673,116 @@ function EditVoteOptionsPanel({
           )}
 
           {option.optiontype === "date" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <input
-                type="date"
-                value={option.optiondate}
-                onChange={(event) =>
-                  onChangeOption(index, "optiondate", event.target.value)
-                }
-                style={editInputStyle}
-              />
-
-              <button
-                type="button"
-                onClick={() => {
-                  const isAllDay = !option.isallday;
-                  onChangeOption(index, "isallday", isAllDay);
-                  if (isAllDay) {
-                    onChangeOption(index, "starttime", "");
-                    onChangeOption(index, "endtime", "");
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", paddingRight: "24px" }}>
+                <input
+                  type="date"
+                  value={option.optiondate}
+                  onChange={(event) =>
+                    onChangeOption(index, "optiondate", event.target.value)
                   }
-                }}
-                style={{
-                  ...smallButtonStyle,
-                  alignSelf: "flex-start",
-                  backgroundColor: option.isallday ? "#333" : "#fff",
-                  color: option.isallday ? "#fff" : "#333",
-                  fontWeight: option.isallday ? "bold" : "normal",
-                }}
-              >
-                하루종일
-              </button>
+                  style={{
+                    flex: 1,
+                    border: "none",
+                    outline: "none",
+                    fontSize: "15px",
+                    color: option.optiondate ? "#1F2933" : "#9CA3AF",
+                    padding: 0,
+                    backgroundColor: "transparent",
+                  }}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const isAllDay = !option.isallday;
+                    onChangeOption(index, "isallday", isAllDay);
+                    if (isAllDay) {
+                      onChangeOption(index, "starttime", "");
+                      onChangeOption(index, "endtime", "");
+                    }
+                  }}
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: "20px",
+                    border: "none",
+                    cursor: "pointer",
+                    backgroundColor: option.isallday ? "#7c79ff" : "#F0EEFF",
+                    color: option.isallday ? "#fff" : "#7c79ff",
+                    fontWeight: "600",
+                    fontSize: "12px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  하루종일
+                </button>
+              </div>
 
               {!option.isallday && (
                 <>
-                  <input
-                    type="time"
-                    value={option.starttime}
-                    onChange={(event) =>
-                      onChangeOption(index, "starttime", event.target.value)
-                    }
-                    style={editInputStyle}
-                  />
-                  <input
-                    type="time"
-                    value={option.endtime}
-                    onChange={(event) =>
-                      onChangeOption(index, "endtime", event.target.value)
-                    }
-                    style={editInputStyle}
-                  />
-                  <p style={{ margin: 0, fontSize: "11px", color: "#bbb" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "10px" }}>
+                    <div
+                      style={{
+                        flex: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        border: "1px solid #E5E7EB",
+                        borderRadius: "10px",
+                        padding: "8px 10px",
+                      }}
+                    >
+                      <FaRegClock size={13} color="#9CA3AF" />
+                      <input
+                        type="time"
+                        value={option.starttime}
+                        onChange={(event) =>
+                          onChangeOption(index, "starttime", event.target.value)
+                        }
+                        style={{
+                          flex: 1,
+                          border: "none",
+                          outline: "none",
+                          fontSize: "14px",
+                          backgroundColor: "transparent",
+                          color: option.starttime ? "#1F2933" : "#9CA3AF",
+                        }}
+                      />
+                    </div>
+
+                    <span style={{ color: "#9CA3AF", fontSize: "13px" }}>~</span>
+
+                    <div
+                      style={{
+                        flex: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        border: "1px solid #E5E7EB",
+                        borderRadius: "10px",
+                        padding: "8px 10px",
+                      }}
+                    >
+                      <FaRegClock size={13} color="#9CA3AF" />
+                      <input
+                        type="time"
+                        value={option.endtime}
+                        onChange={(event) =>
+                          onChangeOption(index, "endtime", event.target.value)
+                        }
+                        style={{
+                          flex: 1,
+                          border: "none",
+                          outline: "none",
+                          fontSize: "14px",
+                          backgroundColor: "transparent",
+                          color: option.endtime ? "#1F2933" : "#9CA3AF",
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <p style={{ margin: "8px 0 0", fontSize: "11px", color: "#bbb" }}>
                     종료시간은 선택사항입니다
                   </p>
                 </>
@@ -3676,52 +3792,93 @@ function EditVoteOptionsPanel({
 
           {option.optiontype === "place" && (
             <>
-              <input
-                value={option.placename}
-                readOnly
-                placeholder="장소명"
-                style={editInputStyle}
-              />
-
               <button
                 type="button"
                 onClick={() =>
                   setOpenPickerIndex((prev) => (prev === index ? null : index))
                 }
-                style={placeSearchButtonStyle}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  padding: "12px 0",
+                  border: "none",
+                  borderBottom:
+                    openPickerIndex === index ||
+                    (hasValue(option.placelat) && hasValue(option.placelng))
+                      ? "1px solid #F3F4F6"
+                      : "none",
+                  backgroundColor: "transparent",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  boxSizing: "border-box",
+                }}
               >
-                {openPickerIndex === index ? "장소 검색 닫기" : "카카오맵에서 장소 검색"}
+                <FaMapMarkerAlt size={14} color="#9CA3AF" />
+
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: "14px", fontWeight: "700", color: "#1F2933" }}>
+                    {openPickerIndex === index ? "지도 검색 닫기" : "지도에서 장소 검색하기"}
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#9CA3AF", marginTop: "2px" }}>
+                    카카오맵에서 장소를 검색하고 선택할 수 있어요.
+                  </div>
+                </div>
+
+                {openPickerIndex === index ? (
+                  <FaChevronDown size={12} color="#C0C5CC" />
+                ) : (
+                  <FaChevronRight size={12} color="#C0C5CC" />
+                )}
               </button>
 
               {openPickerIndex === index && (
-                <LocationPicker
-                  allowMapClick={false}
-                  onSelect={(name, address, place) =>
-                    handleSelectPlace(index, name, address, place)
-                  }
-                />
+                <div style={{ marginBottom: "10px" }}>
+                  <LocationPicker
+                    allowMapClick={false}
+                    onSelect={(name, address, place) =>
+                      handleSelectPlace(index, name, address, place)
+                    }
+                  />
+                </div>
               )}
 
-              <input
-                value={option.placeaddress}
-                readOnly
-                placeholder="주소 선택 입력"
-                style={editInputStyle}
-              />
+              {hasValue(option.placelat) && hasValue(option.placelng) && (
+                <>
+                  <input
+                    value={option.placename}
+                    readOnly
+                    style={{ ...editPlainRowStyle, fontWeight: "700" }}
+                  />
 
-              <input
-                value={option.kakaomapurl}
-                readOnly
-                placeholder="카카오맵 URL 선택 입력"
-                style={editInputStyle}
-              />
+                  <input
+                    value={option.placeaddress}
+                    readOnly
+                    placeholder="주소 정보 없음"
+                    style={{ ...editPlainRowStyle, borderBottom: "none" }}
+                  />
+                </>
+              )}
             </>
           )}
         </div>
       ))}
 
-      <button type="button" onClick={onAddOption} style={smallButtonStyle}>
-        선택지 추가
+      <button
+        type="button"
+        onClick={onAddOption}
+        style={{
+          width: "100%",
+          height: "48px",
+          fontSize: "28px",
+          border: "1px solid #ddd",
+          borderRadius: "14px",
+          backgroundColor: "#fff",
+          cursor: "pointer",
+        }}
+      >
+        +
       </button>
     </div>
   );
@@ -3945,21 +4102,23 @@ const smallButtonStyle = {
   cursor: "pointer",
 };
 
-const placeSearchButtonStyle = {
-  width: "100%",
-  height: "40px",
-  marginBottom: "8px",
-  border: "1px solid var(--border-color)",
-  borderRadius: "6px",
-  backgroundColor: "var(--bg-color)",
-  cursor: "pointer",
-};
-
 const editInputStyle = {
   width: "100%",
   padding: "10px",
   border: "1px solid var(--border-color)",
   borderRadius: "8px",
+  boxSizing: "border-box",
+  marginBottom: "8px",
+};
+
+const editPlainRowStyle = {
+  width: "100%",
+  border: "none",
+  outline: "none",
+  borderBottom: "1px solid #F3F4F6",
+  padding: "10px 0",
+  fontSize: "14px",
+  backgroundColor: "transparent",
   boxSizing: "border-box",
   marginBottom: "8px",
 };

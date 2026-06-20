@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { FaBell } from 'react-icons/fa'
 import { logoutApi, getCurrentUserApi } from '../../api/authApi'
 import { supabase } from '../../lib/supabaseClient'
 import { useTheme } from '../../context/ThemeContext'
@@ -261,7 +262,9 @@ function SettingsPage() {
         padding: '16px 0',
         borderBottom: '1px solid var(--border-color)'
       }}>
-        <label className="info-label" style={{ marginBottom: 0 }}>알림 팝업 🔔</label>
+        <label className="info-label" style={{ marginBottom: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
+          알림 팝업 <FaBell size={11} color="#F59E0B" />
+        </label>
         <div 
           onClick={toggleNotif}
           style={{

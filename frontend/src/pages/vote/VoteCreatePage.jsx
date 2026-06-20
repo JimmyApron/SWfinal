@@ -1,11 +1,18 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { FaListUl, FaCalendarAlt, FaMapMarkerAlt, FaRegClock, FaChevronRight, FaChevronDown } from "react-icons/fa";
 import { supabase } from "../../lib/supabaseClient";
 import { createVote } from "../../api/voteApi";
 import { sendVoteNotification } from "../notification/VoteNotification";
 import LocationPicker from "../../components/map/LocationPicker";
 import { getMemberAvailabilities, getScheduleCandidates } from "../../api/scheduleApi";
 import { getTopAvailableTimes, sortAvailableTimes, getTopConsecutiveDays } from "../../utils/scheduleUtils";
+
+const VOTE_TYPE_OPTIONS = [
+  { value: "general", label: "일반 투표", icon: FaListUl, description: "메뉴/준비물 등 자유 선택" },
+  { value: "schedule", label: "일정 확정", icon: FaCalendarAlt, description: "일정 후보 선택" },
+  { value: "location", label: "장소 확정", icon: FaMapMarkerAlt, description: "장소 후보 선택" },
+];
 
 function VoteCreatePage() {
   const { roomid } = useParams();
@@ -275,7 +282,12 @@ function VoteCreatePage() {
   };
 
   const handleAddOption = () => {
-    const currentType = options[0]?.optiontype || "text";
+    const currentType =
+      votetype === "schedule"
+        ? "date"
+        : isLocationVoteType(votetype)
+        ? "place"
+        : options[0]?.optiontype || "text";
     setOptions([...options, makeEmptyOption(currentType)]);
   };
 
@@ -647,32 +659,79 @@ function VoteCreatePage() {
           }}
         />
 
-        <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
-          {[
-            { value: "general", label: "일반 투표" },
-            { value: "schedule", label: "일정 확정" },
-            { value: "location", label: "위치 확정" },
-          ].map((type) => (
-            <button
-              key={type.value}
-              type="button"
-              onClick={() => handleVotetypeChange(type.value)}
-              style={{
-                padding: "8px 16px",
-                borderRadius: "24px",
-                border:
-                  isSelectedVoteType(votetype, type.value)
-                    ? "2px solid #7c79ff"
-                    : "1px solid #ddd",
-                backgroundColor: isSelectedVoteType(votetype, type.value) ? "#f0f0ff" : "#fff",
-                color: isSelectedVoteType(votetype, type.value) ? "#7c79ff" : "#333",
-                fontWeight: isSelectedVoteType(votetype, type.value) ? "bold" : "normal",
-                cursor: "pointer",
-              }}
-            >
-              {type.label}
-            </button>
-          ))}
+        <p style={{ margin: "0 0 10px", fontSize: "15px", fontWeight: "700", color: "#1F2933" }}>
+          투표 종류
+        </p>
+
+        <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
+          {VOTE_TYPE_OPTIONS.map((type) => {
+            const selected = isSelectedVoteType(votetype, type.value);
+            const Icon = type.icon;
+
+            return (
+              <button
+                key={type.value}
+                type="button"
+                onClick={() => handleVotetypeChange(type.value)}
+                style={{
+                  position: "relative",
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "16px 6px 12px",
+                  borderRadius: "14px",
+                  border: selected ? "2px solid #7c79ff" : "1px solid #E5E7EB",
+                  backgroundColor: selected ? "#F5F4FF" : "#fff",
+                  cursor: "pointer",
+                }}
+              >
+                {selected && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: "8px",
+                      right: "8px",
+                      width: "18px",
+                      height: "18px",
+                      borderRadius: "50%",
+                      backgroundColor: "#7c79ff",
+                      color: "#fff",
+                      fontSize: "11px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    ✓
+                  </span>
+                )}
+
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "50%",
+                    backgroundColor: "#F0EEFF",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Icon size={18} color="#7c79ff" />
+                </div>
+
+                <span style={{ fontSize: "14px", fontWeight: "700", color: "#1F2933" }}>
+                  {type.label}
+                </span>
+
+                <span style={{ fontSize: "11px", color: "#9CA3AF", textAlign: "center", lineHeight: 1.3 }}>
+                  {type.description}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {votetype === "general" && (
@@ -746,87 +805,185 @@ function VoteCreatePage() {
         )}
 
         {options.map((option, index) => (
-          <div
-            key={index}
-            style={{
-              display: "flex",
-              gap: "8px",
-              alignItems: "flex-start",
-              marginBottom: "10px",
-            }}
-          >
-            <div style={{ flex: 1 }}>
+          <div key={index} style={{ marginBottom: "10px" }}>
               {option.optiontype === "text" && (
-                <input
-                  value={option.optiontext}
-                  onChange={(e) =>
-                    handleChangeOption(index, "optiontext", e.target.value)
-                  }
-                  placeholder="텍스트 입력"
-                  style={inputStyle}
-                />
-              )}
-
-              {option.optiontype === "date" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    border: "1px solid #E5E7EB",
+                    borderRadius: "14px",
+                    padding: "4px 14px",
+                  }}
+                >
                   <input
-                    type="date"
-                    value={option.optiondate}
+                    value={option.optiontext}
                     onChange={(e) =>
-                      handleChangeOption(index, "optiondate", e.target.value)
+                      handleChangeOption(index, "optiontext", e.target.value)
                     }
-                    style={inputStyle}
+                    placeholder="텍스트 입력"
+                    style={{ ...plainRowInputStyle, border: "none", borderBottom: "none" }}
                   />
 
                   <button
                     type="button"
-                    onClick={() => {
-                      const newOptions = [...options];
-                      const isAllDay = !newOptions[index].isallday;
-                      newOptions[index].isallday = isAllDay;
-                      if (isAllDay) {
-                        newOptions[index].starttime = "";
-                        newOptions[index].endtime = "";
-                      }
-                      setOptions(newOptions);
-                    }}
+                    onClick={() => handleDeleteOption(index)}
                     style={{
-                      padding: "0 12px",
-                      height: "36px",
-                      borderRadius: "6px",
+                      border: "none",
+                      background: "none",
+                      fontSize: "18px",
                       cursor: "pointer",
-                      border: option.isallday ? "2px solid #333" : "1px solid #ddd",
-                      backgroundColor: option.isallday ? "#333" : "#fff",
-                      color: option.isallday ? "#fff" : "#333",
-                      fontWeight: option.isallday ? "bold" : "normal",
-                      fontSize: "13px",
-                      alignSelf: "flex-start",
+                      color: "#9CA3AF",
+                      padding: 0,
+                      lineHeight: 1,
                     }}
                   >
-                    하루종일
+                    ×
                   </button>
+                </div>
+              )}
+
+              {option.optiontype === "date" && (
+                <div
+                  style={{
+                    position: "relative",
+                    border: "1px solid #E5E7EB",
+                    borderRadius: "14px",
+                    padding: "14px",
+                    backgroundColor: "#fff",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteOption(index)}
+                    style={{
+                      position: "absolute",
+                      top: "10px",
+                      right: "10px",
+                      border: "none",
+                      background: "none",
+                      fontSize: "18px",
+                      cursor: "pointer",
+                      color: "#9CA3AF",
+                      padding: 0,
+                      lineHeight: 1,
+                    }}
+                  >
+                    ×
+                  </button>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", paddingRight: "24px" }}>
+                    <input
+                      type="date"
+                      value={option.optiondate}
+                      onChange={(e) =>
+                        handleChangeOption(index, "optiondate", e.target.value)
+                      }
+                      style={{
+                        flex: 1,
+                        border: "none",
+                        outline: "none",
+                        fontSize: "15px",
+                        color: option.optiondate ? "#1F2933" : "#9CA3AF",
+                        padding: 0,
+                        backgroundColor: "transparent",
+                      }}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newOptions = [...options];
+                        const isAllDay = !newOptions[index].isallday;
+                        newOptions[index].isallday = isAllDay;
+                        if (isAllDay) {
+                          newOptions[index].starttime = "";
+                          newOptions[index].endtime = "";
+                        }
+                        setOptions(newOptions);
+                      }}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: "20px",
+                        border: "none",
+                        cursor: "pointer",
+                        backgroundColor: option.isallday ? "#7c79ff" : "#F0EEFF",
+                        color: option.isallday ? "#fff" : "#7c79ff",
+                        fontWeight: "600",
+                        fontSize: "12px",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      하루종일
+                    </button>
+                  </div>
 
                   {!option.isallday && (
                     <>
-                      <input
-                        type="time"
-                        value={option.starttime}
-                        onChange={(e) =>
-                          handleChangeOption(index, "starttime", e.target.value)
-                        }
-                        style={inputStyle}
-                      />
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "10px" }}>
+                        <div
+                          style={{
+                            flex: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            border: "1px solid #E5E7EB",
+                            borderRadius: "10px",
+                            padding: "8px 10px",
+                          }}
+                        >
+                          <FaRegClock size={13} color="#9CA3AF" />
+                          <input
+                            type="time"
+                            value={option.starttime}
+                            onChange={(e) =>
+                              handleChangeOption(index, "starttime", e.target.value)
+                            }
+                            style={{
+                              flex: 1,
+                              border: "none",
+                              outline: "none",
+                              fontSize: "14px",
+                              backgroundColor: "transparent",
+                              color: option.starttime ? "#1F2933" : "#9CA3AF",
+                            }}
+                          />
+                        </div>
 
-                      <input
-                        type="time"
-                        value={option.endtime}
-                        onChange={(e) =>
-                          handleChangeOption(index, "endtime", e.target.value)
-                        }
-                        style={inputStyle}
-                      />
+                        <span style={{ color: "#9CA3AF", fontSize: "13px" }}>~</span>
 
-                      <p style={{ margin: 0, fontSize: "11px", color: "#bbb" }}>
+                        <div
+                          style={{
+                            flex: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            border: "1px solid #E5E7EB",
+                            borderRadius: "10px",
+                            padding: "8px 10px",
+                          }}
+                        >
+                          <FaRegClock size={13} color="#9CA3AF" />
+                          <input
+                            type="time"
+                            value={option.endtime}
+                            onChange={(e) =>
+                              handleChangeOption(index, "endtime", e.target.value)
+                            }
+                            style={{
+                              flex: 1,
+                              border: "none",
+                              outline: "none",
+                              fontSize: "14px",
+                              backgroundColor: "transparent",
+                              color: option.endtime ? "#1F2933" : "#9CA3AF",
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <p style={{ margin: "8px 0 0", fontSize: "11px", color: "#bbb" }}>
                         종료시간은 선택사항입니다
                       </p>
                     </>
@@ -837,24 +994,31 @@ function VoteCreatePage() {
               {option.optiontype === "place" && (
                 <div
                   style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "6px",
-                    padding: "10px",
-                    border: "1px solid #eee",
-                    borderRadius: "8px",
-                    backgroundColor: "#fafafa",
+                    position: "relative",
+                    border: "1px solid #E5E7EB",
+                    borderRadius: "14px",
+                    padding: "14px",
+                    backgroundColor: "#fff",
                   }}
                 >
-                  <input
-                    value={option.placename}
-                    readOnly
-                    onChange={(e) =>
-                      handleChangeOption(index, "placename", e.target.value)
-                    }
-                    placeholder="장소명"
-                    style={inputStyle}
-                  />
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteOption(index)}
+                    style={{
+                      position: "absolute",
+                      top: "10px",
+                      right: "10px",
+                      border: "none",
+                      background: "none",
+                      fontSize: "18px",
+                      cursor: "pointer",
+                      color: "#9CA3AF",
+                      padding: 0,
+                      lineHeight: 1,
+                    }}
+                  >
+                    ×
+                  </button>
 
                   <button
                     type="button"
@@ -863,81 +1027,74 @@ function VoteCreatePage() {
                         prev === index ? null : index
                       )
                     }
-                    style={secondaryButtonStyle}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      padding: "12px 0",
+                      paddingRight: "20px",
+                      border: "none",
+                      borderBottom:
+                        openPlacePickerIndex === index ||
+                        (hasValue(option.placelat) && hasValue(option.placelng))
+                          ? "1px solid #F3F4F6"
+                          : "none",
+                      backgroundColor: "transparent",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      boxSizing: "border-box",
+                    }}
                   >
-                    {openPlacePickerIndex === index
-                      ? "장소 검색 닫기"
-                      : "카카오맵에서 장소 검색"}
+                    <FaMapMarkerAlt size={14} color="#9CA3AF" />
+
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: "14px", fontWeight: "700", color: "#1F2933" }}>
+                        {openPlacePickerIndex === index ? "지도 검색 닫기" : "지도에서 장소 검색하기"}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#9CA3AF", marginTop: "2px" }}>
+                        카카오맵에서 장소를 검색하고 선택할 수 있어요.
+                      </div>
+                    </div>
+
+                    {openPlacePickerIndex === index ? (
+                      <FaChevronDown size={12} color="#C0C5CC" />
+                    ) : (
+                      <FaChevronRight size={12} color="#C0C5CC" />
+                    )}
                   </button>
 
                   {openPlacePickerIndex === index && (
-                    <LocationPicker
-                      allowMapClick={false}
-                      onSelect={(name, address, place) =>
-                        handleSelectPlaceOption(index, name, address, place)
-                      }
-                    />
+                    <div style={{ padding: "12px 0" }}>
+                      <LocationPicker
+                        allowMapClick={false}
+                        onSelect={(name, address, place) =>
+                          handleSelectPlaceOption(index, name, address, place)
+                        }
+                      />
+                    </div>
                   )}
 
-                  <input
-                    value={option.placeaddress}
-                    readOnly
-                    placeholder="주소"
-                    style={inputStyle}
-                  />
+                  {hasValue(option.placelat) && hasValue(option.placelng) && (
+                    <>
+                      <input
+                        value={option.placename}
+                        readOnly
+                        style={{ ...plainRowInputStyle, fontWeight: "700" }}
+                      />
 
-                  <input
-                    value={option.kakaomapurl}
-                    readOnly
-                    placeholder="카카오맵 URL 선택 입력"
-                    style={inputStyle}
-                  />
-
-                  {!hasValue(option.placelat) && !hasValue(option.placelng) && (
-                    <p style={helperTextStyle}>
-                      카카오맵에서 장소를 검색해 선택해주세요.
-                    </p>
+                      <input
+                        value={option.placeaddress}
+                        readOnly
+                        placeholder="주소 정보 없음"
+                        style={{ ...plainRowInputStyle, borderBottom: "none" }}
+                      />
+                    </>
                   )}
                 </div>
               )}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => handleDeleteOption(index)}
-              style={{
-                border: "none",
-                background: "none",
-                fontSize: "22px",
-                cursor: "pointer",
-                color: "#888",
-              }}
-            >
-              ×
-            </button>
           </div>
         ))}
-
-        {votetype === "schedule" && (
-          <button
-            type="button"
-            onClick={handleLoadAvailabilities}
-            style={{
-              width: "100%",
-              padding: "12px",
-              marginBottom: "8px",
-              border: "1px solid #d8d8ff",
-              borderRadius: "10px",
-              backgroundColor: "#f9f9ff",
-              color: "#5c58d8",
-              fontSize: "14px",
-              cursor: "pointer",
-              fontWeight: "600",
-            }}
-          >
-            📅 가능 시간 불러오기
-          </button>
-        )}
 
         <button
           type="button"
@@ -947,13 +1104,39 @@ function VoteCreatePage() {
             height: "48px",
             fontSize: "28px",
             border: "1px solid #ddd",
+            borderRadius: "14px",
             backgroundColor: "#fff",
-            marginBottom: "20px",
+            marginBottom: votetype === "schedule" ? "8px" : "20px",
             cursor: "pointer",
           }}
         >
           +
         </button>
+
+        {votetype === "schedule" && (
+          <button
+            type="button"
+            onClick={handleLoadAvailabilities}
+            style={{
+              width: "100%",
+              padding: "12px",
+              marginBottom: "20px",
+              border: "1px solid #d8d8ff",
+              borderRadius: "10px",
+              backgroundColor: "#f9f9ff",
+              color: "#5c58d8",
+              fontSize: "14px",
+              cursor: "pointer",
+              fontWeight: "600",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "6px",
+            }}
+          >
+            <FaCalendarAlt size={14} /> 가능 시간 불러오기
+          </button>
+        )}
 
         <label style={labelStyle}>
           <input
@@ -1101,19 +1284,16 @@ const labelStyle = {
   cursor: "pointer",
 };
 
-const secondaryButtonStyle = {
+const plainRowInputStyle = {
   width: "100%",
-  height: "40px",
-  border: "1px solid #ddd",
-  borderRadius: "6px",
-  backgroundColor: "#fff",
-  cursor: "pointer",
-};
-
-const helperTextStyle = {
-  margin: 0,
-  fontSize: "12px",
-  color: "#888",
+  border: "none",
+  outline: "none",
+  borderBottom: "1px solid #F3F4F6",
+  padding: "12px 0",
+  fontSize: "14px",
+  backgroundColor: "transparent",
+  color: "#1F2933",
+  boxSizing: "border-box",
 };
 
 export default VoteCreatePage;

@@ -583,7 +583,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
               top: "-4px",
             }}
           >
-            {showConfirmedForm ? "취소" : "+ 일정 추가"}
+            {showConfirmedForm ? "취소" : "+ 새 일정"}
           </button>
         </div>
 
