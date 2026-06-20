@@ -18,7 +18,10 @@ import {
   getAcceptedShares,
   removeCalendarShare,
   getSentPendingCalendarShares,
+  getReceivedPendingCalendarShares,
   cancelCalendarShareRequest,
+  acceptCalendarShare,
+  rejectCalendarShare,
 } from "../../api/calendarShareApi";
 import LocationPicker from "../../components/map/LocationPicker";
 
@@ -238,6 +241,7 @@ function CalendarPage() {
   const [sharingFriends, setSharingFriends] = useState([]);
   const [friendListForShare, setFriendListForShare] = useState([]);
   const [sentCalendarShareRequests, setSentCalendarShareRequests] = useState([]);
+  const [receivedCalendarShareRequests, setReceivedCalendarShareRequests] = useState([]);
   const [shareLoading, setShareLoading] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
 
@@ -331,18 +335,23 @@ function CalendarPage() {
     if (!currentUser) return;
 
     try {
-      const [sharing, friends, sentPending] = await Promise.all([
+      const [sharing, friends, sentPending, receivedPending] = await Promise.all([
         getAcceptedShares(currentUser.id),
         getFriends(currentUser.id),
         getSentPendingCalendarShares(currentUser.id),
+        getReceivedPendingCalendarShares(currentUser.id),
       ]);
 
       setSharingFriends(sharing);
       setSentCalendarShareRequests(sentPending);
+      setReceivedCalendarShareRequests(receivedPending);
 
       const sharingIds = new Set(sharing.map((s) => s.id));
       const sentIds = new Set(sentPending.map((s) => s.receiverId));
-      setFriendListForShare(friends.filter((f) => !sharingIds.has(f.id) && !sentIds.has(f.id)));
+      const receivedIds = new Set(receivedPending.map((s) => s.senderId));
+      setFriendListForShare(
+        friends.filter((f) => !sharingIds.has(f.id) && !sentIds.has(f.id) && !receivedIds.has(f.id))
+      );
     } catch (e) {
       console.error(e);
     }
@@ -426,6 +435,25 @@ function CalendarPage() {
       await cancelCalendarShareRequest(req.shareId, currentUser.id, req.receiverId);
       setSentCalendarShareRequests((prev) => prev.filter((r) => r.shareId !== req.shareId));
       setFriendListForShare((prev) => [...prev, { id: req.receiverId, nickname: req.nickname, profileimageurl: req.profileimageurl }]);
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
+  const handleAcceptCalendarShareRequest = async (req) => {
+    try {
+      await acceptCalendarShare(currentUser.id, req.senderId);
+      setReceivedCalendarShareRequests((prev) => prev.filter((r) => r.shareId !== req.shareId));
+      await loadCalendarShareData();
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
+  const handleRejectCalendarShareRequest = async (req) => {
+    try {
+      await rejectCalendarShare(req.senderId, currentUser.id);
+      setReceivedCalendarShareRequests((prev) => prev.filter((r) => r.shareId !== req.shareId));
     } catch (e) {
       alert(e.message);
     }
@@ -1651,6 +1679,85 @@ function CalendarPage() {
               >
                 공개 중인 친구가 없습니다
               </p>
+            )}
+
+            {receivedCalendarShareRequests.length > 0 && (
+              <div style={{ marginBottom: "12px" }}>
+                <p
+                  style={{
+                    margin: "0 0 8px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    color: "var(--secondary-text)",
+                  }}
+                >
+                  받은 공개 요청
+                </p>
+                {receivedCalendarShareRequests.map((req) => (
+                  <div
+                    key={req.shareId}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "7px 0",
+                      borderBottom: "1px solid var(--border-color)",
+                    }}
+                  >
+                    {req.profileimageurl ? (
+                      <img
+                        src={req.profileimageurl}
+                        alt={req.nickname}
+                        style={{ width: "28px", height: "28px", borderRadius: "50%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: "28px",
+                          height: "28px",
+                          borderRadius: "50%",
+                          backgroundColor: "#e0e0ff",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "14px",
+                        }}
+                      >
+                        👤
+                      </div>
+                    )}
+                    <span style={{ flex: 1, fontSize: "13px" }}>{req.nickname}</span>
+                    <button
+                      onClick={() => handleAcceptCalendarShareRequest(req)}
+                      style={{
+                        fontSize: "11px",
+                        color: "#fff",
+                        border: "none",
+                        backgroundColor: "#7c79ff",
+                        borderRadius: "6px",
+                        padding: "3px 8px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      수락
+                    </button>
+                    <button
+                      onClick={() => handleRejectCalendarShareRequest(req)}
+                      style={{
+                        fontSize: "11px",
+                        color: "var(--secondary-text)",
+                        border: "1px solid var(--border-color)",
+                        background: "none",
+                        borderRadius: "6px",
+                        padding: "3px 8px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      거절
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
 
             {sentCalendarShareRequests.length > 0 && (
