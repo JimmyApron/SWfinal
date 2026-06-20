@@ -369,11 +369,11 @@
 }
 
 .middle-place-member-strip {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
   margin: 12px 0;
-  overflow-x: auto;
-  scrollbar-width: none;
+  overflow: visible;
 }
 
 .middle-place-member-strip::-webkit-scrollbar {
@@ -381,8 +381,7 @@
 }
 
 .middle-place-member-chip {
-  flex: 0 0 auto;
-  min-width: 86px;
+  min-width: 0;
   padding: 8px 10px;
   border: 1px solid #ececf3;
   border-radius: 12px;
@@ -1084,6 +1083,7 @@
   font-weight: 700;
   line-height: 1.45;
   text-align: center;
+  white-space: pre-line;
   transform: translate(-50%, -50%);
   pointer-events: none;
   animation: mapToastPop 2.4s ease forwards;
@@ -1931,7 +1931,7 @@
   .room-location-tab-content .map-experience {
     width: 100%;
     border-radius: 0;
-    --sheet-expanded-top: 78px;
+    --sheet-expanded-top: 92px;
   }
 
   .map-floating-search {
@@ -2113,7 +2113,7 @@
   }
 
   .middle-place-member-chip {
-    min-width: 72px;
+    min-width: 0;
     padding: 7px 8px;
     border-radius: 10px;
   }

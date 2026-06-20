@@ -369,7 +369,11 @@ export async function confirmVote(
 
   if (isLocationVoteType(votetype)) {
     const placeName =
-      option.placename || option.optiontext || "확정된 중간 장소";
+      getMeaningfulPlaceName(
+        option.placename,
+        option.optiontext,
+        option.placeaddress
+      ) || "확정된 중간 장소";
 
     const placeAddress = option.placeaddress || null;
 
@@ -649,4 +653,26 @@ export async function applyScheduleVoteToExisting(scheduleId, option, voteid, ro
   } catch (notifError) {
     console.error("알림 생성 실패:", notifError);
   }
+}
+
+function getMeaningfulPlaceName(...values) {
+  for (const value of values) {
+    const trimmedValue = typeof value === "string" ? value.trim() : "";
+
+    if (trimmedValue && !isPlaceholderPlaceName(trimmedValue)) {
+      return trimmedValue;
+    }
+  }
+
+  return "";
+}
+
+function isPlaceholderPlaceName(name) {
+  const normalizedName = String(name || "").trim();
+
+  return (
+    /^meeting\s*place$/i.test(normalizedName) ||
+    /^place$/i.test(normalizedName) ||
+    /^만날\s*장소(?:\s*미정)?$/.test(normalizedName)
+  );
 }

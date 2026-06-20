@@ -509,6 +509,7 @@ function ChatTab({ roomId }) {
   const [isPinnedMessageExpanded, setIsPinnedMessageExpanded] = useState(false);
   const [isEditingPinnedMessage, setIsEditingPinnedMessage] = useState(false);
   const [pinnedMessageDraft, setPinnedMessageDraft] = useState("");
+  const [previewImageUrl, setPreviewImageUrl] = useState("");
 
   const bottomRef = useRef(null);
   const messageListRef = useRef(null);
@@ -580,6 +581,20 @@ function ChatTab({ roomId }) {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!previewImageUrl) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setPreviewImageUrl("");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [previewImageUrl]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -1451,12 +1466,21 @@ function ChatTab({ roomId }) {
                       >
                         {message.imageurl ? (
                           <img
+                            className="chat-message-image"
                             src={message.imageurl}
                             alt="이미지"
-                            style={{
-                              maxWidth: "200px",
-                              borderRadius: "8px",
-                              display: "block",
+                            role="button"
+                            tabIndex={0}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setPreviewImageUrl(message.imageurl);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setPreviewImageUrl(message.imageurl);
+                              }
                             }}
                           />
                         ) : (
@@ -1516,6 +1540,28 @@ function ChatTab({ roomId }) {
 
         <div ref={bottomRef} />
       </div>
+
+      {previewImageUrl && (
+        <div
+          className="chat-image-preview-overlay"
+          onClick={() => setPreviewImageUrl("")}
+        >
+          <div
+            className="chat-image-preview-dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="chat-image-preview-close"
+              onClick={() => setPreviewImageUrl("")}
+              aria-label="이미지 닫기"
+            >
+              ×
+            </button>
+            <img src={previewImageUrl} alt="확대된 채팅 이미지" />
+          </div>
+        </div>
+      )}
 
       {false && showMediaOptions && (
         <div

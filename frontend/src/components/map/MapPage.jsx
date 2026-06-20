@@ -87,6 +87,7 @@ function MapPage({ roomId }) {
   const [showDepartureLocationPicker, setShowDepartureLocationPicker] = useState(false)
   const [showLocationRegisterModal, setShowLocationRegisterModal] = useState(false)
   const [showCancelDepartureConfirm, setShowCancelDepartureConfirm] = useState(false)
+  const [showCancelMiddlePlaceConfirm, setShowCancelMiddlePlaceConfirm] = useState(false)
   const [activeMapPanel, setActiveMapPanel] = useState('default')
   const [hasSearchResultsSheet, setHasSearchResultsSheet] = useState(false)
   const [hasMiddleRecommendationResults, setHasMiddleRecommendationResults] = useState(false)
@@ -1308,6 +1309,10 @@ function MapPage({ roomId }) {
   const handleSelectMiddlePlace = async (place) => {
     const scheduleLocation = toScheduleLocation(place, currentRoomId)
 
+    if (isPlaceholderPlaceName(scheduleLocation.placename)) {
+      scheduleLocation.placename = scheduleLocation.placeaddress || '이름 없는 장소'
+    }
+
     // 만약 선택된 일정이 없으면, 일정을 선택하거나 새로 만들도록 모달을 띄움
     if (!selectedScheduleId) {
       setPendingMiddleLocation(scheduleLocation)
@@ -1588,40 +1593,30 @@ function MapPage({ roomId }) {
     })
   }
 
-  const handleCancelMiddlePlace = async () => {
+  const handleCancelMiddlePlace = () => {
     if (!activeMeetingPlace) {
       setMessage('취소할 중간 장소가 없습니다.')
       return
     }
 
-    const confirmCancel = window.confirm(
-      '확정된 중간 장소를 취소할까요? 다시 중간 장소를 추천받을 수 있습니다.'
-    )
+    setShowCancelMiddlePlaceConfirm(true)
+  }
 
-    if (!confirmCancel) return
-
+  const handleConfirmCancelMiddlePlace = async () => {
+    setShowCancelMiddlePlaceConfirm(false)
     try {
       if (selectedScheduleId) {
-        await clearConfirmedScheduleLocation(selectedScheduleId)
+        const clearedSchedule = await clearConfirmedScheduleLocation(selectedScheduleId)
         setRoomConfirmedSchedules((schedules) =>
-          schedules.map((schedule) =>
-            Number(schedule.id) === Number(selectedScheduleId)
-              ? {
-                  ...schedule,
-                  location: null,
-                  locationaddress: null,
-                  locationlat: null,
-                  locationlng: null,
-                }
-              : schedule
-          )
+          replaceScheduleInList(schedules, clearedSchedule)
         )
         setConfirmedSchedulePlaceLinks((links) => {
           const nextLinks = { ...links }
           delete nextLinks[selectedScheduleId]
           return nextLinks
         })
-        setRoomConfirmedSchedules(await getRoomConfirmedSchedules(currentRoomId))
+        const schedules = await getRoomConfirmedSchedules(currentRoomId)
+        setRoomConfirmedSchedules(replaceScheduleInList(schedules, clearedSchedule))
       } else {
         await deleteRoomMiddlePlace(currentRoomId)
       }
@@ -1634,7 +1629,7 @@ function MapPage({ roomId }) {
       setMemberRouteResults([])
       setMemberRoutePaths([])
 
-      setMessage('중간 장소 확정을 취소했습니다. 다시 중간 장소를 추천받을 수 있습니다.')
+      setMessage('중간 장소 확정을 취소했습니다.\n다시 중간 장소를 추천받을 수 있습니다.')
     } catch (error) {
       console.error('중간 장소 확정 취소 오류:', error)
       setMessage('중간 장소 확정 취소 중 오류가 발생했습니다.')
@@ -2328,6 +2323,29 @@ function MapPage({ roomId }) {
         </div>
       )}
 
+      {showCancelMiddlePlaceConfirm && (
+        <div className="transport-mode-overlay">
+          <div className="departure-cancel-dialog">
+            <h3>중간 장소 확정 취소</h3>
+            <p>
+              확정된 중간 장소를 취소할까요?<br />
+              다시 중간 장소를 추천받을 수 있습니다.
+            </p>
+            <div className="departure-cancel-actions">
+              <button
+                type="button"
+                onClick={() => setShowCancelMiddlePlaceConfirm(false)}
+              >
+                유지
+              </button>
+              <button type="button" onClick={handleConfirmCancelMiddlePlace}>
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {pendingMeetingPlaceConfirm && (
         <div className="transport-mode-overlay">
           <div className="departure-cancel-dialog">
@@ -2965,7 +2983,17 @@ function normalizeSchedulePlaceName(name) {
   const trimmedName = typeof name === 'string' ? name.trim() : ''
   if (!trimmedName) return ''
 
-  return /^meeting\s*place$/i.test(trimmedName) ? '' : trimmedName
+  return isPlaceholderPlaceName(trimmedName) ? '' : trimmedName
+}
+
+function isPlaceholderPlaceName(name) {
+  const normalizedName = String(name || '').trim()
+
+  return (
+    /^meeting\s*place$/i.test(normalizedName) ||
+    /^place$/i.test(normalizedName) ||
+    /^만날\s*장소(?:\s*미정)?$/.test(normalizedName)
+  )
 }
 
 function getVisibleMapPlaces({ places = [], confirmedAdditionalPlaces = [], activeMeetingPlace }) {

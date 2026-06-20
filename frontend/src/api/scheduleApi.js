@@ -556,7 +556,7 @@ export async function updateConfirmedScheduleTiming(
 }
 
 export async function clearConfirmedScheduleLocation(scheduleId) {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("confirmed_schedules")
     .update({
       location: null,
@@ -564,12 +564,20 @@ export async function clearConfirmedScheduleLocation(scheduleId) {
       locationlat: null,
       locationlng: null,
     })
-    .eq("id", Number(scheduleId));
+    .eq("id", Number(scheduleId))
+    .select("*")
+    .maybeSingle();
 
   if (error) {
     console.error("장소 삭제 실패 상세:", JSON.stringify(error));
     throw new Error("장소 삭제 실패");
   }
+
+  if (!data) {
+    throw new Error("Schedule location was not cleared");
+  }
+
+  return data;
 }
 
 
