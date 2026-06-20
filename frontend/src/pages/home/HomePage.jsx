@@ -199,6 +199,7 @@ function HomePage() {
       await sendFriendRequest(currentUser.id, friendEmail);
       setFriendEmail("");
       alert("친구 요청을 보냈습니다.");
+      await loadAll(currentUser.id);
     } catch (error) {
       alert(error.message);
     } finally {
@@ -645,15 +646,17 @@ function HomePage() {
                     <button
                       onClick={() => handleRemoveFriend(friend.id)}
                       style={{
-                        border: "none",
-                        background: "none",
-                        fontSize: "16px",
+                        padding: "5px 10px",
+                        backgroundColor: "var(--btn-bg)",
+                        color: "var(--btn-text)",
+                        border: "1px solid var(--border-color)",
+                        borderRadius: "6px",
+                        fontSize: "12px",
                         cursor: "pointer",
-                        color: "var(--secondary-text)",
-                        padding: "4px",
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      ✕
+                      친구 삭제
                     </button>
                   </div>
                 ))
