@@ -49,22 +49,22 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin: 12px 0 18px;
-  gap: 10px;
+  margin: 8px 0 14px;
+  gap: 8px;
 }
 
 .edit-avatar-preview,
 .edit-avatar-default {
-  width: 82px;
-  height: 82px;
+  width: 70px;
+  height: 70px;
   border-radius: 50%;
   object-fit: cover;
   border: 3px solid #ffffff;
-  box-shadow: 0 4px 12px rgba(35, 29, 75, 0.1);
+  box-shadow: 0 4px 10px rgba(35, 29, 75, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32px;
+  font-size: 28px;
   background: #e5e7eb;
   color: #667085;
 }
@@ -77,45 +77,45 @@
   border: 1px solid #7c4dff;
   color: #7c4dff;
   border-radius: 999px;
-  padding: 0 14px;
-  height: 34px;
+  padding: 0 12px;
+  height: 30px;
   font-weight: 600;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .setting-edit-card {
   background: #ffffff;
-  border-radius: 18px;
-  padding: 16px;
-  box-shadow: 0 4px 12px rgba(31, 28, 67, 0.05);
-  margin-bottom: 12px;
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 4px 10px rgba(31, 28, 67, 0.05);
+  margin-bottom: 10px;
 }
 
 .card-title {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 800;
-  margin: 0 0 14px;
+  margin: 0 0 10px;
   color: #111827;
 }
 
 .card-title svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 .edit-form-group {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .edit-form-group label {
   display: block;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  margin-bottom: 5px;
+  margin-bottom: 3px;
   color: #374151;
 }
 
@@ -134,17 +134,13 @@
 
 .edit-form-group input {
   flex: 1;
-  height: 46px;
+  height: 42px;
   border: 1px solid #e2e5ec;
-  border-radius: 12px;
-  padding: 0 14px;
-  font-size: 14px;
+  border-radius: 10px;
+  padding: 0 12px;
+  font-size: 13px;
   outline: none;
   color: #171827;
-}
-
-.edit-form-group input::placeholder {
-  font-size: 14px;
 }
 
 .edit-form-group input:focus {
@@ -156,16 +152,16 @@
 }
 
 .check-button {
-  height: 46px;
-  min-width: 88px;
-  padding: 0 14px;
+  height: 42px;
+  min-width: 80px;
+  padding: 0 12px;
   border: 1px solid #7c4dff;
   background: #ffffff;
   color: #7c4dff;
-  border-radius: 12px;
+  border-radius: 10px;
   font-weight: 700;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .otp-container {
@@ -191,18 +187,19 @@
 .setting-password-field {
   position: relative;
   width: 100%;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .setting-password-input {
   display: block;
   width: 100%;
-  height: 46px;
-  padding: 0 46px 0 14px;
+  height: 42px;
+  padding: 0 42px 0 12px;
   box-sizing: border-box;
   border: 1px solid #e2e5ec;
-  border-radius: 12px;
-  font-size: 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #171827;
   outline: none;
 }
 
@@ -213,10 +210,10 @@
 .setting-password-toggle {
   position: absolute;
   top: 50%;
-  right: 12px;
+  right: 10px;
   transform: translateY(-50%);
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -230,20 +227,20 @@
 .password-guide {
   font-size: 11px;
   line-height: 1.3;
-  margin: 3px 2px 0;
+  margin: 2px 2px 0;
 }
 
 .password-change-btn {
   width: 100%;
-  height: 44px;
-  margin-top: 10px;
+  height: 40px;
+  margin-top: 8px;
   background: #ffffff;
   border: 1px solid #7c4dff;
   color: #7c4dff;
-  border-radius: 12px;
+  border-radius: 10px;
   font-weight: 700;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .status-message {
@@ -260,12 +257,12 @@
 
 .save-all-button {
   width: 100%;
-  height: 50px;
+  height: 46px;
   border: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   background: linear-gradient(135deg, #8b5cf6, #6938ef);
   color: #ffffff;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   cursor: pointer;
   margin-top: 14px;
@@ -277,12 +274,12 @@
 
 .delete-link-btn {
   width: 100%;
-  height: 46px;
+  height: 42px;
   background: #ffffff;
   border: 1px solid #fee2e2;
   color: #dc2626;
   font-weight: 700;
   cursor: pointer;
-  border-radius: 12px;
-  font-size: 14px;
+  border-radius: 10px;
+  font-size: 13px;
 }
