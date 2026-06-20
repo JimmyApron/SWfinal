@@ -1,29 +1,24 @@
 .signup-page {
   min-height: 100dvh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 10px 14px;
-  background: #f6f7fb;
+  padding: 24px;
+  background: #ffffff;
   box-sizing: border-box;
 }
 
 @media (max-height: 700px) {
   .signup-page {
-    height: auto;
     min-height: 100dvh;
-    align-items: flex-start;
     overflow-y: auto;
   }
 }
 
 .signup-card {
   width: 100%;
-  max-width: 490px;
-  background: #ffffff;
-  border-radius: 28px;
-  padding: 24px 28px;
-  box-shadow: 0 10px 32px rgba(22, 27, 45, 0.06);
+  max-width: none;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
   box-sizing: border-box;
 }
 
@@ -32,7 +27,7 @@
   border: none;
   cursor: pointer;
   padding: 0;
-  margin-bottom: 10px;
+  margin-bottom: 28px;
   display: flex;
   align-items: center;
   color: #111111;
@@ -43,7 +38,7 @@
   font-size: 28px;
   font-weight: 800;
   color: #111827;
-  letter-spacing: -0.7px;
+  letter-spacing: 0;
 }
 
 .signup-description {
