@@ -1458,7 +1458,7 @@ function ConfirmedScheduleDetailPage() {
               background: "#fff",
               padding: "18px",
               borderRadius: "18px",
-              width: isEditingLocationMap ? "min(90vw, 300px)" : "270px",
+              width: isEditingLocationMap ? "min(94vw, 380px)" : "270px",
               maxHeight: "85vh",
               overflowY: "auto",
               textAlign: isEditingLocationMap ? "left" : "center",
@@ -1523,7 +1523,7 @@ function ConfirmedScheduleDetailPage() {
                   onClick={() => setIsEditingLocationMap(true)}
                   style={{ ...primaryButtonStyle, marginBottom: "8px" }}
                 >
-                  지도에서 위치 선택하기
+                  지도에서 장소 선택하기
                 </button>
 
                 <button

@@ -2164,9 +2164,10 @@ function CalendarPage() {
               backgroundColor: "var(--bg-color)",
               borderRadius: "20px 20px 0 0",
               width: "100%",
-              maxHeight: "90vh",
+              maxHeight: "calc(100vh - 0px)",
               overflowY: "auto",
               padding: "24px 20px 80px",
+              boxSizing: "border-box",
             }}
           >
             <div
