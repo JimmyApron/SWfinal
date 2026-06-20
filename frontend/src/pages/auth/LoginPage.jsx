@@ -159,9 +159,21 @@ function LoginPage() {
         <p style={{ margin: '16px 0 0', fontSize: '13px', color: '#6B687A', textAlign: 'center' }}>{message}</p>
       )}
 
-      <p style={{ margin: '20px 0 0', textAlign: 'center', fontSize: '14px', color: '#6C5CE7' }}>
+      <button
+        type="button"
+        onClick={() => navigate('/reset-password')}
+        style={{
+          margin: '20px auto',
+          display: 'block',
+          background: 'none',
+          border: 'none',
+          fontSize: '14px',
+          color: '#6C5CE7',
+          cursor: 'pointer',
+        }}
+      >
         비밀번호를 잊으셨나요?
-      </p>
+      </button>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '32px 0 24px' }}>
         <div style={{ flex: 1, height: '1px', backgroundColor: '#E7E3F2' }} />

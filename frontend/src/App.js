@@ -10,6 +10,7 @@ import BottomNav from "./components/BottomNav";
 import InviteCodePage from "./pages/auth/InviteCodePage";
 import LoginPage from "./pages/auth/LoginPage";
 import SignupPage from "./pages/auth/SignupPage";
+import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
 import GuestLoginPage from "./pages/auth/GuestLoginPage";
 
 import HomePage from "./pages/home/HomePage";
@@ -214,6 +215,7 @@ function App() {
               <Route path="/" element={<InviteCodePage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/guest" element={<GuestLoginPage />} />
               <Route path="/home" element={<HomePage />} />
               <Route path="/rooms/create" element={<RoomCreatePage />} />
