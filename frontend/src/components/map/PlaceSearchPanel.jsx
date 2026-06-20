@@ -22,12 +22,12 @@ function PlaceSearchPanel({
 
   const handleSearchPlaces = async () => {
     if (!searchLocation) {
-      setMessage('먼저 중간장소를 확정해주세요.')
+      setMessage('먼저 중간 장소를 확정해주세요.')
       return
     }
 
     try {
-      setMessage('확정된 중간장소 주변에서 장소를 검색하고, 구글맵 평점 정보를 불러오는 중입니다.')
+      setMessage('확정된 중간 장소 주변에서 장소를 검색하고, 구글맵 평점 정보를 불러오는 중입니다.')
 
       const kakaoPlaces = await searchNearbyPlaces({
         lat: searchLocation.lat,
@@ -90,7 +90,7 @@ function PlaceSearchPanel({
     )
 
     if (selectedPlaces.length === 0) {
-      setMessage('투표에 넣을 추가장소 후보를 1개 이상 선택해주세요.')
+      setMessage('투표에 넣을 추가 장소를 1개 이상 선택해주세요.')
       return
     }
 
@@ -102,8 +102,8 @@ function PlaceSearchPanel({
       <section>
         <h2>주변 장소 추천</h2>
         <p>
-          먼저 유명 중간장소를 추천받고, 그중 하나를 중간장소로 확정해주세요.
-          중간장소가 확정되면 그 주변의 음식점, 카페, 놀거리를 검색할 수 있습니다.
+          먼저 유명 중간 장소를 추천받고, 그중 하나를 중간 장소로 확정해주세요.
+          중간 장소가 확정되면 그 주변의 음식점, 카페, 놀거리를 검색할 수 있습니다.
         </p>
       </section>
     )
@@ -111,10 +111,10 @@ function PlaceSearchPanel({
 
   return (
     <section>
-      <h2>확정된 중간장소 주변 추천</h2>
+      <h2>확정된 중간 장소 주변 추천</h2>
 
       <p>
-        기준 위치: {searchLocation.name || '확정된 중간장소'}
+        기준 장소: {searchLocation.name || '확정된 중간 장소'}
       </p>
 
       <PlaceCategoryTabs
@@ -136,14 +136,14 @@ function PlaceSearchPanel({
       </p>
 
       <button type="button" onClick={handleSearchPlaces}>
-        중간장소 주변 검색
+        중간 장소 주변 검색
       </button>
 
       {message && <p>{message}</p>}
 
       {places.length > 0 && onCreateAdditionalPlaceVote && (
         <button type="button" onClick={handleCreateVote}>
-          선택한 후보로 추가장소 투표 만들기
+          선택한 장소로 추가 장소 투표 만들기
         </button>
       )}
 

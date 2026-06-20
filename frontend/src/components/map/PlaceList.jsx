@@ -23,7 +23,7 @@ function PlaceList({
                   checked={selectedPlaceIds.includes(String(place.id))}
                   onChange={() => onToggleVotePlace(place)}
                 />{' '}
-                투표 후보로 선택
+                투표 항목으로 선택
               </label>
             )}
 

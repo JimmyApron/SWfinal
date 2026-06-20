@@ -377,7 +377,7 @@ function MapPage({ roomId }) {
     const content = {
       __type: 'map_share',
       sharetype: shareType,
-      name: place.name || place.placename || '공유 위치',
+      name: place.name || place.placename || '공유 장소',
       address: place.address || place.placeaddress || '',
       lat,
       lng,
@@ -448,7 +448,7 @@ function MapPage({ roomId }) {
 
   const handleShareMiddlePlace = async () => {
     if (!middlePlace) {
-      setMessage('확정된 중간장소가 없습니다.')
+      setMessage('확정된 중간 장소가 없습니다.')
       return
     }
 
@@ -458,7 +458,7 @@ function MapPage({ roomId }) {
     })
 
     if (isShared) {
-      setShareToast('확정된 중간장소가 채팅에 공유되었습니다!')
+      setShareToast('확정된 중간 장소가 채팅에 공유되었습니다!')
       setTimeout(() => setShareToast(''), 2000)
     }
   }
@@ -672,7 +672,7 @@ function MapPage({ roomId }) {
     }
 
     if (!middlePlace) {
-      setMessage('중간위치를 확정해주세요.')
+      setMessage('중간 장소를 확정해주세요.')
       return
     }
 
@@ -1114,7 +1114,7 @@ function MapPage({ roomId }) {
         setCreatedLocationOnlySchedule(targetSchedule)
       }
 
-      setMessage(`${targetSchedule?.title || '일정'}의 만날 위치로 저장했어요.`)
+      setMessage(`${targetSchedule?.title || '일정'}의 만날 장소로 저장했어요.`)
       await calculateAllMemberRoutesToMiddlePlace(confirmedPlace)
 
     } catch (error) {
@@ -1135,7 +1135,7 @@ function MapPage({ roomId }) {
       
       const targetSchedule = schedules.find(s => s.id === scheduleId)
       
-      // 만날 위치로 즉시 반영
+      // 만날 장소로 즉시 반영
       const confirmedPlace = {
         name: pendingMiddleLocation.placename,
         address: pendingMiddleLocation.placeaddress,
@@ -1158,10 +1158,10 @@ function MapPage({ roomId }) {
         setCreatedLocationOnlySchedule(targetSchedule)
       }
       
-      setMessage('선택한 일정에 만날 위치를 저장했습니다.')
+      setMessage('선택한 일정에 만날 장소를 저장했습니다.')
       await calculateAllMemberRoutesToMiddlePlace(confirmedPlace)
     } catch (error) {
-      setMessage(`일정 위치 저장 실패: ${error.message}`)
+      setMessage(`일정 장소 저장 실패: ${error.message}`)
     }
   }
 
@@ -1215,7 +1215,7 @@ function MapPage({ roomId }) {
 
   const handleSetMeetingPlace = async (place) => {
     if (!currentRoomId) {
-      setMessage('방 정보를 찾을 수 없어 만날 위치를 설정할 수 없습니다.')
+      setMessage('방 정보를 찾을 수 없어 만날 장소를 설정할 수 없습니다.')
       return
     }
 
@@ -1259,7 +1259,7 @@ function MapPage({ roomId }) {
     }
 
     if (!selectedPlaces || selectedPlaces.length === 0) {
-      setMessage('투표로 만들 중간 장소 후보를 1개 이상 선택해주세요.')
+      setMessage('투표로 만들 중간 장소를 1개 이상 선택해주세요.')
       return
     }
 
@@ -1298,12 +1298,12 @@ function MapPage({ roomId }) {
 
   const handleCreateAdditionalPlaceVote = (selectedPlaces) => {
     if (!currentRoomId) {
-      setMessage('방 정보를 찾을 수 없어 추가장소 투표를 만들 수 없습니다.')
+      setMessage('방 정보를 찾을 수 없어 추가 장소 투표를 만들 수 없습니다.')
       return
     }
 
     if (!selectedPlaces || selectedPlaces.length === 0) {
-      setMessage('투표로 만들 추가장소 후보를 1개 이상 선택해주세요.')
+      setMessage('투표로 만들 추가 장소를 1개 이상 선택해주세요.')
       return
     }
 
@@ -1406,7 +1406,7 @@ function MapPage({ roomId }) {
         ...schedule,
         isLocationOnly: true,
       })
-      setMessage(`${schedule.title} 일정을 만들었어요. 이제 만날 위치를 정해 주세요.`)
+      setMessage(`${schedule.title} 일정을 만들었어요. 이제 만날 장소를 정해 주세요.`)
     } catch (error) {
       setNewScheduleTitleError(error.message)
     }
@@ -1599,11 +1599,11 @@ function MapPage({ roomId }) {
         >
           <div style={{ width: '320px', padding: '24px', borderRadius: '20px', backgroundColor: 'var(--bg-color)', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
             <h3 style={{ marginBottom: '8px', textAlign: 'center' }}>
-              📍 만날 위치 설정
+              📍 만날 장소 설정
             </h3>
             <p style={{ color: 'var(--secondary-text)', fontSize: '13px', textAlign: 'center', marginBottom: '20px' }}>
               <strong>{pendingMiddleLocation.placename}</strong><br/>
-              이 위치를 어떤 일정에 등록할까요?
+              이 장소를 어떤 일정에 등록할까요?
             </p>
 
             <div style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '20px', paddingRight: '4px' }}>
@@ -1839,7 +1839,7 @@ function MapPage({ roomId }) {
                 도착
               </button>
             </div>
-            {!middlePlace && <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '8px', textAlign: 'center' }}>⚠️ 만날 위치를 먼저 확정해 주세요.</p>}
+            {!middlePlace && <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '8px', textAlign: 'center' }}>⚠️ 만날 장소를 먼저 확정해 주세요.</p>}
           </div>
 
           {message && (
@@ -1987,7 +1987,7 @@ function MapPage({ roomId }) {
           <p>주소: {middlePlace.address || '주소 정보 없음'}</p>
 
           <button type="button" onClick={handleShareMiddlePlace}>
-            확정된 중간장소 채팅에 공유
+            확정된 중간 장소 채팅에 공유
           </button>
 
           <button type="button" onClick={handleCancelMiddlePlace}>

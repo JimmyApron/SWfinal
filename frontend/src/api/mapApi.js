@@ -360,8 +360,8 @@ export async function saveRoomMiddlePlace({ roomId, place, confirmedBy }) {
     .single()
 
   if (error) {
-    console.error('중간장소 저장 실패:', error)
-    throw new Error('중간장소 저장 실패')
+    console.error('중간 장소 저장 실패:', error)
+    throw new Error('중간 장소 저장 실패')
   }
 
   return {
@@ -388,8 +388,8 @@ export async function getRoomMiddlePlace(roomId) {
     .maybeSingle()
 
   if (error) {
-    console.error('중간장소 조회 실패:', error)
-    throw new Error('중간장소 조회 실패')
+    console.error('중간 장소 조회 실패:', error)
+    throw new Error('중간 장소 조회 실패')
   }
 
   if (!data) return null
@@ -417,8 +417,8 @@ export async function deleteRoomMiddlePlace(roomId) {
     .eq('roomid', Number(roomId))
 
   if (error) {
-    console.error('중간장소 확정 취소 실패:', error)
-    throw new Error('중간장소 확정 취소 실패')
+    console.error('중간 장소 확정 취소 실패:', error)
+    throw new Error('중간 장소 확정 취소 실패')
   }
 }
 

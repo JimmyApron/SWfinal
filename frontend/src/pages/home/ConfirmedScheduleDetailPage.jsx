@@ -172,7 +172,7 @@ function ConfirmedScheduleDetailPage() {
 
     getAdditionalConfirmedLocations(schedule.roomid, schedule.id)
       .then(setAdditionalLocations)
-      .catch((error) => console.error("추가 위치 조회 실패:", error));
+      .catch((error) => console.error("추가 장소 조회 실패:", error));
 
     if (schedule.isLocationOnly) {
       const draftTitle = localStorage.getItem(
@@ -305,7 +305,7 @@ function ConfirmedScheduleDetailPage() {
 
   const handleSave = async () => {
     if (!locationText.trim()) {
-      alert("위치를 입력하세요.");
+      alert("장소를 입력하세요.");
       return;
     }
 
@@ -324,9 +324,9 @@ function ConfirmedScheduleDetailPage() {
       setShowMap(false);
       await refreshRouteEstimates(draftMeetingPlace);
 
-      alert("위치가 저장되었습니다.");
+      alert("장소가 저장되었습니다.");
     } catch (error) {
-      alert("위치 저장 실패: " + error.message);
+      alert("장소 저장 실패: " + error.message);
     } finally {
       setSaving(false);
     }
@@ -534,7 +534,7 @@ function ConfirmedScheduleDetailPage() {
 
   const handleAddLocation = async () => {
     if (!additionalPlace?.name) {
-      alert("추가할 위치를 선택하세요.");
+      alert("추가할 장소를 선택하세요.");
       return;
     }
 
@@ -551,9 +551,9 @@ function ConfirmedScheduleDetailPage() {
       setAdditionalPlace(null);
       setShowAdditionalPicker(false);
 
-      alert("추가 위치가 저장되었습니다.");
+      alert("추가 장소가 저장되었습니다.");
     } catch (error) {
-      alert("추가 위치 저장 실패: " + error.message);
+      alert("추가 장소 저장 실패: " + error.message);
     } finally {
       setSaving(false);
     }
@@ -579,7 +579,7 @@ function ConfirmedScheduleDetailPage() {
           }}
         >
           <p style={{ color: "#7c79ff", margin: 0 }}>
-            📍 만날 위치: {selectedMeetingPlace?.name || schedule.location}
+            📍 만날 장소: {selectedMeetingPlace?.name || schedule.location}
           </p>
         </div>
       )}
@@ -597,7 +597,7 @@ function ConfirmedScheduleDetailPage() {
 
       {additionalLocations.length > 0 && (
         <div style={{ marginBottom: "12px" }}>
-          <p style={{ fontWeight: "bold", marginBottom: "8px" }}>추가 위치</p>
+          <p style={{ fontWeight: "bold", marginBottom: "8px" }}>추가 장소</p>
 
           {additionalLocations.map((place) => (
             <p key={place.id} style={{ margin: "4px 0", color: "#555" }}>
@@ -621,7 +621,7 @@ function ConfirmedScheduleDetailPage() {
           cursor: "pointer",
         }}
       >
-        주변 위치 추가하기
+        주변 장소 추가하기
       </button>
 
       {showAdditionalPicker && (
@@ -634,7 +634,7 @@ function ConfirmedScheduleDetailPage() {
 
           {additionalPlace && (
             <p style={{ color: "#7c79ff", margin: "8px 0" }}>
-              선택한 위치: {additionalPlace.name}
+              선택한 장소: {additionalPlace.name}
             </p>
           )}
 
@@ -653,7 +653,7 @@ function ConfirmedScheduleDetailPage() {
               cursor: "pointer",
             }}
           >
-            추가 위치 저장
+            추가 장소 저장
           </button>
         </>
       )}
@@ -1042,7 +1042,7 @@ function ConfirmedScheduleDetailPage() {
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
           <p style={{ fontWeight: "bold", margin: 0 }}>
-            {selectedMeetingPlace || schedule.location ? "만날 위치 재설정" : "만날 위치 설정"}
+            {selectedMeetingPlace || schedule.location ? "만날 장소 재설정" : "만날 장소 설정"}
           </p>
           <button
             onClick={() => navigate(`/rooms/${schedule.roomid}?tab=location`)}
@@ -1054,7 +1054,7 @@ function ConfirmedScheduleDetailPage() {
 
         <input
           type="text"
-          placeholder="지도에서 위치를 선택하세요"
+          placeholder="지도에서 장소를 선택하세요"
           value={locationText}
           readOnly
           style={{ ...inputStyle, color: "#aaa", backgroundColor: "#fafafa" }}
@@ -1077,7 +1077,7 @@ function ConfirmedScheduleDetailPage() {
 
         {isPastSchedule ? (
           <p style={{ fontSize: "13px", color: "#aaa", marginBottom: "12px" }}>
-            지난 일정은 위치를 수정할 수 없습니다.
+            지난 일정은 장소를 수정할 수 없습니다.
           </p>
         ) : (
           <>
@@ -1085,7 +1085,7 @@ function ConfirmedScheduleDetailPage() {
               onClick={() => setShowMap((prev) => !prev)}
               style={secondaryButtonStyle}
             >
-              {showMap ? "지도 닫기" : "지도에서 위치 선택하기"}
+              {showMap ? "지도 닫기" : "지도에서 장소 선택하기"}
             </button>
 
             {showMap && (
@@ -1106,7 +1106,7 @@ function ConfirmedScheduleDetailPage() {
                 />
 
                 <button onClick={handleSave} disabled={saving} style={primaryButtonStyle}>
-                  {saving ? "저장 중..." : "위치 저장"}
+                  {saving ? "저장 중..." : "장소 저장"}
                 </button>
               </>
             )}

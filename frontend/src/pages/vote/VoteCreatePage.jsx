@@ -301,7 +301,7 @@ function VoteCreatePage() {
 
     if (isLocationVoteType(votetype)) {
       if (locationKind && !scheduleId) {
-        alert("위치 투표를 저장할 대상 일정이 없습니다.");
+        alert("장소 투표를 저장할 대상 일정이 없습니다.");
         return;
       }
 
@@ -316,7 +316,7 @@ function VoteCreatePage() {
       });
 
       if (invalidPlaceOption) {
-        alert("선택지 장소를 카카오맵에서 선택해주세요.");
+        alert("투표 항목의 장소를 카카오맵에서 선택해주세요.");
         return;
       }
     }
@@ -342,7 +342,7 @@ function VoteCreatePage() {
     });
 
     if (validOptions.length === 0) {
-      alert("투표 선택지를 1개 이상 입력하세요.");
+      alert("투표 항목을 1개 이상 입력하세요.");
       return;
     }
 
@@ -569,7 +569,7 @@ function VoteCreatePage() {
                   cursor: availSelectedCount > 0 ? "pointer" : "default",
                 }}
               >
-                {availSelectedCount > 0 ? `${availSelectedCount}개 후보로 추가` : "선택 후 추가"}
+                {availSelectedCount > 0 ? `${availSelectedCount}개 투표 항목으로 추가` : "선택 후 추가"}
               </button>
             </div>
           </div>
@@ -651,7 +651,7 @@ function VoteCreatePage() {
           {[
             { value: "general", label: "일반 투표" },
             { value: "schedule", label: "일정 확정" },
-            { value: "location", label: "위치 확정" },
+            { value: "location", label: "장소 확정" },
           ].map((type) => (
             <button
               key={type.value}
@@ -741,7 +741,7 @@ function VoteCreatePage() {
               marginBottom: "16px",
             }}
           >
-            위치 탭에서 선택한 중간장소 후보들이 투표 항목으로 추가되었습니다.
+            위치 탭에서 선택한 중간 장소들이 투표 항목으로 추가되었습니다.
           </p>
         )}
 

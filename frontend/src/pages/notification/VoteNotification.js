@@ -26,14 +26,14 @@ export const sendVoteNotification = async ({
       votetype === "schedule"
         ? "일정"
         : votetype === "location"
-        ? "중간장소"
+        ? "중간 장소"
         : "일반";
 
     const typeTitle =
       votetype === "schedule"
         ? "📅 일정 투표"
         : votetype === "location"
-        ? "📍 중간장소 투표"
+        ? "📍 중간 장소 투표"
         : "🗳️ 일반 투표";
 
     let isUrgent = false;
@@ -58,7 +58,7 @@ export const sendVoteNotification = async ({
       ? `/rooms/${rId}/votes/${createdVoteId}`
       : `/rooms/${rId}?tab=vote`;
 
-    // 1. 작성자를 제외한 참여자들에게 새 투표 알림 발송 (createRoomNotifications 사용)
+    // 1. 작성자를 제외한 멤버에게 새 투표 알림 발송 (createRoomNotifications 사용)
     await createRoomNotifications({
       roomId: rId,
       senderId,

@@ -144,7 +144,7 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
         <div style={{ display: "flex", alignItems: "center", gap: "4px", color: schedule.location ? "#4B5563" : "#9CA3AF", flex: 1, minWidth: 0 }}>
           <FaMapMarkerAlt size={12} color={schedule.location ? "#7C5CFF" : "#9CA3AF"} />
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {schedule.location || "위치 미정"}
+            {schedule.location || "장소 미정"}
           </span>
         </div>
         

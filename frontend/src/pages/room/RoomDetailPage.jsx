@@ -396,7 +396,7 @@ function RoomDetailPage() {
           </div>
           <div style={{ marginBottom: "25px" }}>
             <h4 style={{ margin: "0 0 10px 0" }}>
-              👥 참여자 명단 ({members.length + guests.length}명)
+              👥 멤버 명단 ({members.length + guests.length}명)
             </h4>
 
             <div
@@ -623,7 +623,7 @@ function RoomDetailPage() {
                     textAlign: "center",
                   }}
                 >
-                  참여자가 없습니다.
+                  멤버가 없습니다.
                 </p>
               )}
             </div>

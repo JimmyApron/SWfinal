@@ -261,7 +261,7 @@ export async function kickParticipantApi(roomId, participantId, type) {
 
   if (error) {
     console.error("추방 실패:", error);
-    throw new Error("참여자 추방에 실패했습니다.");
+    throw new Error("멤버 추방에 실패했습니다.");
   }
 }
 

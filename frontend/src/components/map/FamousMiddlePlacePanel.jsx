@@ -40,7 +40,7 @@ function FamousMiddlePlacePanel({
     }
 
     try {
-      setMessage('멤버별 이동수단 기준으로 유명 중간장소를 계산하는 중입니다.')
+      setMessage('멤버별 이동수단 기준으로 유명 중간 장소를 계산하는 중입니다.')
 
       const fixedMemberTransportModes = {}
 
@@ -62,7 +62,7 @@ function FamousMiddlePlacePanel({
       setRecommendedPlaces(result)
       onRecommendPlaces(result)
 
-      // 추천된 후보는 기본적으로 전부 투표 후보로 체크
+      // 추천된 장소는 기본적으로 전부 투표 항목으로 체크
       setSelectedPlaceIds(result.map((place, index) => getPlaceKey(place, index)))
 
       if (result.length === 0) {
@@ -70,10 +70,10 @@ function FamousMiddlePlacePanel({
         return
       }
 
-      setMessage('유명 중간장소 후보 5개를 추천했습니다.')
+      setMessage('유명 중간 장소 5개를 추천했습니다.')
     } catch (error) {
-      console.error('유명 중간장소 추천 오류:', error)
-      setMessage(error.message || '유명 중간장소 추천 중 오류가 발생했습니다.')
+      console.error('유명 중간 장소 추천 오류:', error)
+      setMessage(error.message || '유명 중간 장소 추천 중 오류가 발생했습니다.')
     }
   }
 
@@ -94,7 +94,7 @@ function FamousMiddlePlacePanel({
     }
 
     if (!onCreateMiddlePlaceVote) {
-      setMessage('중간장소 투표 생성 기능이 연결되지 않았습니다.')
+      setMessage('중간 장소 투표 생성 기능이 연결되지 않았습니다.')
       return
     }
 
@@ -103,7 +103,7 @@ function FamousMiddlePlacePanel({
     })
 
     if (selectedPlaces.length === 0) {
-      setMessage('투표에 넣을 중간장소 후보를 1개 이상 선택해주세요.')
+      setMessage('투표에 넣을 중간 장소를 1개 이상 선택해주세요.')
       return
     }
 
@@ -112,7 +112,7 @@ function FamousMiddlePlacePanel({
 
   return (
     <section className="middle-place-panel">
-      <h2>유명 중간장소 추천</h2>
+      <h2>유명 중간 장소 추천</h2>
 
       <p>
         멤버들이 등록한 이동수단을 기준으로 각자 이동시간이 비슷한 유명 장소를
@@ -133,7 +133,7 @@ function FamousMiddlePlacePanel({
       })}
 
       <button type="button" onClick={handleRecommend} disabled={!canRecommend}>
-        유명 중간장소 5개 추천
+        유명 중간 장소 5개 추천
       </button>
 
       {!canRecommend && (
@@ -144,7 +144,7 @@ function FamousMiddlePlacePanel({
 
       {recommendedPlaces.length > 0 && (
         <div>
-          <h3>추천된 중간장소</h3>
+          <h3>추천된 중간 장소</h3>
 
           <button
             type="button"
@@ -160,7 +160,7 @@ function FamousMiddlePlacePanel({
               fontWeight: 'bold',
             }}
           >
-            선택한 후보로 중간장소 투표 만들기
+            선택한 장소로 중간 장소 투표 만들기
           </button>
 
           {recommendedPlaces.map((place, index) => {
@@ -191,7 +191,7 @@ function FamousMiddlePlacePanel({
                     checked={isSelected}
                     onChange={() => handleTogglePlace(placeKey)}
                   />
-                  <span>투표 후보로 선택</span>
+                  <span>투표 항목으로 선택</span>
                 </label>
 
                 <h4>
@@ -213,7 +213,7 @@ function FamousMiddlePlacePanel({
                   type="button"
                   onClick={() => onSelectMiddlePlace(place)}
                 >
-                  이 장소를 중간장소로 확정
+                  이 장소를 중간 장소로 확정
                 </button>
               </div>
             )

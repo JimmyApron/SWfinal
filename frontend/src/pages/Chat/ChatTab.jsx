@@ -300,13 +300,13 @@ function KakaoLocationMap({ lat, lng, name, address, style, onClick }) {
       marker = new window.kakao.maps.Marker({
         map,
         position,
-        title: name || "공유 위치",
+        title: name || "공유 장소",
       });
 
       infoWindow = new window.kakao.maps.InfoWindow({
         content: `
           <div style="padding:10px; font-size:13px; line-height:1.5;">
-            <strong>${escapeMapHtml(name || "공유 위치")}</strong>
+            <strong>${escapeMapHtml(name || "공유 장소")}</strong>
             <p style="margin:4px 0;">${escapeMapHtml(
               address || "주소 정보 없음"
             )}</p>
@@ -439,8 +439,8 @@ function escapeMapHtml(value) {
 function MapShareMessageCard({ meta }) {
   const titleMap = {
     current_location: "현재 위치 공유",
-    middle_place: "확정된 중간장소",
-    nearby_place: "중간장소 주변 추천 장소",
+    middle_place: "확정된 중간 장소",
+    nearby_place: "중간 장소 주변 추천 장소",
   };
 
   return (

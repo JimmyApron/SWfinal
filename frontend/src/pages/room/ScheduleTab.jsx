@@ -1314,9 +1314,9 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
             </>
           )}
 
-          {/* 참여자 현황 */}
+          {/* 멤버 현황 */}
           <div style={{ marginBottom: "32px" }}>
-            <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#1F2933", marginBottom: "12px" }}>참여자 현황</h3>
+            <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#1F2933", marginBottom: "12px" }}>멤버 현황</h3>
             <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
               {members.map((member) => {
                 const isRegistered = availabilities.some((item) => item.userid === member.userid);

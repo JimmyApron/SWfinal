@@ -50,7 +50,7 @@ function LocationPicker({
     const clickHandler = (mouseEvent) => {
       const latlng = mouseEvent.latLng;
       placeMarker(latlng.getLat(), latlng.getLng(), {
-        name: "선택한 위치",
+        name: "선택한 장소",
       });
 
       const geocoder = new window.kakao.maps.services.Geocoder();
@@ -64,7 +64,7 @@ function LocationPicker({
             const address = road || jibun;
 
             placeMarker(latlng.getLat(), latlng.getLng(), {
-              name: address || "선택한 위치",
+              name: address || "선택한 장소",
               address,
             });
 
@@ -96,7 +96,7 @@ function LocationPicker({
 
     const marker = new window.kakao.maps.Marker({
       position: new window.kakao.maps.LatLng(lat, lng),
-      title: place.name || "선택한 위치",
+      title: place.name || "선택한 장소",
     });
 
     marker.setMap(map);
@@ -105,7 +105,7 @@ function LocationPicker({
     infoWindowRef.current = new window.kakao.maps.InfoWindow({
       content: `
         <div style="padding:10px; font-size:13px; line-height:1.5;">
-          <strong>${escapeHtml(place.name || "선택한 위치")}</strong>
+          <strong>${escapeHtml(place.name || "선택한 장소")}</strong>
           <p style="margin:4px 0;">${escapeHtml(
             place.address || "주소 정보 없음"
           )}</p>

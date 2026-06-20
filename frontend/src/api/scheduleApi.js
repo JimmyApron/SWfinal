@@ -248,8 +248,8 @@ export async function getAdditionalConfirmedLocations(roomId, scheduleId = null)
   const { data, error } = query;
 
   if (error) {
-    console.error("추가 위치 조회 실패:", error);
-    throw new Error("추가 위치 조회 실패");
+    console.error("추가 장소 조회 실패:", error);
+    throw new Error("추가 장소 조회 실패");
   }
 
   const voteIds = (data || [])
@@ -263,8 +263,8 @@ export async function getAdditionalConfirmedLocations(roomId, scheduleId = null)
     : { data: [], error: null };
 
   if (voteError) {
-    console.error("추가 위치 투표 조회 실패:", voteError);
-    throw new Error("추가 위치 조회 실패");
+    console.error("추가 장소 투표 조회 실패:", voteError);
+    throw new Error("추가 장소 조회 실패");
   }
 
   const voteMap = new Map((votes || []).map((vote) => [vote.id, vote]));
@@ -291,8 +291,8 @@ export async function addAdditionalConfirmedLocation(roomId, scheduleId, placeNa
     .single();
 
   if (error) {
-    console.error("추가 위치 저장 실패:", error);
-    throw new Error("추가 위치 저장 실패");
+    console.error("추가 장소 저장 실패:", error);
+    throw new Error("추가 장소 저장 실패");
   }
 
   return data;
@@ -329,7 +329,7 @@ export async function applyConfirmedLocationToSchedule(
       })
       .eq("id", Number(scheduleId));
 
-    if (error) throw new Error("일정 위치 저장 실패");
+    if (error) throw new Error("일정 장소 저장 실패");
   } else {
     const { data: existingLocation, error: existingLocationError } =
       await supabase
@@ -341,7 +341,7 @@ export async function applyConfirmedLocationToSchedule(
         .maybeSingle();
 
     if (existingLocationError) throw new Error("추가 장소 중복 확인 실패");
-    if (existingLocation) throw new Error("이미 있는 추가장소입니다.");
+    if (existingLocation) throw new Error("이미 있는 추가 장소입니다.");
 
     const { error } = await supabase.from("confirmed_locations").insert([{
       roomid: Number(location.roomid),
@@ -444,8 +444,8 @@ export async function updateConfirmedScheduleLocation(
     .eq("id", scheduleId);
 
   if (error) {
-    console.error("위치 저장 실패 상세:", JSON.stringify(error));
-    throw new Error("위치 저장 실패");
+    console.error("장소 저장 실패 상세:", JSON.stringify(error));
+    throw new Error("장소 저장 실패");
   }
 }
 
@@ -487,8 +487,8 @@ export async function clearConfirmedScheduleLocation(scheduleId) {
     .eq("id", Number(scheduleId));
 
   if (error) {
-    console.error("위치 삭제 실패 상세:", JSON.stringify(error));
-    throw new Error("위치 삭제 실패");
+    console.error("장소 삭제 실패 상세:", JSON.stringify(error));
+    throw new Error("장소 삭제 실패");
   }
 }
 

@@ -87,7 +87,7 @@ function GuestLoginPage() {
       setInviteCode(trimmedInviteCode)
       setRoomRealId(roomData.id)
       setIsRoomVerified(true)
-      setMessage('✅ 유효한 방 확인 완료! 참가자 명단을 실시간으로 감시합니다.')
+      setMessage('✅ 유효한 방 확인 완료! 멤버 명단을 실시간으로 감시합니다.')
 
       await refreshParticipantList(trimmedInviteCode, roomData.id)
     } catch (error) {

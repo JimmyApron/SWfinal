@@ -381,11 +381,11 @@ function VoteDetailPage() {
     if (!targetOption) return;
 
     const optionName =
-      targetOption.placename || targetOption.optiontext || "이 후보";
+      targetOption.placename || targetOption.optiontext || "이 투표 항목";
 
     if (!targetOption.isNew) {
       const ok = window.confirm(
-        `"${optionName}" 후보를 삭제할까요? 저장 버튼을 눌러야 실제로 반영됩니다.`
+        `"${optionName}" 투표 항목을 삭제할까요? 저장 버튼을 눌러야 실제로 반영됩니다.`
       );
 
       if (!ok) return;
@@ -423,18 +423,18 @@ function VoteDetailPage() {
 
   const validatePlaceOptionForSave = (option) => {
     if (!option.placename.trim()) {
-      return "중간장소 후보의 장소명을 모두 입력하세요.";
+      return "중간 장소 투표 항목의 장소명을 모두 입력하세요.";
     }
 
     const hasLat = hasValue(option.placelat);
     const hasLng = hasValue(option.placelng);
 
     if (!hasLat || !hasLng) {
-      return "선택지 장소를 카카오맵에서 선택해주세요.";
+      return "투표 항목의 장소를 카카오맵에서 선택해주세요.";
     }
 
     if ((hasLat && !hasLng) || (!hasLat && hasLng)) {
-      return "선택지 장소를 카카오맵에서 다시 선택해주세요.";
+      return "투표 항목의 장소를 카카오맵에서 다시 선택해주세요.";
     }
 
     const latNumber = normalizeCoordinate(option.placelat);
@@ -444,7 +444,7 @@ function VoteDetailPage() {
       (hasLat && Number.isNaN(latNumber)) ||
       (hasLng && Number.isNaN(lngNumber))
     ) {
-      return "선택지 장소를 카카오맵에서 다시 선택해주세요.";
+      return "투표 항목의 장소를 카카오맵에서 다시 선택해주세요.";
     }
 
     return null;
@@ -472,9 +472,9 @@ function VoteDetailPage() {
     }
 
     if (option.optiontype === "date") {
-      if (!option.optiondate) return "일정 선택지의 날짜를 모두 입력하세요.";
+      if (!option.optiondate) return "일정 투표 항목의 날짜를 모두 입력하세요.";
       if (!option.isallday && !option.starttime) {
-        return "일정 선택지의 시작 시간을 모두 입력하세요.";
+        return "일정 투표 항목의 시작 시간을 모두 입력하세요.";
       }
       if (
         !option.isallday &&
@@ -482,12 +482,12 @@ function VoteDetailPage() {
         option.endtime &&
         option.starttime >= option.endtime
       ) {
-        return "일정 선택지의 종료 시간은 시작 시간보다 늦어야 합니다.";
+        return "일정 투표 항목의 종료 시간은 시작 시간보다 늦어야 합니다.";
       }
       return null;
     }
 
-    if (!option.optiontext.trim()) return "투표 선택지 내용을 모두 입력하세요.";
+    if (!option.optiontext.trim()) return "투표 항목 내용을 모두 입력하세요.";
     return null;
   };
 
@@ -518,7 +518,7 @@ function VoteDetailPage() {
       .eq("optionid", optionId);
 
     if (responseDeleteError) {
-      console.error("삭제할 후보의 투표 응답 삭제 실패:", responseDeleteError);
+      console.error("삭제할 투표 항목의 투표 응답 삭제 실패:", responseDeleteError);
       throw responseDeleteError;
     }
 
@@ -528,7 +528,7 @@ function VoteDetailPage() {
       .eq("id", optionId);
 
     if (optionDeleteError) {
-      console.error("투표 후보 삭제 실패:", optionDeleteError);
+      console.error("투표 항목 삭제 실패:", optionDeleteError);
       throw optionDeleteError;
     }
   };
@@ -541,7 +541,7 @@ function VoteDetailPage() {
         const placeName = newPlaceName.trim();
 
         if (!placeName || !hasValue(newPlaceLat) || !hasValue(newPlaceLng)) {
-          alert("선택지 장소를 카카오맵에서 선택해주세요.");
+          alert("투표 항목의 장소를 카카오맵에서 선택해주세요.");
           return;
         }
 
@@ -552,7 +552,7 @@ function VoteDetailPage() {
         const hasLng = hasValue(inputLng);
 
         if ((hasLat && !hasLng) || (!hasLat && hasLng)) {
-          alert("선택지 장소를 카카오맵에서 다시 선택해주세요.");
+          alert("투표 항목의 장소를 카카오맵에서 다시 선택해주세요.");
           return;
         }
 
@@ -563,7 +563,7 @@ function VoteDetailPage() {
           (hasLat && Number.isNaN(latNumber)) ||
           (hasLng && Number.isNaN(lngNumber))
         ) {
-          alert("선택지 장소를 카카오맵에서 다시 선택해주세요.");
+          alert("투표 항목의 장소를 카카오맵에서 다시 선택해주세요.");
           return;
         }
 
@@ -663,15 +663,15 @@ function VoteDetailPage() {
       vote.votetype === "schedule"
         ? "일정"
         : requestedLocationKind === "middle"
-        ? "중간위치"
+        ? "중간 장소"
         : requestedLocationKind === "additional"
-        ? "추가장소"
+        ? "추가 장소"
         : isMiddlePlaceVote
-        ? "중간위치"
-        : "추가장소";
+        ? "중간 장소"
+        : "추가 장소";
 
     if (isLocationVote && !hasPlaceCoordinates(option)) {
-      alert("선택지 장소를 카카오맵에서 선택해주세요.");
+      alert("투표 항목의 장소를 카카오맵에서 선택해주세요.");
       return;
     }
 
@@ -764,7 +764,7 @@ function VoteDetailPage() {
       alert(`${scheduleTitle}에 장소를 저장했어요.`);
     } catch (error) {
       alert(
-        error.message === "이미 있는 추가장소입니다."
+        error.message === "이미 있는 추가 장소입니다."
           ? error.message
           : "확정 실패: " + (error.message || JSON.stringify(error))
       );
@@ -799,9 +799,9 @@ function VoteDetailPage() {
       alert(`${schedule?.title || "대상 일정"}에 장소를 저장했어요.`);
     } catch (error) {
       alert(
-        error.message === "이미 있는 추가장소입니다."
+        error.message === "이미 있는 추가 장소입니다."
           ? error.message
-          : "일정 위치 저장 실패: " + error.message
+          : "일정 장소 저장 실패: " + error.message
       );
     }
   };
@@ -820,14 +820,14 @@ function VoteDetailPage() {
       return;
     }
 
-    if (!window.confirm("추가장소 등록을 취소하시겠습니까?")) return;
+    if (!window.confirm("추가 장소 등록을 취소하시겠습니까?")) return;
 
     try {
       await removeVoteConfirmedAdditionalLocation(confirmedLocation.id);
       await loadVote();
-      alert("추가장소 등록을 취소했습니다.");
+      alert("추가 장소 등록을 취소했습니다.");
     } catch (error) {
-      alert("추가장소 등록 취소 실패: " + error.message);
+      alert("추가 장소 등록 취소 실패: " + error.message);
     }
   };
 
@@ -842,14 +842,14 @@ function VoteDetailPage() {
       return;
     }
 
-    if (!window.confirm("중간위치 확정을 취소하시겠습니까?")) return;
+    if (!window.confirm("중간 장소 확정을 취소하시겠습니까?")) return;
 
     try {
       await clearConfirmedScheduleLocation(vote.scheduleid);
       await loadVote();
-      alert("중간위치 확정을 취소했습니다.");
+      alert("중간 장소 확정을 취소했습니다.");
     } catch (error) {
-      alert("중간위치 확정 취소 실패: " + error.message);
+      alert("중간 장소 확정 취소 실패: " + error.message);
     }
   };
 
@@ -1141,7 +1141,7 @@ function VoteDetailPage() {
 
   const handleSubmitWithName = async () => {
     if (!appointmentTitle.trim()) {
-      alert("약속 이름을 입력해주세요.");
+      alert("일정 이름을 입력해주세요.");
       return;
     }
 
@@ -1247,7 +1247,7 @@ function VoteDetailPage() {
   const handleCloseVote = async () => {
     if (
       !window.confirm(
-        "투표를 종료할까요? 종료되어도 확정 버튼을 누르기 전까지 중간장소는 확정되지 않습니다."
+        "투표를 종료할까요? 종료되어도 확정 버튼을 누르기 전까지 중간 장소는 확정되지 않습니다."
       )
     ) {
       return;
@@ -1299,7 +1299,7 @@ function VoteDetailPage() {
     }
 
     if (editPlaceOptions.length === 0) {
-      alert("투표 선택지를 1개 이상 입력하세요.");
+      alert("투표 항목을 1개 이상 입력하세요.");
       return;
     }
 
@@ -1481,7 +1481,7 @@ function VoteDetailPage() {
             <div style={{ padding: "12px 20px 0" }}>
               <button onClick={handleAddDetailAvailAsOptions} disabled={detailSelectedCount === 0}
                 style={{ width: "100%", padding: "13px", backgroundColor: detailSelectedCount > 0 ? "#7c79ff" : "#eee", color: detailSelectedCount > 0 ? "#fff" : "#aaa", border: "none", borderRadius: "10px", fontSize: "15px", fontWeight: "bold", cursor: detailSelectedCount > 0 ? "pointer" : "default" }}>
-                {detailSelectedCount > 0 ? `${detailSelectedCount}개 후보로 추가` : "선택 후 추가"}
+                {detailSelectedCount > 0 ? `${detailSelectedCount}개 투표 항목으로 추가` : "선택 후 추가"}
               </button>
             </div>
           </div>
@@ -1576,7 +1576,7 @@ function VoteDetailPage() {
             <p style={{ color: "var(--secondary-text)", fontSize: "13px", textAlign: "center", marginBottom: "20px" }}>
               <strong>"{pendingLinkSchedule.title || "일정"}"</strong>의 날짜가 이 투표 결과로 변경됩니다.
               {pendingLinkSchedule.location && (
-                <><br /><span style={{ color: "#7c79ff" }}>위치는 기존 위치로 유지됩니다.</span></>
+                <><br /><span style={{ color: "#7c79ff" }}>장소는 기존 장소로 유지됩니다.</span></>
               )}
               <br />계속하시겠어요?
             </p>
@@ -1603,7 +1603,7 @@ function VoteDetailPage() {
           <div style={{ backgroundColor: "var(--bg-color)", borderRadius: "16px", padding: "24px", width: "90%", maxWidth: "360px" }}>
             <h3 style={{ marginBottom: "8px", textAlign: "center" }}>일정이 변경되었습니다!</h3>
             <p style={{ color: "var(--secondary-text)", fontSize: "13px", textAlign: "center", marginBottom: "20px" }}>
-              지금 만날 위치를 등록하시겠어요?
+              지금 만날 장소를 등록하시겠어요?
             </p>
             <div style={{ display: "flex", gap: "8px" }}>
               <button
@@ -1616,7 +1616,7 @@ function VoteDetailPage() {
                 onClick={() => { setShowAfterLinkLocationModal(false); navigate(`/rooms/${roomid}?tab=location`, { state: { selectedScheduleId: pendingLocationScheduleId } }); }}
                 style={{ flex: 1, padding: "12px", backgroundColor: "#7c79ff", color: "#fff", border: "none", borderRadius: "10px", fontSize: "15px", cursor: "pointer" }}
               >
-                위치 등록하기
+                장소 등록하기
               </button>
             </div>
           </div>
@@ -1653,7 +1653,7 @@ function VoteDetailPage() {
           <div style={{ backgroundColor: "var(--bg-color)", borderRadius: "16px", padding: "24px", width: "90%", maxWidth: "360px" }}>
             <h3 style={{ marginBottom: "8px", textAlign: "center" }}>일정이 변경되었습니다!</h3>
             <p style={{ color: "var(--secondary-text)", fontSize: "13px", textAlign: "center", marginBottom: "20px" }}>
-              만날 위치를 지금 정하시겠어요?
+              만날 장소를 지금 정하시겠어요?
             </p>
             <div style={{ display: "flex", gap: "8px" }}>
               <button
@@ -1731,9 +1731,9 @@ function VoteDetailPage() {
               }}
             >
               {existingHasLocation
-                ? "기존 위치가 유지됩니다."
+                ? "기존 장소가 유지됩니다."
                 : isReconfirmation
-                ? "만날 위치를 지금 정하시겠어요?"
+                ? "만날 장소를 지금 정하시겠어요?"
                 : "일정을 등록할 일정을 선택하거나 새 일정을 만들어 주세요."}
             </p>
             {existingHasLocation ? (
@@ -1920,8 +1920,8 @@ function VoteDetailPage() {
           >
             <h3 style={{ marginBottom: "4px", textAlign: "center" }}>
               {pendingLocationKind === "middle"
-                ? "만날 위치가 확정되었습니다!"
-                : "추가 위치가 확정되었습니다!"}
+                ? "만날 장소가 확정되었습니다!"
+                : "추가 장소가 확정되었습니다!"}
             </h3>
 
             <p
@@ -1932,7 +1932,7 @@ function VoteDetailPage() {
                 marginBottom: "16px",
               }}
             >
-              위치를 추가할 일정을 선택하거나 새 일정을 만들어 주세요.
+              장소를 추가할 일정을 선택하거나 새 일정을 만들어 주세요.
             </p>
 
             {/* 1. 확정된 일정에서 정하기 */}
@@ -2092,7 +2092,7 @@ function VoteDetailPage() {
                   cursor: "pointer",
                 }}
               >
-                지금 위치 정하기
+                지금 장소 정하기
               </button>
             </div>
           </div>
@@ -2121,10 +2121,10 @@ function VoteDetailPage() {
             }}
           >
             <h3 style={{ marginTop: 0, marginBottom: "8px", fontSize: "18px" }}>
-              위치를 정하시겠습니까?
+              장소를 정하시겠습니까?
             </h3>
             <p style={{ color: "var(--secondary-text)", fontSize: "13px", lineHeight: "1.6", marginBottom: "20px" }}>
-              만날 날짜와 일정 이름은 저장되었습니다.{"\n"}위치는 나중에 입력할 수도 있습니다.
+              만날 날짜와 일정 이름은 저장되었습니다.{"\n"}장소는 나중에 입력할 수도 있습니다.
             </p>
             <div style={{ display: "flex", gap: "8px" }}>
               <button
@@ -2166,7 +2166,7 @@ function VoteDetailPage() {
                   cursor: "pointer",
                 }}
               >
-                지금 위치 정하기
+                지금 장소 정하기
               </button>
             </div>
           </div>
@@ -2205,12 +2205,12 @@ function VoteDetailPage() {
                 marginBottom: "16px",
               }}
             >
-              위치만 등록된 기존 항목에 이번 일정을 연결하거나, 새 위치를 정할 수 있어요.
+              장소만 등록된 기존 항목에 이번 일정을 연결하거나, 새 장소를 정할 수 있어요.
             </p>
 
             <div style={{ marginBottom: "12px" }}>
               <p style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: "bold" }}>
-                기존 위치 항목에 일정 연결
+                기존 장소 항목에 일정 연결
               </p>
 
               {locationOnlySchedules.map((s) => (
@@ -2254,7 +2254,7 @@ function VoteDetailPage() {
                 cursor: "pointer",
               }}
             >
-              새 위치 정하기
+              새 장소 정하기
             </button>
           </div>
         </div>
@@ -2303,7 +2303,7 @@ function VoteDetailPage() {
               ✕
             </button>
 
-            <h3 style={{ marginBottom: "4px", textAlign: "center" }}>약속 이름을 입력해주세요</h3>
+            <h3 style={{ marginBottom: "4px", textAlign: "center" }}>일정 이름을 입력해주세요</h3>
 
             <p
               style={{
@@ -2314,13 +2314,13 @@ function VoteDetailPage() {
               }}
             >
               {nameInputMode === "later"
-                ? "위치는 나중에 위치 탭에서 등록할 수 있어요."
-                : "새 위치를 등록할 일정의 이름을 입력해주세요."}
+                ? "장소는 나중에 위치 탭에서 등록할 수 있어요."
+                : "새 장소를 등록할 일정의 이름을 입력해주세요."}
             </p>
 
             <input
               type="text"
-              placeholder="약속 이름"
+              placeholder="일정 이름"
               value={appointmentTitle}
               onChange={(e) => setAppointmentTitle(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSubmitWithName()}
@@ -2337,7 +2337,7 @@ function VoteDetailPage() {
 
             {!appointmentTitle.trim() && (
               <p style={{ fontSize: "12px", color: "#e53935", margin: "0 0 10px 2px" }}>
-                약속 이름을 입력해주세요.
+                일정 이름을 입력해주세요.
               </p>
             )}
             {appointmentTitle.trim() && <div style={{ marginBottom: "10px" }} />}
@@ -2446,9 +2446,9 @@ function VoteDetailPage() {
               textAlign: "center",
             }}
           >
-            <h3 style={{ marginTop: 0 }}>위치를 정하러 가시겠습니까?</h3>
+            <h3 style={{ marginTop: 0 }}>장소를 정하러 가시겠습니까?</h3>
             <p style={{ color: "var(--secondary-text)", fontSize: "13px" }}>
-              만날 날짜와 일정이름은 저장되었습니다. 위치는 나중에 입력할 수 있습니다.
+              만날 날짜와 일정 이름은 저장되었습니다. 장소는 나중에 입력할 수 있습니다.
             </p>
             <div style={{ display: "flex", gap: "8px" }}>
               <button
@@ -2479,7 +2479,7 @@ function VoteDetailPage() {
                   cursor: "pointer",
                 }}
               >
-                지금 위치 정하기
+                지금 장소 정하기
               </button>
             </div>
           </div>
@@ -2641,13 +2641,13 @@ function VoteDetailPage() {
               borderRadius: "8px",
             }}
           >
-            위치 투표는 투표 종료와 별개로, 생성자가
+            장소 투표는 투표 종료와 별개로, 생성자가
             <strong>
               {isManualLocationVote
-                ? " 중간위치 확정 또는 추가장소 등록 "
+                ? " 중간 장소 확정 또는 추가 장소 등록 "
                 : isMiddlePlaceVote
-                ? " 중간위치 확정하기 "
-                : " 추가장소 확정하기 "}
+                ? " 중간 장소 확정하기 "
+                : " 추가 장소 확정하기 "}
             </strong>
             버튼을 눌러야 최종 확정됩니다.
           </p>
@@ -2758,10 +2758,10 @@ function VoteDetailPage() {
               {isLocationVote && (
                 <span style={badgeStyle}>
                   {isManualLocationVote
-                    ? "일반 위치 투표"
+                    ? "일반 장소 투표"
                     : isMiddlePlaceVote
-                    ? "중간위치 투표"
-                    : "추가장소 투표"}
+                    ? "중간 장소 투표"
+                    : "추가 장소 투표"}
                 </span>
               )}
             </div>
@@ -3150,8 +3150,8 @@ function VoteDetailPage() {
                                 }}
                               >
                                 {isMiddleLocationRegistered
-                                  ? "중간위치 확정됨"
-                                  : "중간위치 확정"}
+                                  ? "중간 장소 확정됨"
+                                  : "중간 장소 확정"}
                               </button>
                               <button
                                 onClick={() =>
@@ -3174,8 +3174,8 @@ function VoteDetailPage() {
                                 }}
                               >
                                 {isAdditionalLocationRegistered
-                                  ? "추가장소 등록됨"
-                                  : "추가장소 등록"}
+                                  ? "추가 장소 등록됨"
+                                  : "추가 장소 등록"}
                               </button>
                             </>
                           ) : vote.locationkind === "additional" ? (
@@ -3198,8 +3198,8 @@ function VoteDetailPage() {
                               }}
                             >
                               {isAdditionalLocationRegistered
-                                ? "추가장소 등록됨"
-                                : "추가장소 등록"}
+                                ? "추가 장소 등록됨"
+                                : "추가 장소 등록"}
                             </button>
                           ) : isMiddlePlaceVote ? (
                             <button
@@ -3219,8 +3219,8 @@ function VoteDetailPage() {
                               }}
                             >
                               {isMiddleLocationRegistered
-                                ? "중간위치 확정됨"
-                                : "중간위치 확정"}
+                                ? "중간 장소 확정됨"
+                                : "중간 장소 확정"}
                             </button>
                           ) : vote.votetype !== "general" && (
                             <button
@@ -3243,11 +3243,11 @@ function VoteDetailPage() {
                               {isLocationVote
                                 ? isConfirmed
                                   ? isMiddlePlaceVote
-                                    ? "중간위치 확정됨"
-                                    : "추가장소 확정됨"
+                                    ? "중간 장소 확정됨"
+                                    : "추가 장소 확정됨"
                                   : isMiddlePlaceVote
-                                  ? "중간위치 확정하기"
-                                  : "추가장소 확정하기"
+                                  ? "중간 장소 확정하기"
+                                  : "추가 장소 확정하기"
                                 : isConfirmed
                                 ? "확정됨"
                                 : "확정"}
@@ -3721,7 +3721,7 @@ function EditVoteOptionsPanel({
       ))}
 
       <button type="button" onClick={onAddOption} style={smallButtonStyle}>
-        선택지 추가
+        투표 항목 추가
       </button>
     </div>
   );

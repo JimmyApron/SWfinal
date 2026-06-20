@@ -200,13 +200,13 @@ function KakaoMapView({
     pickedMarkerRef.current = new window.kakao.maps.Marker({
       position,
       map: mapObjectRef.current,
-      title: pickedPlace.name || '선택한 위치',
+      title: pickedPlace.name || '선택한 장소',
     })
 
     const infoWindow = new window.kakao.maps.InfoWindow({
       content: `
         <div style="padding:8px; font-size:13px; line-height:1.5;">
-          <strong>${escapeHtml(pickedPlace.name || '선택한 위치')}</strong>
+          <strong>${escapeHtml(pickedPlace.name || '선택한 장소')}</strong>
           <p style="margin:4px 0;">${escapeHtml(pickedPlace.address || '주소 정보 없음')}</p>
         </div>
       `,
@@ -642,7 +642,7 @@ function KakaoMapView({
     if (onSetMeetingPlace && !place.isConfirmedMiddlePlace) {
       const button = document.createElement('button')
       button.type = 'button'
-      button.textContent = '만날 위치로 설정하기'
+      button.textContent = '만날 장소로 설정하기'
       button.style.display = 'block'
       button.style.marginTop = '8px'
       button.style.padding = '7px 10px'

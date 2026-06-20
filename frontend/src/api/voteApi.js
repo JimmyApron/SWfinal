@@ -30,7 +30,7 @@ function isLocationVoteType(votetype) {
  * 투표 옵션 정리 함수
  * - 일반 투표
  * - 일정 투표
- * - 중간장소 투표
+ * - 중간 장소 투표
  * 전부 여기서 같은 형태로 정리함
  */
 function normalizeVoteOption(option) {
@@ -48,7 +48,7 @@ function normalizeVoteOption(option) {
     endtime: option.endtime || null,
     availablecount: option.availablecount || 0,
 
-    // 중간장소 투표용
+    // 중간 장소 투표용
     placename: option.placename || option.name || option.optiontext || null,
     placeaddress: option.placeaddress || option.address || null,
     placelat: normalizeCoordinate(option.placelat, option.lat),
@@ -272,7 +272,7 @@ export async function deleteVote(voteid) {
 }
 
 /**
- * 일정 또는 중간장소 확정
+ * 일정 또는 중간 장소 확정
  *
  * VoteDetailPage에서 5번째 인자는 상황에 따라 다르게 들어올 수 있음.
  * - schedule: appointmentTitle
@@ -369,7 +369,7 @@ export async function confirmVote(
 
   if (isLocationVoteType(votetype)) {
     const placeName =
-      option.placename || option.optiontext || "확정된 중간장소";
+      option.placename || option.optiontext || "확정된 중간 장소";
 
     const placeAddress = option.placeaddress || null;
 
@@ -429,7 +429,7 @@ export async function confirmVote(
     }
 
     /**
-     * 위치 탭에서 확정 중간장소로 다시 불러올 수 있도록 저장
+     * 위치 탭에서 확정 중간 장소로 다시 불러올 수 있도록 저장
      *
      * 주의:
      * room_middle_places 테이블에 kakaomapurl 컬럼이 없다면
@@ -470,7 +470,7 @@ export async function confirmVote(
       }
 
       if (existingLocation) {
-        throw new Error("이미 있는 추가장소입니다.");
+        throw new Error("이미 있는 추가 장소입니다.");
       }
 
       const { error: locationError } = await supabase
@@ -507,7 +507,7 @@ export async function confirmVote(
 /**
  * 투표 항목 추가
  * - 일반 투표: 문자열로 추가 가능
- * - 중간장소 투표: 객체로 좌표/주소/URL까지 추가 가능
+ * - 중간 장소 투표: 객체로 좌표/주소/URL까지 추가 가능
  */
 export async function addVoteOption(voteid, option) {
   const optionData =
@@ -590,7 +590,7 @@ export async function updateVote(
 }
 
 /**
- * 중간장소 후보 수정
+ * 중간 장소 투표 항목 수정
  */
 export async function updateVoteOption(optionid, option) {
   const { data, error } = await supabase
