@@ -135,7 +135,9 @@ function NotificationListener() {
                 schedule_confirmed: "schedule",
                 schedule_cancelled: "schedule",
                 schedule_new: "schedule",
-                location_request: "location"
+                location_request: "location",
+                middle_place_confirmed: "location",
+                location_schedule_created: "location"
               };
 
               const targetTab = typeToTabMap[notif.type];
@@ -153,7 +155,7 @@ function NotificationListener() {
                 notif.issilent !== true && 
                 isGlobalPopupEnabled && 
                 !isRoomMuted && 
-                (!isLookingAtRelevantTab || notif.type === "kick" || notif.type === "schedule_confirmed");
+                (!isLookingAtRelevantTab || notif.type === "kick" || notif.type === "schedule_confirmed" || notif.type === "middle_place_confirmed" || notif.type === "location_schedule_created");
 
               if (showToast) {
                 console.log("✅ [App.js] Toast 표시함");

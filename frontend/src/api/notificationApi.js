@@ -17,6 +17,7 @@ const TYPE_SETTING_MAP = {
   arrival_approaching: "locationnotifenabled",
   arrival_completed: "locationnotifenabled",
   middle_place_confirmed: "locationnotifenabled",
+  location_schedule_created: "locationnotifenabled",
   chat_new: "chatnotifenabled",
   room_invite: "roomnotifenabled",
   room_invite_accepted: "roomnotifenabled",
@@ -386,7 +387,7 @@ export async function getMyGuestNotifications(guestId) {
 
 export const TAB_TYPE_MAP = {
   schedule: ["schedule_confirmed", "schedule_cancelled", "schedule_new", "schedule_request"],
-  location: ["location_request"],
+  location: ["location_request", "middle_place_confirmed", "location_schedule_created"],
   vote: ["vote_closed", "vote_reminder", "vote_new"],
   chat: ["chat_new"],
 };

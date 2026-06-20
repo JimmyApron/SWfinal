@@ -14,6 +14,7 @@ import { supabase } from '../../lib/supabaseClient'
 import {
   createNotification,
   createGuestNotification,
+  createRoomNotifications,
 } from '../../api/notificationApi'
 import {
   saveMyLocation,
@@ -553,6 +554,34 @@ function MapPage({ roomId }) {
     setShowDepartureLocationPicker(false)
     setTransportModePrompt({ location, isEdit: false, source: 'manual' })
     setMessage('이동수단을 입력하세요.')
+  }
+
+  const notifyMiddlePlaceConfirmed = async (placeName, scheduleId = selectedScheduleId) => {
+    if (!currentRoomId || !placeName) return
+
+    const message = `${placeName} 장소가 확정되었습니다.`
+    const link = `/rooms/${currentRoomId}?tab=location${scheduleId ? `&scheduleId=${scheduleId}` : ''}`
+
+    try {
+      await createRoomNotifications({
+        roomId: currentRoomId,
+        senderId: currentUserId || currentGuestId || localStorage.getItem('guest_id'),
+        type: 'middle_place_confirmed',
+        title: '📍 장소 확정',
+        message,
+        link,
+        includeSender: true,
+      })
+    } catch (error) {
+      console.error('장소 확정 알림 생성 실패:', error)
+    }
+
+    window.dispatchEvent(new CustomEvent('app-toast', {
+      detail: {
+        message,
+        link,
+      },
+    }))
   }
 
   const handleSelectTransportMode = async (transportMode) => {
@@ -1114,6 +1143,7 @@ function MapPage({ roomId }) {
       }
 
       setMessage(`${targetSchedule?.title || '일정'}의 만날 위치로 저장했어요.`)
+      await notifyMiddlePlaceConfirmed(place.name, selectedScheduleId)
       await calculateAllMemberRoutesToMiddlePlace(confirmedPlace)
 
     } catch (error) {
@@ -1158,6 +1188,7 @@ function MapPage({ roomId }) {
       }
       
       setMessage('선택한 일정에 만날 위치를 저장했습니다.')
+      await notifyMiddlePlaceConfirmed(pendingMiddleLocation.placename, scheduleId)
       await calculateAllMemberRoutesToMiddlePlace(confirmedPlace)
     } catch (error) {
       setMessage(`일정 위치 저장 실패: ${error.message}`)
@@ -1205,6 +1236,13 @@ function MapPage({ roomId }) {
         ...schedule,
         isLocationOnly: true,
       })
+
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: {
+          message: `${schedule.location || pendingMiddleLocation.placename} 장소가 확정되었습니다.`,
+          link: `/rooms/${currentRoomId}?tab=location`,
+        },
+      }))
       
       await calculateAllMemberRoutesToMiddlePlace(confirmedPlace)
     } catch (error) {
@@ -1405,6 +1443,27 @@ function MapPage({ roomId }) {
         ...schedule,
         isLocationOnly: true,
       })
+      const scheduleMessage = `${schedule.title || newScheduleTitle} 일정의 장소를 정할 수 있어요.`
+      const scheduleLink = `/rooms/${currentRoomId}?tab=location&scheduleId=${schedule.id}`
+      try {
+        await createRoomNotifications({
+          roomId: currentRoomId,
+          senderId: currentUserId || currentGuestId || localStorage.getItem('guest_id'),
+          type: 'location_schedule_created',
+          title: '📍 장소 일정 추가',
+          message: scheduleMessage,
+          link: scheduleLink,
+          includeSender: true,
+        })
+      } catch (notificationError) {
+        console.error('장소 일정 추가 알림 생성 실패:', notificationError)
+      }
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: {
+          message: scheduleMessage,
+          link: scheduleLink,
+        },
+      }))
       setMessage(`${schedule.title} 일정을 만들었어요. 이제 만날 위치를 정해 주세요.`)
     } catch (error) {
       setNewScheduleTitleError(error.message)
