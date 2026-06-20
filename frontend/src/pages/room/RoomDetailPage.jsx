@@ -295,10 +295,25 @@ function RoomDetailPage() {
       try {
         const pId = p.type === "member" ? p.userid : p.id;
         await kickParticipantApi(Number(roomId), pId, p.type);
+        const changedAt = new Date().toISOString();
+        await supabase.from("room_messages").insert([{
+          roomid: Number(roomId),
+          userid: currentUser?.id || null,
+          nickname: currentUser?.nickname || "system",
+          content: JSON.stringify({
+            __type: "participant_removed",
+            participantId: String(pId),
+            changedAt,
+          }),
+        }]);
         setSelectedParticipantId(null);
         fetchRoomData();
         window.dispatchEvent(new CustomEvent("roomParticipantsChanged", {
-          detail: { roomId: Number(roomId), participantId: String(pId) },
+          detail: {
+            roomId: Number(roomId),
+            participantId: String(pId),
+            changedAt,
+          },
         }));
         supabase.channel(`room_parts_${roomId}`).send({ type: "broadcast", event: "PARTICIPANTS_CHANGED", payload: {} });
         await new Promise((resolve) => {

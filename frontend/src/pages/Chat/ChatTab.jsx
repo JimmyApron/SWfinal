@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FiUser } from "react-icons/fi";
 import { supabase } from "../../lib/supabaseClient";
@@ -507,7 +507,8 @@ function ChatTab({ roomId }) {
   const [isPinnedMessageExpanded, setIsPinnedMessageExpanded] = useState(false);
   const [isEditingPinnedMessage, setIsEditingPinnedMessage] = useState(false);
   const [pinnedMessageDraft, setPinnedMessageDraft] = useState("");
-  const [participants, setParticipants] = useState(new Set());
+  const [participants, setParticipants] = useState(new Map());
+  const [hiddenParticipantCutoffs, setHiddenParticipantCutoffs] = useState(new Map());
 
   const bottomRef = useRef(null);
   const galleryInputRef = useRef(null);
@@ -517,29 +518,84 @@ function ChatTab({ roomId }) {
   const dragStartY = useRef(null);
   const isDragging = useRef(false);
 
+  const hiddenCutoffsStorageKey = roomId ? `hidden_chat_participants_${roomId}` : null;
+
+  useEffect(() => {
+    if (!hiddenCutoffsStorageKey) {
+      setHiddenParticipantCutoffs(new Map());
+      return;
+    }
+
+    try {
+      const saved = JSON.parse(localStorage.getItem(hiddenCutoffsStorageKey) || "{}");
+      setHiddenParticipantCutoffs(new Map(Object.entries(saved)));
+    } catch {
+      setHiddenParticipantCutoffs(new Map());
+    }
+  }, [hiddenCutoffsStorageKey]);
+
+  const rememberHiddenParticipantCutoff = useCallback((participantId, hiddenUntil) => {
+    if (!participantId || !hiddenUntil) return;
+
+    setHiddenParticipantCutoffs((prev) => {
+      const current = prev.get(String(participantId));
+      if (current && new Date(current).getTime() >= new Date(hiddenUntil).getTime()) {
+        return prev;
+      }
+
+      const next = new Map(prev);
+      next.set(String(participantId), hiddenUntil);
+
+      if (hiddenCutoffsStorageKey) {
+        localStorage.setItem(
+          hiddenCutoffsStorageKey,
+          JSON.stringify(Object.fromEntries(next))
+        );
+      }
+
+      return next;
+    });
+  }, [hiddenCutoffsStorageKey]);
+
+  const rememberHiddenCutoffsFromMessages = useCallback((messageRows) => {
+    (messageRows || []).forEach((message) => {
+      const meta = getMessageMeta(message.content);
+      if (meta?.__type !== "participant_removed" || !meta.participantId) return;
+
+      rememberHiddenParticipantCutoff(
+        meta.participantId,
+        meta.changedAt || message.createdat
+      );
+    });
+  }, [rememberHiddenParticipantCutoff]);
+
   useEffect(() => {
     if (!roomId) return;
     const fetchParticipants = async () => {
       const [{ data: members }, { data: guests }] = await Promise.all([
-        supabase.from("room_members").select("userid").eq("roomid", Number(roomId)),
-        supabase.from("room_guests").select("id").eq("roomid", Number(roomId))
+        supabase.from("room_members").select("userid, joinedat").eq("roomid", Number(roomId)),
+        supabase.from("room_guests").select("id, createdat").eq("roomid", Number(roomId))
       ]);
-      const pSet = new Set([
-        ...(members || []).map(m => String(m.userid)),
-        ...(guests || []).map(g => String(g.id))
+      const pMap = new Map([
+        ...(members || []).map(m => [String(m.userid), m.joinedat]),
+        ...(guests || []).map(g => [String(g.id), g.createdat])
       ]);
-      setParticipants(pSet);
+      setParticipants(pMap);
     };
     fetchParticipants();
 
     const handleLocalParticipantsChanged = (event) => {
       if (Number(event.detail?.roomId) !== Number(roomId)) return;
       if (event.detail?.participantId) {
+        const participantId = String(event.detail.participantId);
+        const hiddenUntil = event.detail.changedAt || new Date().toISOString();
+
         setParticipants((prev) => {
-          const next = new Set(prev);
-          next.delete(String(event.detail.participantId));
+          const next = new Map(prev);
+          next.delete(participantId);
           return next;
         });
+        rememberHiddenParticipantCutoff(participantId, hiddenUntil);
       }
       fetchParticipants();
     };
@@ -586,7 +642,7 @@ function ChatTab({ roomId }) {
       supabase.removeChannel(guestChannel);
       supabase.removeChannel(participantDeleteChannel);
     };
-  }, [roomId]);
+  }, [roomId, hiddenCutoffsStorageKey, rememberHiddenParticipantCutoff]);
 
   useEffect(() => {
     let cancelled = false;
@@ -665,7 +721,9 @@ function ChatTab({ roomId }) {
         return;
       }
 
-      setMessages(data || []);
+      const nextMessages = data || [];
+      rememberHiddenCutoffsFromMessages(nextMessages);
+      setMessages(nextMessages);
     };
 
     fetchMessages();
@@ -681,6 +739,7 @@ function ChatTab({ roomId }) {
           filter: `roomid=eq.${roomId}`,
         },
         (payload) => {
+          rememberHiddenCutoffsFromMessages([payload.new]);
           setMessages((prev) => {
             if (prev.some((m) => m.id === payload.new.id)) return prev;
             return [...prev, payload.new];
@@ -708,7 +767,7 @@ function ChatTab({ roomId }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [roomId]);
+  }, [roomId, rememberHiddenCutoffsFromMessages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -728,6 +787,7 @@ function ChatTab({ roomId }) {
 
   const canDelete = (message) => {
     if (!currentUser || message.userid !== currentUser.id) return false;
+    if (!isKnownParticipantForMessage(message)) return false;
     if (isDeletedMsg(message.content)) return false;
 
     try {
@@ -754,6 +814,26 @@ function ChatTab({ roomId }) {
     if (isDeletedMsg(message.content)) return false;
 
     return !!getPinnableText(message).trim();
+  };
+
+  const isKnownParticipantForMessage = (message) => {
+    if (!message.userid) return true;
+
+    const participantId = String(message.userid);
+    const hiddenUntil = hiddenParticipantCutoffs.get(participantId);
+    if (
+      hiddenUntil &&
+      message.createdat &&
+      new Date(message.createdat).getTime() <= new Date(hiddenUntil).getTime()
+    ) {
+      return false;
+    }
+
+    const joinedAt = participants.get(participantId);
+    if (!joinedAt) return false;
+    if (!message.createdat) return true;
+
+    return new Date(message.createdat).getTime() >= new Date(joinedAt).getTime();
   };
 
   const deleteMessage = async (messageId) => {
@@ -1238,6 +1318,7 @@ function ChatTab({ roomId }) {
           const meta = getMessageMeta(message.content);
 
           if (meta?.__type === "pin_event") return null;
+          if (meta?.__type === "participant_removed") return null;
 
           if (isDeletedMsg(message.content) && !message.imageurl) {
             return (
@@ -1248,14 +1329,15 @@ function ChatTab({ roomId }) {
             );
           }
 
+          const isParticipant = isKnownParticipantForMessage(message);
           const myId = currentUser?.id;
           const isMine = !!(
             myId &&
             myId !== "guest" &&
             message.userid &&
-            message.userid === myId
+            message.userid === myId &&
+            isParticipant
           );
-          const isParticipant = message.userid ? participants.has(String(message.userid)) : true;
           const deletable = canDelete(message);
           const editable = canEdit(message);
           const pinnable = canPin(message);
