@@ -1,0 +1,240 @@
+.settings-page {
+  min-height: 100dvh;
+  background: #f7f7fc;
+  color: #171827;
+  padding-bottom: 70px;
+  box-sizing: border-box;
+}
+
+.settings-content {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0 18px 12px;
+  box-sizing: border-box;
+}
+
+.settings-header {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: sticky;
+  top: 0;
+  background: #f7f7fc;
+  z-index: 10;
+}
+
+.back-button {
+  border: none;
+  background: none;
+  padding: 8px;
+  font-size: 20px;
+  cursor: pointer;
+  color: #111827;
+}
+
+.settings-title {
+  font-size: 18px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.profile-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-top: 10px;
+}
+
+.profile-avatar {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #ffffff;
+  box-shadow: 0 4px 12px rgba(31, 29, 71, 0.08);
+}
+
+.profile-avatar-default {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  border: 3px solid #ffffff;
+  box-shadow: 0 4px 12px rgba(31, 29, 71, 0.08);
+}
+
+.nickname {
+  font-size: 26px;
+  font-weight: 800;
+  margin: 10px 0 2px;
+}
+
+.email {
+  font-size: 14px;
+  color: #667085;
+  margin: 0;
+}
+
+.provider-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 20px;
+  padding: 3px 8px;
+  font-size: 11px;
+  margin-top: 5px;
+}
+
+.provider-google { background: #fff; border: 1px solid #e0e0e0; color: #444; }
+.provider-kakao { background: #FEE500; color: #000; font-weight: bold; }
+
+.profile-edit-button {
+  height: 38px;
+  margin-top: 12px;
+  padding: 0 18px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid #7c4dff;
+  color: #7c4dff;
+  border-radius: 99px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-section-title {
+  font-size: 18px;
+  font-weight: 800;
+  margin: 20px 0 10px;
+  color: #111827;
+}
+
+.settings-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 0 16px;
+  box-shadow: 0 4px 12px rgba(32, 28, 70, 0.05);
+}
+
+.settings-row {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #ececf3;
+}
+
+.settings-row:last-child {
+  border-bottom: none;
+}
+
+.row-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-icon-circle {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #f1edff;
+  color: #7c4dff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.row-label {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.settings-toggle {
+  width: 44px;
+  height: 25px;
+  border-radius: 99px;
+  border: none;
+  background: #ccc;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.3s;
+  padding: 0;
+}
+
+.settings-toggle[aria-checked="true"] {
+  background: #7c4dff;
+}
+
+.settings-toggle-thumb {
+  width: 19px;
+  height: 19px;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  transition: left 0.3s;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.settings-toggle[aria-checked="true"] .settings-toggle-thumb {
+  left: 22px;
+}
+
+.account-menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.account-menu-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 0 16px;
+  min-height: 58px;
+  box-shadow: 0 4px 12px rgba(32, 28, 70, 0.05);
+  cursor: pointer;
+  border: none;
+  width: 100%;
+}
+
+.account-menu-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #f1edff;
+  color: #7c4dff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logout-card {
+  border: 1px solid #fee2e2;
+  color: #dc2626;
+}
+
+.logout-card .account-menu-icon {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.settings-version {
+  margin: 12px 0 6px;
+  font-size: 12px;
+  text-align: center;
+  color: #9296a5;
+}
