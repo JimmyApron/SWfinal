@@ -182,6 +182,72 @@ function HomePage() {
     init();
   }, [loadConfirmedSchedules]);
 
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const reloadPending = async () => {
+      try {
+        const reqs = await getPendingRequests(currentUser.id);
+        setPendingRequests(reqs);
+      } catch (error) {
+        console.error("친구 요청 조회 실패:", error);
+      }
+    };
+
+    const reloadSent = async () => {
+      try {
+        const sent = await getSentRequests(currentUser.id);
+        setSentRequests(sent);
+      } catch (error) {
+        console.error("보낸 요청 조회 실패:", error);
+      }
+    };
+
+    const channel = supabase
+      .channel(`friend-requests-${currentUser.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "friends",
+          filter: `friendid=eq.${currentUser.id}`,
+        },
+        reloadPending
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "friends",
+          filter: `userid=eq.${currentUser.id}`,
+        },
+        reloadSent
+      )
+      // friends 테이블 realtime이 안 잡힐 경우를 대비한 보조 트리거:
+      // 친구 요청 시 항상 notifications에도 같이 INSERT되므로 이걸로도 갱신
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `receiverid=eq.${currentUser.id}`,
+        },
+        (payload) => {
+          if (payload.new?.type === "friend_request") reloadPending();
+        }
+      )
+      .subscribe((status) => {
+        console.log("친구 요청 realtime 상태:", status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser]);
+
   const handleOpenFriendPanel = async () => {
     setShowFriendPanel(true);
 
