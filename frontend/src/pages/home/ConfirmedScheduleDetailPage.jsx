@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { FaCalendarAlt, FaMapMarkerAlt } from "react-icons/fa";
 import { supabase } from "../../lib/supabaseClient";
 import {
   addAdditionalConfirmedLocation,
   cancelConfirmedSchedule,
   createConfirmedScheduleForRoom,
+  deleteAdditionalConfirmedLocation,
   dismissConfirmedSchedule,
   getAdditionalConfirmedLocations,
   updateConfirmedScheduleTiming,
@@ -23,17 +25,20 @@ import { getTodayStr } from "../../utils/scheduleUtils";
 function getTimeUntil(date, starttime) {
   if (!date || !date.match(/^\d{4}-\d{2}-\d{2}$/)) return null;
   const today = getTodayStr();
-  if (date === today) return "오늘 약속입니다";
+  if (date === today) return "당일 일정";
   const target = new Date(`${date}T${starttime || "00:00:00"}`);
   if (isNaN(target.getTime())) return null;
   const diff = target - new Date();
-  if (diff < 0) return "지난 일정입니다";
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  if (days > 0) return `일정 ${days}일 ${hours}시간 전입니다`;
-  if (hours > 0) return `일정 ${hours}시간 ${minutes}분 전입니다`;
-  return `일정 ${minutes}분 전입니다`;
+  if (diff < 0) return "지난 일정";
+  const totalMinutes = Math.floor(diff / (1000 * 60));
+  const totalHours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (totalHours < 24) {
+    return `${String(totalHours).padStart(2, "0")}시간 ${String(minutes).padStart(2, "0")}분 전`;
+  }
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  return `${days}일 ${hours}시간 전`;
 }
 
 function ConfirmedScheduleDetailPage() {
@@ -54,7 +59,6 @@ function ConfirmedScheduleDetailPage() {
     isallday: Boolean(schedule?.isallday),
   });
   const [timingDraft, setTimingDraft] = useState(scheduleTiming);
-  const [showMap, setShowMap] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [roomOwnerId, setRoomOwnerId] = useState(null);
   const [attendees, setAttendees] = useState([]);
@@ -93,6 +97,10 @@ function ConfirmedScheduleDetailPage() {
   const [memberLocations, setMemberLocations] = useState([]);
   const [memberRoutePaths, setMemberRoutePaths] = useState([]);
   const [voteExists, setVoteExists] = useState(null); // null=로딩중, true/false
+  const [showEditChoice, setShowEditChoice] = useState(false);
+  const [showAttendees, setShowAttendees] = useState(false);
+  const [showLocationEditChoice, setShowLocationEditChoice] = useState(false);
+  const [isEditingLocationMap, setIsEditingLocationMap] = useState(false);
 
   useEffect(() => {
     if (!schedule) {
@@ -149,17 +157,18 @@ function ConfirmedScheduleDetailPage() {
 
       const { data: profiles } = await supabase
         .from("profiles")
-        .select("id, nickname")
+        .select("id, nickname, profileimageurl")
         .in("id", memberIds);
 
       const profileMap = Object.fromEntries(
-        (profiles || []).map((p) => [p.id, p.nickname])
+        (profiles || []).map((p) => [p.id, p])
       );
 
       setAttendees(
         memberIds.map((uid) => ({
           userid: uid,
-          nickname: profileMap[uid] || uid,
+          nickname: profileMap[uid]?.nickname || uid,
+          profileimageurl: profileMap[uid]?.profileimageurl || null,
         }))
       );
     };
@@ -253,6 +262,9 @@ function ConfirmedScheduleDetailPage() {
   const isRoomOwner = currentUser?.id && currentUser.id === roomOwnerId;
   const isLocationOnly = Boolean(schedule.isLocationOnly);
   const isAbsent = currentUser?.id ? absentees.includes(currentUser.id) : false;
+  const attendingCount = attendees.filter(
+    (attendee) => !absentees.includes(attendee.userid)
+  ).length;
 
   const isPastSchedule = (() => {
     if (!scheduleTiming.date) return false;
@@ -260,7 +272,9 @@ function ConfirmedScheduleDetailPage() {
     return scheduleTiming.date < today;
   })();
 
-  const dateLabel = !scheduleTiming.date
+  const isDateUndecided = !scheduleTiming.date;
+
+  const dateLabel = isDateUndecided
     ? "일정 미정"
     : scheduleTiming.isallday
     ? `${scheduleTiming.date} (하루종일)`
@@ -295,6 +309,7 @@ function ConfirmedScheduleDetailPage() {
       await updateConfirmedScheduleTiming(schedule.id, timingDraft);
       setScheduleTiming(timingDraft);
       setIsEditingTiming(false);
+      setShowEditChoice(false);
       alert("일정 날짜와 시간을 수정했습니다.");
     } catch (error) {
       alert(error.message);
@@ -321,7 +336,8 @@ function ConfirmedScheduleDetailPage() {
       );
 
       setSelectedMeetingPlace(draftMeetingPlace);
-      setShowMap(false);
+      setIsEditingLocationMap(false);
+      setShowLocationEditChoice(false);
       await refreshRouteEstimates(draftMeetingPlace);
 
       alert("위치가 저장되었습니다.");
@@ -559,6 +575,32 @@ function ConfirmedScheduleDetailPage() {
     }
   };
 
+  const handleDeleteAdditionalLocation = async (locationId) => {
+    if (!window.confirm("이 장소를 삭제할까요?")) return;
+
+    try {
+      await deleteAdditionalConfirmedLocation(locationId);
+      setAdditionalLocations((locations) =>
+        locations.filter((location) => location.id !== locationId)
+      );
+    } catch (error) {
+      alert("장소 삭제 실패: " + error.message);
+    }
+  };
+
+  const openInScheduleTab = () => {
+    sessionStorage.setItem(
+      "confirmFromSchedule",
+      JSON.stringify({
+        id: schedule.id,
+        title: schedule.title || "일정",
+        hasLocation: !!schedule.location,
+        roomid: schedule.roomid,
+      })
+    );
+    navigate(`/rooms/${schedule.roomid}?tab=schedule`);
+  };
+
   const middlePlace = schedule.middlePlace || selectedMeetingPlace;
 
   const canShowMiddlePlaceMap =
@@ -566,96 +608,228 @@ function ConfirmedScheduleDetailPage() {
     Number.isFinite(Number(middlePlace.lat)) &&
     Number.isFinite(Number(middlePlace.lng));
 
+  const isLocationUndecided = !(selectedMeetingPlace?.name || schedule.location);
+
   const middlePlaceSection = (
     <>
-      {(selectedMeetingPlace?.name || schedule.location) && (
-        <div
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "8px",
+          marginBottom: "10px",
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p
+            style={{
+              color: "#1F2933",
+              margin: 0,
+              fontSize: "14px",
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+            }}
+          >
+            <FaMapMarkerAlt color="#7C5CFF" size={13} />
+            {isLocationUndecided
+              ? "만날 장소: 미등록"
+              : `만날 장소: ${selectedMeetingPlace?.name || schedule.location}`}
+          </p>
+          {!isLocationUndecided && (selectedMeetingPlace?.address || locationAddress) && (
+            <p style={{ margin: "3px 0 0", fontSize: "12px", color: "#9CA3AF" }}>
+              {selectedMeetingPlace?.address || locationAddress}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            if (isPastSchedule) return;
+            setIsEditingLocationMap(false);
+            setShowLocationEditChoice(true);
+          }}
+          disabled={isPastSchedule}
           style={{
-            display: "flex",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "8px",
-            marginBottom: "12px",
+            border: "none",
+            background: "none",
+            color: "#7C5CFF",
+            fontSize: "13px",
+            fontWeight: "600",
+            cursor: isPastSchedule ? "not-allowed" : "pointer",
+            opacity: isPastSchedule ? 0.4 : 1,
+            padding: 0,
           }}
         >
-          <p style={{ color: "#7c79ff", margin: 0 }}>
-            📍 만날 위치: {selectedMeetingPlace?.name || schedule.location}
-          </p>
-        </div>
-      )}
+          {isLocationUndecided ? "등록" : "수정"}
+        </button>
+      </div>
 
       {canShowMiddlePlaceMap && (
-        <div style={{ marginBottom: "20px" }}>
+        <div style={{ marginBottom: "14px" }}>
           <KakaoMapView
             memberLocations={memberLocations}
             places={[middlePlace]}
             selectedPlace={middlePlace}
             memberRoutePaths={memberRoutePaths}
+            mapHeight="220px"
           />
         </div>
       )}
 
-      {additionalLocations.length > 0 && (
-        <div style={{ marginBottom: "12px" }}>
-          <p style={{ fontWeight: "bold", marginBottom: "8px" }}>추가 위치</p>
-
-          {additionalLocations.map((place) => (
-            <p key={place.id} style={{ margin: "4px 0", color: "#555" }}>
-              📍 {place.placename}
-            </p>
-          ))}
-        </div>
-      )}
-
-      <button
-        onClick={() => setShowAdditionalPicker((visible) => !visible)}
+      <div
         style={{
-          width: "100%",
-          padding: "12px",
-          marginBottom: "8px",
-          backgroundColor: "#f5f5f5",
-          color: "#333",
-          border: "none",
-          borderRadius: "10px",
-          fontSize: "15px",
-          cursor: "pointer",
+          backgroundColor: "#FFFFFF",
+          borderRadius: "14px",
+          border: "1px solid #E5E7EB",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+          padding: "10px 12px",
+          marginBottom: "10px",
         }}
       >
-        주변 위치 추가하기
-      </button>
-
-      {showAdditionalPicker && (
-        <>
-          <LocationPicker
-            onSelect={(name, address, place = {}) =>
-              setAdditionalPlace({ ...place, name, address })
-            }
-          />
-
-          {additionalPlace && (
-            <p style={{ color: "#7c79ff", margin: "8px 0" }}>
-              선택한 위치: {additionalPlace.name}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+            <FaMapMarkerAlt color="#7C5CFF" size={13} />
+            <p style={{ color: "#1F2933", margin: 0, fontSize: "14px" }}>
+              함께 가고 싶은 장소
+              {additionalLocations.length > 0 && (
+                <span style={{ color: "#7C5CFF" }}> {additionalLocations.length}</span>
+              )}
             </p>
-          )}
-
+          </div>
           <button
-            onClick={handleAddLocation}
-            disabled={saving || !additionalPlace}
+            type="button"
+            onClick={() => {
+              if (isPastSchedule) return;
+              setAdditionalPlace(null);
+              setShowAdditionalPicker(true);
+            }}
+            disabled={isPastSchedule}
             style={{
-              width: "100%",
-              padding: "12px",
-              marginBottom: "8px",
-              backgroundColor: "#7c79ff",
-              color: "#fff",
               border: "none",
-              borderRadius: "10px",
-              fontSize: "15px",
-              cursor: "pointer",
+              background: "none",
+              color: "#7C5CFF",
+              fontSize: "12px",
+              fontWeight: "600",
+              cursor: isPastSchedule ? "not-allowed" : "pointer",
+              opacity: isPastSchedule ? 0.4 : 1,
+              padding: 0,
             }}
           >
-            추가 위치 저장
+            추가
           </button>
-        </>
+        </div>
+
+        {additionalLocations.length > 0 && (
+          <>
+            <div style={{ height: "1px", backgroundColor: "#E5E7EB", margin: "8px -12px" }} />
+            <div>
+              {additionalLocations.map((place) => (
+                <div
+                  key={place.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "8px",
+                    paddingLeft: "18px",
+                  }}
+                >
+                  <p style={{ margin: "3px 0", fontSize: "12px", color: "#4B5563" }}>
+                    - {place.placename}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteAdditionalLocation(place.id)}
+                    style={{
+                      border: "none",
+                      background: "none",
+                      color: "#EF4444",
+                      fontSize: "11px",
+                      cursor: "pointer",
+                      padding: "4px",
+                      flexShrink: 0,
+                    }}
+                  >
+                    삭제
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {showAdditionalPicker && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            zIndex: 3000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onClick={() => {
+            setShowAdditionalPicker(false);
+            setAdditionalPlace(null);
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: "18px",
+              borderRadius: "18px",
+              width: "min(90vw, 300px)",
+              maxHeight: "85vh",
+              overflowY: "auto",
+              boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
+              boxSizing: "border-box",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 10px", fontSize: "15px", color: "#1F2933", textAlign: "center" }}>
+              가고 싶은 장소 추가
+            </h3>
+
+            <LocationPicker
+              mapHeight="170px"
+              onSelect={(name, address, place = {}) =>
+                setAdditionalPlace({ ...place, name, address })
+              }
+            />
+
+            {additionalPlace && (
+              <p style={{ color: "#7C5CFF", margin: "8px 0", fontSize: "12px" }}>
+                선택한 위치: {additionalPlace.name}
+              </p>
+            )}
+
+            <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAdditionalPicker(false);
+                  setAdditionalPlace(null);
+                }}
+                style={{ ...secondaryButtonStyle, marginBottom: 0 }}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleAddLocation}
+                disabled={saving || !additionalPlace}
+                style={{ ...primaryButtonStyle, marginBottom: 0 }}
+              >
+                {saving ? "추가 중..." : "추가"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
@@ -665,36 +839,36 @@ function ConfirmedScheduleDetailPage() {
       <div style={{ minHeight: "100vh", backgroundColor: "#fff" }}>
         <div
           style={{
-            height: "56px",
+            height: "48px",
             display: "flex",
             alignItems: "center",
-            padding: "0 16px",
+            padding: "0 14px",
             borderBottom: "1px solid #eee",
-            gap: "12px",
+            gap: "10px",
           }}
         >
           <button
             onClick={() => navigate("/home")}
-            style={{ border: "none", background: "none", fontSize: "24px" }}
+            style={{ border: "none", background: "none", fontSize: "20px" }}
           >
             ←
           </button>
 
-          <h3 style={{ margin: 0 }}>확정 일정 상세</h3>
+          <h3 style={{ margin: 0, fontSize: "15px" }}>확정 일정 상세</h3>
         </div>
 
-        <div style={{ padding: "20px" }}>
-          <p style={{ color: "#888", fontSize: "13px", marginBottom: "4px" }}>
+        <div style={{ padding: "16px" }}>
+          <p style={{ color: "#888", fontSize: "12px", marginBottom: "4px" }}>
             {schedule.roomname}
           </p>
 
-          <h2 style={{ marginBottom: "2px" }}>일정 미정</h2>
+          <h2 style={{ marginBottom: "2px", fontSize: "18px" }}>일정 미정</h2>
 
-          <p style={{ color: "#aaa", marginBottom: "12px" }}>
+          <p style={{ color: "#aaa", fontSize: "13px", marginBottom: "10px" }}>
             아직 확정된 일정이 없습니다.
           </p>
 
-          <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+          <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
             <button
               type="button"
               onClick={() =>
@@ -713,7 +887,7 @@ function ConfirmedScheduleDetailPage() {
             </button>
           </div>
 
-          <p style={{ fontWeight: "bold", marginBottom: "8px" }}>
+          <p style={{ fontWeight: "bold", fontSize: "14px", marginBottom: "6px" }}>
             직접 입력하기
           </p>
 
@@ -782,338 +956,250 @@ function ConfirmedScheduleDetailPage() {
     );
   }
 
+  const timeUntil = getTimeUntil(schedule.date, schedule.starttime);
+
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#fff" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: "#F7F7FA" }}>
       <div
         style={{
-          height: "56px",
+          height: "48px",
           display: "flex",
           alignItems: "center",
-          padding: "0 16px",
-          borderBottom: "1px solid #eee",
-          gap: "12px",
+          padding: "0 14px",
+          backgroundColor: "#fff",
+          borderBottom: "1px solid #E5E7EB",
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
         }}
       >
         <button
           onClick={() => navigate(-1)}
-          style={{ border: "none", background: "none", fontSize: "24px" }}
+          style={{ border: "none", background: "none", fontSize: "20px", color: "#1F2933", flex: "0 0 28px" }}
         >
           ←
         </button>
 
-        <h3 style={{ margin: 0 }}>확정 일정 상세</h3>
+        <h3 style={{ margin: 0, flex: 1, textAlign: "center", fontSize: "15px", color: "#1F2933" }}>확정 일정 상세</h3>
+
+        <div style={{ flex: "0 0 28px" }} />
       </div>
 
-      <div style={{ padding: "20px" }}>
-        <p style={{ color: "#888", fontSize: "13px", marginBottom: "4px" }}>
+      <div style={{ padding: "14px", paddingBottom: "24px" }}>
+        <p style={{ color: "#7C5CFF", fontSize: "12px", fontWeight: "700", margin: "0 0 4px" }}>
           {schedule.roomname}
         </p>
 
-        {schedule.title && <h2 style={{ marginBottom: "2px" }}>{schedule.title}</h2>}
+        {schedule.title && (
+          <h2 style={{ margin: "0 0 4px", fontSize: "18px", color: "#1F2933" }}>{schedule.title}</h2>
+        )}
 
-        <p style={{ color: "#555", marginBottom: schedule.date ? "4px" : "16px" }}>{dateLabel}</p>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginBottom: "10px" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p
+              style={{
+                margin: 0,
+                color: "#1F2933",
+                fontSize: "14px",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
+              <FaCalendarAlt color="#7C5CFF" size={13} />
+              확정 일정: {dateLabel}
+            </p>
+            {timeUntil && (
+              <p
+                style={{
+                  margin: "3px 0 0",
+                  fontSize: "12px",
+                  color: "#F59E0B",
+                  fontWeight: "500",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <span>🔔</span>
+                <span>{timeUntil}</span>
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (isPastSchedule) return;
+              setIsEditingTiming(false);
+              setShowEditChoice(true);
+            }}
+            disabled={isPastSchedule}
+            style={{
+              border: "none",
+              background: "none",
+              color: "#7C5CFF",
+              fontSize: "13px",
+              fontWeight: "550",
+              cursor: isPastSchedule ? "not-allowed" : "pointer",
+              opacity: isPastSchedule ? 0.4 : 1,
+              padding: 0,
+            }}
+          >
+            {isDateUndecided ? "등록" : "수정"}
+          </button>
+        </div>
 
         {isPastSchedule && (
           <div
             style={{
-              padding: "10px 14px",
-              marginBottom: "12px",
-              backgroundColor: "#f5f5f5",
+              padding: "8px 12px",
+              marginBottom: "10px",
+              backgroundColor: "#F3F4F6",
               borderRadius: "10px",
-              fontSize: "13px",
-              color: "#888",
+              fontSize: "12px",
+              color: "#6B7280",
             }}
           >
             지난 일정입니다. 날짜·위치 수정은 불가합니다.
           </div>
         )}
 
-        {(() => {
-          const timeUntil = getTimeUntil(schedule.date, schedule.starttime);
-          if (!timeUntil) return null;
-          return (
-            <p
-              style={{
-                margin: "0 0 4px",
-                fontSize: "13px",
-                fontWeight: schedule.date === getTodayStr() ? "bold" : "normal",
-                color: schedule.date === getTodayStr() ? "#7c79ff" : "#f90",
-              }}
-            >
-              {timeUntil}
-            </p>
-          );
-        })()}
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "8px",
-            marginBottom: "16px",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              if (isPastSchedule) return;
-              setTimingDraft(scheduleTiming);
-              setIsEditingTiming((prev) => !prev);
-            }}
-            disabled={isPastSchedule}
-            style={{
-              ...shortcutButtonStyle,
-              ...(isPastSchedule ? { opacity: 0.4, cursor: "not-allowed" } : {}),
-            }}
-          >
-            직접 수정
-          </button>
-          {/* 케이스 1: 투표로 생성 + 투표 존재 */}
-          {schedule.voteid && voteExists === true && (
-            <button
-              type="button"
-              onClick={() =>
-                navigate(`/rooms/${schedule.roomid}/votes/${schedule.voteid}`)
-              }
-              style={shortcutButtonStyle}
-            >
-              투표로 돌아가기
-            </button>
-          )}
-          {/* 케이스 2: 투표로 생성 + 투표 삭제됨 */}
-          {schedule.voteid && voteExists === false && (
-            <button
-              type="button"
-              onClick={() => {
-                sessionStorage.setItem("confirmFromSchedule", JSON.stringify({
-                  id: schedule.id,
-                  title: schedule.title || "일정",
-                  hasLocation: !!(schedule.location),
-                  roomid: schedule.roomid,
-                }));
-                navigate(`/rooms/${schedule.roomid}?tab=schedule`);
-              }}
-              style={{ ...shortcutButtonStyle, color: "#f44", borderColor: "#ffcccc" }}
-            >
-              일정 탭에서 정하기
-            </button>
-          )}
-          {/* 케이스 3: 직접 생성 */}
-          {!schedule.voteid && (
-            <button
-              type="button"
-              onClick={() => {
-                sessionStorage.setItem("confirmFromSchedule", JSON.stringify({
-                  id: schedule.id,
-                  title: schedule.title || "일정",
-                  hasLocation: !!(schedule.location),
-                  roomid: schedule.roomid,
-                }));
-                navigate(`/rooms/${schedule.roomid}?tab=schedule`);
-              }}
-              style={shortcutButtonStyle}
-            >
-              일정 탭에서 정하기
-            </button>
-          )}
-        </div>
-
-        {isEditingTiming && (
+        {schedule.voteid && (
           <div
             style={{
-              marginBottom: "16px",
-              padding: "12px",
-              border: "1px solid #e0e0ff",
-              borderRadius: "10px",
-              backgroundColor: "#f9f9ff",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              marginBottom: "12px",
             }}
           >
-            <input
-              type="date"
-              value={timingDraft.date}
-              onChange={(event) =>
-                setTimingDraft((draft) => ({
-                  ...draft,
-                  date: event.target.value,
-                }))
-              }
-              style={inputStyle}
-            />
-
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                marginBottom: "8px",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={timingDraft.isallday}
-                onChange={(event) =>
-                  setTimingDraft((draft) => ({
-                    ...draft,
-                    isallday: event.target.checked,
-                  }))
+            {/* 케이스 1: 투표로 생성 + 투표 존재 */}
+            {voteExists === true && (
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(`/rooms/${schedule.roomid}/votes/${schedule.voteid}`)
                 }
-              />
-              하루종일
-            </label>
-
-            {!timingDraft.isallday && (
-              <div style={{ display: "flex", gap: "8px" }}>
-                <input
-                  type="time"
-                  value={timingDraft.starttime}
-                  onChange={(event) =>
-                    setTimingDraft((draft) => ({
-                      ...draft,
-                      starttime: event.target.value,
-                    }))
-                  }
-                  style={{ ...inputStyle, width: "50%" }}
-                />
-                <input
-                  type="time"
-                  value={timingDraft.endtime}
-                  onChange={(event) =>
-                    setTimingDraft((draft) => ({
-                      ...draft,
-                      endtime: event.target.value,
-                    }))
-                  }
-                  style={{ ...inputStyle, width: "50%" }}
-                />
-              </div>
+                style={shortcutButtonStyle}
+              >
+                투표로 돌아가기
+              </button>
             )}
-
-            <div style={{ display: "flex", gap: "8px" }}>
+            {/* 케이스 2: 투표로 생성 + 투표 삭제됨 */}
+            {voteExists === false && (
               <button
                 type="button"
-                onClick={() => setIsEditingTiming(false)}
-                style={{ ...secondaryButtonStyle, marginBottom: 0 }}
+                onClick={openInScheduleTab}
+                style={{ ...shortcutButtonStyle, color: "#f44", borderColor: "#ffcccc" }}
               >
-                취소
+                일정 탭에서 정하기
               </button>
-              <button
-                type="button"
-                onClick={handleSaveTiming}
-                disabled={saving}
-                style={{ ...primaryButtonStyle, marginBottom: 0 }}
-              >
-                {saving ? "등록 중..." : "등록"}
-              </button>
-            </div>
+            )}
           </div>
         )}
 
         {attendees.length > 0 && (
           <div
             style={{
-              marginBottom: "20px",
-              padding: "12px 14px",
-              backgroundColor: "#f9f9ff",
-              borderRadius: "12px",
+              marginBottom: "10px",
+              padding: "10px 12px",
+              backgroundColor: "#FFFFFF",
+              borderRadius: "14px",
+              border: "1px solid #E5E7EB",
+              boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
             }}
           >
-            <p style={{ fontWeight: "bold", marginBottom: "8px" }}>
-              참여 멤버 ({attendees.length}명)
-            </p>
-
-            {attendees.map((attendee) => (
-              <p
-                key={attendee.userid}
-                style={{ margin: "4px 0", fontSize: "14px", color: "#333" }}
+            <div
+              onClick={() => setShowAttendees((prev) => !prev)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: showAttendees ? "8px" : 0,
+                cursor: "pointer",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <div
+                  style={{
+                    width: "24px",
+                    height: "24px",
+                    borderRadius: "7px",
+                    backgroundColor: "#F0ECFF",
+                    color: "#7C5CFF",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "12px",
+                  }}
+                >
+                  👥
+                </div>
+                <span style={{ fontWeight: "700", fontSize: "14px", color: "#1F2933" }}>
+                  참여 멤버 {attendingCount}명
+                </span>
+              </div>
+              <span
+                style={{
+                  color: "#9CA3AF",
+                  fontSize: "14px",
+                  display: "inline-block",
+                  transform: showAttendees ? "rotate(90deg)" : "rotate(0deg)",
+                  transition: "transform 0.15s ease",
+                }}
               >
-                · {attendee.nickname || attendee.userid}
-                {absentees.includes(attendee.userid) && (
-                  <span style={{ color: "#f44", marginLeft: "6px" }}>
-                    불참
+                ›
+              </span>
+            </div>
+
+            {showAttendees &&
+              attendees.map((attendee) => (
+                <div
+                  key={attendee.userid}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "6px 0 6px 30px",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "26px",
+                      height: "26px",
+                      borderRadius: "50%",
+                      backgroundColor: "#E5E7EB",
+                      flexShrink: 0,
+                      overflow: "hidden",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {attendee.profileimageurl ? (
+                      <img
+                        src={attendee.profileimageurl}
+                        alt={attendee.nickname}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <span style={{ fontSize: "14px" }}>👤</span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: "13px", color: "#4B5563" }}>
+                    {attendee.nickname || attendee.userid}
                   </span>
-                )}
-              </p>
-            ))}
+                  {absentees.includes(attendee.userid) && (
+                    <span style={{ color: "#EF4444", fontSize: "11px" }}>불참</span>
+                  )}
+                </div>
+              ))}
           </div>
         )}
 
         {middlePlaceSection}
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-          <p style={{ fontWeight: "bold", margin: 0 }}>
-            {selectedMeetingPlace || schedule.location ? "만날 위치 재설정" : "만날 위치 설정"}
-          </p>
-          <button
-            onClick={() => navigate(`/rooms/${schedule.roomid}?tab=location`)}
-            style={{ border: "none", background: "none", color: "#7c79ff", fontSize: "13px", cursor: "pointer", padding: 0 }}
-          >
-            위치 탭에서 정하기
-          </button>
-        </div>
-
-        <input
-          type="text"
-          placeholder="지도에서 위치를 선택하세요"
-          value={locationText}
-          readOnly
-          style={{ ...inputStyle, color: "#aaa", backgroundColor: "#fafafa" }}
-        />
-
-        {locationAddress && (
-          <p
-            style={{
-              fontSize: "12px",
-              color: "#888",
-              marginBottom: "12px",
-              paddingLeft: "4px",
-            }}
-          >
-            상세주소: {locationAddress}
-          </p>
-        )}
-
-        {!locationAddress && <div style={{ marginBottom: "12px" }} />}
-
-        {isPastSchedule ? (
-          <p style={{ fontSize: "13px", color: "#aaa", marginBottom: "12px" }}>
-            지난 일정은 위치를 수정할 수 없습니다.
-          </p>
-        ) : (
-          <>
-            <button
-              onClick={() => setShowMap((prev) => !prev)}
-              style={secondaryButtonStyle}
-            >
-              {showMap ? "지도 닫기" : "지도에서 위치 선택하기"}
-            </button>
-
-            {showMap && (
-              <>
-                <LocationPicker
-                  initialPlace={draftMeetingPlace || selectedMeetingPlace}
-                  prefillKeywordFromInitialPlace={false}
-                  onSelect={(name, address, place = {}) => {
-                    setLocationText(name);
-                    setLocationAddress(address || place.address || "");
-                    setDraftMeetingPlace({
-                      name,
-                      address: address || place.address || "",
-                      lat: place.lat,
-                      lng: place.lng,
-                    });
-                  }}
-                />
-
-                <button onClick={handleSave} disabled={saving} style={primaryButtonStyle}>
-                  {saving ? "저장 중..." : "위치 저장"}
-                </button>
-              </>
-            )}
-          </>
-        )}
-
-        <div style={{ marginBottom: "24px" }} />
+        <div style={{ marginBottom: "16px" }} />
 
         {isPastSchedule ? (
           /* 지난 일정: 개인 캘린더에서만 삭제 (본인에게만 적용) */
@@ -1123,12 +1209,12 @@ function ConfirmedScheduleDetailPage() {
                 onClick={handleDismiss}
                 style={{
                   width: "100%",
-                  padding: "12px",
+                  padding: "10px",
                   backgroundColor: "#fff",
                   color: "#f44",
                   border: "1px solid #f44",
                   borderRadius: "10px",
-                  fontSize: "15px",
+                  fontSize: "14px",
                   cursor: "pointer",
                 }}
               >
@@ -1137,9 +1223,9 @@ function ConfirmedScheduleDetailPage() {
               <p
                 style={{
                   textAlign: "center",
-                  fontSize: "12px",
+                  fontSize: "11px",
                   color: "#aaa",
-                  marginTop: "6px",
+                  marginTop: "5px",
                 }}
               >
                 내 캘린더에서만 삭제됩니다
@@ -1154,13 +1240,13 @@ function ConfirmedScheduleDetailPage() {
                 onClick={handleToggleAbsence}
                 style={{
                   width: "100%",
-                  padding: "12px",
+                  padding: "10px",
                   marginBottom: "8px",
                   backgroundColor: "#fff",
                   color: isAbsent ? "#7c79ff" : "#f44",
                   border: `1px solid ${isAbsent ? "#7c79ff" : "#f44"}`,
                   borderRadius: "10px",
-                  fontSize: "15px",
+                  fontSize: "14px",
                   cursor: "pointer",
                 }}
               >
@@ -1174,12 +1260,12 @@ function ConfirmedScheduleDetailPage() {
                   onClick={handleCancel}
                   style={{
                     width: "100%",
-                    padding: "12px",
+                    padding: "10px",
                     backgroundColor: "#fff",
                     color: "#f44",
                     border: "1px solid #f44",
                     borderRadius: "10px",
-                    fontSize: "15px",
+                    fontSize: "14px",
                     cursor: "pointer",
                   }}
                 >
@@ -1188,9 +1274,9 @@ function ConfirmedScheduleDetailPage() {
                 <p
                   style={{
                     textAlign: "center",
-                    fontSize: "12px",
+                    fontSize: "11px",
                     color: "#aaa",
-                    marginTop: "6px",
+                    marginTop: "5px",
                   }}
                 >
                   삭제하면 모든 멤버의 화면에서 사라집니다
@@ -1201,52 +1287,307 @@ function ConfirmedScheduleDetailPage() {
         )}
 
       </div>
+
+      {showEditChoice && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            zIndex: 3000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onClick={() => {
+            setShowEditChoice(false);
+            setIsEditingTiming(false);
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: "18px",
+              borderRadius: "18px",
+              width: isEditingTiming ? "260px" : "230px",
+              textAlign: isEditingTiming ? "left" : "center",
+              boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            {isEditingTiming ? (
+              <>
+                <h3 style={{ margin: "0 0 12px", fontSize: "15px", color: "#1F2933", textAlign: "center" }}>
+                  확정 일정 수정
+                </h3>
+
+                <input
+                  type="date"
+                  value={timingDraft.date}
+                  onChange={(event) =>
+                    setTimingDraft((draft) => ({
+                      ...draft,
+                      date: event.target.value,
+                    }))
+                  }
+                  style={inputStyle}
+                />
+
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    marginBottom: "8px",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={timingDraft.isallday}
+                    onChange={(event) =>
+                      setTimingDraft((draft) => ({
+                        ...draft,
+                        isallday: event.target.checked,
+                      }))
+                    }
+                  />
+                  하루종일
+                </label>
+
+                {!timingDraft.isallday && (
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <input
+                      type="time"
+                      value={timingDraft.starttime}
+                      onChange={(event) =>
+                        setTimingDraft((draft) => ({
+                          ...draft,
+                          starttime: event.target.value,
+                        }))
+                      }
+                      style={{ ...inputStyle, width: "50%" }}
+                    />
+                    <input
+                      type="time"
+                      value={timingDraft.endtime}
+                      onChange={(event) =>
+                        setTimingDraft((draft) => ({
+                          ...draft,
+                          endtime: event.target.value,
+                        }))
+                      }
+                      style={{ ...inputStyle, width: "50%" }}
+                    />
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditingTiming(false);
+                      setShowEditChoice(false);
+                    }}
+                    style={{ ...secondaryButtonStyle, marginBottom: 0 }}
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveTiming}
+                    disabled={saving}
+                    style={{ ...primaryButtonStyle, marginBottom: 0 }}
+                  >
+                    {saving ? "등록 중..." : "등록"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 style={{ margin: "0 0 12px", fontSize: "15px", color: "#1F2933" }}>
+                  {isDateUndecided
+                    ? "일정을 어떻게 등록할까요?"
+                    : "일정을 어떻게 수정할까요?"}
+                </h3>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTimingDraft(scheduleTiming);
+                    setIsEditingTiming(true);
+                  }}
+                  style={{ ...primaryButtonStyle, marginBottom: "8px" }}
+                >
+                  {isDateUndecided ? "직접 등록" : "직접 수정"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditChoice(false);
+                    openInScheduleTab();
+                  }}
+                  style={{ ...secondaryButtonStyle, marginBottom: 0 }}
+                >
+                  일정 탭에서 열기
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showLocationEditChoice && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            zIndex: 3000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onClick={() => {
+            setShowLocationEditChoice(false);
+            setIsEditingLocationMap(false);
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: "18px",
+              borderRadius: "18px",
+              width: isEditingLocationMap ? "min(90vw, 300px)" : "270px",
+              maxHeight: "85vh",
+              overflowY: "auto",
+              textAlign: isEditingLocationMap ? "left" : "center",
+              boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
+              boxSizing: "border-box",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            {isEditingLocationMap ? (
+              <>
+                <h3 style={{ margin: "0 0 10px", fontSize: "15px", color: "#1F2933", textAlign: "center" }}>
+                  만날 장소 선택
+                </h3>
+
+                <LocationPicker
+                  initialPlace={draftMeetingPlace || selectedMeetingPlace}
+                  prefillKeywordFromInitialPlace={false}
+                  mapHeight="170px"
+                  onSelect={(name, address, place = {}) => {
+                    setLocationText(name);
+                    setLocationAddress(address || place.address || "");
+                    setDraftMeetingPlace({
+                      name,
+                      address: address || place.address || "",
+                      lat: place.lat,
+                      lng: place.lng,
+                    });
+                  }}
+                />
+
+                <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditingLocationMap(false);
+                      setShowLocationEditChoice(false);
+                    }}
+                    style={{ ...secondaryButtonStyle, marginBottom: 0 }}
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saving}
+                    style={{ ...primaryButtonStyle, marginBottom: 0 }}
+                  >
+                    {saving ? "수정 중..." : "수정"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 style={{ margin: "0 0 12px", fontSize: "14px", color: "#1F2933" }}>
+                  {isLocationUndecided
+                    ? "만날 장소를 어떻게 등록할까요?"
+                    : "만날 장소를 어떻게 수정할까요?"}
+                </h3>
+
+                <button
+                  type="button"
+                  onClick={() => setIsEditingLocationMap(true)}
+                  style={{ ...primaryButtonStyle, marginBottom: "8px" }}
+                >
+                  지도에서 위치 선택하기
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLocationEditChoice(false);
+                    navigate(`/rooms/${schedule.roomid}?tab=location`);
+                  }}
+                  style={{ ...secondaryButtonStyle, marginBottom: 0 }}
+                >
+                  위치 탭에서 열기
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 const inputStyle = {
   width: "100%",
-  padding: "12px",
+  padding: "10px",
   marginBottom: "8px",
   border: "1px solid #ddd",
   borderRadius: "10px",
   boxSizing: "border-box",
+  fontSize: "14px",
 };
 
 const primaryButtonStyle = {
   width: "100%",
-  padding: "12px",
+  padding: "10px",
   marginBottom: "8px",
   backgroundColor: "#7c79ff",
   color: "#fff",
   border: "none",
   borderRadius: "10px",
-  fontSize: "15px",
+  fontSize: "14px",
   cursor: "pointer",
 };
 
 const secondaryButtonStyle = {
   width: "100%",
-  padding: "12px",
+  padding: "10px",
   marginBottom: "8px",
   backgroundColor: "#f5f5f5",
   color: "#333",
   border: "none",
   borderRadius: "10px",
-  fontSize: "15px",
+  fontSize: "14px",
   cursor: "pointer",
 };
 
 const shortcutButtonStyle = {
   flexShrink: 0,
-  padding: "5px 8px",
+  padding: "4px 7px",
   border: "1px solid #d8d8ff",
-  borderRadius: "7px",
+  borderRadius: "6px",
   backgroundColor: "#f9f9ff",
   color: "#5c58d8",
   cursor: "pointer",
-  fontSize: "12px",
+  fontSize: "11px",
 };
 
 export default ConfirmedScheduleDetailPage;

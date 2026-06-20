@@ -10,6 +10,7 @@ function KakaoMapView({
   onMapClick,
   pickedPlace,
   onSetMeetingPlace,
+  mapHeight = '500px',
 }) {
   const mapRef = useRef(null)
   const mapObjectRef = useRef(null)
@@ -673,7 +674,7 @@ function KakaoMapView({
     <div
       style={{
         width: '100%',
-        minHeight: '520px',
+        minHeight: mapHeight,
       }}
     >
       {!isMapReady && <p>지도 불러오는 중...</p>}
@@ -682,8 +683,8 @@ function KakaoMapView({
         ref={mapRef}
         style={{
           width: '100%',
-          height: '500px',
-          minHeight: '500px',
+          height: mapHeight,
+          minHeight: mapHeight,
           display: 'block',
           position: 'relative',
           overflow: 'hidden',

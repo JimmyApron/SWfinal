@@ -34,6 +34,7 @@ function RoomListPage() {
   });
 
   const [contextMenu, setContextMenu] = useState(null); // { x, y, roomId }
+  const [isRoomsExpanded, setIsRoomsExpanded] = useState(false);
 
   // 알림 끄기 관리 (Local Storage 사용)
   const [mutedRooms, setMutedRooms] = useState(() => {
@@ -190,24 +191,24 @@ function RoomListPage() {
   }
 
   return (
-    <div style={{ padding: "0", backgroundColor: "var(--bg-color)", minHeight: "100vh", position: "relative" }}>
-      <header style={{ 
-        padding: "20px", 
+    <div style={{ padding: "0", backgroundColor: "var(--bg-color)", position: "relative" }}>
+      <header style={{
+        padding: "12px 0",
         borderBottom: "1px solid var(--border-color)",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center"
       }}>
-        <h1 style={{ margin: 0, fontSize: "24px", color: "var(--text-color)" }}>방 목록</h1>
+        <h1 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "var(--text-color)" }}>방 목록</h1>
       </header>
 
       {sortedRooms.length === 0 ? (
-        <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--secondary-text)" }}>
+        <div style={{ padding: "24px 0", textAlign: "center", color: "var(--secondary-text)" }}>
           <p>참여 중인 방이 없습니다.</p>
         </div>
       ) : (
         <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          {sortedRooms.map((room) => {
+          {(isRoomsExpanded ? sortedRooms : sortedRooms.slice(0, 2)).map((room) => {
             const isPinned = !!pinnedRooms[room.id];
             
             return (
@@ -219,7 +220,7 @@ function RoomListPage() {
                   setContextMenu({ x: e.clientX, y: e.clientY, roomId: room.id });
                 }}
                 style={{
-                  padding: "16px 20px",
+                  padding: "10px 0",
                   borderBottom: "1px solid var(--border-color)",
                   cursor: "pointer",
                   display: "flex",
@@ -231,9 +232,9 @@ function RoomListPage() {
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isPinned ? "rgba(124, 121, 255, 0.05)" : "transparent"}
               >
                 <div style={{
-                  width: "50px",
-                  height: "50px",
-                  marginRight: "15px",
+                  width: "40px",
+                  height: "40px",
+                  marginRight: "10px",
                   flexShrink: 0,
                   position: "relative",
                 }}>
@@ -241,12 +242,12 @@ function RoomListPage() {
                   <div style={{
                     width: "100%",
                     height: "100%",
-                    borderRadius: "18px",
+                    borderRadius: "14px",
                     backgroundColor: isPinned ? "var(--accent-color)" : "var(--btn-bg)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: "24px",
+                    fontSize: "20px",
                     overflow: "hidden"
                   }}>
                     {room.roomimageurl ? (
@@ -286,58 +287,77 @@ function RoomListPage() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
                     <div style={{ display: "flex", alignItems: "center", minWidth: 0 }}>
-                      <span style={{ 
-                        fontWeight: "bold", 
-                        fontSize: "16px", 
-                        overflow: "hidden", 
-                        textOverflow: "ellipsis", 
+                      <span style={{
+                        fontWeight: "bold",
+                        fontSize: "14px",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
                         color: "var(--text-color)"
                       }}>
                         {room.roomname}
                       </span>
-                      
+
                       {mutedRooms.includes(room.id) && (
-                        <span style={{ marginLeft: "4px", fontSize: "12px", opacity: 0.5 }}>🔕</span>
+                        <span style={{ marginLeft: "4px", fontSize: "11px", opacity: 0.5 }}>🔕</span>
                       )}
 
-                      <span style={{ marginLeft: "6px", color: "var(--secondary-text)", fontSize: "14px", flexShrink: 0 }}>
+                      <span style={{ marginLeft: "6px", color: "var(--secondary-text)", fontSize: "12px", flexShrink: 0 }}>
                         {(room.room_members?.[0]?.count || 0) + (room.room_guests?.[0]?.count || 0)}
                       </span>
-                      
-                      {room.unreadCount > 0 && (
-                        <div style={{
-                          backgroundColor: mutedRooms.includes(room.id) ? "#ccc" : "#ff4d4f",
-                          color: "white",
-                          borderRadius: "10px",
-                          padding: "1px 6px",
-                          fontSize: "10px",
-                          fontWeight: "bold",
-                          marginLeft: "8px",
-                          minWidth: "16px",
-                          textAlign: "center",
-                          flexShrink: 0,
-                          lineHeight: "1.4"
-                        }}>
-                          {room.unreadCount > 99 ? "99+" : room.unreadCount}
-                        </div>
-                      )}
                     </div>
-                    <span style={{ fontSize: "12px", color: "var(--secondary-text)", flexShrink: 0 }}>
+                    <span style={{ fontSize: "11px", color: "var(--secondary-text)", flexShrink: 0 }}>
                       {formatRelativeTime(room.lastactivityat)}
                     </span>
                   </div>
-                  
+
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "14px", color: "var(--secondary-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span style={{ fontSize: "12px", color: "var(--secondary-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {room.unreadCount > 0 ? "새로운 알림이 있습니다." : "최근 활동 없음"}
                     </span>
+
+                    {room.unreadCount > 0 && (
+                      <div style={{
+                        backgroundColor: mutedRooms.includes(room.id) ? "#ccc" : "#ff4d4f",
+                        color: "white",
+                        borderRadius: "10px",
+                        padding: "3px 5px",
+                        fontSize: "10px",
+                        fontWeight: "bold",
+                        marginLeft: "8px",
+                        minWidth: "16px",
+                        textAlign: "center",
+                        flexShrink: 0,
+                        lineHeight: "1.4"
+                      }}>
+                        {room.unreadCount > 99 ? "99+" : room.unreadCount}
+                      </div>
+                    )}
                   </div>
                 </div>
               </li>
             );
           })}
         </ul>
+      )}
+
+      {sortedRooms.length > 2 && (
+        <button
+          onClick={() => setIsRoomsExpanded((prev) => !prev)}
+          style={{
+            width: "100%",
+            padding: "8px",
+            backgroundColor: "transparent",
+            color: "var(--accent-color)",
+            border: "none",
+            borderTop: "1px solid var(--border-color)",
+            cursor: "pointer",
+            fontSize: "12px",
+            fontWeight: "bold",
+          }}
+        >
+          {isRoomsExpanded ? "접기 ▲" : `더보기 (+${sortedRooms.length - 2}) ▼`}
+        </button>
       )}
 
       {/* 우클릭 메뉴 (Context Menu) */}

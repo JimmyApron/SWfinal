@@ -344,7 +344,7 @@ function RoomDetailPage() {
   });
 
   return (
-    <div style={{ position: "relative", minHeight: "100vh", paddingBottom: "90px", boxSizing: "border-box", backgroundColor: "#F7F7FA" }}>
+    <div style={{ position: "relative", boxSizing: "border-box", backgroundColor: "#F7F7FA" }}>
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", backgroundColor: "#fff", position: "sticky", top: 0, zIndex: 100, borderBottom: "1px solid #E5E7EB" }}>
         <button onClick={() => navigate("/home")} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>←</button>
         <span style={{ fontWeight: "700", fontSize: "17px" }}>{room.roomname}</span>

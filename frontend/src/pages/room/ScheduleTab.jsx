@@ -17,6 +17,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { createNotification, createRoomNotifications } from "../../api/notificationApi";
 import ConfirmedScheduleCard from "../../components/ConfirmedScheduleCard";
 import { FiCalendar, FiClock, FiPlus, FiChevronLeft, FiChevronRight, FiEdit2, FiTrash2, FiMoreVertical } from "react-icons/fi";
+import { getTodayStr } from "../../utils/scheduleUtils";
 
 function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const navigate = useNavigate();
@@ -54,6 +55,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const [confirmedIsAllDay, setConfirmedIsAllDay] = useState(false);
   const [isConfirmedExpanded, setIsConfirmedExpanded] = useState(false);
   const [showAddCandidateForm, setShowAddCandidateForm] = useState(false); // 추가: 후보지 추가 폼 표시 여부
+  const [showEditCandidateModal, setShowEditCandidateModal] = useState(false); // 추가: 후보지 수정 팝업(중앙) 표시 여부
 
   const timetableScrollRef = useRef(null);
 
@@ -79,6 +81,38 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const filteredTimeSlots = showAllTimes
     ? timeSlots
     : timeSlots.filter((t) => t >= "09:00" && t <= "22:00");
+
+  // 모든 후보 일정이 공통으로 선택 불가능한 이른/늦은 시간대는 표에서 정리한다.
+  const hasAllDayCandidate = candidates.some((c) => c.isallday);
+  const earliestStartMinutes = candidates.reduce((min, c) => {
+    if (c.isallday || !c.starttime) return min;
+    const [h, m] = c.starttime.slice(0, 5).split(":").map(Number);
+    const minutes = h * 60 + m;
+    return min === null ? minutes : Math.min(min, minutes);
+  }, null);
+  const latestEndMinutes = candidates.reduce((max, c) => {
+    if (c.isallday || !c.endtime) return max;
+    const [h, m] = c.endtime.slice(0, 5).split(":").map(Number);
+    return Math.max(max, h * 60 + m);
+  }, 0);
+  const minutesToTime = (mins) => {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  };
+  // 위/아래 모두 공통으로 선택 불가능한 시간대면 펼치기 없이 바로 잘라낸다.
+  const startCutoff =
+    hasAllDayCandidate || earliestStartMinutes === null
+      ? null
+      : minutesToTime(earliestStartMinutes);
+  const endCutoff =
+    hasAllDayCandidate || candidates.length === 0
+      ? null
+      : minutesToTime(Math.max(0, latestEndMinutes - 30));
+
+  const visibleTimeSlots = filteredTimeSlots.filter(
+    (t) => (!startCutoff || t >= startCutoff) && (!endCutoff || t <= endCutoff)
+  );
 
   const getHeatmapColor = (count, total) => {
     const ratio = count / total;
@@ -273,6 +307,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
           isallday: newIsAllDay,
         });
         alert("후보 일정이 수정되었습니다.");
+        setShowEditCandidateModal(false);
       } else {
         if (!newDates || newDates.length === 0) {
           alert("날짜를 1개 이상 선택하세요.");
@@ -327,7 +362,13 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     setNewStartTime(candidate.starttime?.slice(0, 5) || "");
     setNewEndTime(candidate.endtime?.slice(0, 5) || "");
     setNewIsAllDay(candidate.isallday);
-    setShowAddCandidateForm(true); // 추가: 수정 시 폼 표시
+    setShowEditCandidateModal(true); // 수정 시 중앙 팝업 표시
+  };
+
+  const closeEditCandidateModal = () => {
+    setShowEditCandidateModal(false);
+    setEditingCandidateId(null);
+    setNewDate(""); setNewStartTime(""); setNewEndTime(""); setNewIsAllDay(false);
   };
 
   const handleDeleteCandidate = async (candidateId) => {
@@ -381,6 +422,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
 
   const handleAddConfirmedSchedule = async () => {
     if (!confirmedDate) { alert("날짜를 선택하세요."); return; }
+    if (confirmedDate < getTodayStr()) { alert("과거 날짜는 선택할 수 없습니다."); return; }
     if (!confirmedIsAllDay && (!confirmedStartTime || !confirmedEndTime)) { alert("시작 시간과 종료 시간을 선택하세요."); return; }
     if (!confirmedIsAllDay && confirmedStartTime >= confirmedEndTime) { alert("시작 시간은 종료 시간보다 빨라야 합니다."); return; }
 
@@ -478,41 +520,46 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
         <>
           <div
             onClick={() => setShowAddMethodSheet(false)}
-            style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", zIndex: 200 }}
+            style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 200 }}
           />
           <div
             style={{
               position: "fixed",
               top: "50%", left: "50%",
               transform: "translate(-50%, -50%)",
-              backgroundColor: "#fff", borderRadius: "16px",
-              padding: "24px 20px", zIndex: 201,
-              width: "280px",
+              backgroundColor: "#fff", borderRadius: "20px",
+              padding: "24px", zIndex: 201,
+              width: "260px",
+              boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
             }}
           >
-            <p style={{ margin: "0 0 16px", fontWeight: "bold", fontSize: "16px", textAlign: "center" }}>일정 추가 방법</p>
+            <p style={{ margin: "0 0 16px", fontWeight: "bold", fontSize: "16px", color: "#1F2933", textAlign: "center" }}>일정 추가 방법</p>
             <button
               onClick={() => { setShowAddMethodSheet(false); setShowConfirmedForm(true); }}
-              style={{ width: "100%", padding: "14px", marginBottom: "10px", backgroundColor: "#f9f9ff", border: "1px solid #d8d8ff", borderRadius: "12px", fontSize: "15px", color: "#333", cursor: "pointer", textAlign: "left" }}
+              style={{ width: "100%", padding: "12px", marginBottom: "8px", backgroundColor: "#7c79ff", border: "none", borderRadius: "10px", fontSize: "15px", color: "#fff", cursor: "pointer" }}
             >
-              ✏️ 직접 입력
+              직접 입력
             </button>
             <button
               onClick={() => { setShowAddMethodSheet(false); navigate(`/rooms/${roomId}/vote-create`, { state: { votePurpose: "schedule", voteType: "date", returnTab: "schedule" } }); }}
-              style={{ width: "100%", padding: "14px", backgroundColor: "#f9f9ff", border: "1px solid #d8d8ff", borderRadius: "12px", fontSize: "15px", color: "#333", cursor: "pointer", textAlign: "left" }}
+              style={{ width: "100%", padding: "12px", backgroundColor: "#f5f5f5", border: "none", borderRadius: "10px", fontSize: "15px", color: "#333", cursor: "pointer" }}
             >
-              🗳️ 투표로 정하기
+              투표로 정하기
             </button>
           </div>
         </>
       )}
 
       {/* Confirmed schedules section */}
-      <div style={{ marginBottom: "32px", marginTop: "24px" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "16px" }}>
+      <div style={{ marginBottom: "9px", marginTop: "20px" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "9px" }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "700", color: "#1F2933" }}>확정된 일정</h2>
-            <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#6B7280" }}>다가오는 약속을 확인해보세요.</p>
+            <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "700", color: "#1F2933" }}>
+              확정 일정{" "}
+              <span style={{ fontSize: "13px", fontWeight: "500", color: "#9CA3AF" }}>
+                총 {confirmedSchedules.length}개의 일정
+              </span>
+            </h2>
           </div>
           <button
             onClick={() => {
@@ -523,7 +570,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
               }
             }}
             style={{
-              padding: "8px 16px",
+              padding: "5px 15px",
               backgroundColor: "#F0ECFF",
               color: "#7C5CFF",
               border: "1px solid #7C5CFF",
@@ -532,6 +579,8 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
               fontSize: "13px",
               fontWeight: "600",
               transition: "all 0.2s",
+              position: "relative",
+              top: "-4px",
             }}
           >
             {showConfirmedForm ? "취소" : "+ 일정 추가"}
@@ -541,7 +590,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
         {showConfirmedForm && (
           <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", padding: "16px", marginBottom: "16px", display: "flex", flexDirection: "column", gap: "10px", border: "1px solid #E5E7EB", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
             <input type="text" placeholder="일정 제목 (선택)" value={confirmedTitle} onChange={(e) => setConfirmedTitle(e.target.value)} style={{ padding: "10px 12px", border: "1px solid #E5E7EB", borderRadius: "8px", fontSize: "14px", outline: "none" }} />
-            <input type="date" value={confirmedDate} onChange={(e) => setConfirmedDate(e.target.value)} style={{ padding: "10px 12px", border: "1px solid #E5E7EB", borderRadius: "8px", fontSize: "14px", outline: "none" }} />
+            <input type="date" min={getTodayStr()} value={confirmedDate} onChange={(e) => setConfirmedDate(e.target.value)} style={{ padding: "10px 12px", border: "1px solid #E5E7EB", borderRadius: "8px", fontSize: "14px", outline: "none" }} />
             <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", color: "#1F2933", cursor: "pointer" }}>
               <input type="checkbox" checked={confirmedIsAllDay} onChange={(e) => setConfirmedIsAllDay(e.target.checked)} style={{ accentColor: "#7C5CFF" }} /> 하루종일
             </label>
@@ -574,7 +623,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                 gap: "12px",
               }}
             >
-              {(isConfirmedExpanded ? confirmedSchedules : confirmedSchedules.slice(0, 3)).map((s) => {
+              {(isConfirmedExpanded ? confirmedSchedules : confirmedSchedules.slice(0, 1)).map((s) => {
                 const isAbsent = (s.absentees || []).includes(currentUser?.id);
                 return (
                   <ConfirmedScheduleCard
@@ -590,49 +639,32 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                 );
               })}
             </div>
-            {confirmedSchedules.length > 3 && (
+            {confirmedSchedules.length > 1 && (
               <button
                 onClick={() => setIsConfirmedExpanded(!isConfirmedExpanded)}
                 style={{
                   width: "100%",
-                  padding: "12px",
+                  padding: "8px",
                   marginTop: "8px",
                   backgroundColor: "transparent",
                   color: "#7C5CFF",
                   border: "none",
+                  borderTop: "1px solid #E5E7EB",
                   cursor: "pointer",
-                  fontSize: "14px",
-                  fontWeight: "600",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "4px",
+                  fontSize: "12px",
+                  fontWeight: "bold",
                 }}
               >
-                {isConfirmedExpanded ? "접기 ▲" : `${confirmedSchedules.length - 3}개 더 보기 ▼`}
+                {isConfirmedExpanded ? "접기 ▲" : `더보기 (+${confirmedSchedules.length - 1}) ▼`}
               </button>
             )}
-            <div style={{ textAlign: "center", marginTop: "12px" }}>
-              <span style={{ fontSize: "12px", color: "#9CA3AF" }}>총 {confirmedSchedules.length}개의 일정</span>
-            </div>
           </div>
         )}
       </div>
 
-
       {/* 일정 조율 섹션 시작 */}
-      <div style={{ marginTop: "40px", marginBottom: "16px" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "8px" }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "700", color: "#1F2933" }}>일정 조율</h2>
-          </div>
-        </div>
-        <p style={{ margin: "0", fontSize: "13px", color: "#6B7280", lineHeight: "1.5" }}>
-          위아래로 드래그해서 가능한 시간을 선택하세요.<br />
-          같은 날짜 안에서 세로 방향으로만 선택됩니다.
-        </p>
-
-        <div style={{ display: "flex", justifyContent: "center", marginTop: "20px", marginBottom: "20px" }}>
+      <div style={{ marginTop: "4px", marginBottom: "16px" }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: "12px" }}>
           <div style={{ display: "flex", backgroundColor: "#F3F4F6", borderRadius: "10px", padding: "4px", width: "100%", maxWidth: "300px" }}>
             {["timetable", "calendar"].map((v) => (
               <button
@@ -679,7 +711,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
           >
             <div style={{ width: "40px", height: "4px", backgroundColor: "#E5E7EB", borderRadius: "2px", margin: "0 auto 20px" }} />
             <h3 style={{ margin: "0 0 8px", fontSize: "18px", fontWeight: "700", color: "#1F2933" }}>
-              {editingCandidateId ? "시간 수정하기" : "직접 시간 추가"}
+              직접 시간 추가
             </h3>
             <p style={{ margin: "0 0 24px", fontSize: "14px", color: "#6B7280", fontWeight: "500" }}>
               정확한 시간을 알고 있다면 직접 입력할 수 있어요.
@@ -688,66 +720,52 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <label style={{ fontSize: "14px", fontWeight: "700", color: "#1F2933" }}>날짜 선택</label>
-                {editingCandidateId ? (
-                  <div style={{ 
-                    padding: "12px", 
-                    backgroundColor: "#F9FAFB", 
-                    border: "1px solid #E5E7EB", 
-                    borderRadius: "12px",
-                    fontSize: "14px",
-                    fontWeight: "600",
-                    color: "#1F2933"
-                  }}>
-                    {formatDateWithDay(newDate)}
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "4px", scrollbarWidth: "none" }}>
-                    <DatePicker
-                      multiple
-                      value={newDates}
-                      onChange={setNewDates}
-                      format="YYYY-MM-DD"
-                      minDate={new Date()}
-                      containerStyle={{ width: "100%" }}
-                      render={(value, openCalendar) => (
-                        <div style={{ display: "flex", gap: "8px", flexWrap: "nowrap" }}>
-                          {newDates.length > 0 ? (
-                            newDates.map((d, idx) => (
-                              <div key={idx} style={{ 
-                                padding: "8px 16px", 
-                                backgroundColor: "#F0ECFF", 
-                                color: "#7C5CFF", 
-                                borderRadius: "20px",
-                                fontSize: "13px",
-                                fontWeight: "600",
-                                border: "1px solid #7C5CFF",
-                                whiteSpace: "nowrap"
-                              }}>
-                                {d.format ? d.format("MM.DD") : String(d).slice(5)}
-                              </div>
-                            ))
-                          ) : null}
-                          <button
-                            onClick={openCalendar}
-                            style={{
+                <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "4px", scrollbarWidth: "none" }}>
+                  <DatePicker
+                    multiple
+                    value={newDates}
+                    onChange={setNewDates}
+                    format="YYYY-MM-DD"
+                    minDate={new Date()}
+                    containerStyle={{ width: "100%" }}
+                    render={(value, openCalendar) => (
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "nowrap" }}>
+                        {newDates.length > 0 ? (
+                          newDates.map((d, idx) => (
+                            <div key={idx} style={{
                               padding: "8px 16px",
-                              backgroundColor: "#FFFFFF",
-                              border: "1px dashed #D1D5DB",
+                              backgroundColor: "#F0ECFF",
+                              color: "#7C5CFF",
                               borderRadius: "20px",
                               fontSize: "13px",
                               fontWeight: "600",
-                              color: "#6B7280",
-                              whiteSpace: "nowrap",
-                              cursor: "pointer",
-                            }}
-                          >
-                            + 날짜 선택
-                          </button>
-                        </div>
-                      )}
-                    />
-                  </div>
-                )}
+                              border: "1px solid #7C5CFF",
+                              whiteSpace: "nowrap"
+                            }}>
+                              {d.format ? d.format("MM.DD") : String(d).slice(5)}
+                            </div>
+                          ))
+                        ) : null}
+                        <button
+                          onClick={openCalendar}
+                          style={{
+                            padding: "8px 16px",
+                            backgroundColor: "#FFFFFF",
+                            border: "1px dashed #D1D5DB",
+                            borderRadius: "20px",
+                            fontSize: "13px",
+                            fontWeight: "600",
+                            color: "#6B7280",
+                            whiteSpace: "nowrap",
+                            cursor: "pointer",
+                          }}
+                        >
+                          + 날짜 선택
+                        </button>
+                      </div>
+                    )}
+                  />
+                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -816,7 +834,121 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                   onClick={handleAddOrUpdateCandidate}
                   style={{ flex: 2, padding: "14px", backgroundColor: "#7C5CFF", color: "#FFFFFF", border: "none", borderRadius: "12px", fontSize: "15px", fontWeight: "700", cursor: "pointer", boxShadow: "0 4px 12px rgba(124, 92, 255, 0.2)" }}
                 >
-                  {editingCandidateId ? "수정하기" : "추가하기"}
+                  추가하기
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* 후보 일정 수정 팝업 (중앙) */}
+      {showEditCandidateModal && (
+        <>
+          <div
+            onClick={closeEditCandidateModal}
+            style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 3000, backdropFilter: "blur(2px)" }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              top: "50%", left: "50%",
+              transform: "translate(-50%, -50%)",
+              backgroundColor: "#FFFFFF",
+              borderRadius: "20px",
+              padding: "24px 20px",
+              zIndex: 3001,
+              width: "min(320px, 90vw)",
+              boxShadow: "0 8px 30px rgba(0,0,0,0.2)",
+            }}
+          >
+            <h3 style={{ margin: "0 0 8px", fontSize: "18px", fontWeight: "700", color: "#1F2933" }}>
+              시간 수정하기
+            </h3>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <label style={{ fontSize: "14px", fontWeight: "700", color: "#1F2933" }}>날짜</label>
+                <div style={{
+                  padding: "12px",
+                  backgroundColor: "#F9FAFB",
+                  border: "1px solid #E5E7EB",
+                  borderRadius: "12px",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  color: "#1F2933"
+                }}>
+                  {newDate ? formatDateWithDay(newDate) : ""}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <label style={{ fontSize: "14px", fontWeight: "700", color: "#1F2933" }}>하루종일</label>
+                <div
+                  onClick={() => setNewIsAllDay(!newIsAllDay)}
+                  style={{
+                    width: "48px",
+                    height: "24px",
+                    backgroundColor: newIsAllDay ? "#7C5CFF" : "#E5E7EB",
+                    borderRadius: "12px",
+                    position: "relative",
+                    cursor: "pointer",
+                    transition: "background-color 0.2s"
+                  }}
+                >
+                  <div style={{
+                    width: "20px",
+                    height: "20px",
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: "50%",
+                    position: "absolute",
+                    top: "2px",
+                    left: newIsAllDay ? "26px" : "2px",
+                    transition: "left 0.2s"
+                  }} />
+                </div>
+              </div>
+
+              {!newIsAllDay && (
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: "block", fontSize: "12px", color: "#6B7280", marginBottom: "6px", fontWeight: "600" }}>시작 시간</label>
+                    <select
+                      value={newStartTime}
+                      onChange={(e) => setNewStartTime(e.target.value)}
+                      style={{ width: "100%", padding: "12px", border: "1px solid #E5E7EB", borderRadius: "12px", fontSize: "15px", outline: "none", backgroundColor: "#F9FAFB", appearance: "none", textAlign: "center", fontWeight: "600" }}
+                    >
+                      <option value="">시작</option>
+                      {timeSlots.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <span style={{ marginTop: "20px", color: "#9CA3AF" }}>~</span>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: "block", fontSize: "12px", color: "#6B7280", marginBottom: "6px", fontWeight: "600" }}>종료 시간</label>
+                    <select
+                      value={newEndTime}
+                      onChange={(e) => setNewEndTime(e.target.value)}
+                      style={{ width: "100%", padding: "12px", border: "1px solid #E5E7EB", borderRadius: "12px", fontSize: "15px", outline: "none", backgroundColor: "#F9FAFB", appearance: "none", textAlign: "center", fontWeight: "600" }}
+                    >
+                      <option value="">종료</option>
+                      {timeSlots.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: "10px", marginTop: "4px" }}>
+                <button
+                  onClick={closeEditCandidateModal}
+                  style={{ flex: 1, padding: "14px", backgroundColor: "#FFFFFF", color: "#4B5563", border: "1px solid #E5E7EB", borderRadius: "12px", fontSize: "15px", fontWeight: "700", cursor: "pointer" }}
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleAddOrUpdateCandidate}
+                  style={{ flex: 2, padding: "14px", backgroundColor: "#7C5CFF", color: "#FFFFFF", border: "none", borderRadius: "12px", fontSize: "15px", fontWeight: "700", cursor: "pointer", boxShadow: "0 4px 12px rgba(124, 92, 255, 0.2)" }}
+                >
+                  수정하기
                 </button>
               </div>
             </div>
@@ -855,13 +987,13 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  minHeight: "36px",
-                  padding: "0 14px",
+                  minHeight: "28px",
+                  padding: "0 10px",
                   border: "1px solid #7c5cff",
                   borderRadius: "999px",
                   background: "#ffffff",
                   color: "#7c5cff",
-                  fontSize: "14px",
+                  fontSize: "12px",
                   fontWeight: "600",
                   cursor: "pointer",
                 }}
@@ -894,9 +1026,9 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                       fontSize: "12px",
                       fontWeight: "600",
                       color: "#9CA3AF",
-                      borderBottom: "1px solid #EEF0F4",
-                      borderRight: "1px solid #EEF0F4",
-                    }}>시간</th>
+                      borderBottom: "1px solid #D1D5DB",
+                      borderRight: "1px solid #D1D5DB",
+                    }}>일정</th>
                     {candidates.map((candidate) => (
                       <th
                         key={candidate.id}
@@ -905,8 +1037,8 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                           minWidth: "120px",
                           padding: "16px 8px",
                           backgroundColor: "#FFFFFF",
-                          borderBottom: "1px solid #EEF0F4",
-                          borderRight: "1px solid #EEF0F4",
+                          borderBottom: "1px solid #D1D5DB",
+                          borderRight: "1px solid #D1D5DB",
                           position: "relative",
                         }}
                       >
@@ -1022,7 +1154,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredTimeSlots.map((time, timeIdx) => (
+                  {visibleTimeSlots.map((time, timeIdx) => (
                     <tr key={time}>
                       <td style={{
                         position: "sticky",
@@ -1033,9 +1165,9 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                         fontSize: "11px",
                         fontWeight: "600",
                         color: time.endsWith(":00") ? "#4B5563" : "#D1D5DB",
-                        borderRight: "1px solid #EEF0F4",
-                        borderBottom: time.endsWith(":30") ? "1px solid #EEF0F4" : "none",
-                        height: "28px",
+                        borderRight: "1px solid #D1D5DB",
+                        borderBottom: time.endsWith(":30") ? "1px solid #D1D5DB" : "none",
+                        height: "20px",
                       }}>
                         {time.endsWith(":00") ? time : ""}
                       </td>
@@ -1051,8 +1183,8 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                         const mySaved = !isSelectMode && slotMembers.some((member) => member.userid === currentUser?.id);
                         const showMySelection = isSelectMode ? isSelected : mySaved;
                         
-                        const nextTime = filteredTimeSlots[timeIdx + 1];
-                        const prevTime = filteredTimeSlots[timeIdx - 1];
+                        const nextTime = visibleTimeSlots[timeIdx + 1];
+                        const prevTime = visibleTimeSlots[timeIdx - 1];
                         const isNextMySelection = nextTime && (isSelectMode 
                           ? selectedSlots.some(s => s.key === getSlotKey(candidate.id, nextTime))
                           : getSlotAvailabilities(candidate.id, nextTime).some(m => m.userid === currentUser?.id));
@@ -1089,24 +1221,17 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                             }}
                             style={{
                               backgroundColor: bgColor,
-                              borderRight: "1px solid #EEF0F4",
-                              borderBottom: "1px solid #EEF0F4",
-                              
+
                               // Seamless block styling
                               position: "relative",
                               borderTop: showMySelection && (isSegmentStart || isSegmentSingle) ? "2px solid #7C5CFF" : "none",
-                              borderBottom: showMySelection && (isSegmentEnd || isSegmentSingle) ? "2px solid #7C5CFF" : "none",
+                              borderBottom: showMySelection && (isSegmentEnd || isSegmentSingle) ? "2px solid #7C5CFF" : (time.endsWith(":30") ? "1px solid #D1D5DB" : "1px solid #F3F4F6"),
                               borderLeft: showMySelection ? "2px solid #7C5CFF" : "none",
-                              borderRight: showMySelection ? "2px solid #7C5CFF" : "1px solid #EEF0F4",
-                              
-                              borderTopLeftRadius: (isSegmentStart || isSegmentSingle) ? "10px" : "0",
-                              borderTopRightRadius: (isSegmentStart || isSegmentSingle) ? "10px" : "0",
-                              borderBottomLeftRadius: (isSegmentEnd || isSegmentSingle) ? "10px" : "0",
-                              borderBottomRightRadius: (isSegmentEnd || isSegmentSingle) ? "10px" : "0",
-                              
+                              borderRight: showMySelection ? "2px solid #7C5CFF" : "1px solid #D1D5DB",
+
                               cursor: selectable ? "pointer" : "default",
                               padding: 0,
-                              height: "28px",
+                              height: "20px",
                               transition: "all 0.1s",
                               zIndex: showMySelection ? 10 : 0,
                             }}
@@ -1121,7 +1246,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
             </div>
 
             {/* 범례 영역 */}
-            <div style={{ padding: "12px 16px", backgroundColor: "#F9FAFB", display: "flex", gap: "12px", flexWrap: "wrap", borderTop: "1px solid #EEF0F4" }}>
+            <div style={{ padding: "12px 16px", backgroundColor: "#F9FAFB", display: "flex", gap: "12px", flexWrap: "wrap", borderTop: "1px solid #D1D5DB" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                 <div style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: "#FFFFFF", border: "1.5px solid #7C5CFF" }} />
                 <span style={{ fontSize: "11px", color: "#6B7280", fontWeight: "600" }}>내 선택</span>
@@ -1129,10 +1254,6 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                 <div style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB" }} />
                 <span style={{ fontSize: "11px", color: "#6B7280", fontWeight: "600" }}>선택 가능</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <div style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: "#7C5CFF" }} />
-                <span style={{ fontSize: "11px", color: "#6B7280", fontWeight: "600" }}>많이 겹침</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                 <div style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: "#E5E7EB" }} />
@@ -1247,7 +1368,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
           )}
 
           {/* 참여자 현황 */}
-          <div style={{ marginBottom: "32px" }}>
+          <div style={{ marginBottom: "13px" }}>
             <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#1F2933", marginBottom: "12px" }}>참여자 현황</h3>
             <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
               {members.map((member) => {
@@ -1378,7 +1499,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
               fontSize: "15px",
               fontWeight: "700",
               cursor: "pointer",
-              marginBottom: "40px",
+              marginBottom: "0px",
             }}
           >
             가능한 시간 분석 보기
@@ -1531,7 +1652,17 @@ function CandidateCalendar({ candidates, availabilities, calYear, calMonth, onPr
   const selectedAvailCount = selectedAvailUsers.length;
 
   return (
-    <div style={{ marginTop: "8px" }}>
+    <div
+      style={{
+        marginTop: "8px",
+        backgroundColor: "#FFFFFF",
+        borderRadius: "16px",
+        border: "1px solid #E5E7EB",
+        boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
+        padding: "16px",
+        marginBottom: "20px",
+      }}
+    >
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "6px", marginBottom: "12px" }}>
         <button onClick={onPrevMonth} style={{ border: "none", background: "none", fontSize: "20px", cursor: "pointer", lineHeight: 1, padding: "0 2px" }}>‹</button>
         <span style={{ fontWeight: "bold", fontSize: "16px" }}>{calYear}년 {calMonth + 1}월</span>
@@ -1559,7 +1690,6 @@ function CandidateCalendar({ candidates, availabilities, calYear, calMonth, onPr
                         return (<div key={uid} style={{ height: "13px", backgroundColor: color, borderRadius: "3px", fontSize: "9px", color: "#fff", paddingLeft: "3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: "13px" }}>{member?.nickname || ""}</div>);
                       })}
                       {availCount > 3 && <div style={{ fontSize: "9px", color: "#888", paddingLeft: "2px" }}>+{availCount - 3}명 더</div>}
-                      {availCount === 0 && <div style={{ fontSize: "9px", color: "#bbb", textAlign: "center" }}>후보</div>}
                     </div>
                   )}
                 </>

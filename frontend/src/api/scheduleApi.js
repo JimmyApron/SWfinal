@@ -245,7 +245,7 @@ export async function getAdditionalConfirmedLocations(roomId, scheduleId = null)
     query = query.eq("scheduleid", Number(scheduleId));
   }
 
-  const { data, error } = query;
+  const { data, error } = await query;
 
   if (error) {
     console.error("추가 위치 조회 실패:", error);
@@ -296,6 +296,18 @@ export async function addAdditionalConfirmedLocation(roomId, scheduleId, placeNa
   }
 
   return data;
+}
+
+export async function deleteAdditionalConfirmedLocation(locationId) {
+  const { error } = await supabase
+    .from("confirmed_locations")
+    .delete()
+    .eq("id", Number(locationId));
+
+  if (error) {
+    console.error("추가 위치 삭제 실패:", error);
+    throw new Error("추가 위치 삭제 실패");
+  }
 }
 
 export async function getRoomConfirmedSchedules(roomId) {
