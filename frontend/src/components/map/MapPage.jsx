@@ -14,7 +14,6 @@ import { supabase } from '../../lib/supabaseClient'
 import {
   createNotification,
   createGuestNotification,
-  createRoomNotifications,
 } from '../../api/notificationApi'
 import {
   saveMyLocation,
@@ -470,6 +469,7 @@ function MapPage({ roomId }) {
     })
   }
 
+  // eslint-disable-next-line no-unused-vars
   const notifyDeparture = async () => {
     const senderName =
       members.find((member) => {
@@ -707,7 +707,6 @@ function MapPage({ roomId }) {
       }
 
       await loadMemberLocations()
-      await notifyDeparture()
 
       if (middlePlace) {
         await calculateAllMemberRoutesToMiddlePlace(middlePlace)
@@ -788,7 +787,7 @@ function MapPage({ roomId }) {
   const handleRequestLocation = async (member) => {
     try {
       if (!currentUserId && !currentGuestId) {
-        alert('로그인한 사용자만 위치 등록 요청을 보낼 수 있습니다.')
+        alert('로그인한 사용자만 장소 등록 요청을 보낼 수 있습니다.')
         return
       }
 
@@ -797,8 +796,8 @@ function MapPage({ roomId }) {
           roomId: currentRoomId,
           guestId: member.guestid,
           type: 'location_request',
-          title: '위치 등록 요청',
-          message: '아직 위치를 등록하지 않았습니다. 위치를 등록해주세요!',
+          title: '장소 등록 요청',
+          message: '아직 장소를 등록하지 않았습니다. 장소를 등록해주세요!',
           link: `/rooms/${currentRoomId}?tab=location`,
         })
       } else {
@@ -807,16 +806,16 @@ function MapPage({ roomId }) {
           receiverId: member.userid,
           senderId: currentUserId,
           type: 'location_request',
-          title: '위치 등록 요청',
-          message: '아직 위치를 등록하지 않았습니다. 위치를 등록해주세요!',
+          title: '장소 등록 요청',
+          message: '아직 장소를 등록하지 않았습니다. 장소를 등록해주세요!',
           link: `/rooms/${currentRoomId}?tab=location`,
         })
       }
 
-      alert(`${member.nickname || '상대방'}님에게 위치 등록 요청 알림을 보냈습니다.`)
+      alert(`${member.nickname || '상대방'}님에게 장소 등록 요청 알림을 보냈습니다.`)
     } catch (error) {
-      console.error('위치 등록 요청 알림 전송 실패:', error)
-      alert('위치 등록 요청 알림 전송에 실패했습니다.')
+      console.error('장소 등록 요청 알림 전송 실패:', error)
+      alert('장소 등록 요청 알림 전송에 실패했습니다.')
     }
   }
 
@@ -866,7 +865,7 @@ function MapPage({ roomId }) {
           status: 'approaching',
         })
 
-        await createRoomNotifications({
+        void ({
           roomId: currentRoomId,
           senderId: currentUserId || currentGuestId,
           type: 'arrival_approaching',
@@ -899,7 +898,7 @@ function MapPage({ roomId }) {
           locationError: null,
         })
 
-        await createRoomNotifications({
+        void ({
           roomId: currentRoomId,
           senderId: currentUserId || currentGuestId,
           type: 'arrival_completed',
@@ -1890,7 +1889,7 @@ function MapPage({ roomId }) {
 
                 {!isRegistered && !isMe && canRequestLocation && (
                   <button type="button" onClick={() => handleRequestLocation(member)}>
-                    위치 등록 요청
+                    장소 등록 요청
                   </button>
                 )}
               </div>

@@ -162,7 +162,7 @@ export async function createGuestNotification({
   roomId,
   guestId,
   type = "location_request",
-  title = "위치 등록 요청",
+  title = "장소 등록 요청",
   message,
   link,
 }) {
@@ -385,7 +385,7 @@ export async function getMyGuestNotifications(guestId) {
 
 export const TAB_TYPE_MAP = {
   schedule: ["schedule_confirmed", "schedule_cancelled", "schedule_new", "schedule_request"],
-  location: ["location_request", "member_departed", "arrival_approaching", "arrival_completed", "middle_place_confirmed"],
+  location: ["location_request"],
   vote: ["vote_closed", "vote_reminder", "vote_new"],
   chat: ["chat_new"],
 };

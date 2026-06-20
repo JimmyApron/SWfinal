@@ -122,8 +122,7 @@ function NotificationListener() {
                 schedule_confirmed: "schedule",
                 schedule_cancelled: "schedule",
                 schedule_new: "schedule",
-                location_request: "location",
-                member_departed: "location"
+                location_request: "location"
               };
 
               const targetTab = typeToTabMap[notif.type];

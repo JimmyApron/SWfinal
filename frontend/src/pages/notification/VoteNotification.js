@@ -26,14 +26,14 @@ export const sendVoteNotification = async ({
       votetype === "schedule"
         ? "일정"
         : votetype === "location"
-        ? "중간장소"
+        ? "장소"
         : "일반";
 
     const typeTitle =
       votetype === "schedule"
         ? "📅 일정 투표"
         : votetype === "location"
-        ? "📍 중간장소 투표"
+        ? "📍 장소 투표"
         : "🗳️ 일반 투표";
 
     let isUrgent = false;

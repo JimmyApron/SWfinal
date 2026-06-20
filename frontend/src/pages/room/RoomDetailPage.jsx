@@ -376,7 +376,7 @@ function RoomDetailPage() {
       <div style={{ display: "flex", backgroundColor: "#fff", padding: "0 16px", borderBottom: "1px solid #E5E7EB" }}>
         {["schedule", "location", "vote", "chat"].map(t => (
           <button key={t} onClick={() => handleChangeTab(t)} style={{ flex: 1, padding: "14px 0", background: "none", border: "none", fontSize: "15px", fontWeight: tab === t ? "700" : "500", color: tab === t ? "#7C5CFF" : "#6B7280", position: "relative" }}>
-            {t === "schedule" ? "일정" : t === "location" ? "위치" : t === "vote" ? "투표" : "채팅"}
+            {t === "schedule" ? "일정" : t === "location" ? "장소" : t === "vote" ? "투표" : "채팅"}
             {unreadTabs[t] && <div style={{ position: "absolute", top: "14px", right: "10px", width: "7px", height: "7px", backgroundColor: "#EF4444", borderRadius: "50%" }} />}
             {tab === t && <div style={{ position: "absolute", bottom: 0, left: "20%", right: "20%", height: "3px", backgroundColor: "#7C5CFF", borderRadius: "3px 3px 0 0" }} />}
           </button>
@@ -407,7 +407,7 @@ function RoomDetailPage() {
             <h4>🔔 알림 설정</h4>
             {["schedule", "location", "vote", "chat"].map(t => (
               <div key={t} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                <span style={{ fontSize: "14px" }}>{t === "schedule" ? "일정" : t === "location" ? "위치" : t === "vote" ? "투표" : "채팅"} 알림</span>
+                <span style={{ fontSize: "14px" }}>{t === "schedule" ? "일정" : t === "location" ? "장소" : t === "vote" ? "투표" : "채팅"} 알림</span>
                 <button onClick={() => handleToggleNotification(t)} style={{ background: notifSettings[t] ? "#8366F4" : "#E0E0E0", color: "#fff", border: "none", borderRadius: "20px", padding: "4px 12px", cursor: "pointer" }}>{notifSettings[t] ? "ON" : "OFF"}</button>
               </div>
             ))}

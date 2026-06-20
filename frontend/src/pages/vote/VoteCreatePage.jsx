@@ -301,7 +301,7 @@ function VoteCreatePage() {
 
     if (isLocationVoteType(votetype)) {
       if (locationKind && !scheduleId) {
-        alert("위치 투표를 저장할 대상 일정이 없습니다.");
+        alert("장소 투표를 저장할 대상 일정이 없습니다.");
         return;
       }
 
@@ -651,7 +651,7 @@ function VoteCreatePage() {
           {[
             { value: "general", label: "일반 투표" },
             { value: "schedule", label: "일정 확정" },
-            { value: "location", label: "위치 확정" },
+            { value: "location", label: "장소 확정" },
           ].map((type) => (
             <button
               key={type.value}
@@ -741,7 +741,7 @@ function VoteCreatePage() {
               marginBottom: "16px",
             }}
           >
-            위치 탭에서 선택한 중간장소 후보들이 투표 항목으로 추가되었습니다.
+            장소 탭에서 선택한 중간장소 후보들이 투표 항목으로 추가되었습니다.
           </p>
         )}
 
