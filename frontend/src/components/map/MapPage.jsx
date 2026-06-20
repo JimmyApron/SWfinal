@@ -66,7 +66,6 @@ function MapPage({ roomId }) {
   const [memberLocationLabels, setMemberLocationLabels] = useState({})
 
   const [message, setMessage] = useState('')
-  const [shareToast, setShareToast] = useState('')
   const [locationUpdateError, setLocationUpdateError] = useState('')
   const [pendingMiddleLocation, setPendingMiddleLocation] = useState(null)
   const [pendingMeetingPlaceConfirm, setPendingMeetingPlaceConfirm] = useState(null)
@@ -115,6 +114,16 @@ function MapPage({ roomId }) {
   )
 
   useEffect(() => {
+    if (!message) return undefined
+
+    const timeoutId = setTimeout(() => {
+      setMessage('')
+    }, 2400)
+
+    return () => clearTimeout(timeoutId)
+  }, [message])
+
+  useEffect(() => {
     const fetchUser = async () => {
       const guestId = localStorage.getItem('guest_id')
 
@@ -131,7 +140,6 @@ function MapPage({ roomId }) {
         }
 
         console.error('사용자 정보 조회 오류:', error)
-        setMessage('사용자 정보를 불러오지 못했습니다.')
         return
       }
 
@@ -213,8 +221,6 @@ function MapPage({ roomId }) {
         setPlaces([confirmedMiddlePlace])
         setMemberRouteResults([])
         setMemberRoutePaths([])
-        setMessage(`${savedMiddlePlace.name}이(가) 중간 장소로 확정되어 있습니다.`)
-
         await calculateAllMemberRoutesToMiddlePlace(confirmedMiddlePlace)
       } catch (error) {
         console.error('확정 중간 장소 조회 오류:', error)
@@ -395,7 +401,6 @@ function MapPage({ roomId }) {
       return locations
     } catch (error) {
       console.error('멤버 위치 조회 오류:', error)
-      setMessage('멤버 위치를 불러오지 못했습니다.')
       return []
     }
   }
@@ -513,10 +518,7 @@ function MapPage({ roomId }) {
       },
     })
 
-    if (isShared) {
-      setShareToast('현재위치가 채팅에 공유되었습니다!')
-      setTimeout(() => setShareToast(''), 2000)
-    }
+    return isShared
   }
 
   const handleShareMiddlePlace = async () => {
@@ -530,10 +532,7 @@ function MapPage({ roomId }) {
       place: middlePlace,
     })
 
-    if (isShared) {
-      setShareToast('확정된 중간 장소가 채팅에 공유되었습니다!')
-      setTimeout(() => setShareToast(''), 2000)
-    }
+    return isShared
   }
 
   const handleShareNearbyPlace = async (place) => {
@@ -595,8 +594,6 @@ function MapPage({ roomId }) {
         return
       }
 
-      setMessage('현재 위치를 가져오는 중입니다.')
-
       const location = await getCurrentPosition()
 
       setCurrentLocation(location)
@@ -604,7 +601,7 @@ function MapPage({ roomId }) {
       setMessage('')
     } catch (error) {
       console.error('현재 위치 저장 오류:', error)
-      setMessage('현재 위치를 가져오거나 저장하는 중 오류가 발생했습니다.')
+      setMessage('현재 위치를 가져오지 못했습니다.')
     }
   }
 
@@ -815,8 +812,6 @@ function MapPage({ roomId }) {
     }
 
     try {
-      setMessage('출발 처리 중입니다. 현재 위치를 확인하고 있어요.')
-
       const location = await getCurrentPosition()
       const now = new Date().toISOString()
 
@@ -851,7 +846,7 @@ function MapPage({ roomId }) {
         await calculateAllMemberRoutesToMiddlePlace(middlePlace)
       }
 
-      setMessage('출발했습니다. 30초마다 위치를 자동 갱신합니다.')
+      setMessage('출발했습니다.')
     } catch (error) {
       const nextStatus = error?.code === 1 ? 'denied' : 'error'
       const nextMessage =
@@ -916,10 +911,10 @@ function MapPage({ roomId }) {
         await calculateAllMemberRoutesToMiddlePlace(middlePlace)
       }
 
-      setMessage('도착 처리되었습니다. 위치 자동 갱신을 멈춥니다.')
+      setMessage('도착 처리되었습니다.')
     } catch (error) {
       console.error('도착 처리 실패:', error)
-      setMessage('도착 처리 중 오류가 발생했습니다.')
+      setMessage('도착 처리에 실패했습니다.')
     }
   }
 
@@ -1072,18 +1067,14 @@ function MapPage({ roomId }) {
     }
   }
 
-  const calculateAllMemberRoutesToMiddlePlace = async (place, options = {}) => {
-    const { silent = false } = options
-
+  const calculateAllMemberRoutesToMiddlePlace = async (place) => {
     if (!place) {
-      if (!silent) setMessage('중간 장소 정보가 없습니다.')
       return
     }
 
     const latestLocations = await loadMemberLocations()
 
     if (!latestLocations || latestLocations.length === 0) {
-      if (!silent) setMessage('멤버 위치 정보가 없습니다.')
       return
     }
 
@@ -1222,11 +1213,8 @@ function MapPage({ roomId }) {
     setMemberRoutePaths(routePaths)
 
     if (routeResults.some((result) => result.error)) {
-      if (!silent) setMessage('일부 멤버의 경로 계산에 실패했지만 위치 정보는 표시합니다.')
       return
     }
-
-    if (!silent) setMessage('')
   }
 
   const getCarRoutePath = async ({ origin, destination }) => {
@@ -1599,7 +1587,6 @@ function MapPage({ roomId }) {
   const handleSelectPlace = (place) => {
     setSelectedPlace(place)
     setDestination(place)
-    setMessage(`${place.name}을(를) 목적지로 설정했습니다.`)
   }
 
   const handleCreateDraftSchedule = async () => {
@@ -2033,6 +2020,12 @@ function MapPage({ roomId }) {
 
   return (
     <section className="map-section">
+      {message && (
+        <div className="map-toast-message" role="status" aria-live="polite">
+          {message}
+        </div>
+      )}
+
       {/* 상단 일정 선택 스위처 */}
       <div className="location-top-selector" style={{ 
         padding: '16px', 
@@ -2628,7 +2621,6 @@ function MapPage({ roomId }) {
                 </div>
               )}
 
-              {message && <p className="map-inline-message">{message}</p>}
             </div>
           )}
 
@@ -2739,10 +2731,6 @@ function MapPage({ roomId }) {
                     </button>
                   </div>
 
-                  {!middlePlace && (
-                    <p className="map-inline-message">만날 장소를 먼저 확정해 주세요.</p>
-                  )}
-
                   <section
                     className={`friend-location-list ${
                       hasMoreFriendMembers ? 'has-more-members' : ''
@@ -2797,7 +2785,6 @@ function MapPage({ roomId }) {
                     )}
                   </section>
 
-                  {message && <p className="map-inline-message">{message}</p>}
                 </>
               )}
             </div>

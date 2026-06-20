@@ -835,13 +835,42 @@
   white-space: nowrap;
 }
 
-.map-inline-message {
-  margin: 10px 0 0;
-  padding: 10px 12px;
+.map-toast-message {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 1300;
+  width: min(calc(100vw - 48px), 360px);
+  padding: 14px 18px;
   border-radius: 14px;
-  background: #fffbeb;
-  color: #92400e;
-  font-size: 12px;
+  background: rgba(17, 24, 39, 0.92);
+  color: #fff;
+  box-shadow: 0 16px 40px rgba(17, 24, 39, 0.24);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: mapToastPop 2.4s ease forwards;
+}
+
+@keyframes mapToastPop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 10px)) scale(0.96);
+  }
+
+  12%,
+  82% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% - 8px)) scale(0.98);
+  }
 }
 
 .map-results-sheet {
