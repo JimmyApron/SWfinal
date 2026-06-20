@@ -35,7 +35,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const [newEndTime, setNewEndTime] = useState("");
   const [newIsAllDay, setNewIsAllDay] = useState(false);
   const [editingCandidateId, setEditingCandidateId] = useState(null);
-  const [showAllTimes, setShowAllTimes] = useState(false);
+  const [showAllTimes, setShowAllTimes] = useState(true);
   const [activeDragCandidateId, setActiveDragCandidateId] = useState(null);
   const [clickedSlot, setClickedSlot] = useState(null); // { candidate, time, availableMembers, unavailableMembers }
   const [activeCandidateMenu, setActiveCandidateMenu] = useState(null); // 추가: 후보지 메뉴 상태
@@ -81,12 +81,11 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     : timeSlots.filter((t) => t >= "09:00" && t <= "22:00");
 
   const getHeatmapColor = (count, total) => {
-    if (count === 0) return "#F4F5F7";
     const ratio = count / total;
-    if (ratio >= 1) return "#7C5CFF";
-    if (ratio >= 0.67) return "#D8CCFF";
-    if (ratio >= 0.34) return "#EDE9FE";
-    return "#F1EDFF";
+    if (ratio >= 1) return "#7C5CFF"; // 전원 가능
+    if (ratio >= 0.75) return "#C8B5FF"; // 많이 겹침
+    if (ratio >= 0.4) return "#E2D6FF"; // 2명 이상
+    return "#F3EEFF"; // 1명 가능
   };
 
   const getMemberColor = (userid) => {
@@ -158,11 +157,6 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
 
   const handleSaveAvailability = async () => {
     try {
-      if (selectedSlots.length === 0) {
-        alert("선택한 시간이 없습니다.");
-        return;
-      }
-
       const { data: { user } } = await supabase.auth.getUser();
       let userId, userNickname;
 
@@ -632,31 +626,6 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
           <div>
             <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "700", color: "#1F2933" }}>일정 조율</h2>
           </div>
-          <button
-            onClick={() => {
-              setEditingCandidateId(null);
-              setNewDates([]);
-              setNewDate("");
-              setNewStartTime("");
-              setNewEndTime("");
-              setNewIsAllDay(false);
-              setShowAddCandidateForm(true);
-            }}
-            style={{
-              padding: "6px 12px",
-              backgroundColor: "transparent",
-              color: "#7C5CFF",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "14px",
-              fontWeight: "600",
-              display: "flex",
-              alignItems: "center",
-              gap: "4px",
-            }}
-          >
-            <FiPlus size={16} /> 직접 시간 추가
-          </button>
         </div>
         <p style={{ margin: "0", fontSize: "13px", color: "#6B7280", lineHeight: "1.5" }}>
           위아래로 드래그해서 가능한 시간을 선택하세요.<br />
@@ -857,60 +826,6 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
 
       {candidateViewMode === "timetable" && (
         <div style={{ paddingBottom: isSelectMode ? "120px" : "40px" }}>
-          {/* 날짜 선택 칩 영역 */}
-          <div
-            style={{
-              display: "flex",
-              gap: "8px",
-              overflowX: "auto",
-              paddingBottom: "16px",
-              scrollbarWidth: "none",
-              msOverflowStyle: "none",
-            }}
-          >
-            {candidates.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => scrollToCandidate(c.id)}
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#FFFFFF",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: "20px",
-                  fontSize: "13px",
-                  fontWeight: "600",
-                  color: "#4B5563",
-                  whiteSpace: "nowrap",
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                }}
-              >
-                {formatDateWithDay(c.date)}
-              </button>
-            ))}
-            <button
-              onClick={() => {
-                setEditingCandidateId(null);
-                setNewDates([]);
-                setNewDate("");
-                setShowAddCandidateForm(true);
-              }}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#F8F8FB",
-                border: "1px dashed #D1D5DB",
-                borderRadius: "20px",
-                fontSize: "13px",
-                fontWeight: "600",
-                color: "#6B7280",
-                whiteSpace: "nowrap",
-                cursor: "pointer",
-              }}
-            >
-              + 날짜 추가
-            </button>
-          </div>
-
           {/* 시간 선택 카드 그리드 */}
           <div
             style={{
@@ -922,16 +837,37 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
               marginBottom: "20px",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "flex-end", padding: "12px 16px", borderBottom: "1px solid #F3F4F6" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#6B7280", cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={showAllTimes}
-                  onChange={(e) => setShowAllTimes(e.target.checked)}
-                  style={{ accentColor: "#7C5CFF" }}
-                />
-                전체 시간 보기
-              </label>
+            {/* 시간표 카드 헤더 (날짜 추가 버튼) */}
+            <div style={{
+              display: "flex",
+              justifyContent: "flex-start",
+              alignItems: "center",
+              padding: "14px 16px 10px",
+            }}>
+              <button
+                onClick={() => {
+                  setEditingCandidateId(null);
+                  setNewDates([]);
+                  setNewDate("");
+                  setShowAddCandidateForm(true);
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minHeight: "36px",
+                  padding: "0 14px",
+                  border: "1px solid #7c5cff",
+                  borderRadius: "999px",
+                  background: "#ffffff",
+                  color: "#7c5cff",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }}
+              >
+                + 날짜 추가
+              </button>
             </div>
 
             <div
@@ -944,6 +880,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
               onMouseLeave={() => { setIsDragging(false); setDragMode(null); setActiveDragCandidateId(null); }}
               onMouseUp={() => { setIsDragging(false); setDragMode(null); setActiveDragCandidateId(null); }}
             >
+
               <table style={{ borderCollapse: "separate", borderSpacing: 0, minWidth: "100%" }}>
                 <thead>
                   <tr>
@@ -1114,7 +1051,6 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                         const mySaved = !isSelectMode && slotMembers.some((member) => member.userid === currentUser?.id);
                         const showMySelection = isSelectMode ? isSelected : mySaved;
                         
-                        // 자연스러운 연결을 위한 주변 상태 체크
                         const nextTime = filteredTimeSlots[timeIdx + 1];
                         const prevTime = filteredTimeSlots[timeIdx - 1];
                         const isNextMySelection = nextTime && (isSelectMode 
@@ -1124,7 +1060,16 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                           ? selectedSlots.some(s => s.key === getSlotKey(candidate.id, prevTime))
                           : getSlotAvailabilities(candidate.id, prevTime).some(m => m.userid === currentUser?.id));
 
-                        const bgColor = !selectable ? "#F3F4F6" : getHeatmapColor(availableCount, totalParticipants);
+                        const bgColor = !selectable 
+                          ? "#E5E7EB" // 선택 불가: 회색
+                          : (availableCount === 0 
+                            ? "#FFFFFF" // 선택 가능 but 비어 있음: 흰색
+                            : getHeatmapColor(availableCount, totalParticipants)); // 누군가 선택함: 보라색 gradient
+                        
+                        const isSegmentStart = showMySelection && !isPrevMySelection;
+                        const isSegmentMiddle = showMySelection && isPrevMySelection && isNextMySelection;
+                        const isSegmentEnd = showMySelection && isPrevMySelection && !isNextMySelection;
+                        const isSegmentSingle = showMySelection && !isPrevMySelection && !isNextMySelection;
 
                         return (
                           <td
@@ -1146,35 +1091,27 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                             style={{
                               backgroundColor: bgColor,
                               borderRight: "1px solid #EEF0F4",
-                              borderBottom: (showMySelection ? (isNextMySelection ? "none" : "1px solid #EEF0F4") : "1px solid #EEF0F4"),
-                              borderTop: (showMySelection ? (isPrevMySelection ? "none" : "none") : "none"),
-                              borderTopLeftRadius: (showMySelection && !isPrevMySelection) ? "6px" : "0",
-                              borderTopRightRadius: (showMySelection && !isPrevMySelection) ? "6px" : "0",
-                              borderBottomLeftRadius: (showMySelection && !isNextMySelection) ? "6px" : "0",
-                              borderBottomRightRadius: (showMySelection && !isNextMySelection) ? "6px" : "0",
-                              outline: showMySelection ? "1.5px solid #7C5CFF" : "none",
-                              outlineOffset: "-1.5px",
+                              borderBottom: "1px solid #EEF0F4",
+                              
+                              // Seamless block styling
+                              position: "relative",
+                              borderTop: showMySelection && (isSegmentStart || isSegmentSingle) ? "2px solid #7C5CFF" : "none",
+                              borderBottom: showMySelection && (isSegmentEnd || isSegmentSingle) ? "2px solid #7C5CFF" : "none",
+                              borderLeft: showMySelection ? "2px solid #7C5CFF" : "none",
+                              borderRight: showMySelection ? "2px solid #7C5CFF" : "1px solid #EEF0F4",
+                              
+                              borderTopLeftRadius: (isSegmentStart || isSegmentSingle) ? "10px" : "0",
+                              borderTopRightRadius: (isSegmentStart || isSegmentSingle) ? "10px" : "0",
+                              borderBottomLeftRadius: (isSegmentEnd || isSegmentSingle) ? "10px" : "0",
+                              borderBottomRightRadius: (isSegmentEnd || isSegmentSingle) ? "10px" : "0",
+                              
                               cursor: selectable ? "pointer" : "default",
                               padding: 0,
                               height: "28px",
                               transition: "all 0.1s",
-                              position: "relative",
-                              zIndex: showMySelection ? 1 : 0,
+                              zIndex: showMySelection ? 10 : 0,
                             }}
                           >
-                            {showMySelection && !isPrevMySelection && isNextMySelection && (
-                              <div style={{
-                                position: "absolute",
-                                top: "50%",
-                                left: "50%",
-                                transform: "translate(-50%, -50%)",
-                                width: "12px",
-                                height: "2px",
-                                backgroundColor: "rgba(255,255,255,0.6)",
-                                borderRadius: "1px",
-                                display: (timeIdx % 2 === 0) ? "block" : "none"
-                              }} />
-                            )}
                           </td>
                         );
                       })}
@@ -1191,20 +1128,16 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                 <span style={{ fontSize: "11px", color: "#6B7280", fontWeight: "600" }}>내 선택</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <div style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: "#F4F5F7" }} />
-                <span style={{ fontSize: "11px", color: "#6B7280", fontWeight: "600" }}>선택 없음</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <div style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: "#F1EDFF" }} />
-                <span style={{ fontSize: "11px", color: "#6B7280", fontWeight: "600" }}>일부 가능</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <div style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: "#D8CCFF" }} />
-                <span style={{ fontSize: "11px", color: "#6B7280", fontWeight: "600" }}>많이 겹침</span>
+                <div style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB" }} />
+                <span style={{ fontSize: "11px", color: "#6B7280", fontWeight: "600" }}>선택 가능</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                 <div style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: "#7C5CFF" }} />
-                <span style={{ fontSize: "11px", color: "#6B7280", fontWeight: "600" }}>전원 가능</span>
+                <span style={{ fontSize: "11px", color: "#6B7280", fontWeight: "600" }}>많이 겹침</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <div style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: "#E5E7EB" }} />
+                <span style={{ fontSize: "11px", color: "#6B7280", fontWeight: "600" }}>선택 불가</span>
               </div>
             </div>
           </div>
@@ -1535,8 +1468,6 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
           members={[...members, ...guests]}
         />
       )}
-
-      <button onClick={handleShowAvailableResult}>가능한 시간 보기</button>
     </div>
   );
 }
