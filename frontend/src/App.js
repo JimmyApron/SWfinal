@@ -45,6 +45,9 @@ const NOTIFICATION_SETTING_COLUMNS = {
   schedule_new: "schedulenotifenabled",
   schedule_request: "schedulenotifenabled",
   location_request: "locationnotifenabled",
+  member_departed: "locationnotifenabled",
+  arrival_approaching: "locationnotifenabled",
+  arrival_completed: "locationnotifenabled",
   middle_place_confirmed: "locationnotifenabled",
   location_schedule_created: "locationnotifenabled",
   vote_new: "votenotifenabled",
@@ -169,38 +172,16 @@ function NotificationListener() {
               table: "notifications",
               filter: `receiverid=eq.${myUserId}`,
             },
-            (payload) => {
+            async (payload) => {
               const notif = payload.new;
               console.log("🚀 [App.js] 새 알림 수신:", notif);
 
               const isGlobalPopupEnabled = localStorage.getItem("global_popup_enabled") !== "false";
               const mutedRooms = JSON.parse(localStorage.getItem("muted_rooms") || "[]");
               const isRoomMuted = notif.roomid && mutedRooms.some(id => String(id) === String(notif.roomid));
+              const isSettingAllowed = await isRoomNotificationPopupAllowed(notif.roomid, notif.type);
               
-              const currentPath = locationRef.current.pathname;
-              const isCurrentlyInRoom = notif.roomid && currentPath.includes(`/rooms/${notif.roomid}`);
-
-              // 현재 보고 있는 탭 확인 (URL 쿼리 스트링 기준)
-              const searchParams = new URLSearchParams(locationRef.current.search);
-              const currentTab = searchParams.get("tab") || "schedule";
-
-              // 알림 타입별 관련 탭 매핑
-              const typeToTabMap = {
-                chat_new: "chat",
-                vote_new: "vote",
-                vote_closed: "vote",
-                vote_reminder: "vote",
-                schedule_confirmed: "schedule",
-                schedule_cancelled: "schedule",
-                schedule_new: "schedule",
-                location_request: "location",
-                middle_place_confirmed: "location",
-                location_schedule_created: "location"
-              };
-
-              const targetTab = typeToTabMap[notif.type];
-              // 현재 해당 방의 해당 탭을 보고 있는지 여부
-              const isLookingAtRelevantTab = isCurrentlyInRoom && targetTab && currentTab === targetTab;
+              // Room settings alone decide whether room popups are shown.
 
               // 팝업 결정 조건
               // 1. issilent가 명시적 true가 아닐 것
@@ -212,8 +193,8 @@ function NotificationListener() {
               const showToast = 
                 notif.issilent !== true && 
                 isGlobalPopupEnabled && 
-                !isRoomMuted && 
-                (!isLookingAtRelevantTab || notif.type === "kick" || notif.type === "schedule_confirmed" || notif.type === "middle_place_confirmed" || notif.type === "location_schedule_created");
+                !isRoomMuted &&
+                isSettingAllowed;
 
               if (showToast) {
                 console.log("✅ [App.js] Toast 표시함");
@@ -221,7 +202,7 @@ function NotificationListener() {
                 setTimeout(() => { if (isMounted) setToast(null); }, 4000);
               } else {
                 console.log("🤫 [App.js] Toast 표시 건너뜜 (사유: 해당 탭 시청 중 또는 설정 차단)");
-                console.log(` - isLookingAtRelevantTab: ${isLookingAtRelevantTab}, issilent: ${notif.issilent}`);
+                console.log(` - isSettingAllowed: ${isSettingAllowed}, issilent: ${notif.issilent}`);
               }
             }
           );

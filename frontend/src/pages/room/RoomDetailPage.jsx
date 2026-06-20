@@ -129,14 +129,24 @@ function RoomDetailPage() {
       await markNotificationsAsReadInRoomByType(Number(roomId), uId, TAB_TYPE_MAP[tab]);
 
       const { data: sett } = await supabase.from("room_members").select("schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled").eq("roomid", Number(roomId)).eq("userid", uId).maybeSingle();
-      if (sett) setNotifSettings({ schedule: sett.schedulenotifenabled, location: sett.locationnotifenabled, vote: sett.votenotifenabled, chat: sett.chatnotifenabled });
+      if (sett) setNotifSettings({
+        schedule: sett.schedulenotifenabled !== false,
+        location: sett.locationnotifenabled !== false,
+        vote: sett.votenotifenabled !== false,
+        chat: sett.chatnotifenabled !== false,
+      });
     } else {
       const guestId = localStorage.getItem("guest_id");
       if (guestId) {
         setCurrentUser({ id: guestId, type: "guest" });
         await markNotificationsAsReadInRoomByType(Number(roomId), guestId, TAB_TYPE_MAP[tab]);
         const { data: sett } = await supabase.from("room_guests").select("schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled").eq("id", guestId).maybeSingle();
-        if (sett) setNotifSettings({ schedule: sett.schedulenotifenabled, location: sett.locationnotifenabled, vote: sett.votenotifenabled, chat: sett.chatnotifenabled });
+        if (sett) setNotifSettings({
+          schedule: sett.schedulenotifenabled !== false,
+          location: sett.locationnotifenabled !== false,
+          vote: sett.votenotifenabled !== false,
+          chat: sett.chatnotifenabled !== false,
+        });
       }
     }
   };
