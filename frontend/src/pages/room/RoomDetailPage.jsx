@@ -205,8 +205,17 @@ function RoomDetailPage() {
   const handleInviteFriend = async (friend) => {
     setInvitingSending(true);
     try {
-      const senderNickname = currentUser.user_metadata?.nickname || currentUser.email || "알 수 없음";
-      await createNotification({ roomId: Number(roomId), receiverId: friend.id, senderId: currentUser.id, type: "room_invite", title: "🏠 방 초대", message: `${senderNickname}님이 [${room.roomname}]에 초대했습니다`, link: `/rooms/${roomId}` });
+      const { data: senderProfile } = await supabase
+        .from("profiles")
+        .select("nickname")
+        .eq("id", currentUser.id)
+        .maybeSingle();
+      const senderNickname =
+        senderProfile?.nickname ||
+        currentUser.user_metadata?.nickname ||
+        currentUser.email ||
+        "알 수 없음";
+      await createNotification({ roomId: Number(roomId), receiverId: friend.id, senderId: currentUser.id, type: "room_invite", title: "🏠 방 초대", message: `${senderNickname} 님이 [${room.roomname}]에 초대했습니다`, link: `/rooms/${roomId}` });
       const { data: n } = await supabase.from("notifications").select("id").eq("type", "room_invite").eq("roomid", Number(roomId)).eq("senderid", currentUser.id).eq("receiverid", friend.id).order("createdat", { ascending: false }).limit(1).maybeSingle();
       setSentInvites(prev => [...prev, { notifId: n?.id, ...friend }]);
       setFriendList(prev => prev.filter(f => f.id !== friend.id));

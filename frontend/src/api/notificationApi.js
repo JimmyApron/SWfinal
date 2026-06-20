@@ -121,7 +121,7 @@ export async function createNotification({
 
   // 방 이름 추가 로직
   let finalMessage = message;
-  if (rId && !message.startsWith("[")) {
+  if (rId && type !== "room_invite" && !message.startsWith("[")) {
     try {
       const { data: roomData } = await supabase.from("rooms").select("roomname").eq("id", rId).single();
       if (roomData?.roomname) {
