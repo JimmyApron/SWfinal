@@ -17,7 +17,12 @@ function GuestLoginPage() {
   const [isRoomVerified, setIsRoomVerified] = useState(false)
 
   const [nickname, setNickname] = useState('')
-  const [message, setMessage] = useState('')
+  const [roomMessage, setRoomMessage] = useState('')
+  const [roomMessageType, setRoomMessageType] = useState('')
+  const [nicknameMessage, setNicknameMessage] = useState('')
+  const [nicknameMessageType, setNicknameMessageType] = useState('')
+  const [enterMessage, setEnterMessage] = useState('')
+  const [enterMessageType, setEnterMessageType] = useState('')
   const [isAvailable, setIsAvailable] = useState(false)
 
   const [existingMembers, setExistingMembers] = useState([])
@@ -65,7 +70,8 @@ function GuestLoginPage() {
     if (!trimmedInviteCode) return
 
     try {
-      setMessage('방 유효성 검사 중...')
+      setRoomMessage('방 유효성 검사 중...')
+      setRoomMessageType('info')
 
       const { data: roomData, error: roomError } = await supabase
         .from('rooms')
@@ -79,19 +85,22 @@ function GuestLoginPage() {
         setIsRoomVerified(false)
         setRoomRealId(null)
         setExistingMembers([])
-        setMessage('존재하지 않는 초대코드입니다.')
+        setRoomMessage('존재하지 않는 초대코드입니다.')
+        setRoomMessageType('error')
         return
       }
 
       setInviteCode(trimmedInviteCode)
       setRoomRealId(roomData.id)
       setIsRoomVerified(true)
-      setMessage('유효한 초대코드입니다.')
+      setRoomMessage('유효한 초대코드입니다.')
+      setRoomMessageType('success')
 
       await refreshParticipantList(trimmedInviteCode, roomData.id)
     } catch (error) {
       console.error(error)
-      setMessage('서버 통신 중 오류가 발생했습니다.')
+      setRoomMessage('서버 통신 중 오류가 발생했습니다.')
+      setRoomMessageType('error')
     }
   }
 
@@ -139,18 +148,21 @@ function GuestLoginPage() {
 
     if (!trimmedNickname) {
       setIsAvailable(false)
-      setMessage('닉네임을 입력해 주세요.')
+      setNicknameMessage('닉네임을 입력해 주세요.')
+      setNicknameMessageType('error')
       return
     }
 
     if (!trimmedInviteCode || !isRoomVerified) {
       setIsAvailable(false)
-      setMessage('먼저 초대코드를 확인해 주세요.')
+      setNicknameMessage('먼저 초대코드를 확인해 주세요.')
+      setNicknameMessageType('error')
       return
     }
 
     try {
-      setMessage('닉네임을 확인하고 있습니다...')
+      setNicknameMessage('닉네임을 확인하고 있습니다...')
+      setNicknameMessageType('info')
 
       const isDuplicate = await checkRoomNicknameDuplicateApi(
         trimmedNickname,
@@ -159,15 +171,18 @@ function GuestLoginPage() {
 
       if (isDuplicate) {
         setIsAvailable(false)
-        setMessage('이 방에 이미 존재하는 닉네임입니다.')
+        setNicknameMessage('이 방에 이미 존재하는 닉네임입니다.')
+        setNicknameMessageType('error')
       } else {
         setIsAvailable(true)
-        setMessage('사용 가능한 닉네임입니다.')
+        setNicknameMessage('사용 가능한 닉네임입니다.')
+        setNicknameMessageType('success')
       }
     } catch (error) {
       console.error(error)
       setIsAvailable(false)
-      setMessage('오류가 발생했습니다.')
+      setNicknameMessage('오류가 발생했습니다.')
+      setNicknameMessageType('error')
     }
   }
 
@@ -181,12 +196,14 @@ function GuestLoginPage() {
 
     if (!trimmedNickname) {
       setIsAvailable(false)
-      setMessage('닉네임을 입력해 주세요.')
+      setNicknameMessage('닉네임을 입력해 주세요.')
+      setNicknameMessageType('error')
       return
     }
 
     try {
-      setMessage('입장 정보를 확인하고 있습니다...')
+      setEnterMessage('입장 정보를 확인하고 있습니다...')
+      setEnterMessageType('info')
 
       const isDuplicateAtLastSecond = await checkRoomNicknameDuplicateApi(
         trimmedNickname,
@@ -195,13 +212,15 @@ function GuestLoginPage() {
 
       if (isDuplicateAtLastSecond) {
         setIsAvailable(false)
-        setMessage(
+        setEnterMessage(
           '앗! 방금 전 다른 유저가 이 닉네임을 먼저 사용했습니다. 다른 닉네임을 입력해 주세요.'
         )
+        setEnterMessageType('error')
         return
       }
 
-      setMessage('방에 입장하고 있습니다...')
+      setEnterMessage('방에 입장하고 있습니다...')
+      setEnterMessageType('info')
 
       const guestData = await insertRoomGuestApi(trimmedNickname, trimmedInviteCode)
 
@@ -216,7 +235,8 @@ function GuestLoginPage() {
       }, 1200)
     } catch (error) {
       console.error(error)
-      setMessage('입장에 실패했습니다.')
+      setEnterMessage('입장에 실패했습니다.')
+      setEnterMessageType('error')
     }
   }
 
@@ -251,11 +271,11 @@ function GuestLoginPage() {
                     setRoomRealId(null)
                     setIsAvailable(false)
                     setExistingMembers([])
+                    setRoomMessage('')
                   }} aria-label="초대코드" />
                   {!isRoomVerified && <button className="guest-button" type="submit">확인</button>}
                 </div>
-                {message && isRoomVerified && <p className="guest-message message-success">✓ {message}</p>}
-                {message && !isRoomVerified && inviteCode && <p className="guest-message message-error">{message}</p>}
+                {roomMessage && <p className={`guest-message message-${roomMessageType}`}>{roomMessage}</p>}
               </div>
             </div>
           </form>
@@ -274,11 +294,11 @@ function GuestLoginPage() {
                   <input className="guest-input" type="text" placeholder="사용할 닉네임 입력" value={nickname} disabled={!isRoomVerified} onChange={(e) => {
                     setNickname(e.target.value)
                     setIsAvailable(false)
+                    setNicknameMessage('')
                   }} aria-label="닉네임" />
                   <button className="guest-button" type="submit" disabled={!isRoomVerified}>중복 확인</button>
                 </div>
-                {message && isAvailable && <p className="guest-message message-success">✓ {message}</p>}
-                {message && !isAvailable && nickname && !isRoomVerified && <p className="guest-message message-error">{message}</p>}
+                {nicknameMessage && <p className={`guest-message message-${nicknameMessageType}`}>{nicknameMessage}</p>}
               </div>
             </div>
           </form>
@@ -294,6 +314,7 @@ function GuestLoginPage() {
               <button className="guest-submit-button" type="button" disabled={!isRoomVerified || !isAvailable} onClick={handleEnterRoom}>
                 <FaSignInAlt /> 방에 참여하기
               </button>
+              {enterMessage && <p className={`guest-message message-${enterMessageType}`}>{enterMessage}</p>}
             </div>
           </div>
         </section>
@@ -331,7 +352,6 @@ function GuestLoginPage() {
                     </div>
                     <span className={`badge ${member.type === '회원' ? 'badge-member' : 'badge-guest'}`}>{member.type}</span>
                     </div>
-
                   ))
                 )}
               </div>

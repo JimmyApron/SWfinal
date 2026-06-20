@@ -371,7 +371,7 @@ function RoomDetailPage() {
           <button onClick={() => setIsSidebarOpen(false)} style={{ alignSelf: "flex-end", background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>✕</button>
           <h3>방 설정</h3><hr/>
           <div style={{ textAlign: "center", marginBottom: "20px" }}>
-            <div style={{ width: "100px", height: "100px", borderRadius: "24px", margin: "0 auto", overflow: "hidden", border: "1px solid #ddd", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "40px" }}>
+            <div style={{ width: "100px", height: "100px", borderRadius: "24px", margin: "0 auto", overflow: "hidden", border: "1px solid #ddd", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "40px", backgroundColor: "#f3f4f6" }}>
               {room.roomimageurl ? <img src={room.roomimageurl} alt="방" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "🏠"}
             </div>
             {isCurrentUserHost && <label htmlFor="img-up" style={{ display: "block", marginTop: "8px", fontSize: "12px", cursor: "pointer", color: "#7C5CFF" }}>이미지 변경</label>}

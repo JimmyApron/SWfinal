@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { FaUserFriends } from "react-icons/fa";
 import { supabase } from "../../lib/supabaseClient";
 import { createRoomNotifications } from "../../api/notificationApi";
 import "./ChatTab.css";
@@ -1192,14 +1193,17 @@ function ChatTab({ roomId }) {
 
               <div className={`chat-row ${isMine ? "mine" : "other"}`}>
                 {!isMine && (
-                  <img
-                    className="chat-profile-image"
-                    src={
-                      message.profileimageurl ||
-                      "https://via.placeholder.com/40?text=?"
-                    }
-                    alt="프로필"
-                  />
+                  message.profileimageurl ? (
+                    <img
+                      className="chat-profile-image"
+                      src={message.profileimageurl}
+                      alt="프로필"
+                    />
+                  ) : (
+                    <div className="chat-profile-image-placeholder">
+                      <FaUserFriends size={20} />
+                    </div>
+                  )
                 )}
 
                 <div className="chat-message-box">
