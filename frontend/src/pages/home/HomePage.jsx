@@ -199,22 +199,12 @@ function HomePage() {
   useEffect(() => {
     if (!currentUser) return;
 
-    const reloadPending = async () => {
-      try {
-        const reqs = await getPendingRequests(currentUser.id);
-        setPendingRequests(reqs);
-      } catch (error) {
-        console.error("친구 요청 조회 실패:", error);
-      }
-    };
-
-    const reloadSent = async () => {
-      try {
-        const sent = await getSentRequests(currentUser.id);
-        setSentRequests(sent);
-      } catch (error) {
-        console.error("보낸 요청 조회 실패:", error);
-      }
+    // friends 테이블 변경(요청/수락/거절/삭제)이 생기면 친구 목록까지 한꺼번에 다시 불러온다.
+    // 받은/보낸 요청만 갱신하면 상대가 수락했을 때 "친구 목록"에는 바로 반영되지 않는 문제가 있었음.
+    const reloadAll = () => {
+      loadAll(currentUser.id).catch((error) =>
+        console.error("친구 목록 갱신 실패:", error)
+      );
     };
 
     const channel = supabase
@@ -227,7 +217,7 @@ function HomePage() {
           table: "friends",
           filter: `friendid=eq.${currentUser.id}`,
         },
-        reloadPending
+        reloadAll
       )
       .on(
         "postgres_changes",
@@ -237,7 +227,7 @@ function HomePage() {
           table: "friends",
           filter: `userid=eq.${currentUser.id}`,
         },
-        reloadSent
+        reloadAll
       )
       // friends 테이블 realtime이 안 잡힐 경우를 대비한 보조 트리거:
       // 친구 요청 시 항상 notifications에도 같이 INSERT되므로 이걸로도 갱신
@@ -250,7 +240,12 @@ function HomePage() {
           filter: `receiverid=eq.${currentUser.id}`,
         },
         (payload) => {
-          if (payload.new?.type === "friend_request") reloadPending();
+          if (
+            payload.new?.type === "friend_request" ||
+            payload.new?.type === "friend_accepted"
+          ) {
+            reloadAll();
+          }
         }
       )
       .subscribe((status) => {
@@ -260,7 +255,7 @@ function HomePage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser]);
+  }, [currentUser, loadAll]);
 
   const handleOpenFriendPanel = async () => {
     setShowFriendPanel(true);
