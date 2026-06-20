@@ -1,5 +1,4 @@
 import { supabase } from "../lib/supabaseClient";
-import { getVisibleNotifications } from "./notificationApi";
 
 function generateInviteCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -162,9 +161,10 @@ export async function getRooms(userId) {
   // 2. 안 읽은 알림 전체 조회 (receiverid === 본인, isread === false)
   const { data: notifications, error: notifError } = await supabase
     .from("notifications")
-    .select("roomid, createdat")
+    .select("roomid, createdat, issilent")
     .eq("receiverid", userId)
-    .eq("isread", false);
+    .eq("isread", false)
+    .or("issilent.is.null,issilent.eq.false");
 
   if (notifError) {
     console.error(notifError);
@@ -172,31 +172,47 @@ export async function getRooms(userId) {
   }
 
   // 3. 가시성 필터링 및 방별 unreadCount 집계 (Reduce 사용)
+  const latestNotificationAtMap = {};
   const unreadCountMap = (notifications || []).reduce((acc, notif) => {
     const myParticipation = memberData.find(m => Number(m.rooms.id) === Number(notif.roomid));
     
     // 가시성 규칙: 가입 시간(joinedat) 이후에 생성된 알림만 합산
     if (myParticipation && new Date(notif.createdat) >= new Date(myParticipation.joinedat)) {
       acc[notif.roomid] = (acc[notif.roomid] || 0) + 1;
+
+      const currentLatest = latestNotificationAtMap[notif.roomid];
+      if (!currentLatest || new Date(notif.createdat) > new Date(currentLatest)) {
+        latestNotificationAtMap[notif.roomid] = notif.createdat;
+      }
     }
     return acc;
   }, {});
 
   // 4. 데이터 결합 및 초기 정렬
   const rooms = memberData
-    .map((item) => ({
-      ...item.rooms,
-      unreadCount: unreadCountMap[item.rooms.id] || 0
-    }))
+    .map((item) => {
+      const latestNotificationAt = latestNotificationAtMap[item.rooms.id];
+      const roomActivityAt = item.rooms.lastactivityat || item.rooms.createdat;
+      const lastactivityat =
+        latestNotificationAt && new Date(latestNotificationAt) > new Date(roomActivityAt)
+          ? latestNotificationAt
+          : item.rooms.lastactivityat;
+
+      return {
+        ...item.rooms,
+        lastactivityat,
+        unreadCount: unreadCountMap[item.rooms.id] || 0
+      };
+    })
     .sort((a, b) => {
-      // 규칙 1순위: unreadCount 내림차순
-      if (b.unreadCount !== a.unreadCount) {
-        return b.unreadCount - a.unreadCount;
-      }
-      // 규칙 2순위: 최신 활동 시간(또는 생성일) 내림차순
+      // 최신 알림/활동 시간이 가장 최근인 방을 먼저 보여준다.
       const timeA = new Date(a.lastactivityat || a.createdat).getTime();
       const timeB = new Date(b.lastactivityat || b.createdat).getTime();
-      return timeB - timeA;
+      if (timeB !== timeA) {
+        return timeB - timeA;
+      }
+
+      return b.unreadCount - a.unreadCount;
     });
 
   return {

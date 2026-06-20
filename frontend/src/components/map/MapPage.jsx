@@ -582,6 +582,7 @@ function MapPage({ roomId }) {
     })
   }
 
+  // eslint-disable-next-line no-unused-vars
   const notifyDeparture = async () => {
     const senderName =
       members.find((member) => {
@@ -664,6 +665,36 @@ function MapPage({ roomId }) {
     setShowLocationRegisterModal(false)
     setTransportModePrompt({ location, isEdit: false, source: 'manual' })
     setMessage('')
+  }
+
+  const notifyMiddlePlaceConfirmed = async (placeName, scheduleId = selectedScheduleId) => {
+    if (!currentRoomId || !placeName) return
+
+    const message = `${placeName} 장소가 확정되었습니다.`
+    const link = `/rooms/${currentRoomId}?tab=location${scheduleId ? `&scheduleId=${scheduleId}` : ''}`
+
+    try {
+      await createRoomNotifications({
+        roomId: currentRoomId,
+        senderId: currentUserId || currentGuestId || localStorage.getItem('guest_id'),
+        type: 'middle_place_confirmed',
+        title: '📍 장소 확정',
+        message,
+        link,
+        includeSender: true,
+      })
+    } catch (error) {
+      console.error('장소 확정 알림 생성 실패:', error)
+    }
+
+    window.dispatchEvent(new CustomEvent('app-toast', {
+      detail: {
+        message,
+        link,
+        roomId: currentRoomId,
+        type: 'middle_place_confirmed',
+      },
+    }))
   }
 
   const handleSelectTransportMode = async (transportMode) => {
@@ -880,7 +911,6 @@ function MapPage({ roomId }) {
       }
 
       await loadMemberLocations()
-      await notifyDeparture()
 
       if (activeMeetingPlace) {
         await calculateAllMemberRoutesToMiddlePlace(activeMeetingPlace)
@@ -961,7 +991,7 @@ function MapPage({ roomId }) {
   const handleRequestLocation = async (member) => {
     try {
       if (!currentUserId && !currentGuestId) {
-        alert('로그인한 사용자만 위치 등록 요청을 보낼 수 있습니다.')
+        alert('로그인한 사용자만 장소 등록 요청을 보낼 수 있습니다.')
         return
       }
 
@@ -970,8 +1000,8 @@ function MapPage({ roomId }) {
           roomId: currentRoomId,
           guestId: member.guestid,
           type: 'location_request',
-          title: '위치 등록 요청',
-          message: '아직 위치를 등록하지 않았습니다. 위치를 등록해주세요!',
+          title: '장소 등록 요청',
+          message: '아직 장소를 등록하지 않았습니다. 장소를 등록해주세요!',
           link: `/rooms/${currentRoomId}?tab=location`,
         })
       } else {
@@ -980,16 +1010,16 @@ function MapPage({ roomId }) {
           receiverId: member.userid,
           senderId: currentUserId,
           type: 'location_request',
-          title: '위치 등록 요청',
-          message: '아직 위치를 등록하지 않았습니다. 위치를 등록해주세요!',
+          title: '장소 등록 요청',
+          message: '아직 장소를 등록하지 않았습니다. 장소를 등록해주세요!',
           link: `/rooms/${currentRoomId}?tab=location`,
         })
       }
 
-      alert(`${member.nickname || '상대방'}님에게 위치 등록 요청 알림을 보냈습니다.`)
+      alert(`${member.nickname || '상대방'}님에게 장소 등록 요청 알림을 보냈습니다.`)
     } catch (error) {
-      console.error('위치 등록 요청 알림 전송 실패:', error)
-      alert('위치 등록 요청 알림 전송에 실패했습니다.')
+      console.error('장소 등록 요청 알림 전송 실패:', error)
+      alert('장소 등록 요청 알림 전송에 실패했습니다.')
     }
   }
 
@@ -1060,7 +1090,7 @@ function MapPage({ roomId }) {
           status: 'approaching',
         })
 
-        await createRoomNotifications({
+        void ({
           roomId: currentRoomId,
           senderId: currentUserId || currentGuestId,
           type: 'arrival_approaching',
@@ -1093,7 +1123,7 @@ function MapPage({ roomId }) {
           locationError: null,
         })
 
-        await createRoomNotifications({
+        void ({
           roomId: currentRoomId,
           senderId: currentUserId || currentGuestId,
           type: 'arrival_completed',
@@ -1325,7 +1355,7 @@ function MapPage({ roomId }) {
         scheduleLocation,
         true
       )
-      
+
       const confirmedPlace = {
         ...place,
         name: scheduleLocation.placename,
@@ -1352,11 +1382,11 @@ function MapPage({ roomId }) {
       setHasMiddleRecommendationResults(false)
       setMemberRouteResults([])
       setMemberRoutePaths([])
-      
+
       const schedules = await getRoomConfirmedSchedules(currentRoomId)
       const nextSchedules = replaceScheduleInList(schedules, updatedSchedule)
       setRoomConfirmedSchedules(nextSchedules)
-      
+
       // 날짜가 없는 일정인 경우 날짜 설정 유도 모달 표시
       const targetSchedule = nextSchedules.find(
         (schedule) => Number(schedule.id) === Number(selectedScheduleId)
@@ -1365,7 +1395,8 @@ function MapPage({ roomId }) {
         setCreatedLocationOnlySchedule(targetSchedule)
       }
 
-      setMessage(`${targetSchedule?.title || '일정'}의 만날 장소로 저장했어요.`)
+      setMessage(`${targetSchedule?.title || '일정'}의 만날 위치로 저장했어요.`)
+      await notifyMiddlePlaceConfirmed(place.name, selectedScheduleId)
       await calculateAllMemberRoutesToMiddlePlace(confirmedPlace)
 
     } catch (error) {
@@ -1379,15 +1410,15 @@ function MapPage({ roomId }) {
 
     try {
       await applyConfirmedLocationToSchedule(scheduleId, pendingMiddleLocation, true)
-      
+
       const schedules = await getRoomConfirmedSchedules(currentRoomId)
       setRoomConfirmedSchedules(schedules)
       setSelectedScheduleId(scheduleId)
-      
+
       const targetSchedule = schedules.find(
         (schedule) => Number(schedule.id) === Number(scheduleId)
       )
-      
+
       // 만날 장소로 즉시 반영
       const confirmedPlace = {
         name: pendingMiddleLocation.placename,
@@ -1404,15 +1435,16 @@ function MapPage({ roomId }) {
       setDestination(confirmedPlace)
       setPlaces([confirmedPlace])
       setHasMiddleRecommendationResults(false)
-      
+
       setPendingMiddleLocation(null)
       setAppointmentTitle('')
-      
+
       if (targetSchedule && !targetSchedule.date) {
         setCreatedLocationOnlySchedule(targetSchedule)
       }
-      
-      setMessage('선택한 일정에 만날 장소를 저장했습니다.')
+
+      setMessage('선택한 일정에 만날 위치를 저장했습니다.')
+      await notifyMiddlePlaceConfirmed(pendingMiddleLocation.placename, scheduleId)
       await calculateAllMemberRoutesToMiddlePlace(confirmedPlace)
     } catch (error) {
       setMessage(`일정 장소 저장 실패: ${error.message}`)
@@ -1432,14 +1464,14 @@ function MapPage({ roomId }) {
         true,
         appointmentTitle
       )
-      
+
       setPendingMiddleLocation(null)
       setAppointmentTitle('')
-      
+
       const schedules = await getRoomConfirmedSchedules(currentRoomId)
       setRoomConfirmedSchedules(schedules)
       setSelectedScheduleId(schedule.id)
-      
+
       // 즉시 UI 반영
       const confirmedPlace = {
         name: schedule.location,
@@ -1450,7 +1482,7 @@ function MapPage({ roomId }) {
         isConfirmedMiddlePlace: true,
         scheduleid: schedule.id,
       }
-      
+
       setMiddlePlace(confirmedPlace)
       setSelectedPlace(confirmedPlace)
       setDestination(confirmedPlace)
@@ -1461,7 +1493,16 @@ function MapPage({ roomId }) {
         ...schedule,
         isLocationOnly: true,
       })
-      
+
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: {
+          message: `${schedule.location || pendingMiddleLocation.placename} 장소가 확정되었습니다.`,
+          link: `/rooms/${currentRoomId}?tab=location`,
+          roomId: currentRoomId,
+          type: 'middle_place_confirmed',
+        },
+      }))
+
       await calculateAllMemberRoutesToMiddlePlace(confirmedPlace)
     } catch (error) {
       setMessage(`일정 생성 실패: ${error.message}`)
@@ -1661,7 +1702,30 @@ function MapPage({ roomId }) {
         ...schedule,
         isLocationOnly: true,
       })
-      setMessage(`${schedule.title} 일정을 만들었어요. 이제 만날 장소를 정해 주세요.`)
+      const scheduleMessage = `${schedule.title || newScheduleTitle} 일정의 장소를 정할 수 있어요.`
+      const scheduleLink = `/rooms/${currentRoomId}?tab=location&scheduleId=${schedule.id}`
+      try {
+        await createRoomNotifications({
+          roomId: currentRoomId,
+          senderId: currentUserId || currentGuestId || localStorage.getItem('guest_id'),
+          type: 'location_schedule_created',
+          title: '📍 장소 일정 추가',
+          message: scheduleMessage,
+          link: scheduleLink,
+          includeSender: true,
+        })
+      } catch (notificationError) {
+        console.error('장소 일정 추가 알림 생성 실패:', notificationError)
+      }
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: {
+          message: scheduleMessage,
+          link: scheduleLink,
+          roomId: currentRoomId,
+          type: 'location_schedule_created',
+        },
+      }))
+      setMessage(`${schedule.title} 일정을 만들었어요. 이제 만날 위치를 정해 주세요.`)
     } catch (error) {
       setNewScheduleTitleError(error.message)
     }
@@ -2114,10 +2178,10 @@ function MapPage({ roomId }) {
       )}
 
       {/* 상단 일정 선택 스위처 */}
-      <div className="location-top-selector" style={{ 
-        padding: '16px', 
-        backgroundColor: 'var(--card-bg)', 
-        borderRadius: '16px', 
+      <div className="location-top-selector" style={{
+        padding: '16px',
+        backgroundColor: 'var(--card-bg)',
+        borderRadius: '16px',
         marginBottom: '16px',
         boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
         border: '1px solid var(--border-color)'
@@ -2127,12 +2191,12 @@ function MapPage({ roomId }) {
           <button
             type="button"
             onClick={() => setShowNewScheduleModal(true)}
-            style={{ 
-              padding: '6px 12px', 
-              fontSize: '13px', 
-              backgroundColor: '#7c79ff', 
-              color: 'white', 
-              border: 'none', 
+            style={{
+              padding: '6px 12px',
+              fontSize: '13px',
+              backgroundColor: '#7c79ff',
+              color: 'white',
+              border: 'none',
               borderRadius: '8px',
               cursor: 'pointer'
             }}
@@ -2216,8 +2280,8 @@ function MapPage({ roomId }) {
               >
                 취소
               </button>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={handleCreateDraftSchedule}
                 style={{ flex: 1, padding: '12px', borderRadius: '10px', border: 'none', backgroundColor: '#7c79ff', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}
               >
@@ -2239,12 +2303,12 @@ function MapPage({ roomId }) {
               <button
                 type="button"
                 onClick={() => handleSelectTransportMode('car')}
-                style={{ 
-                  padding: '14px', 
-                  borderRadius: '12px', 
-                  border: '1px solid var(--border-color)', 
-                  backgroundColor: 'white', 
-                  color: 'var(--text-color)', 
+                style={{
+                  padding: '14px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: 'white',
+                  color: 'var(--text-color)',
                   fontWeight: 'bold',
                   fontSize: '15px',
                   cursor: 'pointer',
@@ -2259,12 +2323,12 @@ function MapPage({ roomId }) {
               <button
                 type="button"
                 onClick={() => handleSelectTransportMode('transit')}
-                style={{ 
-                  padding: '14px', 
-                  borderRadius: '12px', 
-                  border: '1px solid var(--border-color)', 
-                  backgroundColor: 'white', 
-                  color: 'var(--text-color)', 
+                style={{
+                  padding: '14px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: 'white',
+                  color: 'var(--text-color)',
                   fontWeight: 'bold',
                   fontSize: '15px',
                   cursor: 'pointer',
@@ -2279,11 +2343,11 @@ function MapPage({ roomId }) {
               <button
                 type="button"
                 onClick={() => setTransportModePrompt(null)}
-                style={{ 
+                style={{
                   marginTop: '10px',
-                  padding: '10px', 
-                  backgroundColor: 'transparent', 
-                  color: 'var(--secondary-text)', 
+                  padding: '10px',
+                  backgroundColor: 'transparent',
+                  color: 'var(--secondary-text)',
                   border: 'none',
                   fontSize: '13px',
                   cursor: 'pointer',

@@ -315,13 +315,22 @@ export const getRoomMembersByInviteCodeApi = async (inviteCode) => {
 
     if (roomError || !room) return []
 
+    // 수정된 부분: profiles 테이블과 join하여 profileimageurl 가져오기
     const { data, error } = await supabase
       .from('room_members')
-      .select('nickname')
+      .select(`
+        nickname,
+        profiles(profileimageurl)
+      `)
       .eq('roomid', room.id)
 
     if (error) throw error
-    return data || []
+    
+    // 데이터 포맷 변경하여 반환 (profiles 데이터 구조 평탄화)
+    return data.map(m => ({
+        nickname: m.nickname,
+        profileimageurl: m.profiles?.profileimageurl || null
+    })) || []
   } catch (error) {
     console.error('방 회원 목록 조회 중 오류 발생:', error.message)
     throw error

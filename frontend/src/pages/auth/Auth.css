@@ -1,0 +1,113 @@
+/* 공통 인증 페이지 스타일 */
+.auth-container {
+  min-height: 100vh;
+  background-color: #ffffff;
+  padding: 24px;
+  box-sizing: border-box;
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.auth-back-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  color: #16142B;
+}
+
+.auth-title {
+  margin: 0 0 12px;
+  font-size: 28px;
+  font-weight: 800;
+  color: #16142B;
+}
+
+.auth-description {
+  margin: 0 0 36px;
+  font-size: 14px;
+  color: #6B687A;
+}
+
+.auth-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: #16142B;
+  margin-bottom: 8px;
+}
+
+.auth-input {
+  width: 100%;
+  padding: 15px;
+  border: 1px solid #E7E3F2;
+  border-radius: 14px;
+  font-size: 15px;
+  color: #16142B;
+  box-sizing: border-box;
+  margin-bottom: 16px;
+  outline: none;
+}
+
+.auth-input:focus {
+  border-color: #6842F7;
+}
+
+.auth-button-primary {
+  width: 100%;
+  padding: 16px;
+  background-color: #6842F7;
+  border: none;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+
+.auth-button-primary:disabled {
+  background-color: #a78bfa;
+  cursor: not-allowed;
+}
+
+.auth-button-secondary {
+  padding: 15px;
+  background-color: #ffffff;
+  border: 1px solid #E7E3F2;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #16142B;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.auth-message {
+  margin: 16px 0 0;
+  font-size: 13px;
+  color: #6B687A;
+  text-align: center;
+}
+
+.auth-divider-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 32px 0;
+}
+
+.auth-divider-line {
+  flex: 1;
+  height: 1px;
+  background-color: #E7E3F2;
+}
+
+.auth-divider-text {
+  font-size: 13px;
+  color: #6B687A;
+  white-space: nowrap;
+}

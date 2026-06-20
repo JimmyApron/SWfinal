@@ -28,6 +28,7 @@ import {
 import { getTopAvailableTimes, sortAvailableTimes, getTopConsecutiveDays, getTodayStr } from "../../utils/scheduleUtils";
 import KakaoMapView from "../../components/map/KakaoMapView";
 import LocationPicker from "../../components/map/LocationPicker";
+import { createRoomNotifications } from "../../api/notificationApi";
 
 function VoteDetailPage() {
   const { roomid, voteid } = useParams();
@@ -754,6 +755,11 @@ function VoteDetailPage() {
         return;
       }
 
+      await notifyLocationConfirmed(
+        result.confirmedLocation,
+        result.confirmedLocation.scheduleid
+      );
+
       const scheduleTitle = vote.confirmed_schedules?.title || "대상 일정";
 
       if (!vote.confirmed_schedules?.date) {
@@ -771,6 +777,49 @@ function VoteDetailPage() {
     }
   };
 
+  const notifyLocationConfirmed = async (location, scheduleId = null) => {
+    const placeName = location?.placename || location?.optiontext || "장소";
+    const message = `${placeName} 장소가 확정되었습니다.`;
+    const link = `/rooms/${roomid}?tab=location${scheduleId ? `&scheduleId=${scheduleId}` : ""}`;
+
+    try {
+      await createRoomNotifications({
+        roomId: Number(roomid),
+        senderId: currentUser?.id || localStorage.getItem("guest_id"),
+        type: "middle_place_confirmed",
+        title: "📍 장소 확정",
+        message,
+        link,
+        includeSender: true,
+      });
+    } catch (error) {
+      console.error("장소 확정 알림 생성 실패:", error);
+    }
+
+    window.dispatchEvent(new CustomEvent("app-toast", {
+      detail: {
+        message,
+        link,
+        roomId: Number(roomid),
+        type: "middle_place_confirmed",
+      },
+    }));
+  };
+
+  const showLocationConfirmedToast = (location, scheduleId = null) => {
+    const placeName = location?.placename || location?.optiontext || "장소";
+    const link = `/rooms/${roomid}?tab=location${scheduleId ? `&scheduleId=${scheduleId}` : ""}`;
+
+    window.dispatchEvent(new CustomEvent("app-toast", {
+      detail: {
+        message: `${placeName} 장소가 확정되었습니다.`,
+        link,
+        roomId: Number(roomid),
+        type: "middle_place_confirmed",
+      },
+    }));
+  };
+
   const handleApplyLocationToSchedule = async (scheduleId) => {
     try {
       await applyConfirmedLocationToSchedule(
@@ -780,6 +829,7 @@ function VoteDetailPage() {
         true,
         isManualLocationVote ? null : pendingLocationKind
       );
+      await notifyLocationConfirmed(pendingConfirmedLocation, scheduleId);
       await loadVote();
       setShowScheduleModal(false);
       setPendingConfirmedLocation(null);
@@ -876,6 +926,7 @@ function VoteDetailPage() {
           true,
           isManualLocationVote ? null : pendingLocationKind
         );
+        await notifyLocationConfirmed(pendingConfirmedLocation, schedule.id);
       }
       setShowNewScheduleConfirmModal(false);
       setShowScheduleModal(false);
@@ -892,12 +943,13 @@ function VoteDetailPage() {
   const handleScheduleConfirmNow = async () => {
     try {
       if (pendingConfirmedLocation) {
-        await createLocationOnlyConfirmedSchedule(
+        const schedule = await createLocationOnlyConfirmedSchedule(
           pendingConfirmedLocation,
           pendingLocationKind === "middle",
           appointmentTitle.trim(),
           isManualLocationVote ? null : pendingLocationKind
         );
+        showLocationConfirmedToast(pendingConfirmedLocation, schedule?.id);
       } else {
         await createDraftConfirmedSchedule(Number(roomid), appointmentTitle.trim());
       }

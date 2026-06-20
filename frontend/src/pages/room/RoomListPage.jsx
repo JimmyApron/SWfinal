@@ -105,13 +105,14 @@ function RoomListPage() {
     if (pinA) return -1;
     if (pinB) return 1;
 
-    // 3. 둘 다 고정 안 된 경우: 기존 카톡 방식 정렬 (1: unreadCount, 2: time)
-    if ((b.unreadCount || 0) !== (a.unreadCount || 0)) {
-      return (b.unreadCount || 0) - (a.unreadCount || 0);
-    }
+    // 3. 둘 다 고정 안 된 경우: 최신 알림/활동 시간이 우선
     const tA = new Date(a.lastactivityat || a.createdat).getTime();
     const tB = new Date(b.lastactivityat || b.createdat).getTime();
-    return tB - tA;
+    if (tB !== tA) {
+      return tB - tA;
+    }
+
+    return (b.unreadCount || 0) - (a.unreadCount || 0);
   });
 
   useEffect(() => {
@@ -153,6 +154,9 @@ function RoomListPage() {
         (payload) => {
           if (payload.eventType === "INSERT") {
             const newNotif = payload.new;
+            if (newNotif.issilent === true) {
+              return;
+            }
             if (newNotif.roomid) {
               setRooms((prevRooms) => {
                 const targetIdx = prevRooms.findIndex(r => String(r.id) === String(newNotif.roomid));

@@ -476,16 +476,21 @@ export async function createLocationOnlyConfirmedSchedule(
   try {
     const { data: userData } = await supabase.auth.getUser();
     const placeName = location.placename ? `'${location.placename}' ` : "";
+    const senderId =
+      userData.user?.id ||
+      (typeof localStorage !== "undefined" ? localStorage.getItem("guest_id") : null);
+
     await createRoomNotifications({
       roomId: location.roomid,
-      senderId: userData.user?.id,
-      type: "schedule_confirmed",
-      title: "🗓️ 일정 확정",
+      senderId,
+      type: "middle_place_confirmed",
+      title: "📍 장소 확정",
       message: `방에 ${placeName}장소가 확정되었습니다.`,
-      link: `/rooms/${location.roomid}?tab=schedule`,
+      link: `/rooms/${location.roomid}?tab=location`,
+      includeSender: true,
     });
   } catch (notifError) {
-    console.error("일정 확정 알림 생성 실패:", notifError);
+    console.error("장소 확정 알림 생성 실패:", notifError);
   }
 
   return data;

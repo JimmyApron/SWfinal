@@ -25,15 +25,15 @@ export const sendVoteNotification = async ({
     const typeLabel =
       votetype === "schedule"
         ? "일정"
-        : votetype === "location"
-        ? "중간 장소"
+      : votetype === "location"
+        ? "장소"
         : "일반";
 
     const typeTitle =
       votetype === "schedule"
         ? "📅 일정 투표"
-        : votetype === "location"
-        ? "📍 중간 장소 투표"
+      : votetype === "location"
+        ? "📍 장소 투표"
         : "🗳️ 일반 투표";
 
     let isUrgent = false;
@@ -104,10 +104,10 @@ export const sendVoteClosedNotification = async ({
     const rId = Number(roomid);
     if (!rId || !voteid) return;
 
-    // createRoomNotifications 내부에서 방 이름을 조회하지 않으므로, 
+    // createRoomNotifications 내부에서 방 이름을 조회하지 않으므로,
     // 메시지 구성을 위해 필요한 경우 여기서 조회하거나 일반적인 문구 사용
     // 여기서는 type에 따른 설정을 적용하기 위해 createRoomNotifications 호출
-    
+
     await createRoomNotifications({
       roomId: rId,
       senderId: null, // 마감 알림은 시스템 성격이므로 senderId를 null로 하거나 senderId 유지

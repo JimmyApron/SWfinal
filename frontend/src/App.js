@@ -10,6 +10,7 @@ import BottomNav from "./components/BottomNav";
 import InviteCodePage from "./pages/auth/InviteCodePage";
 import LoginPage from "./pages/auth/LoginPage";
 import SignupPage from "./pages/auth/SignupPage";
+import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
 import GuestLoginPage from "./pages/auth/GuestLoginPage";
 
 import HomePage from "./pages/home/HomePage";
@@ -37,6 +38,47 @@ import SettingsPage from "./pages/settings/SettingsPage";
 import SettingEditPage from "./pages/settings/SettingEditPage";
 
 const AUTH_PATHS = ["/", "/login", "/signup", "/guest"];
+
+const NOTIFICATION_SETTING_COLUMNS = {
+  schedule_confirmed: "schedulenotifenabled",
+  schedule_cancelled: "schedulenotifenabled",
+  schedule_new: "schedulenotifenabled",
+  schedule_request: "schedulenotifenabled",
+  location_request: "locationnotifenabled",
+  middle_place_confirmed: "locationnotifenabled",
+  location_schedule_created: "locationnotifenabled",
+  vote_new: "votenotifenabled",
+  vote_closed: "votenotifenabled",
+  vote_reminder: "votenotifenabled",
+  chat_new: "chatnotifenabled",
+};
+
+async function isRoomNotificationPopupAllowed(roomId, type) {
+  const settingColumn = NOTIFICATION_SETTING_COLUMNS[type];
+  if (!roomId || !settingColumn) return true;
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user?.id) {
+    const { data } = await supabase
+      .from("room_members")
+      .select(settingColumn)
+      .eq("roomid", Number(roomId))
+      .eq("userid", user.id)
+      .maybeSingle();
+    return data?.[settingColumn] !== false;
+  }
+
+  const guestId = localStorage.getItem("guest_id");
+  if (!guestId) return true;
+
+  const { data } = await supabase
+    .from("room_guests")
+    .select(settingColumn)
+    .eq("roomid", Number(roomId))
+    .eq("id", guestId)
+    .maybeSingle();
+  return data?.[settingColumn] !== false;
+}
 
 function Layout({ children }) {
   const location = useLocation();
@@ -73,6 +115,26 @@ function NotificationListener() {
   useEffect(() => {
     locationRef.current = location;
   }, [location]);
+
+  useEffect(() => {
+    const handleAppToast = async (event) => {
+      const nextToast = event.detail;
+      if (!nextToast?.message) return;
+
+      const isGlobalPopupEnabled = localStorage.getItem("global_popup_enabled") !== "false";
+      const mutedRooms = JSON.parse(localStorage.getItem("muted_rooms") || "[]");
+      const isRoomMuted = nextToast.roomId && mutedRooms.some(id => String(id) === String(nextToast.roomId));
+      const isSettingAllowed = await isRoomNotificationPopupAllowed(nextToast.roomId, nextToast.type);
+
+      if (!isGlobalPopupEnabled || isRoomMuted || !isSettingAllowed) return;
+
+      setToast({ message: nextToast.message, link: nextToast.link });
+      setTimeout(() => setToast(null), 4000);
+    };
+
+    window.addEventListener("app-toast", handleAppToast);
+    return () => window.removeEventListener("app-toast", handleAppToast);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -132,7 +194,8 @@ function NotificationListener() {
                 schedule_cancelled: "schedule",
                 schedule_new: "schedule",
                 location_request: "location",
-                member_departed: "location"
+                middle_place_confirmed: "location",
+                location_schedule_created: "location"
               };
 
               const targetTab = typeToTabMap[notif.type];
@@ -150,7 +213,7 @@ function NotificationListener() {
                 notif.issilent !== true && 
                 isGlobalPopupEnabled && 
                 !isRoomMuted && 
-                (!isLookingAtRelevantTab || notif.type === "kick");
+                (!isLookingAtRelevantTab || notif.type === "kick" || notif.type === "schedule_confirmed" || notif.type === "middle_place_confirmed" || notif.type === "location_schedule_created");
 
               if (showToast) {
                 console.log("✅ [App.js] Toast 표시함");
@@ -224,6 +287,7 @@ function App() {
               <Route path="/" element={<InviteCodePage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/guest" element={<GuestLoginPage />} />
               <Route path="/home" element={<HomePage />} />
               <Route path="/rooms/create" element={<RoomCreatePage />} />

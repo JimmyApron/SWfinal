@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FiBell, FiCamera, FiImage, FiUser } from "react-icons/fi";
 import { supabase } from "../../lib/supabaseClient";
@@ -510,6 +510,8 @@ function ChatTab({ roomId }) {
   const [isEditingPinnedMessage, setIsEditingPinnedMessage] = useState(false);
   const [pinnedMessageDraft, setPinnedMessageDraft] = useState("");
   const [previewImageUrl, setPreviewImageUrl] = useState("");
+  const [participants, setParticipants] = useState(new Map());
+  const [hiddenParticipantCutoffs, setHiddenParticipantCutoffs] = useState(new Map());
 
   const bottomRef = useRef(null);
   const messageListRef = useRef(null);
@@ -519,6 +521,132 @@ function ChatTab({ roomId }) {
   const sheetRef = useRef(null);
   const dragStartY = useRef(null);
   const isDragging = useRef(false);
+
+  const hiddenCutoffsStorageKey = roomId ? `hidden_chat_participants_${roomId}` : null;
+
+  useEffect(() => {
+    if (!hiddenCutoffsStorageKey) {
+      setHiddenParticipantCutoffs(new Map());
+      return;
+    }
+
+    try {
+      const saved = JSON.parse(localStorage.getItem(hiddenCutoffsStorageKey) || "{}");
+      setHiddenParticipantCutoffs(new Map(Object.entries(saved)));
+    } catch {
+      setHiddenParticipantCutoffs(new Map());
+    }
+  }, [hiddenCutoffsStorageKey]);
+
+  const rememberHiddenParticipantCutoff = useCallback((participantId, hiddenUntil) => {
+    if (!participantId || !hiddenUntil) return;
+
+    setHiddenParticipantCutoffs((prev) => {
+      const current = prev.get(String(participantId));
+      if (current && new Date(current).getTime() >= new Date(hiddenUntil).getTime()) {
+        return prev;
+      }
+
+      const next = new Map(prev);
+      next.set(String(participantId), hiddenUntil);
+
+      if (hiddenCutoffsStorageKey) {
+        localStorage.setItem(
+          hiddenCutoffsStorageKey,
+          JSON.stringify(Object.fromEntries(next))
+        );
+      }
+
+      return next;
+    });
+  }, [hiddenCutoffsStorageKey]);
+
+  const rememberHiddenCutoffsFromMessages = useCallback((messageRows) => {
+    (messageRows || []).forEach((message) => {
+      const meta = getMessageMeta(message.content);
+      if (meta?.__type !== "participant_removed" || !meta.participantId) return;
+
+      rememberHiddenParticipantCutoff(
+        meta.participantId,
+        meta.changedAt || message.createdat
+      );
+    });
+  }, [rememberHiddenParticipantCutoff]);
+
+  useEffect(() => {
+    if (!roomId) return;
+    const fetchParticipants = async () => {
+      const [{ data: members }, { data: guests }] = await Promise.all([
+        supabase.from("room_members").select("userid, joinedat").eq("roomid", Number(roomId)),
+        supabase.from("room_guests").select("id, createdat").eq("roomid", Number(roomId))
+      ]);
+      const pMap = new Map([
+        ...(members || []).map(m => [String(m.userid), m.joinedat]),
+        ...(guests || []).map(g => [String(g.id), g.createdat])
+      ]);
+      setParticipants(pMap);
+    };
+    fetchParticipants();
+
+    const handleLocalParticipantsChanged = (event) => {
+      if (Number(event.detail?.roomId) !== Number(roomId)) return;
+      if (event.detail?.participantId) {
+        const participantId = String(event.detail.participantId);
+        const hiddenUntil = event.detail.changedAt || new Date().toISOString();
+
+        setParticipants((prev) => {
+          const next = new Map(prev);
+          next.delete(participantId);
+          return next;
+        });
+        rememberHiddenParticipantCutoff(participantId, hiddenUntil);
+      }
+      fetchParticipants();
+    };
+
+    window.addEventListener("roomParticipantsChanged", handleLocalParticipantsChanged);
+
+    const channelSuffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const memberChannel = supabase
+      .channel(`room-members-${roomId}-${channelSuffix}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "room_members", filter: `roomid=eq.${roomId}` },
+        fetchParticipants
+      )
+      .subscribe();
+
+    const guestChannel = supabase
+      .channel(`room-guests-${roomId}-${channelSuffix}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "room_guests", filter: `roomid=eq.${roomId}` },
+        fetchParticipants
+      )
+      .subscribe();
+
+    const participantDeleteChannel = supabase
+      .channel(`room-participant-deletes-${roomId}-${channelSuffix}`)
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "room_members" },
+        fetchParticipants
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "room_guests" },
+        fetchParticipants
+      )
+      .subscribe();
+
+    return () => {
+      window.removeEventListener("roomParticipantsChanged", handleLocalParticipantsChanged);
+      supabase.removeChannel(memberChannel);
+      supabase.removeChannel(guestChannel);
+      supabase.removeChannel(participantDeleteChannel);
+    };
+  }, [roomId, hiddenCutoffsStorageKey, rememberHiddenParticipantCutoff]);
 
   useEffect(() => {
     let cancelled = false;
@@ -611,7 +739,9 @@ function ChatTab({ roomId }) {
         return;
       }
 
-      setMessages(data || []);
+      const nextMessages = data || [];
+      rememberHiddenCutoffsFromMessages(nextMessages);
+      setMessages(nextMessages);
     };
 
     fetchMessages();
@@ -627,6 +757,7 @@ function ChatTab({ roomId }) {
           filter: `roomid=eq.${roomId}`,
         },
         (payload) => {
+          rememberHiddenCutoffsFromMessages([payload.new]);
           setMessages((prev) => {
             if (prev.some((m) => m.id === payload.new.id)) return prev;
             return [...prev, payload.new];
@@ -654,7 +785,7 @@ function ChatTab({ roomId }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [roomId]);
+  }, [roomId, rememberHiddenCutoffsFromMessages]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -823,6 +954,7 @@ function ChatTab({ roomId }) {
 
   const canDelete = (message) => {
     if (!currentUser || message.userid !== currentUser.id) return false;
+    if (!isKnownParticipantForMessage(message)) return false;
     if (isDeletedMsg(message.content)) return false;
 
     try {
@@ -849,6 +981,26 @@ function ChatTab({ roomId }) {
     if (isDeletedMsg(message.content)) return false;
 
     return !!getPinnableText(message).trim();
+  };
+
+  const isKnownParticipantForMessage = (message) => {
+    if (!message.userid) return true;
+
+    const participantId = String(message.userid);
+    const hiddenUntil = hiddenParticipantCutoffs.get(participantId);
+    if (
+      hiddenUntil &&
+      message.createdat &&
+      new Date(message.createdat).getTime() <= new Date(hiddenUntil).getTime()
+    ) {
+      return false;
+    }
+
+    const joinedAt = participants.get(participantId);
+    if (!joinedAt) return false;
+    if (!message.createdat) return true;
+
+    return new Date(message.createdat).getTime() >= new Date(joinedAt).getTime();
   };
 
   const deleteMessage = async (messageId) => {
@@ -1359,6 +1511,7 @@ function ChatTab({ roomId }) {
           const meta = getMessageMeta(message.content);
 
           if (meta?.__type === "pin_event") return null;
+          if (meta?.__type === "participant_removed") return null;
 
           if (isDeletedMsg(message.content) && !message.imageurl) {
             return (
@@ -1369,12 +1522,14 @@ function ChatTab({ roomId }) {
             );
           }
 
+          const isParticipant = isKnownParticipantForMessage(message);
           const myId = currentUser?.id;
           const isMine = !!(
             myId &&
             myId !== "guest" &&
             message.userid &&
-            message.userid === myId
+            message.userid === myId &&
+            isParticipant
           );
           const deletable = canDelete(message);
           const editable = canEdit(message);
@@ -1387,7 +1542,7 @@ function ChatTab({ roomId }) {
 
               <div className={`chat-row ${isMine ? "mine" : "other"}`}>
                 {!isMine && (
-                  message.profileimageurl ? (
+                  (isParticipant && message.profileimageurl) ? (
                     <img
                       className="chat-profile-image"
                       src={message.profileimageurl}
@@ -1405,7 +1560,7 @@ function ChatTab({ roomId }) {
 
                 <div className="chat-message-box">
                   {!isMine && (
-                    <div className="chat-nickname">{message.nickname}</div>
+                    <div className="chat-nickname">{isParticipant ? message.nickname : "(알 수 없음)"}</div>
                   )}
 
                   <div className={`chat-bubble-line ${isMine ? "mine" : "other"}`}>

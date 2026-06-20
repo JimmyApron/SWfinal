@@ -17,6 +17,7 @@ const TYPE_SETTING_MAP = {
   arrival_approaching: "locationnotifenabled",
   arrival_completed: "locationnotifenabled",
   middle_place_confirmed: "locationnotifenabled",
+  location_schedule_created: "locationnotifenabled",
   chat_new: "chatnotifenabled",
   room_invite: "roomnotifenabled",
   room_invite_accepted: "roomnotifenabled",
@@ -162,7 +163,7 @@ export async function createGuestNotification({
   roomId,
   guestId,
   type = "location_request",
-  title = "위치 등록 요청",
+  title = "장소 등록 요청",
   message,
   link,
 }) {
@@ -188,6 +189,7 @@ export async function createRoomNotifications({
   message,
   link,
   targetUserIds,
+  includeSender = false,
 }) {
   if (!roomId) throw new Error("roomId가 필요합니다.");
 
@@ -208,7 +210,7 @@ export async function createRoomNotifications({
 
   if (targetUserIds && targetUserIds.length > 0) {
     targetReceivers = targetUserIds
-      .filter((id) => id && String(id) !== String(senderId))
+      .filter((id) => id && (includeSender || String(id) !== String(senderId)))
       .map((id) => ({ receiverid: String(id) }));
   } else {
     const [{ data: members }, { data: guests }] = await Promise.all([
@@ -217,11 +219,11 @@ export async function createRoomNotifications({
     ]);
 
     const memberIds = (members || [])
-      .filter((m) => m.userid && String(m.userid) !== String(senderId))
+      .filter((m) => m.userid && (includeSender || String(m.userid) !== String(senderId)))
       .map((m) => ({ receiverid: String(m.userid) }));
 
     const guestIds = (guests || [])
-      .filter((g) => g.id && String(g.id) !== String(senderId))
+      .filter((g) => g.id && (includeSender || String(g.id) !== String(senderId)))
       .map((g) => ({ receiverid: String(g.id) }));
 
     targetReceivers = [...memberIds, ...guestIds];
@@ -385,7 +387,7 @@ export async function getMyGuestNotifications(guestId) {
 
 export const TAB_TYPE_MAP = {
   schedule: ["schedule_confirmed", "schedule_cancelled", "schedule_new", "schedule_request"],
-  location: ["location_request", "member_departed", "arrival_approaching", "arrival_completed", "middle_place_confirmed"],
+  location: ["location_request", "middle_place_confirmed", "location_schedule_created"],
   vote: ["vote_closed", "vote_reminder", "vote_new"],
   chat: ["chat_new"],
 };

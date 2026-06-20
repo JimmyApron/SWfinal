@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { FiUser } from "react-icons/fi";
 
 import { supabase } from "../../lib/supabaseClient";
-import { 
-  transferRoomOwnership, 
-  updateRoomNameApi, 
+import {
+  transferRoomOwnership,
+  updateRoomNameApi,
   updateRoomImageApi,
-  kickParticipantApi 
+  kickParticipantApi
 } from "../../api/roomApi";
 import ScheduleTab from "./ScheduleTab";
 import MapPage from "../../components/map/MapPage";
@@ -18,9 +19,9 @@ import {
   sendFriendRequestById,
   cancelFriendRequest,
 } from "../../api/friendApi";
-import { 
-  createNotification, 
-  deleteNotification, 
+import {
+  createNotification,
+  deleteNotification,
   markNotificationsAsReadInRoom,
   markNotificationsAsReadInRoomByType,
   TAB_TYPE_MAP
@@ -29,7 +30,7 @@ import {
 function RoomDetailPage() {
   const navigate = useNavigate();
   const { roomId } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [room, setRoom] = useState(null);
   const [tab, setTab] = useState(searchParams.get("tab") || "schedule");
@@ -37,7 +38,8 @@ function RoomDetailPage() {
   const [members, setMembers] = useState([]);
   const [guests, setGuests] = useState([]);
   const [myEntryId, setMyEntryId] = useState(null);
-  
+  const [notifications, setNotifications] = useState([]);
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
@@ -64,6 +66,13 @@ function RoomDetailPage() {
   useEffect(() => { tabRef.current = tab; }, [tab]);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
+  const unreadTabs = {
+    schedule: notifications.some(n => n.isread !== true && n.issilent !== true && TAB_TYPE_MAP.schedule.includes(n.type)),
+    location: notifications.some(n => n.isread !== true && n.issilent !== true && TAB_TYPE_MAP.location.includes(n.type)),
+    vote: notifications.some(n => n.isread !== true && n.issilent !== true && TAB_TYPE_MAP.vote.includes(n.type)),
+    chat: notifications.some(n => n.isread !== true && n.issilent !== true && TAB_TYPE_MAP.chat.includes(n.type)),
+  };
+
   useEffect(() => {
     const queryTab = searchParams.get("tab");
     if (["schedule", "location", "vote", "chat"].includes(queryTab)) {
@@ -80,17 +89,33 @@ function RoomDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, currentUser?.id, roomId]);
 
+  const fetchUnreadTabs = async (userId) => {
+    if (!userId || !roomId) return;
+    try {
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("roomid", Number(roomId))
+        .eq("receiverid", userId)
+        .or("isread.is.null,isread.eq.false");
+      if (error) throw error;
+      setNotifications(data || []);
+    } catch (err) {
+      console.error("알림 로드 실패:", err);
+    }
+  };
+
   const fetchRoomData = async () => {
     console.log("🚀 [RoomDetailPage] fetchRoomData 시작, roomId:", roomId);
-    
+
     const { data: roomData, error: roomError } = await supabase
       .from("rooms").select(`*, room_members(count)`).eq("id", Number(roomId)).single();
-    
+
     if (roomError) {
       console.error("❌ [RoomDetailPage] 방 정보 조회 실패:", roomError);
       return;
     }
-    
+
     setRoom(roomData);
     setNewRoomName(roomData.roomname);
 
@@ -126,7 +151,8 @@ function RoomDetailPage() {
       const me = memberData?.find(m => String(m.userid) === String(uId));
       if (me) setMyEntryId(me.id);
       await markNotificationsAsReadInRoomByType(Number(roomId), uId, TAB_TYPE_MAP[tab]);
-      
+      fetchUnreadTabs(uId);
+
       const { data: sett } = await supabase.from("room_members").select("schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled").eq("roomid", Number(roomId)).eq("userid", uId).maybeSingle();
       if (sett) setNotifSettings({ schedule: sett.schedulenotifenabled, location: sett.locationnotifenabled, vote: sett.votenotifenabled, chat: sett.chatnotifenabled });
     } else {
@@ -134,6 +160,7 @@ function RoomDetailPage() {
       if (guestId) {
         setCurrentUser({ id: guestId, type: "guest" });
         await markNotificationsAsReadInRoomByType(Number(roomId), guestId, TAB_TYPE_MAP[tab]);
+        fetchUnreadTabs(guestId);
         const { data: sett } = await supabase.from("room_guests").select("schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled").eq("id", guestId).maybeSingle();
         if (sett) setNotifSettings({ schedule: sett.schedulenotifenabled, location: sett.locationnotifenabled, vote: sett.votenotifenabled, chat: sett.chatnotifenabled });
       }
@@ -150,11 +177,17 @@ function RoomDetailPage() {
       supabase.channel(`room_notifs_${roomId}_${currentUserId}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `receiverid=eq.${currentUserId}` }, async (payload) => {
         const newNotif = payload.new;
         if (Number(newNotif.roomid) !== Number(roomId)) return;
+        if (newNotif.issilent === true) return;
         const types = TAB_TYPE_MAP[tabRef.current] || [];
         if (types.includes(newNotif.type)) {
           await markNotificationsAsReadInRoomByType(roomId, currentUserId, [newNotif.type]);
+          setNotifications(prev => [{ ...newNotif, isread: true }, ...prev]);
+        } else {
+          setNotifications(prev => [newNotif, ...prev]);
         }
-      }).subscribe(),
+      }).on("postgres_changes", { event: "UPDATE", schema: "public", table: "notifications", filter: `receiverid=eq.${currentUserId}` }, (p) => setNotifications(prev => prev.map(n => n.id === p.new.id ? p.new : n)))
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "notifications", filter: `receiverid=eq.${currentUserId}` }, (p) => setNotifications(prev => prev.filter(n => n.id !== p.old.id)))
+      .subscribe(),
       supabase.channel(`room_parts_${roomId}`).on("postgres_changes", { event: "*", schema: "public", table: "room_members", filter: `roomid=eq.${roomId}` }, () => fetchRoomData())
       .on("postgres_changes", { event: "*", schema: "public", table: "room_guests", filter: `roomid=eq.${roomId}` }, () => fetchRoomData())
       .on("broadcast", { event: "PARTICIPANTS_CHANGED" }, () => fetchRoomData()).subscribe()
@@ -170,6 +203,16 @@ function RoomDetailPage() {
     }).subscribe();
     return () => { supabase.removeChannel(kickChannel); };
   }, [roomId, currentUser, myEntryId, navigate]);
+
+  const handleChangeTab = async (nextTab) => {
+    setTab(nextTab);
+    setSearchParams({ tab: nextTab });
+    const currentUserId = currentUser?.id || localStorage.getItem("guest_id");
+    if (currentUserId) {
+      await markNotificationsAsReadInRoomByType(Number(roomId), currentUserId, TAB_TYPE_MAP[nextTab]);
+      fetchUnreadTabs(currentUserId);
+    }
+  };
 
   const handleCopyInviteCode = async () => {
     try {
@@ -227,12 +270,12 @@ function RoomDetailPage() {
     // 본인이 아니고 대상이 회원인 경우 친구 요청 팝업 허용
     if (p.type === "member" && currentUser?.type === "member" && !isMe) {
       setMemberPopup({ member: p, loading: true });
-      checkFriendStatus(currentUser.id, p.userid).then(d => setMemberPopup({ 
-        member: p, 
-        status: d?.status, 
-        requestId: d?.id, 
-        iSentRequest: d?.userid === currentUser.id, 
-        loading: false 
+      checkFriendStatus(currentUser.id, p.userid).then(d => setMemberPopup({
+        member: p,
+        status: d?.status,
+        requestId: d?.id,
+        iSentRequest: d?.userid === currentUser.id,
+        loading: false
       }));
     }
   };
@@ -261,11 +304,33 @@ function RoomDetailPage() {
       try {
         const pId = p.type === "member" ? p.userid : p.id;
         await kickParticipantApi(Number(roomId), pId, p.type);
-        await createNotification({ roomId: Number(roomId), receiverId: pId, senderId: currentUser.id, type: "kick", title: "🚫 추방 알림", message: `방에서 추방되었습니다.`, link: "/home" });
-        alert("추방 완료");
+        const changedAt = new Date().toISOString();
+        await supabase.from("room_messages").insert([{
+          roomid: Number(roomId),
+          userid: currentUser?.id || null,
+          nickname: currentUser?.nickname || "system",
+          content: JSON.stringify({
+            __type: "participant_removed",
+            participantId: String(pId),
+            changedAt,
+          }),
+        }]);
         setSelectedParticipantId(null);
         fetchRoomData();
+        window.dispatchEvent(new CustomEvent("roomParticipantsChanged", {
+          detail: {
+            roomId: Number(roomId),
+            participantId: String(pId),
+            changedAt,
+          },
+        }));
         supabase.channel(`room_parts_${roomId}`).send({ type: "broadcast", event: "PARTICIPANTS_CHANGED", payload: {} });
+        await new Promise((resolve) => {
+          if (window.requestAnimationFrame) window.requestAnimationFrame(resolve);
+          else setTimeout(resolve, 0);
+        });
+        await createNotification({ roomId: Number(roomId), receiverId: pId, senderId: currentUser.id, type: "kick", title: "🚫 추방 알림", message: `방에서 추방되었습니다.`, link: "/home" });
+        alert("추방 완료");
       } catch (e) { alert(e.message); }
     }
   };
@@ -289,7 +354,11 @@ function RoomDetailPage() {
     const table = currentUser.type === "member" ? "room_members" : "room_guests";
     const filter = currentUser.type === "member" ? { roomid: Number(roomId), userid: currentUser.id } : { id: currentUser.id };
     const { error } = await supabase.from(table).update({ [col]: next }).match(filter);
-    if (!error) setNotifSettings(prev => ({ ...prev, [tabName]: next }));
+    if (error) {
+      alert("알림 설정 저장 실패: " + error.message);
+      return;
+    }
+    setNotifSettings(prev => ({ ...prev, [tabName]: next }));
   };
 
   if (!room) return <div>로딩 중...</div>;
@@ -331,6 +400,15 @@ function RoomDetailPage() {
         <span style={{ fontWeight: "700", fontSize: "17px" }}>{room.roomname}</span>
         <button onClick={() => setIsSidebarOpen(true)} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>⚙</button>
       </header>
+      <div style={{ display: "flex", backgroundColor: "#fff", padding: "0 16px", borderBottom: "1px solid #E5E7EB" }}>
+        {["schedule", "location", "vote", "chat"].map(t => (
+          <button key={t} onClick={() => handleChangeTab(t)} style={{ flex: 1, padding: "14px 0", background: "none", border: "none", fontSize: "15px", fontWeight: tab === t ? "700" : "500", color: tab === t ? "#7C5CFF" : "#6B7280", position: "relative" }}>
+            {t === "schedule" ? "일정" : t === "location" ? "장소" : t === "vote" ? "투표" : "채팅"}
+            {unreadTabs[t] && <div style={{ position: "absolute", top: "14px", right: "10px", width: "7px", height: "7px", backgroundColor: "#EF4444", borderRadius: "50%" }} />}
+            {tab === t && <div style={{ position: "absolute", bottom: 0, left: "20%", right: "20%", height: "3px", backgroundColor: "#7C5CFF", borderRadius: "3px 3px 0 0" }} />}
+          </button>
+        ))}
+      </div>
       <div
         className={
           isLocationTab
@@ -362,7 +440,7 @@ function RoomDetailPage() {
           <button onClick={() => setIsSidebarOpen(false)} style={{ alignSelf: "flex-end", background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>✕</button>
           <h3>방 설정</h3><hr/>
           <div style={{ textAlign: "center", marginBottom: "20px" }}>
-            <div style={{ width: "100px", height: "100px", borderRadius: "24px", margin: "0 auto", overflow: "hidden", border: "1px solid #ddd", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "40px" }}>
+            <div style={{ width: "100px", height: "100px", borderRadius: "24px", margin: "0 auto", overflow: "hidden", border: "1px solid #ddd", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "40px", backgroundColor: "#f3f4f6" }}>
               {room.roomimageurl ? <img src={room.roomimageurl} alt="방" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "🏠"}
             </div>
             {isCurrentUserHost && <label htmlFor="img-up" style={{ display: "block", marginTop: "8px", fontSize: "12px", cursor: "pointer", color: "#7C5CFF" }}>이미지 변경</label>}
@@ -376,7 +454,7 @@ function RoomDetailPage() {
             <h4>🔔 알림 설정</h4>
             {["schedule", "location", "vote", "chat"].map(t => (
               <div key={t} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                <span style={{ fontSize: "14px" }}>{t === "schedule" ? "일정" : t === "location" ? "위치" : t === "vote" ? "투표" : "채팅"} 알림</span>
+                <span style={{ fontSize: "14px" }}>{t === "schedule" ? "일정" : t === "location" ? "장소" : t === "vote" ? "투표" : "채팅"} 알림</span>
                 <button onClick={() => handleToggleNotification(t)} style={{ background: notifSettings[t] ? "#8366F4" : "#E0E0E0", color: "#fff", border: "none", borderRadius: "20px", padding: "4px 12px", cursor: "pointer" }}>{notifSettings[t] ? "ON" : "OFF"}</button>
               </div>
             ))}
@@ -440,49 +518,33 @@ function RoomDetailPage() {
                         paddingRight: (isCurrentUserHost && !isMe) ? "30px" : "5px", // 버튼 공간 확보
                       }}
                     >
-                      {p.type === "member" ? (
-                        profileImg ? (
-                          <img
-                            src={profileImg}
-                            alt="프로필"
-                            style={{
-                              width: "32px",
-                              height: "32px",
-                              borderRadius: "50%",
-                              objectFit: "cover",
-                              border: "1px solid #E5E7EB",
-                            }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: "32px",
-                              height: "32px",
-                              borderRadius: "50%",
-                              backgroundColor: "#F3F4F6",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: "16px",
-                            }}
-                          >
-                            👤
-                          </div>
-                        )
+                      {p.type === "member" && p.nickname !== "알 수 없음" && profileImg ? (
+                        <img
+                          src={profileImg}
+                          alt="프로필"
+                          style={{
+                            width: "32px",
+                            height: "32px",
+                            borderRadius: "50%",
+                            objectFit: "cover",
+                            border: "1px solid #E5E7EB",
+                          }}
+                        />
                       ) : (
                         <div
                           style={{
                             width: "32px",
                             height: "32px",
                             borderRadius: "50%",
-                            backgroundColor: "#ffeaa7",
+                            backgroundColor: "#F3F4F6",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             fontSize: "16px",
+                            color: "#8B8799"
                           }}
                         >
-                          🐱
+                          <FiUser size={16} />
                         </div>
                       )}
 
@@ -649,14 +711,14 @@ function RoomDetailPage() {
               memberPopup.status === "accepted" ? (
                 <p style={{ fontSize: "14px", color: "#7C5CFF", fontWeight: "bold" }}>친구가 된 사용자입니다.</p>
               ) : (
-                <button 
+                <button
                   onClick={async () => {
                     try {
                       await sendFriendRequestById(currentUser.id, memberPopup.member.userid);
                       alert("친구 요청을 보냈습니다.");
                       setMemberPopup(null);
                     } catch(e) { alert("요청 실패"); }
-                  }} 
+                  }}
                   style={{ width: "100%", padding: "10px", background: "#7C5CFF", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", cursor: "pointer", marginBottom: "8px" }}
                 >
                   친구 요청 보내기

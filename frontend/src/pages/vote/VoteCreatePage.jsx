@@ -741,7 +741,7 @@ function VoteCreatePage() {
               marginBottom: "16px",
             }}
           >
-            위치 탭에서 선택한 중간 장소들이 투표 항목으로 추가되었습니다.
+            장소 탭에서 선택한 중간장소 후보들이 투표 항목으로 추가되었습니다.
           </p>
         )}
 
@@ -1019,7 +1019,7 @@ function VoteCreatePage() {
 
         {(() => {
           const disabled = !endtimeenabled || !endtime;
-          
+
           let labelText = "종료 30분 전 알림";
           if (endtimeenabled && endtime) {
             const diff = (new Date(endtime).getTime() - new Date().getTime()) / (1000 * 60);

@@ -20,7 +20,7 @@ function EmailConfirmPage() {
           // 2. 💡 약속했던 대로 로컬스토리지에 user_id 마저 구워주기
           localStorage.setItem('user_id', userId)
 
-          // 3. ✨ [은혜님 요구사항 반영] profiles 테이블에서 이 유저의 진짜 닉네임 낚아채기!
+          // 
           const { data: profileData, error: profileError } = await supabase
             .from('profiles')
             .select('nickname')
@@ -61,7 +61,7 @@ function EmailConfirmPage() {
 
   return (
     <section style={{ textAlign: 'center', marginTop: '100px' }}>
-      {/* 🥳 은혜님이 가입한 닉네임이 여기에 쾅 박힙니다! */}
+    
       <h2>🎉 인증 성공! 환영합니다, {userNickname}님!</h2>
       <p>이메일 인증이 완벽하게 완료되었습니다.</p>
       <p>잠시 후 서비스 화면으로 안전하게 이동합니다...</p>

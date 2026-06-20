@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FaEye, FaEyeSlash } from 'react-icons/fa'
+import { FaEye, FaEyeSlash, FaChevronLeft, FaCamera, FaUser, FaLock, FaUserCircle } from 'react-icons/fa'
+import { FiUser } from 'react-icons/fi'
 import { getCurrentUserApi, sendEmailOtpApi } from '../../api/authApi'
 import { supabase } from '../../lib/supabaseClient'
 import {
@@ -11,6 +12,7 @@ import {
   updatePasswordApi,
   deleteUserAccountApi,
 } from '../../api/settingApi'
+import './SettingEditPage.css'
 
 function SettingEditPage() {
   const navigate = useNavigate()
@@ -32,7 +34,7 @@ function SettingEditPage() {
   const [isNicknameChecked, setIsNicknameChecked] = useState(false)
   const [isEmailChecked, setIsEmailChecked] = useState(false)
   
-  // OTP 관련 State (회원가입과 동일한 방식)
+  // OTP 관련 State
   const [otpCode, setOtpCode] = useState('')
   const [otpSent, setOtpSent] = useState(false)
   const [emailVerified, setEmailVerified] = useState(false)
@@ -160,7 +162,6 @@ function SettingEditPage() {
     if (email === initialEmail) { setIsEmailChecked(true); setMessage('✅ 현재 사용 중인 이메일입니다.'); return }
     try {
       setMessage('이메일 중복 체크 중...')
-      // 1. profiles 테이블 확인 (다른 유저)
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('id')
@@ -173,14 +174,13 @@ function SettingEditPage() {
         setMessage('❌ 이미 사용 중인 이메일입니다.')
         return
       }
-      // 2. auth.users 확인 (미완료 계정 포함) — updateUser 실패 방지
       const { data: isDuplicate, error: rpcError } = await supabase.rpc('check_email_exists', {
         email_to_check: email.trim(),
       })
       if (rpcError) throw rpcError
       if (isDuplicate) {
         setIsEmailChecked(false)
-        setMessage('❌ 이미 등록된 이메일입니다. 다른 이메일을 사용해주세요.')
+        setMessage('❌ 이미 등록된 이메일입니다.')
         return
       }
       setIsEmailChecked(true)
@@ -189,7 +189,6 @@ function SettingEditPage() {
     } catch (error) { setIsEmailChecked(false); setMessage(`❌ 중복 확인 실패: ${error.message}`) }
   }
 
-  // OTP 전송 (이메일 변경용 — supabase.auth.updateUser 사용)
   const handleSendOtp = async () => {
     if (!isEmailChecked) { setMessage('⚠️ 먼저 이메일 중복 확인을 해주세요.'); return }
     if (countdown > 0) { setMessage(`⚠️ ${countdown}초 후에 다시 시도해주세요.`); return }
@@ -197,17 +196,14 @@ function SettingEditPage() {
     try {
       setIsUploading(true)
       setMessage('📧 인증 코드를 발송 중입니다...')
-
-      // 이메일 변경 확인 코드 전송 (signInWithOtp 아닌 updateUser 사용)
       const { error } = await supabase.auth.updateUser({ email: email.trim() })
       if (error) throw error
-
       setOtpSent(true)
       setCountdown(60)
-      setMessage('📧 새 이메일로 6자리 인증 코드가 발송되었습니다. 인증번호를 입력하고 "확인"을 눌러주세요.')
+      setMessage('📧 인증 코드가 발송되었습니다. 인증번호를 입력하고 "확인"을 눌러주세요.')
     } catch (error) {
       if (error.message?.includes('rate limit')) {
-        setMessage('❌ 보안을 위해 인증 메일 발송이 일시적으로 제한되었습니다. 잠시 후 다시 시도해주세요.')
+        setMessage('❌ 인증 메일 발송이 제한되었습니다. 잠시 후 다시 시도해주세요.')
         setCountdown(60)
       } else {
         setMessage(`❌ 인증 코드 발송 실패: ${error.message}`)
@@ -215,7 +211,6 @@ function SettingEditPage() {
     } finally { setIsUploading(false) }
   }
 
-  // OTP 검증 (회원가입과 동일한 로직)
   const handleVerifyOtp = async () => {
     if (otpCode.length !== 6) { setMessage('⚠️ 6자리 인증 코드를 입력해주세요.'); return }
     try {
@@ -248,18 +243,15 @@ function SettingEditPage() {
       setIsUploading(true)
       setMessage('🔄 정보를 저장 중입니다...')
 
-      // 1. 사진 업로드
       if (selectedFile) {
         const uploadRes = await uploadAvatarApi(selectedFile, userId)
         if (!uploadRes.success) throw new Error('사진 업로드 실패')
       }
 
-      // 2. 닉네임 변경
       if (nickname !== initialNickname) {
         await updateNicknameApi(nickname, userId)
       }
 
-      // 3. 프로필 테이블 이메일 동기화 (auth.verifyOtp에서 이미 auth.users는 업데이트됨)
       if (isEmailChanged) {
         const { error: profileError } = await supabase
           .from('profiles')
@@ -278,10 +270,8 @@ function SettingEditPage() {
     } finally { setIsUploading(false) }
   }
 
-  // 비밀번호 변경 기능
   const handleUpdatePasswordDirect = async (e) => {
     e.preventDefault(); if (isSocialUser) return;
-    
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/
 
     if (!currentPassword) { setMessage('⚠️ 현재 비밀번호를 입력해주세요.'); return }
@@ -317,244 +307,160 @@ function SettingEditPage() {
     } catch (e) { setMessage('탈퇴 실패') }
   }
 
+  const [isPasswordSectionOpen, setIsPasswordSectionOpen] = useState(false)
+
+  // ... (existing state)
+
   return (
-    <div className="setting-container" style={{ paddingBottom: '90px' }}>
-      <button
-        onClick={() => navigate(-1)}
-        style={{ border: 'none', background: 'none', fontSize: '24px', cursor: 'pointer', padding: '0 0 8px', display: 'block' }}
-      >
-        ←
-      </button>
-      <h2>내 정보 수정 ⚙️</h2>
-
-      {/* 프로필 사진 */}
-      <div className="edit-avatar-section">
-        {previewUrl || profileImageUrl ? (
-          <img src={previewUrl || profileImageUrl} alt="프로필" className="edit-avatar-preview" />
-        ) : (
-          <div className="edit-avatar-default">👤</div>
-        )}
-        <label htmlFor="avatar-file-input" className="avatar-upload-btn-label">
-          {isUploading ? '처리 중...' : '사진 변경하기 📷'}
-        </label>
-        <input id="avatar-file-input" type="file" accept="image/*" onChange={handleAvatarChange} disabled={isUploading} style={{ display: 'none' }} />
-      </div>
-
-      {/* 닉네임 */}
-      <div className="edit-form-group">
-        <label>닉네임 변경</label>
-        <div className="input-with-button">
-          <input type="text" value={nickname} onChange={(e) => { setNickname(e.target.value); setIsNicknameChecked(e.target.value === initialNickname) }} />
-          <button type="button" onClick={handleCheckNickname}>중복 확인</button>
-        </div>
-      </div>
-
-      {/* 이메일 (OTP 인증 방식) */}
-      <div className="edit-form-group">
-        <label>이메일{isSocialUser ? '' : ' 변경'}</label>
-        {isSocialUser ? (
-          <>
-            <input type="email" value={email} disabled style={{ width: '100%', boxSizing: 'border-box' }} />
-            <p style={{ margin: '6px 0 0', fontSize: '13px', color: '#888' }}>
-              카카오 또는 구글로 로그인한 계정은 이메일을 변경할 수 없습니다.
-            </p>
-          </>
-        ) : (
-          <div className="input-with-button">
-            <input
-              type="email"
-              value={email}
-              disabled={emailVerified}
-              onChange={(e) => {
-                setEmail(e.target.value)
-                setIsEmailChecked(e.target.value === initialEmail)
-                setOtpSent(false)
-                setEmailVerified(false)
-              }}
-            />
-            <button type="button" onClick={handleCheckEmail} disabled={emailVerified}>
-              중복 확인
-            </button>
-          </div>
-        )}
-
-        {emailVerified && (
-          <p style={{ margin: '8px 0 0', fontSize: '14px', color: '#4caf50', fontWeight: 'bold' }}>
-            ✅ 인증 완료
-          </p>
-        )}
-
-        {isEmailChecked && email !== initialEmail && !emailVerified && (
-          <button
-            type="button"
-            onClick={handleSendOtp}
-            disabled={isUploading || countdown > 0}
-            style={{
-              width: '100%',
-              marginTop: '8px',
-              padding: '10px',
-              backgroundColor: countdown > 0 ? '#eee' : '#7c79ff',
-              color: countdown > 0 ? '#aaa' : '#fff',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: countdown > 0 ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {countdown > 0
-              ? `${countdown}초 후 재전송 가능`
-              : otpSent
-              ? '인증 코드 재전송'
-              : '이메일 인증하기'}
+    <div className="setting-edit-page">
+      <div className="setting-edit-content">
+        <header className="setting-edit-header">
+          <button type="button" className="setting-edit-back-button" onClick={() => navigate(-1)} aria-label="이전 화면으로 돌아가기">
+            <FaChevronLeft />
           </button>
-        )}
+          <h1>내 정보 수정</h1>
+        </header>
 
-        {otpSent && !emailVerified && (
-          <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
-            <div style={{ position: 'relative', flex: 1 }}>
-              <input
-                type="text"
-                placeholder="인증 코드 6자리"
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                maxLength={6}
-                style={{ width: '100%', paddingRight: '50px', boxSizing: 'border-box' }}
-              />
-              <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', color: timeLeft <= 60 ? '#f44' : '#888' }}>
-                {formatTime(timeLeft)}
-              </span>
-            </div>
-            <button type="button" onClick={handleVerifyOtp} disabled={isUploading || timeLeft === 0}>
-              확인
-            </button>
-          </div>
-        )}
-      </div>
+        <section className="edit-avatar-section">
+            {previewUrl || profileImageUrl ? (
+              <img src={previewUrl || profileImageUrl} alt="프로필" className="edit-avatar-preview" />
+            ) : (
+              <div className="edit-avatar-default"><FiUser /></div>
+            )}
+            <label htmlFor="avatar-file-input" className="avatar-upload-btn-label">
+              <FaCamera size={14} /> 사진 변경
+            </label>
+            <input id="avatar-file-input" type="file" accept="image/*" onChange={handleAvatarChange} disabled={isUploading} style={{ display: 'none' }} />
+          </section>
 
-      {/* 비밀번호 변경 (일반 로그인 사용자만) */}
-      {!isSocialUser && (
-        <div className="edit-form-group" style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
-          <label>비밀번호 변경 🔒</label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ position: 'relative' }}>
-              <input 
-                type={showCurrentPassword ? "text" : "password"} 
-                placeholder="현재 비밀번호" 
-                value={currentPassword} 
-                onChange={(e) => setCurrentPassword(e.target.value)} 
-                autoComplete="new-password"
-                style={{ width: '100%', paddingRight: '40px' }}
-              />
-              <span 
-                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: '#888' }}
-              >
-                {showCurrentPassword ? <FaEyeSlash /> : <FaEye />}
-              </span>
-            </div>
+          <section className="setting-edit-card">
+            <h2 className="card-title"><FaUserCircle /> 기본 정보</h2>
             
-            <div style={{ position: 'relative' }}>
-              <input 
-                type={showNewPassword ? "text" : "password"} 
-                placeholder="새 비밀번호" 
-                value={newPassword} 
-                onChange={(e) => setNewPassword(e.target.value)} 
-                autoComplete="new-password"
-                style={{ width: '100%', paddingRight: '40px' }}
-              />
-              <span 
-                onClick={() => setShowNewPassword(!showNewPassword)}
-                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: '#888' }}
-              >
-                {showNewPassword ? <FaEyeSlash /> : <FaEye />}
-              </span>
+            <div className="edit-form-group">
+              <label>닉네임</label>
+              <div className="input-with-button">
+                <input className="setting-edit-input" type="text" placeholder="닉네임을 입력하세요" value={nickname} onChange={(e) => { setNickname(e.target.value); setIsNicknameChecked(e.target.value === initialNickname) }} />
+                <button type="button" className="check-button" onClick={handleCheckNickname}>중복 확인</button>
+              </div>
             </div>
-            {newPassword && (
-              <p style={{ 
-                fontSize: '12px', 
-                margin: '0 0 4px 4px', 
-                color: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(newPassword) ? '#4caf50' : '#f44336' 
-              }}>
-                {/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(newPassword) 
-                  ? '✅ 안전한 비밀번호입니다.' 
-                  : '❌ 영문 대/소문자, 숫자, 특수문자 포함 8자 이상'}
-              </p>
-            )}
 
-            <div style={{ position: 'relative' }}>
-              <input 
-                type={showConfirmPassword ? "text" : "password"} 
-                placeholder="새 비밀번호 확인" 
-                value={confirmPassword} 
-                onChange={(e) => setConfirmPassword(e.target.value)} 
-                autoComplete="new-password"
-                style={{ width: '100%', paddingRight: '40px' }}
-              />
-              <span 
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: '#888' }}
-              >
-                {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
-              </span>
+            <div className="edit-form-group">
+              <label>이메일</label>
+              {isSocialUser ? (
+                <input className="setting-edit-input" type="email" value={email} disabled />
+              ) : (
+                <div className="input-with-button">
+                  <input
+                    className="setting-edit-input"
+                    type="email"
+                    placeholder="이메일을 입력하세요"
+                    value={email}
+                    disabled={emailVerified}
+                    onChange={(e) => {
+                      setEmail(e.target.value)
+                      setIsEmailChecked(e.target.value === initialEmail)
+                      setOtpSent(false)
+                      setEmailVerified(false)
+                    }}
+                  />
+                  <button type="button" className="check-button" onClick={handleCheckEmail} disabled={emailVerified}>중복 확인</button>
+                </div>
+              )}
+              
+              {emailVerified && <p className="status-message message-success">✓ 인증 완료</p>}
+              
+              {isEmailChecked && email !== initialEmail && !emailVerified && (
+                <button type="button" className="password-change-btn" onClick={handleSendOtp} disabled={isUploading || countdown > 0}>
+                  {countdown > 0 ? `${countdown}초 후 재전송 가능` : otpSent ? '인증 코드 재전송' : '이메일 인증하기'}
+                </button>
+              )}
+
+              {otpSent && !emailVerified && (
+                <div className="otp-container">
+                  <div className="otp-input-wrapper">
+                    <input
+                      className="setting-edit-input"
+                      type="text"
+                      placeholder="인증 코드 6자리"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      maxLength={6}
+                    />
+                    <span className="otp-timer">{formatTime(timeLeft)}</span>
+                  </div>
+                  <button type="button" className="check-button" onClick={handleVerifyOtp} disabled={isUploading || timeLeft === 0}>확인</button>
+                </div>
+              )}
             </div>
-            {confirmPassword && (
-              <p style={{ 
-                fontSize: '12px', 
-                margin: '0 0 4px 4px', 
-                color: newPassword === confirmPassword ? '#4caf50' : '#f44336' 
-              }}>
-                {newPassword === confirmPassword ? '✅ 비밀번호가 일치합니다.' : '❌ 비밀번호가 일치하지 않습니다.'}
-              </p>
-            )}
+          </section>
 
-            <button 
-              type="button" 
-              onClick={handleUpdatePasswordDirect} 
-              disabled={isUploading}
-              style={{ 
-                marginTop: '5px', 
-                padding: '10px', 
-                backgroundColor: '#f0f0f0', 
-                border: '1px solid #ddd', 
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '600'
-              }}
-            >
-              비밀번호 변경하기
-            </button>
-          </div>
-        </div>
-      )}
+          {!isSocialUser && (
+            <section className="setting-edit-card">
+              <button type="button" className="card-title" style={{background: 'none', border: 'none', width: '100%', cursor: 'pointer', textAlign: 'left'}} onClick={() => setIsPasswordSectionOpen(!isPasswordSectionOpen)} aria-expanded={isPasswordSectionOpen}>
+                <FaLock /> 비밀번호 변경 {isPasswordSectionOpen ? '▲' : '▼'}
+              </button>
+              {isPasswordSectionOpen && (
+                <>
+                  <div className="edit-form-group">
+                    <label>현재 비밀번호</label>
+                    <div className="setting-password-field">
+                      <input className="setting-password-input" type={showCurrentPassword ? "text" : "password"} placeholder="현재 비밀번호를 입력하세요" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} autoComplete="new-password" />
+                      <button type="button" className="setting-password-toggle" onClick={() => setShowCurrentPassword(!showCurrentPassword)} aria-label="비밀번호 표시하기">{showCurrentPassword ? <FaEyeSlash /> : <FaEye />}</button>
+                    </div>
+                  </div>
+                  <div className="edit-form-group">
+                    <label>새 비밀번호</label>
+                    <div className="setting-password-field">
+                      <input className="setting-password-input" type={showNewPassword ? "text" : "password"} placeholder="새 비밀번호를 입력하세요" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" />
+                      <button type="button" className="setting-password-toggle" onClick={() => setShowNewPassword(!showNewPassword)} aria-label="비밀번호 표시하기">{showNewPassword ? <FaEyeSlash /> : <FaEye />}</button>
+                    </div>
+                    {newPassword && (
+                      <p className={`password-guide ${/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(newPassword) ? 'message-success' : 'message-error'}`}>
+                        {/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(newPassword) ? '✓ 안전한 비밀번호입니다.' : '영문 대/소문자, 숫자, 특수문자 포함 8자 이상'}
+                      </p>
+                    )}
+                  </div>
+                  <div className="edit-form-group">
+                    <label>새 비밀번호 확인</label>
+                    <div className="setting-password-field">
+                      <input className="setting-password-input" type={showConfirmPassword ? "text" : "password"} placeholder="새 비밀번호를 다시 입력하세요" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" />
+                      <button type="button" className="setting-password-toggle" onClick={() => setShowConfirmPassword(!showConfirmPassword)} aria-label="비밀번호 표시하기">{showConfirmPassword ? <FaEyeSlash /> : <FaEye />}</button>
+                    </div>
+                    {confirmPassword && (
+                      <p className={`password-guide ${newPassword === confirmPassword ? 'message-success' : 'message-error'}`}>
+                        {newPassword === confirmPassword ? '✓ 비밀번호가 일치합니다.' : '비밀번호가 일치하지 않습니다.'}
+                      </p>
+                    )}
+                  </div>
+                  <button type="button" className="password-change-btn" onClick={handleUpdatePasswordDirect} disabled={isUploading}>비밀번호 변경</button>
+                </>
+              )}
+            </section>
+          )}
 
-      {/* 알림 메시지 */}
-      {message && <p className="status-message">{message}</p>}
+          {message && <p className={`status-message ${message.startsWith('✅') ? 'message-success' : 'message-error'}`}>{message}</p>}
 
-      <div className="bottom-button-group">
-        <button onClick={handleSaveAll} className="save-all-button" disabled={isUploading}>저장하기</button>
-      </div>
+          <button onClick={handleSaveAll} className="save-all-button" disabled={isUploading}>저장하기</button>
 
-      {/* 회원 탈퇴 */}
-      <div className="delete-account-section" style={{ marginTop: '40px' }}>
-        {!showDeleteForm ? (
-          <button type="button" onClick={() => setShowDeleteForm(true)} className="delete-link-btn">회원 탈퇴하기 😢</button>
-        ) : (
-          <form onSubmit={handleConfirmDeleteAccount} className="delete-confirm-form">
-            <h4>🚨 회원 탈퇴 확인</h4>
-            <div className="delete-input-group">
-              <input type="text" placeholder='아래 빈칸에 "탈퇴하기" 라고 입력' value={deleteConfirmText} onChange={(e) => setDeleteConfirmText(e.target.value)} />
+        <section className="delete-account-section">
+          {!showDeleteForm ? (
+            <button type="button" onClick={() => setShowDeleteForm(true)} className="delete-link-btn">회원 탈퇴하기</button>
+          ) : (
+            <div className="setting-edit-card" style={{border: '1px solid #fee2e2'}}>
+              <h4 style={{margin: '0 0 12px', color: '#dc2626'}}>🚨 회원 탈퇴 확인</h4>
+              <p style={{fontSize: '13px', marginBottom: '12px'}}>탈퇴하려면 아래에 "탈퇴하기"를 입력해주세요.</p>
+              <input type="text" placeholder='탈퇴하기' value={deleteConfirmText} onChange={(e) => setDeleteConfirmText(e.target.value)} style={{width: '100%', boxSizing: 'border-box', height: '46px', borderRadius: '12px', border: '1px solid #e2e5ec', padding: '0 14px', marginBottom: '12px'}} />
+              <div style={{display: 'flex', gap: '8px'}}>
+                <button type="submit" className="delete-submit-btn" style={{flex: 1, padding: '10px 0'}} onClick={handleConfirmDeleteAccount}>진짜 탈퇴하기</button>
+                <button type="button" onClick={() => setShowDeleteForm(false)} style={{flex: 1, background: '#f3f4f6', border: 'none', borderRadius: '8px', padding: '10px'}}>취소</button>
+              </div>
             </div>
-            <div className="delete-action-buttons">
-              <button type="submit" className="delete-submit-btn">진짜 탈퇴하기</button>
-              <button type="button" onClick={() => setShowDeleteForm(false)} className="delete-cancel-btn">취소</button>
-            </div>
-          </form>
-        )}
+          )}
+        </section>
       </div>
     </div>
   )
 }
 
 export default SettingEditPage
+
