@@ -641,12 +641,37 @@ function RoomDetailPage() {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 3000, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ background: "#fff", padding: "20px", borderRadius: "16px", width: "300px", maxHeight: "70vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "16px" }}><b>친구 초대</b><button onClick={() => setShowInviteModal(false)}>✕</button></div>
+
+            {sentInvites.length > 0 && (
+              <div style={{ marginBottom: "16px" }}>
+                <p style={{ fontSize: "12px", fontWeight: "bold", color: "#8B8799", margin: "0 0 8px" }}>보낸 요청 ({sentInvites.length})</p>
+                {sentInvites.map(inv => (
+                  <div key={inv.notifId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      {inv.profileimageurl ? (
+                        <img src={inv.profileimageurl} alt="" style={{ width: "28px", height: "28px", borderRadius: "50%", objectFit: "cover" }} />
+                      ) : (
+                        <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "#F3F4F6", display: "flex", alignItems: "center", justifyContent: "center" }}><FiUser size={14} color="#8B8799" /></div>
+                      )}
+                      <span>{inv.nickname}</span>
+                    </div>
+                    <button onClick={() => handleCancelInvite(inv)} style={{ padding: "4px 8px", background: "#F3F4F6", color: "#6B7280", border: "none", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}>취소</button>
+                  </div>
+                ))}
+                <hr style={{ margin: "12px 0", border: "none", borderTop: "1px solid #F3F4F6" }} />
+              </div>
+            )}
+
+            <p style={{ fontSize: "12px", fontWeight: "bold", color: "#8B8799", margin: "0 0 8px" }}>초대 가능한 친구</p>
             {friendList.map(f => (
               <div key={f.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
                 <span>{f.nickname}</span>
                 <button onClick={() => handleInviteFriend(f)} disabled={invitingSending} style={{ padding: "4px 8px", background: "#7C5CFF", color: "#fff", border: "none", borderRadius: "4px" }}>초대</button>
               </div>
             ))}
+            {friendList.length === 0 && (
+              <p style={{ fontSize: "13px", color: "#9CA3AF", textAlign: "center", padding: "8px 0" }}>초대 가능한 친구가 없습니다.</p>
+            )}
           </div>
         </div>
       )}
