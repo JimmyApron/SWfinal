@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FaEye, FaEyeSlash, FaChevronLeft, FaCamera, FaUser, FaLock, FaUserCircle } from 'react-icons/fa'
+import { FiUser } from 'react-icons/fi'
 import { getCurrentUserApi, sendEmailOtpApi } from '../../api/authApi'
 import { supabase } from '../../lib/supabaseClient'
 import {
@@ -324,7 +325,7 @@ function SettingEditPage() {
             {previewUrl || profileImageUrl ? (
               <img src={previewUrl || profileImageUrl} alt="프로필" className="edit-avatar-preview" />
             ) : (
-              <div className="edit-avatar-default"><FaUserCircle /></div>
+              <div className="edit-avatar-default"><FiUser /></div>
             )}
             <label htmlFor="avatar-file-input" className="avatar-upload-btn-label">
               <FaCamera size={14} /> 사진 변경

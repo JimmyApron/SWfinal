@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaUserFriends } from "react-icons/fa";
+import { FiUser } from "react-icons/fi";
 import { supabase } from "../../lib/supabaseClient";
 import { createRoomNotifications } from "../../api/notificationApi";
 import "./ChatTab.css";
@@ -531,6 +531,61 @@ function ChatTab({ roomId }) {
       setParticipants(pSet);
     };
     fetchParticipants();
+
+    const handleLocalParticipantsChanged = (event) => {
+      if (Number(event.detail?.roomId) !== Number(roomId)) return;
+      if (event.detail?.participantId) {
+        setParticipants((prev) => {
+          const next = new Set(prev);
+          next.delete(String(event.detail.participantId));
+          return next;
+        });
+      }
+      fetchParticipants();
+    };
+
+    window.addEventListener("roomParticipantsChanged", handleLocalParticipantsChanged);
+
+    const channelSuffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const memberChannel = supabase
+      .channel(`room-members-${roomId}-${channelSuffix}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "room_members", filter: `roomid=eq.${roomId}` },
+        fetchParticipants
+      )
+      .subscribe();
+
+    const guestChannel = supabase
+      .channel(`room-guests-${roomId}-${channelSuffix}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "room_guests", filter: `roomid=eq.${roomId}` },
+        fetchParticipants
+      )
+      .subscribe();
+
+    const participantDeleteChannel = supabase
+      .channel(`room-participant-deletes-${roomId}-${channelSuffix}`)
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "room_members" },
+        fetchParticipants
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "room_guests" },
+        fetchParticipants
+      )
+      .subscribe();
+
+    return () => {
+      window.removeEventListener("roomParticipantsChanged", handleLocalParticipantsChanged);
+      supabase.removeChannel(memberChannel);
+      supabase.removeChannel(guestChannel);
+      supabase.removeChannel(participantDeleteChannel);
+    };
   }, [roomId]);
 
   useEffect(() => {
@@ -1219,7 +1274,7 @@ function ChatTab({ roomId }) {
                     />
                   ) : (
                     <div className="chat-profile-image-placeholder">
-                      <FaUserFriends size={20} />
+                      <FiUser size={20} />
                     </div>
                   )
                 )}

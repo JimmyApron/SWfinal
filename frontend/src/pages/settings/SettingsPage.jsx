@@ -4,6 +4,7 @@ import { logoutApi, getCurrentUserApi } from '../../api/authApi'
 import { supabase } from '../../lib/supabaseClient'
 import { useTheme } from '../../context/ThemeContext'
 import { FaChevronLeft, FaMoon, FaBell, FaUser, FaSignOutAlt, FaChevronRight, FaPen } from 'react-icons/fa'
+import { FiUser } from 'react-icons/fi'
 import './SettingsPage.css'
 
 function SettingsPage() {
@@ -99,7 +100,7 @@ function SettingsPage() {
             {userProfile?.profileimageurl ? (
               <img src={userProfile.profileimageurl} alt="프로필" className="profile-avatar" />
             ) : (
-              <div className="profile-avatar-default"><FaUser /></div>
+              <div className="profile-avatar-default"><FiUser /></div>
             )}
           </div>
           <h1 className="nickname">{userProfile?.nickname || '닉네임 없음'}</h1>

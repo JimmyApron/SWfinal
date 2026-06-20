@@ -6,7 +6,8 @@ import {
 } from '../../api/authApi'
 import { supabase } from '../../lib/supabaseClient'
 import { useNavigate } from 'react-router-dom'
-import { FaChevronLeft, FaUserFriends, FaSignInAlt, FaUsers } from 'react-icons/fa'
+import { FaChevronLeft, FaSignInAlt, FaUsers } from 'react-icons/fa'
+import { FiUser } from 'react-icons/fi'
 import './GuestLoginPage.css'
 
 function GuestLoginPage() {
@@ -251,7 +252,7 @@ function GuestLoginPage() {
 
       <main className="guest-content">
         <div className="guest-intro">
-          <FaUserFriends size={48} className="guest-intro-icon" />
+          <FiUser size={48} className="guest-intro-icon" />
           <p className="guest-intro-text">초대코드만 입력하면 빠르게 방에 들어갈 수 있어요.</p>
         </div>
 
@@ -345,7 +346,7 @@ function GuestLoginPage() {
                           <img src={member.profileimageurl} alt={member.nickname} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
                         ) : (
                           /* 비회원, 탈퇴한 유저('알 수 없음'), 또는 프로필 이미지가 없는 회원은 기본 아바타 */
-                          <FaUserFriends size={16} />
+                          <FiUser size={16} />
                         )}
                       </div>
                       <span>{member.nickname}</span>

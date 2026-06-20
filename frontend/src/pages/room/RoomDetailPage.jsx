@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { FaUserFriends } from "react-icons/fa";
+import { FiUser } from "react-icons/fi";
 
 import { supabase } from "../../lib/supabaseClient";
 import { 
@@ -295,11 +295,18 @@ function RoomDetailPage() {
       try {
         const pId = p.type === "member" ? p.userid : p.id;
         await kickParticipantApi(Number(roomId), pId, p.type);
-        await createNotification({ roomId: Number(roomId), receiverId: pId, senderId: currentUser.id, type: "kick", title: "🚫 추방 알림", message: `방에서 추방되었습니다.`, link: "/home" });
-        alert("추방 완료");
         setSelectedParticipantId(null);
         fetchRoomData();
+        window.dispatchEvent(new CustomEvent("roomParticipantsChanged", {
+          detail: { roomId: Number(roomId), participantId: String(pId) },
+        }));
         supabase.channel(`room_parts_${roomId}`).send({ type: "broadcast", event: "PARTICIPANTS_CHANGED", payload: {} });
+        await new Promise((resolve) => {
+          if (window.requestAnimationFrame) window.requestAnimationFrame(resolve);
+          else setTimeout(resolve, 0);
+        });
+        await createNotification({ roomId: Number(roomId), receiverId: pId, senderId: currentUser.id, type: "kick", title: "🚫 추방 알림", message: `방에서 추방되었습니다.`, link: "/home" });
+        alert("추방 완료");
       } catch (e) { alert(e.message); }
     }
   };
@@ -475,7 +482,7 @@ function RoomDetailPage() {
                             color: "#8B8799"
                           }}
                         >
-                          <FaUserFriends size={16} />
+                          <FiUser size={16} />
                         </div>
                       )}
 
