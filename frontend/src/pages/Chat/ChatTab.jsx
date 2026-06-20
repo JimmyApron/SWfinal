@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FiBell, FiCamera, FiImage, FiUser } from "react-icons/fi";
+import {
+  FiBell,
+  FiBookmark,
+  FiCamera,
+  FiEdit2,
+  FiImage,
+  FiTrash2,
+  FiUser,
+  FiX,
+} from "react-icons/fi";
 import { supabase } from "../../lib/supabaseClient";
 import { createRoomNotifications } from "../../api/notificationApi";
 import "./ChatTab.css";
@@ -503,7 +512,9 @@ function ChatTab({ roomId }) {
   const [uploading, setUploading] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [selectedMsgId, setSelectedMsgId] = useState(null);
+  const [selectedMsgMenuPlacement, setSelectedMsgMenuPlacement] = useState("above");
   const [editingMsgId, setEditingMsgId] = useState(null);
+  const [editingPreviewText, setEditingPreviewText] = useState("");
   const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
   const [announcementContent, setAnnouncementContent] = useState("");
   const [isPinnedMessageExpanded, setIsPinnedMessageExpanded] = useState(false);
@@ -943,7 +954,10 @@ function ChatTab({ roomId }) {
   useEffect(() => {
     if (!selectedMsgId) return;
 
-    const dismiss = () => setSelectedMsgId(null);
+    const dismiss = () => {
+      setSelectedMsgId(null);
+      setSelectedMsgMenuPlacement("above");
+    };
 
     document.addEventListener("click", dismiss);
 
@@ -951,6 +965,25 @@ function ChatTab({ roomId }) {
       document.removeEventListener("click", dismiss);
     };
   }, [selectedMsgId]);
+
+  const toggleMessageActions = (event, messageId, actionCount) => {
+    event.stopPropagation();
+
+    if (selectedMsgId === messageId) {
+      setSelectedMsgId(null);
+      setSelectedMsgMenuPlacement("above");
+      return;
+    }
+
+    const messageList = messageListRef.current;
+    const bubbleRect = event.currentTarget.getBoundingClientRect();
+    const listRect = messageList?.getBoundingClientRect();
+    const estimatedMenuHeight = 18 + actionCount * 40;
+    const spaceAbove = listRect ? bubbleRect.top - listRect.top : bubbleRect.top;
+
+    setSelectedMsgMenuPlacement(spaceAbove < estimatedMenuHeight + 12 ? "below" : "above");
+    setSelectedMsgId(messageId);
+  };
 
   const canDelete = (message) => {
     if (!currentUser || message.userid !== currentUser.id) return false;
@@ -1021,14 +1054,17 @@ function ChatTab({ roomId }) {
   };
 
   const startEditingMessage = (message) => {
+    const text = getTextMessage(message.content);
     setEditingMsgId(message.id);
-    setContent(getTextMessage(message.content));
+    setEditingPreviewText(text);
+    setContent(text);
     setSelectedMsgId(null);
     setShowMediaOptions(false);
   };
 
   const cancelEditingMessage = () => {
     setEditingMsgId(null);
+    setEditingPreviewText("");
     setContent("");
   };
 
@@ -1062,6 +1098,7 @@ function ChatTab({ roomId }) {
     }
 
     setEditingMsgId(null);
+    setEditingPreviewText("");
     setContent("");
     return true;
   };
@@ -1403,7 +1440,11 @@ function ChatTab({ roomId }) {
   };
 
   return (
-    <div className={`chat-container${showMediaOptions ? " media-open" : ""}`}>
+    <div
+      className={`chat-container${showMediaOptions ? " media-open" : ""}${
+        editingMsgId ? " editing-message" : ""
+      }`}
+    >
       {pinnedText && (
         <div
           className={`chat-pinned-message${
@@ -1534,6 +1575,7 @@ function ChatTab({ roomId }) {
           const deletable = canDelete(message);
           const editable = canEdit(message);
           const pinnable = canPin(message);
+          const actionCount = [deletable, editable, pinnable].filter(Boolean).length;
           const unreadCount = isMine ? getUnreadCount(message) : 0;
 
           return (
@@ -1576,13 +1618,17 @@ function ChatTab({ roomId }) {
                     <div className="chat-bubble-wrap">
                       {selectedMsgId === message.id && (
                         <div
-                          className="chat-delete-popup"
+                          className={`chat-delete-popup ${selectedMsgMenuPlacement}`}
                           style={isMine ? { right: 0 } : { left: 0 }}
                           onClick={(event) => event.stopPropagation()}
                         >
                           {deletable && (
-                            <button onClick={() => deleteMessage(message.id)}>
-                              삭제
+                            <button
+                              className="chat-action-delete"
+                              onClick={() => deleteMessage(message.id)}
+                            >
+                              <FiTrash2 aria-hidden="true" />
+                              <span>삭제</span>
                             </button>
                           )}
                           {editable && (
@@ -1590,7 +1636,8 @@ function ChatTab({ roomId }) {
                               className="chat-edit-button"
                               onClick={() => startEditingMessage(message)}
                             >
-                              수정하기
+                              <FiEdit2 aria-hidden="true" />
+                              <span>수정하기</span>
                             </button>
                           )}
                           {pinnable && (
@@ -1598,7 +1645,8 @@ function ChatTab({ roomId }) {
                               className="chat-pin-button"
                               onClick={() => pinMessage(message)}
                             >
-                              고정하기
+                              <FiBookmark aria-hidden="true" />
+                              <span>고정하기</span>
                             </button>
                           )}
                         </div>
@@ -1611,10 +1659,7 @@ function ChatTab({ roomId }) {
                         onClick={
                           deletable || pinnable
                             ? (event) => {
-                                event.stopPropagation();
-                                setSelectedMsgId((value) =>
-                                  value === message.id ? null : message.id
-                                );
+                                toggleMessageActions(event, message.id, actionCount);
                               }
                             : undefined
                         }
@@ -1896,29 +1941,41 @@ function ChatTab({ roomId }) {
       )}
 
       <div className={`chat-composer${showMediaOptions ? " expanded" : ""}`}>
-      <form className="chat-input-area" onSubmit={handleSendMessage}>
-        {editingMsgId && (
+      {editingMsgId && (
+        <div className="chat-edit-preview">
+          <div className="chat-edit-preview-icon" aria-hidden="true">
+            <FiEdit2 />
+          </div>
+          <div className="chat-edit-preview-text">
+            <strong>메시지 수정</strong>
+            <span>{editingPreviewText}</span>
+          </div>
           <button
             type="button"
-            className="chat-edit-cancel-btn"
+            className="chat-edit-preview-close"
             onClick={cancelEditingMessage}
+            aria-label="수정 취소"
           >
-            취소
+            <FiX aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
+      <form className="chat-input-area" onSubmit={handleSendMessage}>
+        {!editingMsgId && (
+          <button
+            type="button"
+            className={`chat-plus-btn${showMediaOptions ? " active" : ""}`}
+            onClick={() => setShowMediaOptions((value) => !value)}
+          >
+            <span className="chat-plus-symbol">{showMediaOptions ? "-" : "+"}</span>
           </button>
         )}
-        <button
-          type="button"
-          className={`chat-plus-btn${showMediaOptions ? " active" : ""}`}
-          onClick={() => setShowMediaOptions((value) => !value)}
-          disabled={!!editingMsgId}
-        >
-          <span className="chat-plus-symbol">{showMediaOptions ? "-" : "+"}</span>
-        </button>
 
         <input
           value={uploading ? "이미지 전송 중..." : content}
           onChange={(event) => setContent(event.target.value)}
-          placeholder="메시지를 입력하세요"
+          placeholder={editingMsgId ? "수정할 메시지를 입력하세요" : "메시지를 입력하세요"}
           disabled={uploading}
         />
 

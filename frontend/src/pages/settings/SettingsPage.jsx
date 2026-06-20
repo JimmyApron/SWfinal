@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { logoutApi, getCurrentUserApi } from '../../api/authApi'
 import { supabase } from '../../lib/supabaseClient'
 import { useTheme } from '../../context/ThemeContext'
-import { FaChevronLeft, FaMoon, FaBell, FaUser, FaSignOutAlt, FaChevronRight, FaPen } from 'react-icons/fa'
+import { FaChevronLeft, FaMoon, FaBell, FaUser, FaSignOutAlt, FaChevronRight } from 'react-icons/fa'
 import { FiUser } from 'react-icons/fi'
 import './SettingsPage.css'
 
@@ -109,9 +109,6 @@ function SettingsPage() {
           {loginProvider === 'google' && <div className="provider-badge provider-google"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="16" /> Google</div>}
           {loginProvider === 'kakao' && <div className="provider-badge provider-kakao">카카오</div>}
           
-          <button type="button" className="edit-btn" onClick={() => navigate('/settings/edit')}>
-            <FaPen size={12} /> 프로필 편집
-          </button>
         </section>
 
         <h3 className="section-title">앱 설정</h3>

@@ -1732,12 +1732,21 @@
 .location-register-icon {
   width: 42px;
   height: 42px;
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 42px;
   border-radius: 999px;
   background: #eeeaff;
   color: #7c79ff;
+  font-size: 0;
   font-weight: 900;
+}
+
+.location-register-icon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 
 .location-register-search {

@@ -30,6 +30,16 @@ function getTodayStr() {
   return `${y}-${m}-${d}`;
 }
 
+function getScheduleSortTime(schedule) {
+  if (!schedule.date) return Number.POSITIVE_INFINITY;
+
+  const time = schedule.starttime || "00:00:00";
+  const normalizedTime = time.length === 5 ? `${time}:00` : time;
+  const timestamp = new Date(`${schedule.date}T${normalizedTime}`).getTime();
+
+  return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
+}
+
 function Avatar({ url, nickname, size = 40 }) {
   return url ? (
     <img
@@ -350,9 +360,9 @@ function HomePage() {
     }
   };
 
-  const upcomingSchedules = confirmedSchedules.filter(
-    (schedule) => !schedule.date || schedule.date >= getTodayStr()
-  );
+  const upcomingSchedules = confirmedSchedules
+    .filter((schedule) => !schedule.date || schedule.date >= getTodayStr())
+    .sort((a, b) => getScheduleSortTime(a) - getScheduleSortTime(b));
 
   return (
     <div className="home-container" style={{ backgroundColor: "var(--bg-color)", color: "var(--text-color)", minHeight: "100vh", padding: "14px 14px 0" }}>

@@ -1,6 +1,7 @@
 .chat-container {
   --chat-nav-height: 64px;
   --chat-input-height: 72px;
+  --chat-edit-preview-height: 68px;
   --chat-options-height: 114px;
   height: calc(100svh - var(--chat-nav-height) - 52px);
   flex: 1;
@@ -25,6 +26,10 @@
 
 .chat-container.media-open .chat-message-list {
   margin-bottom: calc(var(--chat-input-height) + var(--chat-options-height));
+}
+
+.chat-container.editing-message .chat-message-list {
+  margin-bottom: calc(var(--chat-input-height) + var(--chat-edit-preview-height));
 }
 
 .chat-pinned-message {
@@ -395,32 +400,76 @@
 
 .chat-delete-popup {
   position: absolute;
-  bottom: calc(100% + 6px);
-  background: #222;
-  border-radius: 8px;
-  padding: 6px 14px;
-  z-index: 10;
+  bottom: calc(100% + 8px);
+  min-width: 128px;
+  overflow: hidden;
+  background: var(--card-bg);
+  border: 1px solid rgba(124, 92, 255, 0.14);
+  border-radius: 12px;
+  padding: 6px;
+  z-index: 25;
   white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
+}
+
+.chat-delete-popup.below {
+  top: calc(100% + 8px);
+  bottom: auto;
 }
 
 .chat-delete-popup button {
-  color: #ff5555;
-  background: none;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-color);
+  background: transparent;
   border: none;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 13px;
-  font-weight: bold;
-  padding: 0;
+  font-weight: 700;
+  line-height: 1;
+  padding: 9px 10px;
   margin: 0;
+  text-align: left;
+  transition:
+    background-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.chat-delete-popup button:hover {
+  background: rgba(124, 92, 255, 0.08);
+  color: #5b4bd8;
+}
+
+.chat-delete-popup button svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+}
+
+.chat-delete-popup .chat-action-delete {
+  color: #dc2626;
+}
+
+.chat-delete-popup .chat-action-delete:hover {
+  background: #fef2f2;
+  color: #b91c1c;
 }
 
 .chat-delete-popup .chat-edit-button,
 .chat-delete-popup .chat-pin-button {
-  color: #fff;
+  color: #5b4bd8;
+}
+
+.chat-delete-popup .chat-edit-button:hover,
+.chat-delete-popup .chat-pin-button:hover {
+  background: rgba(124, 92, 255, 0.08);
+  color: #4c3ed1;
 }
 
 .chat-announcement-message {
@@ -679,6 +728,81 @@
   border-top: 0;
 }
 
+.chat-edit-preview {
+  min-height: var(--chat-edit-preview-height);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  background: #f4f0ff;
+  border-bottom: 1px solid rgba(124, 92, 255, 0.18);
+}
+
+.chat-edit-preview-icon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(124, 92, 255, 0.24);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.78);
+  color: #6d5dfc;
+}
+
+.chat-edit-preview-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.chat-edit-preview-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #33286d;
+}
+
+.chat-edit-preview-text strong {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.chat-edit-preview-text span {
+  overflow: hidden;
+  color: #6f65a8;
+  font-size: 13px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-edit-preview-close {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #5f55b8;
+  cursor: pointer;
+}
+
+.chat-edit-preview-close svg {
+  width: 22px;
+  height: 22px;
+}
+
+.chat-edit-preview-close:hover {
+  background: rgba(124, 92, 255, 0.12);
+}
+
 .chat-input-area .chat-plus-btn {
   width: 34px;
   height: 34px;
@@ -722,13 +846,6 @@
   pointer-events: auto;
   transform: translateY(0);
   border-top-width: 1px;
-}
-
-.chat-input-area .chat-edit-cancel-btn {
-  margin-left: 0;
-  padding: 0 12px;
-  background-color: var(--btn-bg);
-  color: var(--btn-text);
 }
 
 .chat-edited-label {

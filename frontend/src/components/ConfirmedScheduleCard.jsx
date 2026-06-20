@@ -14,7 +14,7 @@ function getTimeUntil(date, starttime) {
   if (isNaN(target.getTime())) return null;
 
   const diff = target - new Date();
-  if (diff < 0) return date === getTodayStr() ? "당일 일정" : "지난 일정";
+  if (diff < 0) return date === getTodayStr() ? "오늘 일정" : "지난 일정";
 
   const totalMinutes = Math.floor(diff / (1000 * 60));
   const totalHours = Math.floor(totalMinutes / 60);

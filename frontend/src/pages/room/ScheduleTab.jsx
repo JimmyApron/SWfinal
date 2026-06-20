@@ -1253,12 +1253,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                               borderTop: showMySelection && (isSegmentStart || isSegmentSingle) ? "2px solid #7C5CFF" : "none",
                               borderBottom: showMySelection && (isSegmentEnd || isSegmentSingle) ? "2px solid #7C5CFF" : (time.endsWith(":30") ? "1px solid #D1D5DB" : "1px solid #F3F4F6"),
                               borderLeft: showMySelection ? "2px solid #7C5CFF" : "none",
-                              borderRight: showMySelection ? "2px solid #7C5CFF" : "1px solid #EEF0F4",
-
-                              borderTopLeftRadius: (isSegmentStart || isSegmentSingle) ? "10px" : "0",
-                              borderTopRightRadius: (isSegmentStart || isSegmentSingle) ? "10px" : "0",
-                              borderBottomLeftRadius: (isSegmentEnd || isSegmentSingle) ? "10px" : "0",
-                              borderBottomRightRadius: (isSegmentEnd || isSegmentSingle) ? "10px" : "0",
+                              borderRight: showMySelection ? "2px solid #7C5CFF" : "1px solid #D1D5DB",
 
                               cursor: selectable ? "pointer" : "default",
                               padding: 0,

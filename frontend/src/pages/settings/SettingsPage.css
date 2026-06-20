@@ -97,21 +97,6 @@
 .provider-google { background: #fff; border: 1px solid #e0e0e0; color: #444; }
 .provider-kakao { background: #FEE500; color: #000; font-weight: bold; }
 
-.edit-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: #ffffff;
-  border: 1px solid #7c4dff;
-  color: #7c4dff;
-  border-radius: 99px;
-  padding: 8px 18px;
-  font-weight: 600;
-  cursor: pointer;
-  font-size: 13px;
-  margin-top: 10px;
-}
-
 .section-title {
   font-size: 17px;
   font-weight: 800;

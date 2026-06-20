@@ -6,7 +6,7 @@ function Auth() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // 1. È¸¿ø°¡ÀÔ ·ÎÁ÷
+  // 1. íšŒì›ê°€ì… ë¡œì§
   const handleSignUp = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -17,15 +17,15 @@ function Auth() {
     });
 
     if (error) {
-      alert(`È¸¿ø°¡ÀÔ ½ÇÆĞ: ${error.message}`);
+      alert(`íšŒì›ê°€ì… ì‹¤íŒ¨: ${error.message}`);
     } else {
-      alert("È¸¿ø°¡ÀÔ ¼º°ø! °¡ÀÔÇÏ½Å ÀÌ¸ŞÀÏÀÇ ÀÎÁõ ¸ŞÀÏÇÔÀ» È®ÀÎÇÏ°Å³ª, Supabase ¼³Á¤¿¡ µû¶ó ¹Ù·Î ·Î±×ÀÎÇØº¸¼¼¿ä.");
-      console.log("°¡ÀÔ À¯Àú Á¤º¸:", data.user);
+      alert("íšŒì›ê°€ì… ì„±ê³µ! ê°€ì…í•˜ì‹  ì´ë©”ì¼ì˜ ì¸ì¦ ë©”ì¼í•¨ì„ í™•ì¸í•˜ê±°ë‚˜, Supabase ì„¤ì •ì— ë”°ë¼ ë°”ë¡œ ë¡œê·¸ì¸í•´ë³´ì„¸ìš”.");
+      console.log("ê°€ì… ìœ ì € ì •ë³´:", data.user);
     }
     setLoading(false);
   };
 
-  // 2. ·Î±×ÀÎ ·ÎÁ÷
+  // 2. ë¡œê·¸ì¸ ë¡œì§
   const handleSignIn = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -36,21 +36,21 @@ function Auth() {
     });
 
     if (error) {
-      alert(`·Î±×ÀÎ ½ÇÆĞ: ${error.message}`);
+      alert(`ë¡œê·¸ì¸ ì‹¤íŒ¨: ${error.message}`);
     } else {
-      alert("·Î±×ÀÎ ¼º°ø!");
-      console.log("·Î±×ÀÎ À¯Àú Á¤º¸:", data.user);
+      alert("ë¡œê·¸ì¸ ì„±ê³µ!");
+      console.log("ë¡œê·¸ì¸ ìœ ì € ì •ë³´:", data.user);
     }
     setLoading(false);
   };
 
   return (
     <div style={{ maxWidth: "400px", margin: "50px auto", padding: "20px", border: "1px solid #ccc", borderRadius: "8px" }}>
-      <h2>Supabase ÀÎÁõ Å×½ºÆ®</h2>
+      <h2>Supabase ì¸ì¦ í…ŒìŠ¤íŠ¸</h2>
       <form style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         <input
           type="email"
-          placeholder="ÀÌ¸ŞÀÏ ÀÔ·Â"
+          placeholder="ì´ë©”ì¼ ì…ë ¥"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
@@ -58,7 +58,7 @@ function Auth() {
         />
         <input
           type="password"
-          placeholder="ºñ¹Ğ¹øÈ£ ÀÔ·Â"
+          placeholder="ë¹„ë°€ë²ˆí˜¸ ì…ë ¥"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -67,10 +67,10 @@ function Auth() {
         
         <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
           <button type="button" onClick={handleSignIn} disabled={loading} style={{ flex: 1, padding: "10px", backgroundColor: "#007bff", color: "white", border: "none", cursor: "pointer" }}>
-            {loading ? "·Îµù Áß..." : "·Î±×ÀÎ"}
+            {loading ? "ë¡œë”© ì¤‘..." : "ë¡œê·¸ì¸"}
           </button>
           <button type="button" onClick={handleSignUp} disabled={loading} style={{ flex: 1, padding: "10px", backgroundColor: "#28a745", color: "white", border: "none", cursor: "pointer" }}>
-            {loading ? "·Îµù Áß..." : "È¸¿ø°¡ÀÔ"}
+            {loading ? "ë¡œë”© ì¤‘..." : "íšŒì›ê°€ì…"}
           </button>
         </div>
       </form>

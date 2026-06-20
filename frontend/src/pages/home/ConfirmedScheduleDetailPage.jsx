@@ -24,21 +24,19 @@ import { getTodayStr } from "../../utils/scheduleUtils";
 
 function getTimeUntil(date, starttime) {
   if (!date || !date.match(/^\d{4}-\d{2}-\d{2}$/)) return null;
-  const today = getTodayStr();
-  if (date === today) return "오늘 일정";
   const target = new Date(`${date}T${starttime || "00:00:00"}`);
   if (isNaN(target.getTime())) return null;
   const diff = target - new Date();
-  if (diff < 0) return "지난 일정";
-  const totalMinutes = Math.floor(diff / (1000 * 60));
+  if (diff < 0 && date === getTodayStr()) return "오늘 일정";
+  const totalMinutes = Math.floor(Math.abs(diff) / (1000 * 60));
   const totalHours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   if (totalHours < 24) {
-    return `${String(totalHours).padStart(2, "0")}시간 ${String(minutes).padStart(2, "0")}분 전`;
+    return `${String(totalHours).padStart(2, "0")}시간 ${String(minutes).padStart(2, "0")}분 전 일정`;
   }
   const days = Math.floor(totalHours / 24);
   const hours = totalHours % 24;
-  return `${days}일 ${hours}시간 전`;
+  return `${days}일 ${hours}시간 전 일정`;
 }
 
 function ConfirmedScheduleDetailPage() {
@@ -97,7 +95,7 @@ function ConfirmedScheduleDetailPage() {
   const [memberLocations, setMemberLocations] = useState([]);
   const [memberRoutePaths, setMemberRoutePaths] = useState([]);
   const [memberRouteResults, setMemberRouteResults] = useState([]);
-  const [voteExists, setVoteExists] = useState(null); // null=嚥≪뮆逾ヤ빳? true/false
+  const [voteExists, setVoteExists] = useState(null); // null=로딩중, true/false
   const [showEditChoice, setShowEditChoice] = useState(false);
   const [showAttendees, setShowAttendees] = useState(false);
   const [showLocationEditChoice, setShowLocationEditChoice] = useState(false);
@@ -182,7 +180,7 @@ function ConfirmedScheduleDetailPage() {
 
     getAdditionalConfirmedLocations(schedule.roomid, schedule.id)
       .then(setAdditionalLocations)
-      .catch((error) => console.error("?곕떽? ?關??鈺곌퀬????쎈솭:", error));
+      .catch((error) => console.error("추가 장소 조회 실패:", error));
 
     if (schedule.isLocationOnly) {
       const draftTitle = localStorage.getItem(
@@ -200,7 +198,7 @@ function ConfirmedScheduleDetailPage() {
 
     getRoomMemberLocations(schedule.roomid)
       .then(setMemberLocations)
-      .catch((error) => console.error("??猷??롫뼊 ?類ｋ궖 鈺곌퀬????쎈솭:", error));
+      .catch((error) => console.error("이동수단 정보 조회 실패:", error));
   }, [schedule]);
 
   useEffect(() => {
@@ -237,7 +235,7 @@ function ConfirmedScheduleDetailPage() {
 
   const handleSaveTiming = async () => {
     if (!timingDraft.date) {
-      alert("?醫롮?????낆젾??곻폒?紐꾩뒄.");
+      alert("날짜를 입력해주세요.");
       return;
     }
 
@@ -245,7 +243,7 @@ function ConfirmedScheduleDetailPage() {
       !timingDraft.isallday &&
       (!timingDraft.starttime || !timingDraft.endtime)
     ) {
-      alert("??뽰삂 ??볦퍢???ル굝利???볦퍢????낆젾??곻폒?紐꾩뒄.");
+      alert("시작 시간과 종료 시간을 입력해주세요.");
       return;
     }
 
@@ -253,7 +251,7 @@ function ConfirmedScheduleDetailPage() {
       !timingDraft.isallday &&
       timingDraft.starttime >= timingDraft.endtime
     ) {
-      alert("?ル굝利???볦퍢?? ??뽰삂 ??볦퍢癰귣?????堉????몃빍??");
+      alert("종료 시간은 시작 시간보다 늦어야 합니다.");
       return;
     }
 
@@ -263,7 +261,7 @@ function ConfirmedScheduleDetailPage() {
       setScheduleTiming(timingDraft);
       setIsEditingTiming(false);
       setShowEditChoice(false);
-      alert("??깆젟 ?醫롮??? ??볦퍢????륁젟??됰뮸??덈뼄.");
+      alert("일정 날짜와 시간을 수정했습니다.");
     } catch (error) {
       alert(error.message);
     } finally {
@@ -273,7 +271,7 @@ function ConfirmedScheduleDetailPage() {
 
   const handleSave = async () => {
     if (!locationText.trim()) {
-      alert("?關?쇘몴???낆젾??뤾쉭??");
+      alert("장소를 입력하세요.");
       return;
     }
 
@@ -293,9 +291,9 @@ function ConfirmedScheduleDetailPage() {
       setShowLocationEditChoice(false);
       await refreshRouteEstimates(draftMeetingPlace);
 
-      alert("?關?쇔첎? ???貫由??됰뮸??덈뼄.");
+      alert("장소가 저장되었습니다.");
     } catch (error) {
-      alert("?關????????쎈솭: " + error.message);
+      alert("장소 저장 실패: " + error.message);
     } finally {
       setSaving(false);
     }
@@ -351,7 +349,7 @@ function ConfirmedScheduleDetailPage() {
                 destination,
                 mode,
               }).catch((error) => {
-              console.error("筌롢끇苡???猷??볦퍢 ?④쑴沅???쎈솭:", error);
+              console.error("멤버 이동시간 계산 실패:", error);
               return null;
             });
 
@@ -399,7 +397,7 @@ function ConfirmedScheduleDetailPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(requestBody),
               }).catch((error) => {
-                console.error("[Kakao Route API] 筌롢끇苡??癒?짗筌?野껋럥以????뺤쒔 ?怨뚭퍙 ??쎈솭:", {
+                console.error("[Kakao Route API] 멤버 자동차 경로선 서버 연결 실패:", {
                   url,
                   requestBody,
                   error,
@@ -430,7 +428,7 @@ function ConfirmedScheduleDetailPage() {
               } else if (response) {
                 const responseBody = await readRouteResponseBody(response);
 
-                console.error("[Kakao Route API] 筌롢끇苡??癒?짗筌?野껋럥以???④쑴沅???쎈솭:", {
+                console.error("[Kakao Route API] 멤버 자동차 경로선 계산 실패:", {
                   url,
                   status: response.status,
                   statusText: response.statusText,
@@ -441,7 +439,7 @@ function ConfirmedScheduleDetailPage() {
             }
 
             if (!hasPath) {
-              routeResult.error = "野껋럥以?野꺜???븍뜃?";
+              routeResult.error = "경로 검색 불가";
             }
 
             routeResults.push(routeResult);
@@ -452,14 +450,14 @@ function ConfirmedScheduleDetailPage() {
       setMemberRoutePaths(pathResults);
       setMemberRouteResults(routeResults);
     } catch (error) {
-      console.error("野껋럥以????????쎈솭:", error);
+      console.error("경로 재검색 실패:", error);
     }
   };
 
   const handleCancel = async () => {
     if (
       !window.confirm(
-        "?類ㅼ젟????깆젟???띯뫁??醫됲돱?? 筌뤴뫀諭?筌롢끇苡?癒?쓺 ???뵝???袁⑸꽊??몃빍??"
+        "확정된 일정을 취소할까요? 모든 멤버에게 알림이 전송됩니다."
       )
     ) {
       return;
@@ -472,27 +470,27 @@ function ConfirmedScheduleDetailPage() {
         roomId: schedule.roomid,
         senderId: currentUser?.id,
         type: "schedule_cancelled",
-        title: "일정 취소",
-        message: `"${schedule.title || dateLabel}" 일정이 취소되었습니다.`,
+        title: "확정 일정이 취소되었습니다",
+        message: `방의 "${schedule.title || dateLabel}" 일정 확정이 취소되었습니다.`,
         link: `/rooms/${schedule.roomid}?tab=vote`,
       });
 
-      alert("일정이 취소되었습니다.");
+      alert("일정 확정이 취소되었습니다.");
       navigate(-1);
     } catch (error) {
-      alert("?띯뫁????쎈솭: " + error.message);
+      alert("취소 실패: " + error.message);
     }
   };
 
   const handleDismiss = async () => {
-    if (!window.confirm("?????遺얇늺?癒?퐣 ????깆젟????ｋ쭔繹먮슣??")) return;
+    if (!window.confirm("내 홈 화면에서 이 일정을 숨길까요?")) return;
 
     try {
       await dismissConfirmedSchedule(schedule.id, currentUser?.id);
-      alert("?????遺얇늺?癒?퐣 ??? 筌ｌ꼶???뤿???щ빍??");
+      alert("내 홈 화면에서 숨김 처리되었습니다.");
       navigate("/home");
     } catch (error) {
-      alert("??? 筌ｌ꼶????쎈솭: " + error.message);
+      alert("숨김 처리 실패: " + error.message);
     }
   };
 
@@ -500,7 +498,7 @@ function ConfirmedScheduleDetailPage() {
     const userId = currentUser?.id;
 
     if (!userId) {
-      alert("嚥≪뮄??紐꾩뵠 ?袁⑹뒄??몃빍??");
+      alert("로그인이 필요합니다.");
       return;
     }
 
@@ -531,25 +529,25 @@ function ConfirmedScheduleDetailPage() {
             roomId: schedule.roomid,
             senderId: userId,
             type: "schedule_cancelled",
-            title: "일정 취소",
-            message: `참석 가능한 멤버가 부족해 "${
+            title: "확정 일정이 취소되었습니다",
+            message: `방의 참여 인원 부족으로 "${
               schedule.title || schedule.date
             }" 일정이 자동 취소되었습니다.`,
             link: `/rooms/${schedule.roomid}?tab=vote`,
           });
 
-          alert("참석 가능한 멤버가 1명 이하라 일정이 자동 취소되었습니다.");
+          alert("참여 인원이 1명만 남아 일정이 자동 취소되었습니다.");
           navigate(-1);
         }
       }
     } catch (error) {
-      alert("筌〓챷苑??怨밴묶 癰궰野???쎈솭: " + error.message);
+      alert("참석 상태 변경 실패: " + error.message);
     }
   };
 
   const handleCreateSchedule = async () => {
     if (!scheduleForm.date) {
-      alert("??깆젟????낆젾??뤾쉭??");
+      alert("일정을 입력하세요.");
       return;
     }
 
@@ -565,10 +563,10 @@ function ConfirmedScheduleDetailPage() {
         `appointment_draft_title_${Number(schedule.roomid)}`
       );
 
-      alert("??깆젟?????貫由??됰뮸??덈뼄.");
+      alert("일정이 저장되었습니다.");
       navigate("/home");
     } catch (error) {
-      alert("??깆젟 ??????쎈솭: " + error.message);
+      alert("일정 저장 실패: " + error.message);
     } finally {
       setSaving(false);
     }
@@ -576,7 +574,7 @@ function ConfirmedScheduleDetailPage() {
 
   const handleAddLocation = async () => {
     if (!additionalPlace?.name) {
-      alert("?곕떽????關?쇘몴??醫뤾문??뤾쉭??");
+      alert("추가할 장소를 선택하세요.");
       return;
     }
 
@@ -593,16 +591,16 @@ function ConfirmedScheduleDetailPage() {
       setAdditionalPlace(null);
       setShowAdditionalPicker(false);
 
-      alert("?곕떽? ?關?쇔첎? ???貫由??됰뮸??덈뼄.");
+      alert("추가 장소가 저장되었습니다.");
     } catch (error) {
-      alert("?곕떽? ?關????????쎈솭: " + error.message);
+      alert("추가 장소 저장 실패: " + error.message);
     } finally {
       setSaving(false);
     }
   };
 
   const handleDeleteAdditionalLocation = async (locationId) => {
-    if (!window.confirm("???關?쇘몴?????醫됲돱??")) return;
+    if (!window.confirm("이 장소를 삭제할까요?")) return;
 
     try {
       await deleteAdditionalConfirmedLocation(locationId);
@@ -610,7 +608,7 @@ function ConfirmedScheduleDetailPage() {
         locations.filter((location) => location.id !== locationId)
       );
     } catch (error) {
-      alert("?關????????쎈솭: " + error.message);
+      alert("장소 삭제 실패: " + error.message);
     }
   };
 
@@ -619,7 +617,7 @@ function ConfirmedScheduleDetailPage() {
       "confirmFromSchedule",
       JSON.stringify({
         id: schedule.id,
-        title: schedule.title || "??깆젟",
+        title: schedule.title || "일정",
         hasLocation: !!schedule.location,
         roomid: schedule.roomid,
       })
@@ -881,7 +879,7 @@ function ConfirmedScheduleDetailPage() {
             onClick={() => navigate("/home")}
             style={{ border: "none", background: "none", fontSize: "20px" }}
           >
-            ??
+            ←
           </button>
 
           <h3 style={{ margin: 0, fontSize: "15px" }}>확정 일정 상세</h3>
@@ -923,7 +921,7 @@ function ConfirmedScheduleDetailPage() {
 
           <input
             type="text"
-            placeholder="??깆젟 ??뺛걠 (?醫뤾문)"
+            placeholder="일정 제목 (선택)"
             value={scheduleForm.title}
             onChange={(event) =>
               setScheduleForm((form) => ({
@@ -1007,10 +1005,10 @@ function ConfirmedScheduleDetailPage() {
           onClick={() => navigate(-1)}
           style={{ border: "none", background: "none", fontSize: "20px", color: "#1F2933", flex: "0 0 28px" }}
         >
-          ??
+          ←
         </button>
 
-        <h3 style={{ margin: 0, flex: 1, textAlign: "center", fontSize: "15px", color: "#1F2933" }}>?類ㅼ젟 ??깆젟 ?怨멸쉭</h3>
+        <h3 style={{ margin: 0, flex: 1, textAlign: "center", fontSize: "15px", color: "#1F2933" }}>확정 일정 상세</h3>
 
         <div style={{ flex: "0 0 28px" }} />
       </div>
@@ -1037,7 +1035,7 @@ function ConfirmedScheduleDetailPage() {
               }}
             >
               <FaCalendarAlt color="#7C5CFF" size={13} />
-              ?類ㅼ젟 ??깆젟: {dateLabel}
+              확정 일정: {dateLabel}
             </p>
             {timeUntil && (
               <p
@@ -1075,7 +1073,7 @@ function ConfirmedScheduleDetailPage() {
               padding: 0,
             }}
           >
-            {isDateUndecided ? "?源낆쨯" : "??륁젟"}
+            {isDateUndecided ? "등록" : "수정"}
           </button>
         </div>
 
@@ -1090,7 +1088,7 @@ function ConfirmedScheduleDetailPage() {
               color: "#6B7280",
             }}
           >
-            筌왖????깆젟??낅빍?? ?醫롮?夷?袁⑺뒄 ??륁젟?? ?븍뜃???몃빍??
+            지난 일정입니다. 날짜·위치 수정은 불가합니다.
           </div>
         )}
 
@@ -1103,7 +1101,7 @@ function ConfirmedScheduleDetailPage() {
               marginBottom: "12px",
             }}
           >
-            {/* ?냈??곷뮞 1: ??紐닸에???밴쉐 + ??紐?鈺곕똻??*/}
+            {/* 케이스 1: 투표로 생성 + 투표 존재 */}
             {voteExists === true && (
               <button
                 type="button"
@@ -1112,17 +1110,17 @@ function ConfirmedScheduleDetailPage() {
                 }
                 style={shortcutButtonStyle}
               >
-                ??紐닸에????툡揶쎛疫?
+                투표로 돌아가기
               </button>
             )}
-            {/* ?냈??곷뮞 2: ??紐닸에???밴쉐 + ??紐??????*/}
+            {/* 케이스 2: 투표로 생성 + 투표 삭제됨 */}
             {voteExists === false && (
               <button
                 type="button"
                 onClick={openInScheduleTab}
                 style={{ ...shortcutButtonStyle, color: "#f44", borderColor: "#ffcccc" }}
               >
-                ??깆젟 ??肉???類λ릭疫?
+                일정 탭에서 정하기
               </button>
             )}
           </div>
@@ -1163,10 +1161,10 @@ function ConfirmedScheduleDetailPage() {
                     fontSize: "12px",
                   }}
                 >
-                  ?維?
+                  👥
                 </div>
                 <span style={{ fontWeight: "700", fontSize: "14px", color: "#1F2933" }}>
-                  筌〓챷肉?筌롢끇苡?{attendingCount}筌?
+                  참여 멤버 {attendingCount}명
                 </span>
               </div>
               <span
@@ -1178,7 +1176,7 @@ function ConfirmedScheduleDetailPage() {
                   transition: "transform 0.15s ease",
                 }}
               >
-                ??
+                ›
               </span>
             </div>
 
@@ -1232,7 +1230,7 @@ function ConfirmedScheduleDetailPage() {
         <div style={{ marginBottom: "16px" }} />
 
         {isPastSchedule ? (
-          /* 筌왖????깆젟: 揶쏆뮇??筌?꼶??遺용퓠??뺤춸 ????(癰귣챷??癒?쓺筌??怨몄뒠) */
+          /* 지난 일정: 개인 캘린더에서만 삭제 (본인에게만 적용) */
           currentUser && (
             <>
               <button
@@ -1248,7 +1246,7 @@ function ConfirmedScheduleDetailPage() {
                   cursor: "pointer",
                 }}
               >
-                ??깆젟 ????
+                일정 삭제
               </button>
               <p
                 style={{
@@ -1258,12 +1256,12 @@ function ConfirmedScheduleDetailPage() {
                   marginTop: "5px",
                 }}
               >
-                ??筌?꼶??遺용퓠??뺤춸 ?????몃빍??
+                내 캘린더에서만 삭제됩니다
               </p>
             </>
           )
         ) : (
-          /* ?袁⑹삺/沃섎챶????깆젟: 疫꿸퀣??甕곌쑵???醫? */
+          /* 현재/미래 일정: 기존 버튼 유지 */
           <>
             {currentUser && (
               <button
@@ -1299,7 +1297,7 @@ function ConfirmedScheduleDetailPage() {
                     cursor: "pointer",
                   }}
                 >
-                  ??깆젟 ????
+                  일정 삭제
                 </button>
                 <p
                   style={{
@@ -1309,7 +1307,7 @@ function ConfirmedScheduleDetailPage() {
                     marginTop: "5px",
                   }}
                 >
-                  ?????롢늺 筌뤴뫀諭?筌롢끇苡???遺얇늺?癒?퐣 ???わ쭪臾먮빍??
+                  삭제하면 모든 멤버의 화면에서 사라집니다
                 </p>
               </>
             )}
@@ -1348,7 +1346,7 @@ function ConfirmedScheduleDetailPage() {
             {isEditingTiming ? (
               <>
                 <h3 style={{ margin: "0 0 12px", fontSize: "15px", color: "#1F2933", textAlign: "center" }}>
-                  ?類ㅼ젟 ??깆젟 ??륁젟
+                  확정 일정 수정
                 </h3>
 
                 <input
@@ -1381,7 +1379,7 @@ function ConfirmedScheduleDetailPage() {
                       }))
                     }
                   />
-                  ??롳펷?ル굞??
+                  하루종일
                 </label>
 
                 {!timingDraft.isallday && (
@@ -1420,7 +1418,7 @@ function ConfirmedScheduleDetailPage() {
                     }}
                     style={{ ...secondaryButtonStyle, marginBottom: 0 }}
                   >
-                痍⑥냼
+                    취소
                   </button>
                   <button
                     type="button"
@@ -1428,7 +1426,7 @@ function ConfirmedScheduleDetailPage() {
                     disabled={saving}
                     style={{ ...primaryButtonStyle, marginBottom: 0 }}
                   >
-                    {saving ? "?源낆쨯 餓?.." : "?源낆쨯"}
+                    {saving ? "등록 중..." : "등록"}
                   </button>
                 </div>
               </>
@@ -1436,8 +1434,8 @@ function ConfirmedScheduleDetailPage() {
               <>
                 <h3 style={{ margin: "0 0 12px", fontSize: "15px", color: "#1F2933" }}>
                   {isDateUndecided
-                    ? "??깆젟????堉멨칰??源낆쨯?醫됲돱??"
-                    : "??깆젟????堉멨칰???륁젟?醫됲돱??"}
+                    ? "일정을 어떻게 등록할까요?"
+                    : "일정을 어떻게 수정할까요?"}
                 </h3>
 
                 <button
@@ -1448,7 +1446,7 @@ function ConfirmedScheduleDetailPage() {
                   }}
                   style={{ ...primaryButtonStyle, marginBottom: "8px" }}
                 >
-                  {isDateUndecided ? "筌욊낯???源낆쨯" : "筌욊낯????륁젟"}
+                  {isDateUndecided ? "직접 등록" : "직접 수정"}
                 </button>
 
                 <button
@@ -1459,7 +1457,7 @@ function ConfirmedScheduleDetailPage() {
                   }}
                   style={{ ...secondaryButtonStyle, marginBottom: 0 }}
                 >
-                  ??깆젟 ??肉????용┛
+                  일정 탭에서 열기
                 </button>
               </>
             )}
@@ -1500,7 +1498,7 @@ function ConfirmedScheduleDetailPage() {
             {isEditingLocationMap ? (
               <>
                 <h3 style={{ margin: "0 0 10px", fontSize: "15px", color: "#1F2933", textAlign: "center" }}>
-                  筌띾슢沅??關???醫뤾문
+                  만날 장소 선택
                 </h3>
 
                 <LocationPicker
@@ -1528,7 +1526,7 @@ function ConfirmedScheduleDetailPage() {
                     }}
                     style={{ ...secondaryButtonStyle, marginBottom: 0 }}
                   >
-                痍⑥냼
+                    취소
                   </button>
                   <button
                     type="button"
@@ -1536,7 +1534,7 @@ function ConfirmedScheduleDetailPage() {
                     disabled={saving}
                     style={{ ...primaryButtonStyle, marginBottom: 0 }}
                   >
-                    {saving ? "??륁젟 餓?.." : "??륁젟"}
+                    {saving ? "수정 중..." : "수정"}
                   </button>
                 </div>
               </>
@@ -1544,8 +1542,8 @@ function ConfirmedScheduleDetailPage() {
               <>
                 <h3 style={{ margin: "0 0 12px", fontSize: "14px", color: "#1F2933" }}>
                   {isLocationUndecided
-                    ? "筌띾슢沅??關?쇘몴???堉멨칰??源낆쨯?醫됲돱??"
-                    : "筌띾슢沅??關?쇘몴???堉멨칰???륁젟?醫됲돱??"}
+                    ? "만날 장소를 어떻게 등록할까요?"
+                    : "만날 장소를 어떻게 수정할까요?"}
                 </h3>
 
                 <button
@@ -1553,7 +1551,7 @@ function ConfirmedScheduleDetailPage() {
                   onClick={() => setIsEditingLocationMap(true)}
                   style={{ ...primaryButtonStyle, marginBottom: "8px" }}
                 >
-                  筌왖?袁⑸퓠???關???醫뤾문??띾┛
+                  지도에서 장소 선택하기
                 </button>
 
                 <button
@@ -1564,7 +1562,7 @@ function ConfirmedScheduleDetailPage() {
                   }}
                   style={{ ...secondaryButtonStyle, marginBottom: 0 }}
                 >
-                  ?袁⑺뒄 ??肉????용┛
+                  위치 탭에서 열기
                 </button>
               </>
             )}
@@ -1635,7 +1633,7 @@ async function readRouteResponseBody(response) {
     return await response.text();
   } catch (error) {
     return {
-      message: "?臾먮뼗 癰귣챶揆????? 筌륁궢六??щ빍??",
+      message: "응답 본문을 읽지 못했습니다.",
       error: error.message,
     };
   }

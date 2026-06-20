@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { FaLocationArrow, FaUserFriends } from 'react-icons/fa'
+import { FaKeyboard, FaLocationArrow, FaUserFriends } from 'react-icons/fa'
 
 import KakaoMapView from './KakaoMapView'
 import CurrentLocationButton from './CurrentLocationButton'
@@ -2545,7 +2545,7 @@ function MapPage({ roomId }) {
                     await handleCurrentLocation()
                   }}
                 >
-                  <span className="location-register-icon">⌖</span>
+                  <span className="location-register-icon"><FaLocationArrow /></span>
                   <span>
                     <strong>현재 위치로 등록</strong>
                     <small>GPS를 이용해 현재 위치를 불러옵니다.</small>
@@ -2556,7 +2556,7 @@ function MapPage({ roomId }) {
                   type="button"
                   onClick={() => setShowDepartureLocationPicker(true)}
                 >
-                  <span className="location-register-icon">⌨</span>
+                  <span className="location-register-icon"><FaKeyboard /></span>
                   <span>
                     <strong>직접 입력해서 등록</strong>
                     <small>장소명이나 주소를 검색해 등록합니다.</small>
