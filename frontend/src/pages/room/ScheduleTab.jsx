@@ -1087,7 +1087,6 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                                 handleSelectSlot(candidate, time, dragMode);
                               }
                             }}
-                            onClick={() => handleCellClick(candidate, time)}
                             style={{
                               backgroundColor: bgColor,
                               borderRight: "1px solid #EEF0F4",
