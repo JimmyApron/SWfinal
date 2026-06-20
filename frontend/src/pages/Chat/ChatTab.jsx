@@ -507,6 +507,7 @@ function ChatTab({ roomId }) {
   const [isPinnedMessageExpanded, setIsPinnedMessageExpanded] = useState(false);
   const [isEditingPinnedMessage, setIsEditingPinnedMessage] = useState(false);
   const [pinnedMessageDraft, setPinnedMessageDraft] = useState("");
+  const [participants, setParticipants] = useState(new Set());
 
   const bottomRef = useRef(null);
   const galleryInputRef = useRef(null);
@@ -515,6 +516,22 @@ function ChatTab({ roomId }) {
   const sheetRef = useRef(null);
   const dragStartY = useRef(null);
   const isDragging = useRef(false);
+
+  useEffect(() => {
+    if (!roomId) return;
+    const fetchParticipants = async () => {
+      const [{ data: members }, { data: guests }] = await Promise.all([
+        supabase.from("room_members").select("userid").eq("roomid", Number(roomId)),
+        supabase.from("room_guests").select("id").eq("roomid", Number(roomId))
+      ]);
+      const pSet = new Set([
+        ...(members || []).map(m => String(m.userid)),
+        ...(guests || []).map(g => String(g.id))
+      ]);
+      setParticipants(pSet);
+    };
+    fetchParticipants();
+  }, [roomId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1183,6 +1200,7 @@ function ChatTab({ roomId }) {
             message.userid &&
             message.userid === myId
           );
+          const isParticipant = message.userid ? participants.has(String(message.userid)) : true;
           const deletable = canDelete(message);
           const editable = canEdit(message);
           const pinnable = canPin(message);
@@ -1193,7 +1211,7 @@ function ChatTab({ roomId }) {
 
               <div className={`chat-row ${isMine ? "mine" : "other"}`}>
                 {!isMine && (
-                  message.profileimageurl ? (
+                  (isParticipant && message.profileimageurl) ? (
                     <img
                       className="chat-profile-image"
                       src={message.profileimageurl}
@@ -1208,7 +1226,7 @@ function ChatTab({ roomId }) {
 
                 <div className="chat-message-box">
                   {!isMine && (
-                    <div className="chat-nickname">{message.nickname}</div>
+                    <div className="chat-nickname">{isParticipant ? message.nickname : "(알 수 없음)"}</div>
                   )}
 
                   <div style={{ position: "relative" }}>
