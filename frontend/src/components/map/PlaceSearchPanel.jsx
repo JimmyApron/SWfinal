@@ -18,6 +18,7 @@ function PlaceSearchPanel({
   sheetDragProps = {},
   sheetHandleProps = {},
   onOpenFriends,
+  onCloseResults,
 }) {
   const [selectedCategory, setSelectedCategory] = useState('')
   const [radius, setRadius] = useState('1000')
@@ -107,6 +108,14 @@ function PlaceSearchPanel({
     )
   }
 
+  const handleSelectAllPlaces = () => {
+    setSelectedPlaceIds(places.map((place) => String(place.id)))
+  }
+
+  const handleClearSelectedPlaces = () => {
+    setSelectedPlaceIds([])
+  }
+
   const handleCreateVote = () => {
     const selectedPlaces = places.filter((place) =>
       selectedPlaceIds.includes(String(place.id))
@@ -118,6 +127,16 @@ function PlaceSearchPanel({
     }
 
     onCreateAdditionalPlaceVote(selectedPlaces)
+  }
+
+  const handleCloseResults = (event) => {
+    event?.preventDefault()
+    event?.stopPropagation()
+    setPlaces([])
+    setSelectedPlaceIds([])
+    onSearchResult([])
+    onResultStateChange?.(false)
+    onCloseResults?.()
   }
 
   if (!searchLocation) {
@@ -150,7 +169,7 @@ function PlaceSearchPanel({
               className="map-friend-chip"
               onClick={onOpenFriends}
             >
-              친구위치
+              멤버위치
             </button>
           )}
           <PlaceCategoryTabs
@@ -200,16 +219,40 @@ function PlaceSearchPanel({
         >
           {variant === 'mapOverlay' && <div className="map-sheet-handle" {...sheetHandleProps} />}
           <div className="map-sheet-header">
-            <div>
-              <strong>검색 결과</strong>
+            {variant === 'mapOverlay' && (
+              <button
+                type="button"
+                className="map-sheet-back-button"
+                onClick={handleCloseResults}
+                aria-label="검색 결과 닫기"
+              >
+                <span aria-hidden="true">←</span>
+              </button>
+            )}
+            <div className="map-sheet-title-block">
+              <strong>주변 장소 검색 결과</strong>
               <span>{places.length}개 장소</span>
             </div>
             {onCreateAdditionalPlaceVote && (
-              <button type="button" onClick={handleCreateVote}>
-                추가 장소 투표 만들기
+              <button
+                type="button"
+                className="map-sheet-header-action"
+                onClick={handleCreateVote}
+              >
+                주변 장소 투표 만들기
               </button>
             )}
           </div>
+          {onCreateAdditionalPlaceVote && (
+            <div className="map-selection-actions">
+              <button type="button" onClick={handleSelectAllPlaces}>
+                모두 선택
+              </button>
+              <button type="button" onClick={handleClearSelectedPlaces}>
+                모두 해제
+              </button>
+            </div>
+          )}
           <PlaceList
             places={places}
             onSelectPlace={onSelectPlace}

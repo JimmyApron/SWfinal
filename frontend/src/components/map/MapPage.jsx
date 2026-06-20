@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { FaLocationArrow, FaUserFriends } from 'react-icons/fa'
 
 import KakaoMapView from './KakaoMapView'
 import CurrentLocationButton from './CurrentLocationButton'
@@ -31,6 +32,7 @@ import {
   clearConfirmedScheduleLocation,
   createDraftConfirmedSchedule,
   createLocationOnlyConfirmedSchedule,
+  getAdditionalConfirmedLocations,
   getRoomConfirmedSchedules,
 } from '../../api/scheduleApi'
 
@@ -41,8 +43,10 @@ const FRIEND_SHEET_COLLAPSED_HEIGHT = 176
 const FRIEND_SHEET_TOP_SNAP_DISTANCE = 36
 const FRIEND_SHEET_COLLAPSED_SNAP_DISTANCE = 72
 const FRIEND_SHEET_HIDDEN_SNAP_DISTANCE = 18
-const SHEET_COLLAPSE_DRAG_DISTANCE = 80
-const SHEET_HIDE_DRAG_DISTANCE = 320
+const SHEET_EXPANDED_SNAP_DISTANCE = 36
+const SHEET_COLLAPSED_SNAP_DISTANCE = 24
+const SHEET_HIDDEN_SNAP_DISTANCE = 18
+const SHEET_HIDDEN_VISIBLE_HEIGHT = 54
 
 function MapPage({ roomId }) {
   const navigate = useNavigate()
@@ -71,6 +75,7 @@ function MapPage({ roomId }) {
   const [pendingMeetingPlaceConfirm, setPendingMeetingPlaceConfirm] = useState(null)
   const [roomConfirmedSchedules, setRoomConfirmedSchedules] = useState([])
   const [roomConfirmedSchedulesLoaded, setRoomConfirmedSchedulesLoaded] = useState(false)
+  const [confirmedAdditionalPlaces, setConfirmedAdditionalPlaces] = useState([])
   const [confirmedSchedulePlaceLinks, setConfirmedSchedulePlaceLinks] = useState({})
   const [selectedScheduleId, setSelectedScheduleId] = useState(null)
   const [showNewScheduleModal, setShowNewScheduleModal] = useState(false)
@@ -84,8 +89,10 @@ function MapPage({ roomId }) {
   const [showCancelDepartureConfirm, setShowCancelDepartureConfirm] = useState(false)
   const [activeMapPanel, setActiveMapPanel] = useState('default')
   const [hasSearchResultsSheet, setHasSearchResultsSheet] = useState(false)
+  const [hasMiddleRecommendationResults, setHasMiddleRecommendationResults] = useState(false)
   const [sheetSnap, setSheetSnap] = useState('collapsed')
   const [sheetDragOffset, setSheetDragOffset] = useState(0)
+  const [sheetFreeOffset, setSheetFreeOffset] = useState(0)
   const [showFriendMemberListOnly, setShowFriendMemberListOnly] = useState(false)
   const [friendSheetTop, setFriendSheetTop] = useState(null)
   const [friendMapFitRequest, setFriendMapFitRequest] = useState(0)
@@ -99,6 +106,19 @@ function MapPage({ roomId }) {
   const selectedSchedule = roomConfirmedSchedules.find(
     (schedule) => Number(schedule.id) === Number(selectedScheduleId)
   )
+  const selectedScheduleMeetingPlace = getScheduleMeetingPlace({
+    schedule: selectedSchedule,
+    roomId: currentRoomId,
+    kakaoMapUrl: selectedSchedule?.id
+      ? confirmedSchedulePlaceLinks[selectedSchedule.id] || ''
+      : '',
+  })
+  const activeMeetingPlace = middlePlace || selectedScheduleMeetingPlace
+  const visibleMapPlaces = getVisibleMapPlaces({
+    places,
+    confirmedAdditionalPlaces,
+    activeMeetingPlace,
+  })
 
   const myLocationRecord = memberLocations.find((location) => {
     if (currentUserId) return location.userid === currentUserId
@@ -193,7 +213,15 @@ function MapPage({ roomId }) {
       clearInterval(intervalId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isTracking, currentRoomId, currentUserId, currentGuestId, middlePlace, selectedScheduleId])
+  }, [
+    isTracking,
+    currentRoomId,
+    currentUserId,
+    currentGuestId,
+    activeMeetingPlace?.lat,
+    activeMeetingPlace?.lng,
+    selectedScheduleId,
+  ])
 
   useEffect(() => {
     if (!currentRoomId) return
@@ -285,27 +313,38 @@ function MapPage({ roomId }) {
   }, [selectedScheduleId, selectedScheduleStorageKey])
 
   useEffect(() => {
+    if (!currentRoomId || !selectedScheduleId) {
+      setConfirmedAdditionalPlaces([])
+      return
+    }
+
+    let isCancelled = false
+
+    getAdditionalConfirmedLocations(currentRoomId, selectedScheduleId)
+      .then((locations) => {
+        if (isCancelled) return
+
+        setConfirmedAdditionalPlaces(
+          (locations || [])
+            .map(toMapPlace)
+            .filter((place) => isValidMapPoint(place.lat, place.lng))
+        )
+      })
+      .catch((error) => {
+        if (isCancelled) return
+        console.error('Failed to load additional confirmed locations:', error)
+        setConfirmedAdditionalPlaces([])
+      })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [currentRoomId, selectedScheduleId])
+
+  useEffect(() => {
     if (!currentRoomId || !selectedScheduleId) return
 
-    let selectedMiddlePlace = null
-
-    if (
-      selectedSchedule &&
-      selectedSchedule.locationlat !== null &&
-      selectedSchedule.locationlng !== null
-    ) {
-      selectedMiddlePlace = {
-        id: `schedule-${selectedSchedule.id}`,
-        roomid: currentRoomId,
-        name: selectedSchedule.location || 'Meeting place',
-        address: selectedSchedule.locationaddress || '',
-        lat: Number(selectedSchedule.locationlat),
-        lng: Number(selectedSchedule.locationlng),
-        kakaoMapUrl: confirmedSchedulePlaceLinks[selectedSchedule.id] || '',
-        isConfirmedMiddlePlace: true,
-        scheduleid: selectedSchedule.id,
-      }
-    }
+    const selectedMiddlePlace = selectedScheduleMeetingPlace
 
     setMiddlePlace(selectedMiddlePlace)
     setSelectedPlace(selectedMiddlePlace)
@@ -522,14 +561,14 @@ function MapPage({ roomId }) {
   }
 
   const handleShareMiddlePlace = async () => {
-    if (!middlePlace) {
+    if (!activeMeetingPlace) {
       setMessage('확정된 중간 장소가 없습니다.')
       return
     }
 
     const isShared = await sendMapShareToChat({
       shareType: 'middle_place',
-      place: middlePlace,
+      place: activeMeetingPlace,
     })
 
     return isShared
@@ -640,8 +679,8 @@ function MapPage({ roomId }) {
       setTransportModePrompt(null)
       await loadMemberLocations()
 
-      if (middlePlace) {
-        await calculateAllMemberRoutesToMiddlePlace(middlePlace)
+      if (activeMeetingPlace) {
+        await calculateAllMemberRoutesToMiddlePlace(activeMeetingPlace)
       }
 
       if (transportModePrompt.source === 'manual') {
@@ -686,8 +725,8 @@ function MapPage({ roomId }) {
 
       await loadMemberLocations()
 
-      if (middlePlace) {
-        await calculateAllMemberRoutesToMiddlePlace(middlePlace)
+      if (activeMeetingPlace) {
+        await calculateAllMemberRoutesToMiddlePlace(activeMeetingPlace)
       }
     } catch (error) {
       const nextStatus = error?.code === 1 ? 'denied' : 'error'
@@ -765,8 +804,8 @@ function MapPage({ roomId }) {
       setLocationUpdateError('')
       await loadMemberLocations()
 
-      if (middlePlace) {
-        await calculateAllMemberRoutesToMiddlePlace(middlePlace, { silent: true })
+      if (activeMeetingPlace) {
+        await calculateAllMemberRoutesToMiddlePlace(activeMeetingPlace, { silent: true })
       }
 
       setMessage('')
@@ -806,7 +845,7 @@ function MapPage({ roomId }) {
       return
     }
 
-    if (!middlePlace) {
+    if (!activeMeetingPlace) {
       setMessage('중간 장소를 확정해주세요.')
       return
     }
@@ -842,8 +881,8 @@ function MapPage({ roomId }) {
       await loadMemberLocations()
       await notifyDeparture()
 
-      if (middlePlace) {
-        await calculateAllMemberRoutesToMiddlePlace(middlePlace)
+      if (activeMeetingPlace) {
+        await calculateAllMemberRoutesToMiddlePlace(activeMeetingPlace)
       }
 
       setMessage('출발했습니다.')
@@ -907,8 +946,8 @@ function MapPage({ roomId }) {
       setLocationUpdateError('')
       await loadMemberLocations()
 
-      if (middlePlace) {
-        await calculateAllMemberRoutesToMiddlePlace(middlePlace)
+      if (activeMeetingPlace) {
+        await calculateAllMemberRoutesToMiddlePlace(activeMeetingPlace)
       }
 
       setMessage('도착 처리되었습니다.')
@@ -1080,12 +1119,21 @@ function MapPage({ roomId }) {
 
     const routeResults = []
     const routePaths = []
+    const routedMemberKeys = new Set()
 
     for (const member of latestLocations) {
       try {
         if (!member.latitude || !member.longitude) {
           continue
         }
+
+        const memberKey = getMemberKey(member)
+
+        if (!memberKey || routedMemberKeys.has(memberKey)) {
+          continue
+        }
+
+        routedMemberKeys.add(memberKey)
 
         const nickname = getMemberNickname(member)
 
@@ -1105,35 +1153,8 @@ function MapPage({ roomId }) {
           lng: Number(place.lng),
         }
 
-        const timeResult = await getRouteTime({
-          origin,
-          destination: destinationPoint,
-          mode,
-        })
-
-        const durationMinutes = Math.round(timeResult.duration / 60)
-
-        routeResults.push({
-          userid: member.userid,
-          guestid: member.guestid,
-          nickname,
-          mode,
-          duration: timeResult.duration,
-          distance: timeResult.distance,
-          durationMinutes,
-          distanceKm: timeResult.distance
-            ? (timeResult.distance / 1000).toFixed(1)
-            : null,
-        })
-
-        await maybeSendArrivalNotifications({
-          member,
-          nickname,
-          durationMinutes,
-          distance: timeResult.distance,
-        })
-
         let routePath = []
+        let routeSummary = null
 
         if (mode === 'car') {
           const pathResult = await getCarRoutePath({
@@ -1143,20 +1164,51 @@ function MapPage({ roomId }) {
 
           if (pathResult?.path?.length > 0) {
             routePath = pathResult.path
+            routeSummary = pathResult
           }
         }
 
         if (mode === 'transit') {
-          const encodedPaths = [
-            timeResult.encodedPolyline,
-            ...(timeResult.steps || []).map((step) => step.encodedPolyline),
-          ].filter(Boolean)
+          const timeResult = await getRouteTime({
+            origin,
+            destination: destinationPoint,
+            mode,
+          })
 
-          routePath = encodedPaths.flatMap((encodedPath) => decodePolyline(encodedPath))
+          routeSummary = timeResult
+
+          routePath = timeResult.encodedPolyline
+            ? decodePolyline(timeResult.encodedPolyline)
+            : (timeResult.steps || [])
+                .map((step) => step.encodedPolyline)
+                .filter(Boolean)
+                .flatMap((encodedPath) => decodePolyline(encodedPath))
         }
 
-        if (!routePath.length) {
-          routePath = buildFallbackRoutePath(origin, destinationPoint)
+        const durationMinutes = routeSummary?.duration
+          ? Math.round(routeSummary.duration / 60)
+          : null
+
+        const routeResult = {
+          userid: member.userid,
+          guestid: member.guestid,
+          nickname,
+          mode,
+          duration: routeSummary?.duration ?? null,
+          distance: routeSummary?.distance ?? null,
+          durationMinutes,
+          distanceKm: routeSummary?.distance
+            ? (routeSummary.distance / 1000).toFixed(1)
+            : null,
+        }
+
+        if (durationMinutes !== null) {
+          await maybeSendArrivalNotifications({
+            member,
+            nickname,
+            durationMinutes,
+            distance: routeSummary?.distance,
+          })
         }
 
         if (routePath.length > 0) {
@@ -1167,33 +1219,16 @@ function MapPage({ roomId }) {
             mode,
             path: routePath,
           })
+        } else {
+          routeResult.error = '경로 검색 불가'
         }
+
+        routeResults.push(routeResult)
       } catch (error) {
         const nickname = getMemberNickname(member)
         const mode = normalizeTransportMode(member.transportmode)
 
         console.error(`${nickname} 경로 계산 오류:`, error)
-
-        const fallbackPath = buildFallbackRoutePath(
-          {
-            lat: Number(member.latitude),
-            lng: Number(member.longitude),
-          },
-          {
-            lat: Number(place.lat),
-            lng: Number(place.lng),
-          }
-        )
-
-        if (mode && fallbackPath.length > 0) {
-          routePaths.push({
-            userid: member.userid,
-            guestid: member.guestid,
-            nickname,
-            mode,
-            path: fallbackPath,
-          })
-        }
 
         routeResults.push({
           userid: member.userid,
@@ -1204,7 +1239,7 @@ function MapPage({ roomId }) {
           distance: null,
           durationMinutes: null,
           distanceKm: null,
-          error: '경로 계산 실패',
+          error: '경로 검색 불가',
         })
       }
     }
@@ -1309,6 +1344,7 @@ function MapPage({ roomId }) {
       setSelectedPlace(confirmedPlace)
       setDestination(confirmedPlace)
       setPlaces([confirmedPlace])
+      setHasMiddleRecommendationResults(false)
       setMemberRouteResults([])
       setMemberRoutePaths([])
       
@@ -1362,6 +1398,7 @@ function MapPage({ roomId }) {
       setSelectedPlace(confirmedPlace)
       setDestination(confirmedPlace)
       setPlaces([confirmedPlace])
+      setHasMiddleRecommendationResults(false)
       
       setPendingMiddleLocation(null)
       setAppointmentTitle('')
@@ -1413,6 +1450,7 @@ function MapPage({ roomId }) {
       setSelectedPlace(confirmedPlace)
       setDestination(confirmedPlace)
       setPlaces([confirmedPlace])
+      setHasMiddleRecommendationResults(false)
 
       setCreatedLocationOnlySchedule({
         ...schedule,
@@ -1511,12 +1549,12 @@ function MapPage({ roomId }) {
 
   const handleCreateAdditionalPlaceVote = (selectedPlaces) => {
     if (!currentRoomId) {
-      setMessage('방 정보를 찾을 수 없어 추가 장소 투표를 만들 수 없습니다.')
+      setMessage('방 정보를 찾을 수 없어 주변 장소 투표를 만들 수 없습니다.')
       return
     }
 
     if (!selectedPlaces || selectedPlaces.length === 0) {
-      setMessage('투표로 만들 추가 장소를 1개 이상 선택해주세요.')
+      setMessage('투표로 만들 주변 장소를 1개 이상 선택해주세요.')
       return
     }
 
@@ -1542,7 +1580,7 @@ function MapPage({ roomId }) {
         votetype: 'location',
         locationKind: 'additional',
         selectedPlaces: votePlaces,
-        title: '추가 장소 투표',
+        title: '주변 장소 투표',
         returnTab: 'location',
         scheduleId: selectedScheduleId,
         scheduleTitle: selectedSchedule?.title || '',
@@ -1551,7 +1589,7 @@ function MapPage({ roomId }) {
   }
 
   const handleCancelMiddlePlace = async () => {
-    if (!middlePlace) {
+    if (!activeMeetingPlace) {
       setMessage('취소할 중간 장소가 없습니다.')
       return
     }
@@ -1565,6 +1603,24 @@ function MapPage({ roomId }) {
     try {
       if (selectedScheduleId) {
         await clearConfirmedScheduleLocation(selectedScheduleId)
+        setRoomConfirmedSchedules((schedules) =>
+          schedules.map((schedule) =>
+            Number(schedule.id) === Number(selectedScheduleId)
+              ? {
+                  ...schedule,
+                  location: null,
+                  locationaddress: null,
+                  locationlat: null,
+                  locationlng: null,
+                }
+              : schedule
+          )
+        )
+        setConfirmedSchedulePlaceLinks((links) => {
+          const nextLinks = { ...links }
+          delete nextLinks[selectedScheduleId]
+          return nextLinks
+        })
         setRoomConfirmedSchedules(await getRoomConfirmedSchedules(currentRoomId))
       } else {
         await deleteRoomMiddlePlace(currentRoomId)
@@ -1574,6 +1630,7 @@ function MapPage({ roomId }) {
       setSelectedPlace(null)
       setDestination(null)
       setPlaces([])
+      setHasMiddleRecommendationResults(false)
       setMemberRouteResults([])
       setMemberRoutePaths([])
 
@@ -1629,8 +1686,8 @@ function MapPage({ roomId }) {
   const myLocationStatusLabel = getLocationStatusLabel(myLocationRecord)
   const routeAutoRecalculateSignature = [
     selectedScheduleId || '',
-    middlePlace?.lat || '',
-    middlePlace?.lng || '',
+    activeMeetingPlace?.lat || '',
+    activeMeetingPlace?.lng || '',
     registeredMemberLocations
       .map((location) => [
         location.userid || '',
@@ -1657,7 +1714,7 @@ function MapPage({ roomId }) {
     .sort()
     .join('|')
   const defaultMapCenter = getDefaultMapCenter({
-    middlePlace,
+    middlePlace: activeMeetingPlace,
     myLocationRecord,
   })
 
@@ -1668,7 +1725,7 @@ function MapPage({ roomId }) {
     setSheetSnap('collapsed')
     setFriendSheetTop(null)
     setFriendMapFitRequest((request) => request + 1)
-    if (middlePlace) calculateAllMemberRoutesToMiddlePlace(middlePlace)
+    if (activeMeetingPlace) calculateAllMemberRoutesToMiddlePlace(activeMeetingPlace)
   }
 
   const closeFriendsPanel = () => {
@@ -1732,16 +1789,38 @@ function MapPage({ roomId }) {
     setSheetSnap((current) => (current === 'expanded' ? 'collapsed' : 'expanded'))
   }
 
-  const getSheetDragLimits = (snap) => {
-    if (snap === 'expanded') {
-      return { min: 0, max: 640 }
-    }
+  const getSheetCssNumber = (sheetElement, propertyName, fallback) => {
+    const value = Number.parseFloat(
+      window.getComputedStyle(sheetElement).getPropertyValue(propertyName)
+    )
 
-    if (snap === 'hidden') {
-      return { min: -640, max: 0 }
-    }
+    return Number.isFinite(value) ? value : fallback
+  }
 
-    return { min: -640, max: 640 }
+  const getSheetDragMetrics = (sheetElement) => {
+    const sheet =
+      sheetElement.closest?.('.map-bottom-sheet') || sheetElement
+    const sheetHeight = sheet.getBoundingClientRect().height
+    const collapsedVisibleHeight = getSheetCssNumber(sheet, '--sheet-collapsed-height', 92)
+    const collapsedOffset = Math.max(0, sheetHeight - collapsedVisibleHeight)
+    const hiddenOffset = Math.max(
+      collapsedOffset,
+      sheetHeight - SHEET_HIDDEN_VISIBLE_HEIGHT
+    )
+    const currentOffset =
+      sheetSnap === 'expanded'
+        ? 0
+        : sheetSnap === 'hidden'
+          ? hiddenOffset
+          : sheetSnap === 'custom'
+            ? Math.max(0, Math.min(hiddenOffset, sheetFreeOffset))
+            : collapsedOffset
+
+    return {
+      currentOffset,
+      collapsedOffset,
+      hiddenOffset,
+    }
   }
 
   const handleSheetPointerDown = (event) => {
@@ -1756,6 +1835,9 @@ function MapPage({ roomId }) {
     const friendSheetBounds = isFriendPanelOpen
       ? getFriendSheetDragBounds(event.currentTarget)
       : null
+    const sheetDragMetrics = friendSheetBounds
+      ? null
+      : getSheetDragMetrics(event.currentTarget)
 
     sheetDragStartRef.current = {
       y: event.clientY,
@@ -1769,6 +1851,12 @@ function MapPage({ roomId }) {
             maxTop: friendSheetBounds.maxTop,
             hiddenTop: friendSheetBounds.hiddenTop,
           }
+        : sheetDragMetrics
+          ? {
+              offset: sheetDragMetrics.currentOffset,
+              collapsedOffset: sheetDragMetrics.collapsedOffset,
+              hiddenOffset: sheetDragMetrics.hiddenOffset,
+            }
         : {}),
     }
 
@@ -1790,10 +1878,12 @@ function MapPage({ roomId }) {
       return
     }
 
-    const limits = getSheetDragLimits(start.snap)
-    const nextOffset = Math.max(limits.min, Math.min(limits.max, deltaY))
+    const nextOffset = Math.max(
+      0,
+      Math.min(start.hiddenOffset, start.offset + deltaY)
+    )
 
-    setSheetDragOffset(nextOffset)
+    setSheetDragOffset(nextOffset - start.offset)
   }
 
   const handleSheetPointerUp = (event) => {
@@ -1847,27 +1937,28 @@ function MapPage({ roomId }) {
       return
     }
 
-    if (start.snap === 'hidden' && deltaY < -24) {
+    const nextOffset = Math.max(
+      0,
+      Math.min(start.hiddenOffset, start.offset + deltaY)
+    )
+
+    if (nextOffset <= SHEET_EXPANDED_SNAP_DISTANCE) {
       setSheetSnap('expanded')
       return
     }
 
-    if (deltaY < -80) {
-      setSheetSnap('expanded')
-      return
-    }
-
-    if (deltaY > SHEET_HIDE_DRAG_DISTANCE) {
+    if (nextOffset >= start.hiddenOffset - SHEET_HIDDEN_SNAP_DISTANCE) {
       setSheetSnap('hidden')
       return
     }
 
-    if (deltaY > SHEET_COLLAPSE_DRAG_DISTANCE) {
+    if (nextOffset >= start.collapsedOffset - SHEET_COLLAPSED_SNAP_DISTANCE) {
       setSheetSnap('collapsed')
       return
     }
 
-    setSheetSnap(start.snap === 'expanded' ? 'collapsed' : start.snap)
+    setSheetFreeOffset(nextOffset)
+    setSheetSnap('custom')
   }
 
   const handleSheetPointerCancel = (event) => {
@@ -1912,16 +2003,17 @@ function MapPage({ roomId }) {
   }
   const sheetStyle = {
     '--sheet-drag-offset': `${sheetDragOffset}px`,
+    '--sheet-free-offset': `${sheetFreeOffset}px`,
     ...(isFriendPanelOpen && friendSheetTop !== null
       ? { '--friend-sheet-top': `${friendSheetTop}px` }
       : {}),
   }
 
   useEffect(() => {
-    if (!isFriendPanelOpen || !middlePlace || registeredMemberLocations.length === 0) return
+    if (!isFriendPanelOpen || !activeMeetingPlace || registeredMemberLocations.length === 0) return
 
     const timeoutId = setTimeout(() => {
-      calculateAllMemberRoutesToMiddlePlace(middlePlace, { silent: true })
+      calculateAllMemberRoutesToMiddlePlace(activeMeetingPlace, { silent: true })
     }, 250)
 
     return () => {
@@ -2002,7 +2094,7 @@ function MapPage({ roomId }) {
       selectedScheduleId,
       defaultMapCenter.lat,
       defaultMapCenter.lng,
-      middlePlace?.lat ? 'meeting' : 'fallback',
+      activeMeetingPlace?.lat ? 'meeting' : 'fallback',
     ].join(':')
 
     if (lastDefaultCenterKeyRef.current === centerKey) return
@@ -2014,7 +2106,7 @@ function MapPage({ roomId }) {
     defaultMapCenter.lat,
     defaultMapCenter.lng,
     isFriendPanelOpen,
-    middlePlace?.lat,
+    activeMeetingPlace?.lat,
     selectedScheduleId,
   ])
 
@@ -2074,6 +2166,7 @@ function MapPage({ roomId }) {
                   setMemberRouteResults([])
                   setMemberRoutePaths([])
                   setHasSearchResultsSheet(false)
+                  setHasMiddleRecommendationResults(false)
                   setActiveMapPanel('default')
                   setMapCenterLevel(4)
                   setMapCenterRequest((request) => request + 1)
@@ -2483,18 +2576,10 @@ function MapPage({ roomId }) {
             height="100%"
             currentLocation={mapCurrentLocation}
             memberLocations={mapMemberLocations}
-            places={places}
+            places={visibleMapPlaces}
             selectedPlace={selectedPlace}
             destination={destination}
-            confirmedMeetingPlace={middlePlace || {
-              name: selectedSchedule?.location,
-              address: selectedSchedule?.locationaddress,
-              lat: selectedSchedule?.locationlat,
-              lng: selectedSchedule?.locationlng,
-              kakaoMapUrl: selectedSchedule?.id
-                ? confirmedSchedulePlaceLinks[selectedSchedule.id] || ''
-                : '',
-            }}
+            confirmedMeetingPlace={activeMeetingPlace}
             memberRoutePaths={mapMemberRoutePaths}
             memberRouteResults={mapMemberRouteResults}
             memberLocationLabels={mapMemberLocationLabels}
@@ -2511,8 +2596,8 @@ function MapPage({ roomId }) {
                 allowMapClick={false}
                 showMap={false}
                 placeholder={
-                  middlePlace
-                    ? `${middlePlace.name || '확정된 중간 장소'}`
+                  activeMeetingPlace
+                    ? `${activeMeetingPlace.name || '확정된 중간 장소'}`
                     : '장소 검색 (예: 홍대입구역)'
                 }
                 onSelect={(name, address, place = {}) => {
@@ -2532,10 +2617,10 @@ function MapPage({ roomId }) {
 
           {!isFriendPanelOpen && (
             <>
-              {middlePlace ? (
+              {activeMeetingPlace ? (
                 <PlaceSearchPanel
                   variant="mapOverlay"
-                  searchLocation={middlePlace}
+                  searchLocation={activeMeetingPlace}
                   onSearchResult={(results) => {
                     setPlaces(results)
                     setActiveMapPanel('default')
@@ -2550,67 +2635,87 @@ function MapPage({ roomId }) {
                   onSharePlace={handleShareNearbyPlace}
                   onCreateAdditionalPlaceVote={handleCreateAdditionalPlaceVote}
                   onOpenFriends={openFriendsPanel}
+                  onCloseResults={() => {
+                    setPlaces([])
+                    setSheetSnap('collapsed')
+                  }}
                 />
               ) : (
-                <div className="map-place-search-panel is-empty">
-                  <div className="map-search-control-card">
-                    <h2>주변 장소 추천</h2>
-                    <p>먼저 만날 장소를 확정하면 주변 음식점, 카페, 놀거리를 검색할 수 있습니다.</p>
-                  </div>
-                </div>
+                null
               )}
             </>
           )}
 
           {!isFriendPanelOpen && !hasSearchResultsSheet && (
             <div
-              className={`map-bottom-sheet map-default-sheet is-${sheetSnap}`}
+              className={`map-bottom-sheet map-default-sheet ${
+                !activeMeetingPlace ? 'has-middle-recommendation' : ''
+              } ${hasMiddleRecommendationResults ? 'has-middle-results' : ''} is-${sheetSnap}`}
               style={sheetStyle}
               {...sheetDragProps}
             >
               <div className="map-sheet-handle" {...sheetHandleProps} />
-              <div className="map-sheet-header">
-                <div>
-                  <div className="map-sheet-title-row">
-                    <strong>{selectedSchedule?.title || '선택한 일정'}</strong>
-                    {selectedSchedule?.date && (
-                      <small className="map-sheet-date">
-                        {formatScheduleDateLabel(selectedSchedule.date)}
-                      </small>
-                    )}
+
+              {!hasMiddleRecommendationResults && (
+                <>
+                  <div className="map-sheet-header">
+                    <div>
+                      <div className="map-sheet-title-row">
+                        <strong>{selectedSchedule?.title || '선택한 일정'}</strong>
+                        {selectedSchedule?.date && (
+                          <small className="map-sheet-date">
+                            {formatScheduleDateLabel(selectedSchedule.date)}
+                          </small>
+                        )}
+                      </div>
+                      <span>{activeMeetingPlace ? activeMeetingPlace.name : '만날 장소 미정'}</span>
+                    </div>
                   </div>
-                  <span>{middlePlace ? middlePlace.name : '만날 장소 미정'}</span>
-                </div>
-              </div>
 
-              <div className="map-quick-actions">
-                <button
-                  type="button"
-                  onClick={openFriendsPanel}
-                >
-                  <strong>친구위치</strong>
-                  <span>{registeredMemberCount}/{members.length || 0}</span>
-                </button>
-                <button type="button" onClick={() => setShowLocationRegisterModal(true)}>
-                  <strong>{myLocationRecord?.transportmode ? '내 위치' : '내 위치 등록'}</strong>
-                  <span>{myLocationStatusLabel}</span>
-                </button>
-              </div>
+                  <div className="map-quick-actions">
+                    <button
+                      type="button"
+                      onClick={openFriendsPanel}
+                    >
+                      <span className="map-quick-action-icon is-members" aria-hidden="true">
+                        <FaUserFriends />
+                      </span>
+                      <strong>멤버위치</strong>
+                      <span>{registeredMemberCount}/{members.length || 0}</span>
+                    </button>
+                    <button type="button" onClick={() => setShowLocationRegisterModal(true)}>
+                      <span className="map-quick-action-icon is-mine" aria-hidden="true">
+                        <FaLocationArrow />
+                      </span>
+                      <strong>{myLocationRecord?.transportmode ? '내 위치' : '내 위치 등록'}</strong>
+                      <span>{myLocationStatusLabel}</span>
+                    </button>
+                  </div>
+                </>
+              )}
 
-              {!middlePlace && (
+              {!activeMeetingPlace && (
                 <FamousMiddlePlacePanel
                   memberLocations={registeredMemberLocations}
-                  onRecommendPlaces={setPlaces}
+                  onRecommendPlaces={(results) => {
+                    setPlaces(results)
+                    setSheetSnap(results.length > 0 ? 'expanded' : 'collapsed')
+                  }}
+                  onResultStateChange={setHasMiddleRecommendationResults}
                   onSelectMiddlePlace={handleSelectMiddlePlace}
                   onCreateMiddlePlaceVote={handleCreateMiddlePlaceVote}
+                  onCloseResults={() => {
+                    setPlaces([])
+                    setSheetSnap('collapsed')
+                  }}
                 />
               )}
 
-              {middlePlace && (
+              {activeMeetingPlace && (
                 <div className="middle-place-summary">
                   <div>
                     <strong>확정된 중간 장소</strong>
-                    <p>{middlePlace.name}</p>
+                    <p>{activeMeetingPlace.name}</p>
                   </div>
                   <button type="button" onClick={handleShareMiddlePlace}>
                     채팅 공유
@@ -2640,7 +2745,7 @@ function MapPage({ roomId }) {
                       type="button"
                       className="map-sheet-back-button"
                       onClick={handleCloseFriendMemberListOnly}
-                      aria-label="친구위치 요약으로 돌아가기"
+                      aria-label="멤버위치 요약으로 돌아가기"
                     >
                       <span aria-hidden="true">←</span>
                     </button>
@@ -2699,9 +2804,9 @@ function MapPage({ roomId }) {
                     </button>
                     <div>
                       <small className="map-sheet-place-label">
-                        {middlePlace?.name || '만날 장소 미정'}
+                        {activeMeetingPlace?.name || '만날 장소 미정'}
                       </small>
-                      <strong>친구위치</strong>
+                      <strong>멤버위치</strong>
                       <span>멤버 위치와 만날 장소까지의 이동 정보를 확인해요.</span>
                     </div>
                   </div>
@@ -2722,7 +2827,7 @@ function MapPage({ roomId }) {
                     <button
                       type="button"
                       onClick={handleDepartureButtonClick}
-                      disabled={isArrived || !middlePlace}
+                      disabled={isArrived || !activeMeetingPlace}
                     >
                       {isTracking ? '출발 취소' : '출발하기'}
                     </button>
@@ -2813,7 +2918,7 @@ function toScheduleLocation(place, roomId) {
       place?.name ||
       place?.place_name ||
       place?.location ||
-      'Meeting place',
+      '이름 없는 장소',
     placeaddress:
       place?.placeaddress ||
       place?.address ||
@@ -2832,6 +2937,72 @@ function replaceScheduleInList(schedules, updatedSchedule) {
     Number(schedule.id) === Number(updatedSchedule.id)
       ? { ...schedule, ...updatedSchedule }
       : schedule
+  )
+}
+
+function getScheduleMeetingPlace({ schedule, roomId, kakaoMapUrl = '' }) {
+  if (!schedule || !isValidMapPoint(schedule.locationlat, schedule.locationlng)) {
+    return null
+  }
+
+  const placeName = normalizeSchedulePlaceName(schedule.location)
+  if (!placeName) return null
+
+  return {
+    id: `schedule-${schedule.id}`,
+    roomid: roomId,
+    name: placeName,
+    address: schedule.locationaddress || '',
+    lat: Number(schedule.locationlat),
+    lng: Number(schedule.locationlng),
+    kakaoMapUrl,
+    isConfirmedMiddlePlace: true,
+    scheduleid: schedule.id,
+  }
+}
+
+function normalizeSchedulePlaceName(name) {
+  const trimmedName = typeof name === 'string' ? name.trim() : ''
+  if (!trimmedName) return ''
+
+  return /^meeting\s*place$/i.test(trimmedName) ? '' : trimmedName
+}
+
+function getVisibleMapPlaces({ places = [], confirmedAdditionalPlaces = [], activeMeetingPlace }) {
+  const searchPlaces = places
+    .map(toMapPlace)
+    .filter((place) => isValidMapPoint(place.lat, place.lng))
+    .filter((place) => !isSameMapPoint(place, activeMeetingPlace))
+
+  if (searchPlaces.length > 0) {
+    return searchPlaces
+  }
+
+  return confirmedAdditionalPlaces
+    .map(toMapPlace)
+    .filter((place) => isValidMapPoint(place.lat, place.lng))
+    .filter((place) => !isSameMapPoint(place, activeMeetingPlace))
+}
+
+function toMapPlace(place = {}) {
+  return {
+    ...place,
+    id: place.id || place.placeid || place.kakaoPlaceId || place.placename || place.name,
+    name: place.name || place.placename || place.place_name || 'Place',
+    address: place.address || place.placeaddress || place.locationaddress || '',
+    lat: Number(place.lat ?? place.latitude ?? place.placelat ?? place.locationlat),
+    lng: Number(place.lng ?? place.longitude ?? place.placelng ?? place.locationlng),
+    kakaoMapUrl: place.kakaoMapUrl || place.kakaomapurl || '',
+  }
+}
+
+function isSameMapPoint(place, target) {
+  if (!place || !target) return false
+  if (!isValidMapPoint(place.lat, place.lng) || !isValidMapPoint(target.lat, target.lng)) return false
+
+  return (
+    Math.abs(Number(place.lat) - Number(target.lat)) < 0.00001 &&
+    Math.abs(Number(place.lng) - Number(target.lng)) < 0.00001
   )
 }
 
@@ -2896,23 +3067,6 @@ function normalizeTransportMode(mode) {
   return mode || ''
 }
 
-function buildFallbackRoutePath(origin, destination) {
-  if (!isValidMapPoint(origin?.lat, origin?.lng) || !isValidMapPoint(destination?.lat, destination?.lng)) {
-    return []
-  }
-
-  return [
-    {
-      lat: Number(origin.lat),
-      lng: Number(origin.lng),
-    },
-    {
-      lat: Number(destination.lat),
-      lng: Number(destination.lng),
-    },
-  ]
-}
-
 function getLocationStatusLabel(location) {
   if (!location?.transportmode) return '위치 미등록'
   if (location.locationstatus === 'denied') return '위치 권한 거부'
@@ -2929,7 +3083,50 @@ function getLocationStatusLabel(location) {
   return '출발 전'
 }
 
+function getTransportModeLabel(mode) {
+  const normalizedMode = String(mode || '').trim()
+
+  if (normalizedMode === 'car') return '\uC790\uB3D9\uCC28'
+  if (normalizedMode === 'transit') return '\uB300\uC911\uAD50\uD1B5'
+  return mode || ''
+}
+
 function getFriendLocationSummary(location, routeResult) {
+  {
+    if (!location?.transportmode) return '\uC704\uCE58 \uBBF8\uB4F1\uB85D'
+
+    const transportModeLabel = getTransportModeLabel(location.transportmode)
+    const withTransportMode = (summary) =>
+      [summary, transportModeLabel].filter(Boolean).join(' \u00B7 ')
+
+    if (location.arrivedat || location.locationstatus === 'arrived') {
+      return withTransportMode('\uB3C4\uCC29 \uC644\uB8CC')
+    }
+
+    const isDeparted =
+      location.isdeparted ||
+      location.locationstatus === 'tracking' ||
+      location.locationstatus === 'departed' ||
+      location.locationstatus === 'approaching'
+
+    if (!isDeparted) return withTransportMode('\uBBF8\uCD9C\uBC1C')
+
+    if (routeResult?.error) {
+      return withTransportMode('\uACBD\uB85C \uAC80\uC0C9 \uBD88\uAC00')
+    }
+
+    if (routeResult?.durationMinutes !== null && routeResult?.durationMinutes !== undefined) {
+      const distance = routeResult.distanceKm ? `${routeResult.distanceKm}km` : ''
+      const routeSummary = [
+        `${routeResult.durationMinutes}\uBD84`,
+        distance,
+      ].filter(Boolean).join(' \u00B7 ')
+
+      return withTransportMode(routeSummary)
+    }
+
+    return transportModeLabel
+  }
   if (!location?.transportmode) return '위치 미등록'
 
   if (location.arrivedat || location.locationstatus === 'arrived') {
@@ -2943,6 +3140,10 @@ function getFriendLocationSummary(location, routeResult) {
     location.locationstatus === 'approaching'
 
   if (!isDeparted) return '미출발'
+
+  if (routeResult?.error) {
+    return '경로 검색 불가'
+  }
 
   if (routeResult?.durationMinutes !== null && routeResult?.durationMinutes !== undefined) {
     const distance = routeResult.distanceKm ? ` · ${routeResult.distanceKm}km` : ''

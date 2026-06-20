@@ -41,12 +41,15 @@ const AUTH_PATHS = ["/", "/login", "/signup", "/guest"];
 function Layout({ children }) {
   const location = useLocation();
   const showNav = !AUTH_PATHS.includes(location.pathname);
+  const isRoomDetailPage = /^\/rooms\/[^/]+$/.test(location.pathname);
+  const roomTab = new URLSearchParams(location.search).get("tab") || "schedule";
   const isRoomLocationTab =
-    /^\/rooms\/[^/]+$/.test(location.pathname) &&
-    new URLSearchParams(location.search).get("tab") === "location";
+    isRoomDetailPage && roomTab === "location";
+  const isRoomChatTab = isRoomDetailPage && roomTab === "chat";
   const contentClassName = [
     showNav ? "app-content-with-bottom-nav" : "",
     isRoomLocationTab ? "app-content-room-location" : "",
+    isRoomChatTab ? "app-content-room-chat" : "",
   ].filter(Boolean).join(" ");
 
   return (

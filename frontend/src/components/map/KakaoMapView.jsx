@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { FiUser } from 'react-icons/fi'
 
 function KakaoMapView({
   currentLocation,
@@ -27,9 +29,11 @@ function KakaoMapView({
   const userMarkerRef = useRef(null)
   const memberMarkerRefs = useRef([])
   const placeMarkerRefs = useRef([])
+  const meetingPlaceMarkerRef = useRef(null)
   const pickedMarkerRef = useRef(null)
   const selectedPlaceMarkerRef = useRef(null)
   const onSetMeetingPlaceRef = useRef(onSetMeetingPlace)
+  const confirmedMeetingPlaceRef = useRef(confirmedMeetingPlace)
 
   const selectedInfoWindowRef = useRef(null)
   const selectedInfoWindowKeyRef = useRef('')
@@ -47,10 +51,15 @@ function KakaoMapView({
   const selectedPlaceViewportKey = selectedPlace
     ? `${selectedPlace.id || selectedPlace.name}-${selectedPlace.lat}-${selectedPlace.lng}`
     : ''
+  const confirmedMeetingPlaceViewportKey = getPlaceViewportKey(confirmedMeetingPlace)
 
   useEffect(() => {
     onSetMeetingPlaceRef.current = onSetMeetingPlace
   }, [onSetMeetingPlace])
+
+  useEffect(() => {
+    confirmedMeetingPlaceRef.current = confirmedMeetingPlace
+  }, [confirmedMeetingPlaceViewportKey, confirmedMeetingPlace])
 
   const closeActiveInfoWindow = useCallback(() => {
     if (selectedInfoWindowRef.current) {
@@ -86,12 +95,12 @@ function KakaoMapView({
     const kakaoMapUrl = getKakaoMapUrl(place)
 
     const content = document.createElement('div')
-    content.style.padding = '10px'
-    content.style.fontSize = '13px'
-    content.style.lineHeight = '1.5'
+    content.style.padding = '8px'
+    content.style.fontSize = '12px'
+    content.style.lineHeight = '1.4'
     content.style.boxSizing = 'border-box'
-    content.style.width = '254px'
-    content.style.maxWidth = '254px'
+    content.style.width = '210px'
+    content.style.maxWidth = '210px'
     content.style.overflow = 'hidden'
 
     const name = document.createElement('strong')
@@ -124,21 +133,22 @@ function KakaoMapView({
     })
 
     const isCurrentMeetingPlace =
-      place.isConfirmedMiddlePlace || isSameMapPlace(place, confirmedMeetingPlace)
+      place.isConfirmedMiddlePlace ||
+      isSameMapPlace(place, confirmedMeetingPlaceRef.current)
 
     if (onSetMeetingPlaceRef.current && !isCurrentMeetingPlace) {
       const button = document.createElement('button')
       button.type = 'button'
       button.textContent = '만날 장소로 설정하기'
       button.style.display = 'block'
-      button.style.marginTop = '8px'
-      button.style.padding = '7px 10px'
+      button.style.marginTop = '6px'
+      button.style.padding = '6px 8px'
       button.style.border = 'none'
       button.style.borderRadius = '7px'
       button.style.backgroundColor = '#7c79ff'
       button.style.color = '#fff'
       button.style.cursor = 'pointer'
-      button.style.fontSize = '12px'
+      button.style.fontSize = '11px'
       button.style.fontWeight = 'bold'
       button.style.width = '100%'
       button.style.boxSizing = 'border-box'
@@ -149,19 +159,37 @@ function KakaoMapView({
 
     selectedInfoWindowRef.current = new window.kakao.maps.InfoWindow({
       content,
+      zIndex: 100,
     })
     selectedInfoWindowKeyRef.current = infoKey
 
     selectedInfoWindowRef.current.open(mapObjectRef.current, marker)
-  }, [closeActiveInfoWindow, confirmedMeetingPlace])
+  }, [closeActiveInfoWindow])
+
+  const refreshCustomOverlayPositions = useCallback(() => {
+    const customOverlays = [
+      ...memberMarkerRefs.current,
+      ...placeMarkerRefs.current,
+      meetingPlaceMarkerRef.current,
+      selectedPlaceMarkerRef.current,
+    ].filter(Boolean)
+
+    customOverlays.forEach((marker) => {
+      const position = marker.position || marker.anchor?.getPosition?.()
+
+      if (position && marker.overlay?.setPosition) {
+        marker.overlay.setPosition(position)
+      }
+    })
+  }, [])
 
   useEffect(() => {
     autoFitPendingRef.current = true
-  }, [placeViewportKey, selectedPlaceViewportKey])
+  }, [placeViewportKey, selectedPlaceViewportKey, confirmedMeetingPlaceViewportKey])
 
   useEffect(() => {
     closeActiveInfoWindow()
-  }, [confirmedMeetingPlace, closeActiveInfoWindow])
+  }, [confirmedMeetingPlaceViewportKey, closeActiveInfoWindow])
 
   useEffect(() => {
     if (!fitBoundsRequest) return
@@ -349,6 +377,48 @@ function KakaoMapView({
     }
   }, [isMapReady, onMapClick])
 
+  useEffect(() => {
+    if (!isMapReady || !mapObjectRef.current) {
+      return
+    }
+
+    const map = mapObjectRef.current
+    let animationFrameId = null
+
+    const refreshOnNextFrame = () => {
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId)
+      }
+
+      animationFrameId = requestAnimationFrame(() => {
+        refreshCustomOverlayPositions()
+        animationFrameId = null
+      })
+    }
+
+    const eventNames = [
+      'center_changed',
+      'zoom_start',
+      'zoom_changed',
+      'bounds_changed',
+      'idle',
+    ]
+
+    eventNames.forEach((eventName) => {
+      window.kakao.maps.event.addListener(map, eventName, refreshOnNextFrame)
+    })
+
+    return () => {
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId)
+      }
+
+      eventNames.forEach((eventName) => {
+        window.kakao.maps.event.removeListener(map, eventName, refreshOnNextFrame)
+      })
+    }
+  }, [isMapReady, refreshCustomOverlayPositions])
+
   // 지도 클릭으로 선택한 위치 마커
   useEffect(() => {
     if (!isMapReady || !mapObjectRef.current) {
@@ -382,6 +452,7 @@ function KakaoMapView({
           <p style="margin:4px 0;">${escapeHtml(pickedPlace.address || '주소 정보 없음')}</p>
         </div>
       `,
+      zIndex: 100,
     })
 
     window.kakao.maps.event.addListener(pickedMarkerRef.current, 'click', () => {
@@ -423,6 +494,7 @@ function KakaoMapView({
           <strong>내 위치</strong>
         </div>
       `,
+      zIndex: 100,
     })
 
     window.kakao.maps.event.addListener(userMarkerRef.current, 'click', () => {
@@ -481,6 +553,7 @@ function KakaoMapView({
         position,
         map: mapObjectRef.current,
         title: nickname,
+        image: createInfoAnchorImage('member'),
       })
       anchorMarker.setOpacity?.(0)
       const profileImageUrl = getMemberProfileImageUrl(memberLocation)
@@ -493,12 +566,15 @@ function KakaoMapView({
       const markerContent = createMemberMarkerContent({
         nickname,
         profileImageUrl,
+        isGuest: Boolean(memberLocation.guestid),
         isDeparted,
+        hasRouteError: Boolean(routeResult?.error),
       })
       const overlay = new window.kakao.maps.CustomOverlay({
         position,
         content: markerContent,
-        yAnchor: 1,
+        xAnchor: 0.5,
+        yAnchor: 0.33,
         zIndex: 4,
       })
 
@@ -508,8 +584,10 @@ function KakaoMapView({
         content: createMemberInfoContent({
           nickname,
           locationLabel,
+          transportMode: memberLocation.transportmode,
           routeResult,
         }),
+        zIndex: 100,
       })
 
       markerContent.addEventListener('click', (event) => {
@@ -563,11 +641,14 @@ function KakaoMapView({
       return
     }
 
-    placeMarkerRefs.current.forEach((marker) => marker.setMap(null))
+    placeMarkerRefs.current.forEach((marker) => {
+      if (marker?.overlay) marker.overlay.setMap(null)
+      if (marker?.anchor) marker.anchor.setMap(null)
+      if (marker?.setMap) marker.setMap(null)
+    })
     placeMarkerRefs.current = []
 
     if (!places || places.length === 0) {
-      closeActiveInfoWindow()
       return
     }
 
@@ -592,17 +673,38 @@ function KakaoMapView({
       bounds.extend(position)
       validPlaceCount += 1
 
-      const marker = new window.kakao.maps.Marker({
+      const anchorMarker = new window.kakao.maps.Marker({
         position,
         map: mapObjectRef.current,
         title: place.name || '장소',
+        image: createInfoAnchorImage('nearby'),
+      })
+      anchorMarker.setOpacity?.(0)
+
+      const markerContent = createPlaceMarkerContent({
+        label: place.name || '장소',
+        variant: 'nearby',
+      })
+      const overlay = new window.kakao.maps.CustomOverlay({
+        position,
+        content: markerContent,
+        yAnchor: 1,
+        zIndex: isSameMapPlace(place, confirmedMeetingPlace) ? 6 : 3,
       })
 
-      window.kakao.maps.event.addListener(marker, 'click', () => {
-        openPlaceInfoWindow(place, marker)
+      overlay.setMap(mapObjectRef.current)
+
+      markerContent.addEventListener('click', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        openPlaceInfoWindow(place, anchorMarker)
       })
 
-      placeMarkerRefs.current.push(marker)
+      window.kakao.maps.event.addListener(anchorMarker, 'click', () => {
+        openPlaceInfoWindow(place, anchorMarker)
+      })
+
+      placeMarkerRefs.current.push({ overlay, anchor: anchorMarker, position, place })
     })
 
     if (
@@ -631,7 +733,82 @@ function KakaoMapView({
     }
 
     mapObjectRef.current.relayout()
-  }, [places, memberRoutePaths.length, isMapReady, closeActiveInfoWindow, openPlaceInfoWindow])
+  }, [
+    places,
+    memberRoutePaths.length,
+    isMapReady,
+    openPlaceInfoWindow,
+    confirmedMeetingPlaceViewportKey,
+  ])
+
+  useEffect(() => {
+    if (!isMapReady || !mapObjectRef.current) {
+      return
+    }
+
+    if (meetingPlaceMarkerRef.current) {
+      if (meetingPlaceMarkerRef.current.overlay) {
+        meetingPlaceMarkerRef.current.overlay.setMap(null)
+      }
+      if (meetingPlaceMarkerRef.current.anchor) {
+        meetingPlaceMarkerRef.current.anchor.setMap(null)
+      }
+      meetingPlaceMarkerRef.current = null
+    }
+
+    const meetingLat = confirmedMeetingPlace?.lat ?? confirmedMeetingPlace?.locationlat
+    const meetingLng = confirmedMeetingPlace?.lng ?? confirmedMeetingPlace?.locationlng
+
+    if (!isValidLatLng(meetingLat, meetingLng)) {
+      return
+    }
+
+    const position = new window.kakao.maps.LatLng(Number(meetingLat), Number(meetingLng))
+    const normalizedMeetingPlace = {
+      ...confirmedMeetingPlace,
+      lat: Number(meetingLat),
+      lng: Number(meetingLng),
+      name:
+        confirmedMeetingPlace?.name ||
+        confirmedMeetingPlace?.location ||
+        confirmedMeetingPlace?.placename ||
+        '만날 장소',
+    }
+
+    const anchorMarker = new window.kakao.maps.Marker({
+      position,
+      map: mapObjectRef.current,
+      title: normalizedMeetingPlace.name,
+      image: createInfoAnchorImage('meeting'),
+    })
+    anchorMarker.setOpacity?.(0)
+
+    const markerContent = createPlaceMarkerContent({
+      label: normalizedMeetingPlace.name,
+      variant: 'meeting',
+    })
+    const overlay = new window.kakao.maps.CustomOverlay({
+      position,
+      content: markerContent,
+      yAnchor: 1,
+      zIndex: 7,
+    })
+
+    overlay.setMap(mapObjectRef.current)
+
+    markerContent.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      openPlaceInfoWindow(normalizedMeetingPlace, anchorMarker)
+    })
+
+    window.kakao.maps.event.addListener(anchorMarker, 'click', () => {
+      openPlaceInfoWindow(normalizedMeetingPlace, anchorMarker)
+    })
+
+    meetingPlaceMarkerRef.current = { overlay, anchor: anchorMarker, position }
+    mapObjectRef.current.relayout()
+  }, [confirmedMeetingPlaceViewportKey, isMapReady, openPlaceInfoWindow])
 
   // 선택한 장소 인포윈도우
   useEffect(() => {
@@ -640,7 +817,15 @@ function KakaoMapView({
     }
 
     if (selectedPlaceMarkerRef.current) {
-      selectedPlaceMarkerRef.current.setMap(null)
+      if (selectedPlaceMarkerRef.current.overlay) {
+        selectedPlaceMarkerRef.current.overlay.setMap(null)
+      }
+      if (selectedPlaceMarkerRef.current.anchor) {
+        selectedPlaceMarkerRef.current.anchor.setMap(null)
+      }
+      if (selectedPlaceMarkerRef.current.setMap) {
+        selectedPlaceMarkerRef.current.setMap(null)
+      }
       selectedPlaceMarkerRef.current = null
     }
 
@@ -659,8 +844,20 @@ function KakaoMapView({
       Number(selectedPlace.lng)
     )
 
+    if (isSameMapPlace(selectedPlace, confirmedMeetingPlace)) {
+      mapObjectRef.current.relayout()
+      mapObjectRef.current.setCenter(selectedLocation)
+
+      if (meetingPlaceMarkerRef.current?.anchor) {
+        openPlaceInfoWindow(selectedPlace, meetingPlaceMarkerRef.current.anchor)
+      }
+      return
+    }
+
     const matchedMarker = placeMarkerRefs.current.find((marker) => {
-      const markerPosition = marker.getPosition()
+      const markerPosition = marker.anchor?.getPosition?.() || marker.getPosition?.()
+
+      if (!markerPosition) return false
 
       return (
         markerPosition.getLat() === Number(selectedPlace.lat) &&
@@ -668,26 +865,54 @@ function KakaoMapView({
       )
     })
 
-    let activeMarker = matchedMarker
+    let activeMarker = matchedMarker?.anchor || matchedMarker
 
     if (!activeMarker) {
-      activeMarker = new window.kakao.maps.Marker({
+      const anchorMarker = new window.kakao.maps.Marker({
         position: selectedLocation,
         map: mapObjectRef.current,
         title: selectedPlace.name || '장소',
+        image: createInfoAnchorImage('nearby'),
+      })
+      anchorMarker.setOpacity?.(0)
+
+      const markerContent = createPlaceMarkerContent({
+        label: selectedPlace.name || '장소',
+        variant: 'nearby',
+      })
+      const overlay = new window.kakao.maps.CustomOverlay({
+        position: selectedLocation,
+        content: markerContent,
+        yAnchor: 1,
+        zIndex: 5,
       })
 
-      window.kakao.maps.event.addListener(activeMarker, 'click', () => {
-        openPlaceInfoWindow(selectedPlace, activeMarker)
+      overlay.setMap(mapObjectRef.current)
+
+      markerContent.addEventListener('click', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        openPlaceInfoWindow(selectedPlace, anchorMarker)
       })
 
-      selectedPlaceMarkerRef.current = activeMarker
+      window.kakao.maps.event.addListener(anchorMarker, 'click', () => {
+        openPlaceInfoWindow(selectedPlace, anchorMarker)
+      })
+
+      selectedPlaceMarkerRef.current = { overlay, anchor: anchorMarker }
+      activeMarker = anchorMarker
     }
 
     mapObjectRef.current.relayout()
     mapObjectRef.current.setCenter(selectedLocation)
     openPlaceInfoWindow(selectedPlace, activeMarker)
-  }, [selectedPlace, isMapReady, closeActiveInfoWindow, openPlaceInfoWindow])
+  }, [
+    selectedPlace,
+    confirmedMeetingPlaceViewportKey,
+    isMapReady,
+    closeActiveInfoWindow,
+    openPlaceInfoWindow,
+  ])
 
   // 기존 단일 경로 선 표시
   useEffect(() => {
@@ -808,6 +1033,13 @@ function KakaoMapView({
       }
     })
 
+    const meetingLat = confirmedMeetingPlace?.lat ?? confirmedMeetingPlace?.locationlat
+    const meetingLng = confirmedMeetingPlace?.lng ?? confirmedMeetingPlace?.locationlng
+
+    if (isValidLatLng(meetingLat, meetingLng)) {
+      bounds.extend(new window.kakao.maps.LatLng(Number(meetingLat), Number(meetingLng)))
+    }
+
     memberLocations.forEach((member) => {
       if (isValidLatLng(member.latitude, member.longitude)) {
         bounds.extend(
@@ -825,7 +1057,13 @@ function KakaoMapView({
     }
 
     mapObjectRef.current.relayout()
-  }, [memberRoutePaths, memberLocations, places, isMapReady])
+  }, [
+    memberRoutePaths,
+    memberLocations,
+    places,
+    confirmedMeetingPlaceViewportKey,
+    isMapReady,
+  ])
 
   useEffect(() => {
     if (
@@ -858,6 +1096,14 @@ function KakaoMapView({
       extendBounds(selectedPlace.lat, selectedPlace.lng)
     }
 
+    const meetingLat = confirmedMeetingPlace?.lat ?? confirmedMeetingPlace?.locationlat
+    const meetingLng = confirmedMeetingPlace?.lng ?? confirmedMeetingPlace?.locationlng
+    extendBounds(meetingLat, meetingLng)
+
+    places.forEach((place) => {
+      extendBounds(place.lat, place.lng)
+    })
+
     memberRoutePaths.forEach((route) => {
       route.path?.forEach((point) => {
         extendBounds(point.lat, point.lng)
@@ -878,6 +1124,8 @@ function KakaoMapView({
           memberLocations,
           selectedPlace,
           destination,
+          confirmedMeetingPlace,
+          places,
           memberRoutePaths,
         })
 
@@ -897,6 +1145,8 @@ function KakaoMapView({
     memberRoutePaths,
     destination,
     selectedPlace,
+    confirmedMeetingPlaceViewportKey,
+    places,
   ])
 
   if (mapError) {
@@ -985,13 +1235,104 @@ function getCoordinateLabel(location) {
   return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
 }
 
-function createMemberMarkerContent({ nickname, profileImageUrl, isDeparted }) {
+function createPlaceMarkerContent({ label, variant = 'nearby' }) {
+  const isMeeting = variant === 'meeting'
+  const size = isMeeting ? 34 : 28
+  const innerSize = isMeeting ? 15 : 12
+  const dotSize = isMeeting ? 5 : 4
+  const color = isMeeting ? '#ff4d57' : '#b9a7ff'
+  const shadowColor = isMeeting
+    ? 'rgba(239, 68, 68, 0.32)'
+    : 'rgba(124, 121, 255, 0.24)'
+
+  const container = document.createElement('button')
+  container.type = 'button'
+  container.title = label || (isMeeting ? '만날 장소' : '주변 장소')
+  container.style.position = 'relative'
+  container.style.display = 'block'
+  container.style.width = `${size}px`
+  container.style.height = `${Math.round(size * 1.28)}px`
+  container.style.border = 'none'
+  container.style.background = 'transparent'
+  container.style.boxSizing = 'border-box'
+  container.style.cursor = 'pointer'
+  container.style.padding = '0'
+  container.style.transform = 'translateY(-3px)'
+
+  const pin = document.createElement('span')
+  pin.style.position = 'absolute'
+  pin.style.left = '50%'
+  pin.style.top = '1px'
+  pin.style.display = 'grid'
+  pin.style.placeItems = 'center'
+  pin.style.width = `${size}px`
+  pin.style.height = `${size}px`
+  pin.style.border = '2px solid #fff'
+  pin.style.borderRadius = '50% 50% 50% 3px'
+  pin.style.background = color
+  pin.style.boxShadow = `0 7px 16px ${shadowColor}`
+  pin.style.boxSizing = 'border-box'
+  pin.style.transform = 'translateX(-50%) rotate(-45deg)'
+
+  const inner = document.createElement('span')
+  inner.style.position = 'relative'
+  inner.style.display = 'grid'
+  inner.style.placeItems = 'center'
+  inner.style.width = `${innerSize}px`
+  inner.style.height = `${innerSize}px`
+  inner.style.border = '2px solid #fff'
+  inner.style.borderRadius = '50%'
+  inner.style.boxSizing = 'border-box'
+  inner.style.transform = 'rotate(45deg)'
+
+  const dot = document.createElement('span')
+  dot.style.position = 'absolute'
+  dot.style.left = '50%'
+  dot.style.top = '50%'
+  dot.style.width = `${dotSize}px`
+  dot.style.height = `${dotSize}px`
+  dot.style.borderRadius = '50%'
+  dot.style.background = '#fff'
+  dot.style.transform = 'translate(-50%, -50%)'
+
+  inner.appendChild(dot)
+  pin.appendChild(inner)
+  container.appendChild(pin)
+
+  return container
+}
+
+function createInfoAnchorImage(variant = 'nearby') {
+  const isMeeting = variant === 'meeting'
+  const isMember = variant === 'member'
+  const width = isMeeting ? 34 : 28
+  const height = isMeeting ? 52 : isMember ? 26 : 44
+  const imageSrc = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
+
+  return new window.kakao.maps.MarkerImage(
+    imageSrc,
+    new window.kakao.maps.Size(width, height),
+    {
+      offset: new window.kakao.maps.Point(width / 2, height),
+    }
+  )
+}
+
+function createMemberMarkerContent({
+  nickname,
+  profileImageUrl,
+  isGuest,
+  isDeparted,
+  hasRouteError,
+}) {
   const container = document.createElement('button')
   container.type = 'button'
   container.style.display = 'flex'
   container.style.flexDirection = 'column'
   container.style.alignItems = 'center'
   container.style.gap = '4px'
+  container.style.width = '72px'
+  container.style.height = '64px'
   container.style.border = 'none'
   container.style.background = 'transparent'
   container.style.padding = '0'
@@ -1029,6 +1370,17 @@ function createMemberMarkerContent({ nickname, profileImageUrl, isDeparted }) {
     image.style.height = '100%'
     image.style.objectFit = 'cover'
     avatar.appendChild(image)
+  } else if (isGuest) {
+    avatar.innerHTML = renderToStaticMarkup(
+      <FiUser aria-hidden="true" focusable="false" />
+    )
+    const icon = avatar.querySelector('svg')
+    if (icon) {
+      icon.style.width = '22px'
+      icon.style.height = '22px'
+      icon.style.color = '#7c79ff'
+      icon.style.strokeWidth = '1.9'
+    }
   } else {
     avatar.textContent = getMemberInitial(nickname)
   }
@@ -1040,7 +1392,7 @@ function createMemberMarkerContent({ nickname, profileImageUrl, isDeparted }) {
   statusDot.style.width = '11px'
   statusDot.style.height = '11px'
   statusDot.style.borderRadius = '50%'
-  statusDot.style.background = isDeparted ? '#16c75b' : '#9ca3af'
+  statusDot.style.background = hasRouteError ? '#ef4444' : isDeparted ? '#16c75b' : '#9ca3af'
   statusDot.style.border = '2px solid #fff'
   statusDot.style.boxShadow = '0 1px 3px rgba(15, 23, 42, 0.24)'
   statusDot.style.boxSizing = 'border-box'
@@ -1072,20 +1424,29 @@ function getMemberInitial(nickname) {
   return trimmedNickname ? trimmedNickname.charAt(0) : '멤'
 }
 
-function createMemberInfoContent({ nickname, locationLabel, routeResult }) {
+function createMemberInfoContent({ nickname, locationLabel, transportMode, routeResult }) {
+  const hasRouteError = Boolean(routeResult?.error)
   const hasRemainingTime =
-    routeResult?.durationMinutes !== null && routeResult?.durationMinutes !== undefined
+    !hasRouteError &&
+    routeResult?.durationMinutes !== null &&
+    routeResult?.durationMinutes !== undefined
   const remainingDistance = routeResult?.distanceKm
     ? `${routeResult.distanceKm}km`
     : routeResult?.distance
       ? `${(Number(routeResult.distance) / 1000).toFixed(1)}km`
       : ''
+  const transportModeLabel = getTransportModeLabel(transportMode)
   const routeSummary = hasRemainingTime
     ? [
         `${routeResult.durationMinutes}분`,
         remainingDistance,
       ].filter(Boolean).join(' · ')
     : ''
+
+  const routeSummaryWithTransport = [
+    routeSummary,
+    transportModeLabel,
+  ].filter(Boolean).join(' \u00B7 ')
 
   return `
     <div style="width:220px; padding:12px; box-sizing:border-box; font-size:13px; line-height:1.45; color:#111827;">
@@ -1095,12 +1456,25 @@ function createMemberInfoContent({ nickname, locationLabel, routeResult }) {
         ${escapeHtml(locationLabel || '위치 정보 없음')}
       </p>
       ${
-        routeSummary
-          ? `<p style="margin:0; font-weight:700;">${escapeHtml(routeSummary)}</p>`
+        routeSummaryWithTransport
+          ? `<p style="margin:0; font-weight:700;">${escapeHtml(routeSummaryWithTransport)}</p>`
+          : ''
+      }
+      ${
+        hasRouteError
+          ? `<p style="margin:8px 0 0; color:#ef4444; font-size:12px; font-weight:800;">경로 검색 불가</p>`
           : ''
       }
     </div>
   `
+}
+
+function getTransportModeLabel(mode) {
+  const normalizedMode = String(mode || '').trim()
+
+  if (normalizedMode === 'car') return '\uC790\uB3D9\uCC28'
+  if (normalizedMode === 'transit') return '\uB300\uC911\uAD50\uD1B5'
+  return mode || ''
 }
 
 function isValidLatLng(lat, lng) {
@@ -1115,6 +1489,21 @@ function isValidLatLng(lat, lng) {
     numberLng >= -180 &&
     numberLng <= 180
   )
+}
+
+function getPlaceViewportKey(place = {}) {
+  const lat = place?.lat ?? place?.latitude ?? place?.placelat ?? place?.locationlat
+  const lng = place?.lng ?? place?.longitude ?? place?.placelng ?? place?.locationlng
+
+  if (!isValidLatLng(lat, lng)) return ''
+
+  return [
+    place.id || place.placeid || place.kakaoPlaceId || '',
+    place.name || place.placename || place.location || '',
+    place.address || place.placeaddress || place.locationaddress || '',
+    Number(lat),
+    Number(lng),
+  ].join(':')
 }
 
 function getKakaoMapUrl(place = {}) {
@@ -1254,6 +1643,7 @@ function getFirstValidLatLng({
   memberLocations = [],
   selectedPlace,
   destination,
+  confirmedMeetingPlace,
   places = [],
   memberRoutePaths = [],
 }) {
@@ -1279,6 +1669,16 @@ function getFirstValidLatLng({
     return {
       lat: Number(selectedPlace.lat),
       lng: Number(selectedPlace.lng),
+    }
+  }
+
+  const meetingLat = confirmedMeetingPlace?.lat ?? confirmedMeetingPlace?.locationlat
+  const meetingLng = confirmedMeetingPlace?.lng ?? confirmedMeetingPlace?.locationlng
+
+  if (isValidLatLng(meetingLat, meetingLng)) {
+    return {
+      lat: Number(meetingLat),
+      lng: Number(meetingLng),
     }
   }
 

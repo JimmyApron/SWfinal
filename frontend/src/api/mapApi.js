@@ -4,6 +4,28 @@ function getLocationTable(scheduleId) {
   return scheduleId ? 'schedule_user_locations' : 'user_locations'
 }
 
+function getLocationParticipantKey(location) {
+  if (location?.userid) return `user:${location.userid}`
+  if (location?.guestid) return `guest:${location.guestid}`
+  return ''
+}
+
+function getLatestParticipantLocations(locations = []) {
+  const latestLocations = []
+  const seenKeys = new Set()
+
+  locations.forEach((location) => {
+    const key = getLocationParticipantKey(location)
+
+    if (!key || seenKeys.has(key)) return
+
+    seenKeys.add(key)
+    latestLocations.push(location)
+  })
+
+  return latestLocations
+}
+
 function buildLocationStatusFields(locationData) {
   const statusFields = {}
 
@@ -201,7 +223,7 @@ export async function getRoomMemberLocations(roomId, scheduleId = null) {
   }
 
   if (!scheduleId) {
-    return data || []
+    return getLatestParticipantLocations(data || [])
   }
 
   const { data: defaultLocations, error: defaultError } = await supabase
@@ -225,12 +247,12 @@ export async function getRoomMemberLocations(roomId, scheduleId = null) {
     throw defaultError
   }
 
-  const scheduleLocations = data || []
+  const scheduleLocations = getLatestParticipantLocations(data || [])
   const savedParticipantKeys = new Set(
-    scheduleLocations.map((location) => location.userid || location.guestid)
+    scheduleLocations.map(getLocationParticipantKey)
   )
-  const inheritedLocations = (defaultLocations || [])
-    .filter((location) => !savedParticipantKeys.has(location.userid || location.guestid))
+  const inheritedLocations = getLatestParticipantLocations(defaultLocations || [])
+    .filter((location) => !savedParticipantKeys.has(getLocationParticipantKey(location)))
     .map((location) => ({
       ...location,
       id: `default-${location.id}`,

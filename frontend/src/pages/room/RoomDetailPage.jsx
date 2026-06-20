@@ -310,19 +310,20 @@ function RoomDetailPage() {
     return new Date(a.joinDate) - new Date(b.joinDate);
   });
   const isLocationTab = tab === "location";
+  const isFixedHeightTab = isLocationTab || tab === "chat";
 
   return (
     <div
       style={{
         position: "relative",
-        minHeight: isLocationTab ? "100%" : "100vh",
-        height: isLocationTab ? "100%" : undefined,
-        paddingBottom: isLocationTab ? 0 : "90px",
+        minHeight: isFixedHeightTab ? "100%" : "100vh",
+        height: isFixedHeightTab ? "100%" : undefined,
+        paddingBottom: isFixedHeightTab ? 0 : "90px",
         boxSizing: "border-box",
         backgroundColor: "#F7F7FA",
-        overflow: isLocationTab ? "hidden" : undefined,
-        display: isLocationTab ? "flex" : undefined,
-        flexDirection: isLocationTab ? "column" : undefined,
+        overflow: isFixedHeightTab ? "hidden" : undefined,
+        display: isFixedHeightTab ? "flex" : undefined,
+        flexDirection: isFixedHeightTab ? "column" : undefined,
       }}
     >
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", backgroundColor: "#fff", position: "sticky", top: 0, zIndex: 100, borderBottom: "1px solid #E5E7EB" }}>
@@ -331,10 +332,16 @@ function RoomDetailPage() {
         <button onClick={() => setIsSidebarOpen(true)} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>⚙</button>
       </header>
       <div
-        className={isLocationTab ? "room-location-tab-content" : undefined}
+        className={
+          isLocationTab
+            ? "room-location-tab-content"
+            : tab === "chat"
+              ? "room-chat-tab-content"
+              : undefined
+        }
         style={{
           padding: tab === "chat" || isLocationTab ? "0" : "0 16px",
-          ...(isLocationTab
+          ...(isFixedHeightTab
             ? {
                 flex: 1,
                 minHeight: 0,

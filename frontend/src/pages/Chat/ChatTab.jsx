@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { FiBell, FiCamera, FiImage, FiUser } from "react-icons/fi";
 import { supabase } from "../../lib/supabaseClient";
 import { createRoomNotifications } from "../../api/notificationApi";
 import "./ChatTab.css";
@@ -493,6 +494,8 @@ function ChatTab({ roomId }) {
   const navigate = useNavigate();
 
   const [messages, setMessages] = useState([]);
+  const [messageReads, setMessageReads] = useState([]);
+  const [participantIds, setParticipantIds] = useState([]);
   const [content, setContent] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
   const [currentProfile, setCurrentProfile] = useState(null);
@@ -508,6 +511,7 @@ function ChatTab({ roomId }) {
   const [pinnedMessageDraft, setPinnedMessageDraft] = useState("");
 
   const bottomRef = useRef(null);
+  const messageListRef = useRef(null);
   const galleryInputRef = useRef(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -638,8 +642,157 @@ function ChatTab({ roomId }) {
   }, [roomId]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!roomId) return;
+
+    let cancelled = false;
+
+    const fetchReads = async () => {
+      const { data, error } = await supabase
+        .from("room_message_reads")
+        .select("messageid, userid")
+        .eq("roomid", Number(roomId));
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error("채팅 읽음 조회 실패:", error);
+        return;
+      }
+
+      setMessageReads(data || []);
+    };
+
+    const fetchParticipants = async () => {
+      const [{ data: members, error: memberError }, { data: guests, error: guestError }] =
+        await Promise.all([
+          supabase.from("room_members").select("userid").eq("roomid", Number(roomId)),
+          supabase.from("room_guests").select("id").eq("roomid", Number(roomId)),
+        ]);
+
+      if (cancelled) return;
+
+      if (memberError || guestError) {
+        console.error("채팅 참여자 조회 실패:", memberError || guestError);
+        return;
+      }
+
+      const ids = [
+        ...(members || []).map((member) => member.userid),
+        ...(guests || []).map((guest) => guest.id),
+      ]
+        .filter(Boolean)
+        .map(String);
+
+      setParticipantIds(Array.from(new Set(ids)));
+    };
+
+    fetchReads();
+    fetchParticipants();
+
+    const readChannel = supabase
+      .channel(`room-message-reads-${roomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "room_message_reads",
+          filter: `roomid=eq.${roomId}`,
+        },
+        fetchReads
+      )
+      .subscribe();
+
+    const participantChannel = supabase
+      .channel(`room-message-read-participants-${roomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "room_members",
+          filter: `roomid=eq.${roomId}`,
+        },
+        fetchParticipants
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "room_guests",
+          filter: `roomid=eq.${roomId}`,
+        },
+        fetchParticipants
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(readChannel);
+      supabase.removeChannel(participantChannel);
+    };
+  }, [roomId]);
+
+  useEffect(() => {
+    const myId = currentUser?.id;
+
+    if (!roomId || !myId || myId === "guest" || messages.length === 0) return;
+
+    const rows = messages
+      .filter((message) => {
+        if (!message.id) return false;
+        if (message.userid && String(message.userid) === String(myId)) return false;
+
+        const meta = getMessageMeta(message.content);
+        return meta?.__type !== "pin_event";
+      })
+      .map((message) => ({
+        roomid: Number(roomId),
+        messageid: message.id,
+        userid: String(myId),
+      }));
+
+    if (rows.length === 0) return;
+
+    supabase
+      .from("room_message_reads")
+      .upsert(rows, {
+        onConflict: "messageid,userid",
+        ignoreDuplicates: true,
+      })
+      .then(({ error }) => {
+        if (error) console.error("채팅 읽음 저장 실패:", error);
+      });
+  }, [roomId, currentUser?.id, messages]);
+
+  useEffect(() => {
+    const messageList = messageListRef.current;
+    if (!messageList) return;
+
+    messageList.scrollTo({
+      top: messageList.scrollHeight,
+      behavior: "smooth",
+    });
   }, [messages]);
+
+  useEffect(() => {
+    if (!showMediaOptions) return;
+
+    const scrollMessagesToBottom = () => {
+      const messageList = messageListRef.current;
+      if (!messageList) return;
+
+      messageList.scrollTop = messageList.scrollHeight;
+    };
+
+    const animationFrameId = requestAnimationFrame(scrollMessagesToBottom);
+    scrollMessagesToBottom();
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [showMediaOptions]);
 
   useEffect(() => {
     if (!selectedMsgId) return;
@@ -1058,11 +1211,37 @@ function ChatTab({ roomId }) {
     setIsEditingPinnedMessage(false);
   }, [pinnedText]);
 
+  const readUserIdsByMessageId = new Map();
+  messageReads.forEach((read) => {
+    if (!read.messageid || !read.userid) return;
+
+    const messageId = String(read.messageid);
+    if (!readUserIdsByMessageId.has(messageId)) {
+      readUserIdsByMessageId.set(messageId, new Set());
+    }
+    readUserIdsByMessageId.get(messageId).add(String(read.userid));
+  });
+
+  const getUnreadCount = (message) => {
+    if (!message?.id || !message.userid || participantIds.length === 0) return 0;
+
+    const senderId = String(message.userid);
+    const readUserIds = readUserIdsByMessageId.get(String(message.id)) || new Set();
+
+    return participantIds.reduce((count, participantId) => {
+      if (String(participantId) === senderId) return count;
+      if (readUserIds.has(String(participantId))) return count;
+      return count + 1;
+    }, 0);
+  };
+
   return (
-    <div className="chat-container">
+    <div className={`chat-container${showMediaOptions ? " media-open" : ""}`}>
       {pinnedText && (
         <div
-          className="chat-pinned-message"
+          className={`chat-pinned-message${
+            isPinnedMessageExpanded ? " expanded" : ""
+          }`}
           onClick={() => setIsPinnedMessageExpanded((value) => !value)}
         >
           <div className="chat-pinned-summary">
@@ -1137,7 +1316,7 @@ function ChatTab({ roomId }) {
           </button>
         </div>
       )}
-      <div className="chat-message-list">
+      <div className="chat-message-list" ref={messageListRef}>
         {messages.map((message, index) => {
           const prevMessage = messages[index - 1];
           const showDateSeparator =
@@ -1170,7 +1349,7 @@ function ChatTab({ roomId }) {
             return (
               <div key={message.id}>
                 {dateSep}
-                <div className="chat-deleted-notice">메시지가 삭제되었습니다</div>
+                <div className="chat-deleted-notice">메시지가 삭제되었습니다.</div>
               </div>
             );
           }
@@ -1185,6 +1364,7 @@ function ChatTab({ roomId }) {
           const deletable = canDelete(message);
           const editable = canEdit(message);
           const pinnable = canPin(message);
+          const unreadCount = isMine ? getUnreadCount(message) : 0;
 
           return (
             <div key={message.id}>
@@ -1192,14 +1372,20 @@ function ChatTab({ roomId }) {
 
               <div className={`chat-row ${isMine ? "mine" : "other"}`}>
                 {!isMine && (
-                  <img
-                    className="chat-profile-image"
-                    src={
-                      message.profileimageurl ||
-                      "https://via.placeholder.com/40?text=?"
-                    }
-                    alt="프로필"
-                  />
+                  message.profileimageurl ? (
+                    <img
+                      className="chat-profile-image"
+                      src={message.profileimageurl}
+                      alt="프로필"
+                    />
+                  ) : (
+                    <span
+                      className="chat-profile-image chat-profile-default"
+                      aria-label="기본 프로필"
+                    >
+                      <FiUser aria-hidden="true" />
+                    </span>
+                  )
                 )}
 
                 <div className="chat-message-box">
@@ -1207,114 +1393,120 @@ function ChatTab({ roomId }) {
                     <div className="chat-nickname">{message.nickname}</div>
                   )}
 
-                  <div style={{ position: "relative" }}>
-                    {selectedMsgId === message.id && (
-                      <div
-                        className="chat-delete-popup"
-                        style={isMine ? { right: 0 } : { left: 0 }}
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        {deletable && (
-                          <button onClick={() => deleteMessage(message.id)}>
-                            삭제
-                          </button>
+                  <div className={`chat-bubble-line ${isMine ? "mine" : "other"}`}>
+                    {isMine && (
+                      <div className="chat-message-meta mine">
+                        {unreadCount > 0 && (
+                          <span className="chat-unread-count">{unreadCount}</span>
                         )}
-                        {editable && (
-                          <button
-                            className="chat-edit-button"
-                            onClick={() => startEditingMessage(message)}
-                          >
-                            수정하기
-                          </button>
-                        )}
-                        {pinnable && (
-                          <button
-                            className="chat-pin-button"
-                            onClick={() => pinMessage(message)}
-                          >
-                            고정하기
-                          </button>
-                        )}
+                        <span>{formatTime(message.createdat)}</span>
                       </div>
                     )}
 
-                    <div
-                      className={`chat-bubble ${isMine ? "mine" : "other"}${
-                        deletable || pinnable ? " deletable" : ""
-                      }`}
-                      onClick={
-                        deletable || pinnable
-                          ? (event) => {
-                              event.stopPropagation();
-                              setSelectedMsgId((value) =>
-                                value === message.id ? null : message.id
-                              );
-                            }
-                          : undefined
-                      }
-                    >
-                      {message.imageurl ? (
-                        <img
-                          src={message.imageurl}
-                          alt="이미지"
-                          style={{
-                            maxWidth: "200px",
-                            borderRadius: "8px",
-                            display: "block",
-                          }}
-                        />
-                      ) : (
-                        (() => {
-                          try {
-                            const meta = JSON.parse(message.content);
-
-                            if (meta.__type === "vote") {
-                              return (
-                                <VoteMessageCard
-                                  meta={meta}
-                                  navigate={navigate}
-                                />
-                              );
-                            }
-
-                            if (meta.__type === "map_share") {
-                              return <MapShareMessageCard meta={meta} />;
-                            }
-
-                            if (meta.__type === "edited_text") {
-                              return meta.text;
-                            }
-
-                            if (meta.__type === "announcement") {
-                              return (
-                                <div className="chat-announcement-message">
-                                  <strong>{meta.title || "공지사항"}</strong>
-                                  <span>{meta.text}</span>
-                                </div>
-                              );
-                            }
-                          } catch {
-                            // 일반 텍스트 메시지
-                          }
-
-                          return message.content;
-                        })()
+                    <div className="chat-bubble-wrap">
+                      {selectedMsgId === message.id && (
+                        <div
+                          className="chat-delete-popup"
+                          style={isMine ? { right: 0 } : { left: 0 }}
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          {deletable && (
+                            <button onClick={() => deleteMessage(message.id)}>
+                              삭제
+                            </button>
+                          )}
+                          {editable && (
+                            <button
+                              className="chat-edit-button"
+                              onClick={() => startEditingMessage(message)}
+                            >
+                              수정하기
+                            </button>
+                          )}
+                          {pinnable && (
+                            <button
+                              className="chat-pin-button"
+                              onClick={() => pinMessage(message)}
+                            >
+                              고정하기
+                            </button>
+                          )}
+                        </div>
                       )}
-                      {isEditedMsg(message.content) && (
-                        <span className="chat-edited-label">수정됨</span>
-                      )}
+
+                      <div
+                        className={`chat-bubble ${isMine ? "mine" : "other"}${
+                          deletable || pinnable ? " deletable" : ""
+                        }`}
+                        onClick={
+                          deletable || pinnable
+                            ? (event) => {
+                                event.stopPropagation();
+                                setSelectedMsgId((value) =>
+                                  value === message.id ? null : message.id
+                                );
+                              }
+                            : undefined
+                        }
+                      >
+                        {message.imageurl ? (
+                          <img
+                            src={message.imageurl}
+                            alt="이미지"
+                            style={{
+                              maxWidth: "200px",
+                              borderRadius: "8px",
+                              display: "block",
+                            }}
+                          />
+                        ) : (
+                          (() => {
+                            try {
+                              const meta = JSON.parse(message.content);
+
+                              if (meta.__type === "vote") {
+                                return (
+                                  <VoteMessageCard
+                                    meta={meta}
+                                    navigate={navigate}
+                                  />
+                                );
+                              }
+
+                              if (meta.__type === "map_share") {
+                                return <MapShareMessageCard meta={meta} />;
+                              }
+
+                              if (meta.__type === "edited_text") {
+                                return meta.text;
+                              }
+
+                              if (meta.__type === "announcement") {
+                                return (
+                                  <div className="chat-announcement-message">
+                                    <strong>{meta.title || "공지사항"}</strong>
+                                    <span>{meta.text}</span>
+                                  </div>
+                                );
+                              }
+                            } catch {
+                              // 일반 텍스트 메시지
+                            }
+
+                            return message.content;
+                          })()
+                        )}
+                        {isEditedMsg(message.content) && (
+                          <span className="chat-edited-label">수정됨</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  <div
-                    style={{
-                      fontSize: "11px",
-                      color: "#999",
-                      marginTop: "3px",
-                      textAlign: isMine ? "right" : "left",
-                    }}
-                  >
-                    {formatTime(message.createdat)}
+                    {!isMine && (
+                      <div className="chat-message-meta other">
+                        <span>{formatTime(message.createdat)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1325,7 +1517,7 @@ function ChatTab({ roomId }) {
         <div ref={bottomRef} />
       </div>
 
-      {showMediaOptions && (
+      {false && showMediaOptions && (
         <div
           className="chat-sheet-overlay"
           onClick={() => setShowMediaOptions(false)}
@@ -1384,7 +1576,9 @@ function ChatTab({ roomId }) {
 
             <div className="chat-sheet-grid">
               <button className="chat-sheet-tile" onClick={openCamera}>
-                <div className="chat-sheet-tile-icon">📷</div>
+                <div className="chat-sheet-tile-icon">
+                  <FiCamera aria-hidden="true" />
+                </div>
                 <span>카메라</span>
               </button>
 
@@ -1395,7 +1589,9 @@ function ChatTab({ roomId }) {
                   setShowMediaOptions(false);
                 }}
               >
-                <div className="chat-sheet-tile-icon">🖼️</div>
+                <div className="chat-sheet-tile-icon">
+                  <FiImage aria-hidden="true" />
+                </div>
                 <span>사진</span>
               </button>
 
@@ -1406,7 +1602,9 @@ function ChatTab({ roomId }) {
                   setShowAnnouncementForm(true);
                 }}
               >
-                <div className="chat-sheet-tile-icon">!</div>
+                <div className="chat-sheet-tile-icon">
+                  <FiBell aria-hidden="true" />
+                </div>
                 <span>공지사항</span>
               </button>
             </div>
@@ -1424,11 +1622,12 @@ function ChatTab({ roomId }) {
 
       {showCamera && (
         <div
+          className="chat-camera-overlay"
           style={{
             position: "fixed",
             inset: 0,
             backgroundColor: "rgba(0,0,0,0.85)",
-            zIndex: 300,
+            zIndex: 10001,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -1437,6 +1636,7 @@ function ChatTab({ roomId }) {
         >
           <video
             ref={videoRef}
+            className="chat-camera-preview"
             style={{
               width: "100%",
               maxWidth: "400px",
@@ -1445,9 +1645,21 @@ function ChatTab({ roomId }) {
             playsInline
           />
 
-          <div style={{ display: "flex", gap: "16px", marginTop: "20px" }}>
-            <button onClick={closeCamera}>취소</button>
-            <button onClick={capturePhoto}>📷 촬영</button>
+          <div className="chat-camera-actions">
+            <button
+              className="chat-camera-cancel"
+              type="button"
+              onClick={closeCamera}
+            >
+              취소
+            </button>
+            <button
+              className="chat-camera-capture"
+              type="button"
+              onClick={capturePhoto}
+            >
+              촬영
+            </button>
           </div>
         </div>
       )}
@@ -1482,6 +1694,7 @@ function ChatTab({ roomId }) {
         </div>
       )}
 
+      <div className={`chat-composer${showMediaOptions ? " expanded" : ""}`}>
       <form className="chat-input-area" onSubmit={handleSendMessage}>
         {editingMsgId && (
           <button
@@ -1498,7 +1711,7 @@ function ChatTab({ roomId }) {
           onClick={() => setShowMediaOptions((value) => !value)}
           disabled={!!editingMsgId}
         >
-          +
+          <span className="chat-plus-symbol">{showMediaOptions ? "-" : "+"}</span>
         </button>
 
         <input
@@ -1512,6 +1725,51 @@ function ChatTab({ roomId }) {
           {editingMsgId ? "수정" : "전송"}
         </button>
       </form>
+
+      <div className="chat-sheet-grid" aria-hidden={!showMediaOptions}>
+        <button
+          className="chat-sheet-tile"
+          onClick={openCamera}
+          type="button"
+          tabIndex={showMediaOptions ? 0 : -1}
+        >
+          <div className="chat-sheet-tile-icon">
+            <FiCamera aria-hidden="true" />
+          </div>
+          <span>카메라</span>
+        </button>
+
+        <button
+          className="chat-sheet-tile"
+          onClick={() => {
+            galleryInputRef.current?.click();
+            setShowMediaOptions(false);
+          }}
+          type="button"
+          tabIndex={showMediaOptions ? 0 : -1}
+        >
+          <div className="chat-sheet-tile-icon">
+            <FiImage aria-hidden="true" />
+          </div>
+          <span>사진</span>
+        </button>
+
+        <button
+          className="chat-sheet-tile"
+          onClick={() => {
+            setShowMediaOptions(false);
+            setShowAnnouncementForm(true);
+          }}
+          type="button"
+          tabIndex={showMediaOptions ? 0 : -1}
+        >
+          <div className="chat-sheet-tile-icon">
+            <FiBell aria-hidden="true" />
+          </div>
+          <span>공지사항</span>
+        </button>
+      </div>
+      </div>
     </div>
   );
 }

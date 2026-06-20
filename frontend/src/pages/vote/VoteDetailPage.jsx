@@ -2761,7 +2761,7 @@ function VoteDetailPage() {
                     ? "일반 장소 투표"
                     : isMiddlePlaceVote
                     ? "중간 장소 투표"
-                    : "추가 장소 투표"}
+                    : "주변 장소 투표"}
                 </span>
               )}
             </div>

@@ -1,0 +1,1039 @@
+
+> frontend@0.1.0 start
+> set "NODE_OPTIONS=--max-old-space-size=4096" && set "DISABLE_ESLINT_PLUGIN=true" && react-scripts start
+
+Starting the development server...
+
+Compiled successfully!
+
+You can now view frontend in the browser.
+
+  http://localhost:3001
+
+Note that the development build is not optimized.
+To create a production build, use npm run build.
+
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Failed to compile.
+
+SyntaxError: C:\Users\User\Documents\GitHub\SWfinal\frontend\src\pages\Chat\ChatTab.jsx: Unexpected token, expected "," (1486:6)
+[0m [90m 1484 |[39m       [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+ [90m 1485 |[39m
+[31m[1m>[22m[39m[90m 1486 |[39m       {[36mfalse[39m [33m&&[39m showMediaOptions [33m&&[39m (
+ [90m      |[39m       [31m[1m^[22m[39m
+ [90m 1487 |[39m         [33m<[39m[33mdiv[39m
+ [90m 1488 |[39m           className[33m=[39m[32m"chat-sheet-overlay"[39m
+ [90m 1489 |[39m           onClick[33m=[39m{() [33m=>[39m setShowMediaOptions([36mfalse[39m)}[0m
+[1m[31mERROR[39m[22m in [1m./src/pages/Chat/ChatTab.jsx[39m[22m
+Module build failed (from ./node_modules/babel-loader/lib/index.js):
+SyntaxError: C:\Users\User\Documents\GitHub\SWfinal\frontend\src\pages\Chat\ChatTab.jsx: Unexpected token, expected "," (1486:6)
+
+[0m [90m 1484 |[39m       [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+ [90m 1485 |[39m
+[31m[1m>[22m[39m[90m 1486 |[39m       {[36mfalse[39m [33m&&[39m showMediaOptions [33m&&[39m (
+ [90m      |[39m       [31m[1m^[22m[39m
+ [90m 1487 |[39m         [33m<[39m[33mdiv[39m
+ [90m 1488 |[39m           className[33m=[39m[32m"chat-sheet-overlay"[39m
+ [90m 1489 |[39m           onClick[33m=[39m{() [33m=>[39m setShowMediaOptions([36mfalse[39m)}[0m
+    at constructor (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+    at FlowParserMixin.raise (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:6616:19)
+    at FlowParserMixin.unexpected (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:6636:16)
+    at FlowParserMixin.expect (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:6916:12)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11678:14)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3603:18)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11348:23)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:4776:20)
+    at FlowParserMixin.parseExprSubscripts (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11098:23)
+    at FlowParserMixin.parseUpdate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11083:21)
+    at FlowParserMixin.parseMaybeUnary (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11063:23)
+    at FlowParserMixin.parseMaybeUnaryOrPrivate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10916:61)
+    at FlowParserMixin.parseExprOps (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10921:23)
+    at FlowParserMixin.parseMaybeConditional (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10898:23)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10848:21)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3561:18)
+    at FlowParserMixin.parseExpressionBase (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10801:23)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10797:39
+    at FlowParserMixin.allowInAnd (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12438:16)
+    at FlowParserMixin.parseExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10797:17)
+    at FlowParserMixin.parseReturnStatement (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13159:28)
+    at FlowParserMixin.parseStatementContent (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12815:21)
+    at FlowParserMixin.parseStatementLike (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12784:17)
+    at FlowParserMixin.parseStatementLike (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:2930:24)
+    at FlowParserMixin.parseStatementListItem (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12764:17)
+    at FlowParserMixin.parseBlockOrModuleBlockBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13333:61)
+    at FlowParserMixin.parseBlockBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13326:10)
+    at FlowParserMixin.parseBlock (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13314:10)
+    at FlowParserMixin.parseFunctionBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12117:24)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:2904:63
+    at FlowParserMixin.forwardNoArrowParamsConversionAt (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3080:16)
+    at FlowParserMixin.parseFunctionBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:2904:12)
+    at FlowParserMixin.parseArrowExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12092:10)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11704:12)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3603:18)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11348:23)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:4776:20)
+    at FlowParserMixin.parseExprSubscripts (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11098:23)
+    at FlowParserMixin.parseUpdate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11083:21)
+    at FlowParserMixin.parseMaybeUnary (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11063:23)
+    at FlowParserMixin.parseMaybeUnaryOrPrivate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10916:61)
+    at FlowParserMixin.parseExprOps (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10921:23)
+    at FlowParserMixin.parseMaybeConditional (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10898:23)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10848:21)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3561:18)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10817:39
+    at FlowParserMixin.allowInAnd (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12443:12)
+    at FlowParserMixin.parseMaybeAssignAllowIn (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10817:17)
+    at FlowParserMixin.parseMaybeAssignAllowInOrVoidPattern (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12510:17)
+    at FlowParserMixin.parseExprListItem (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12192:18)
+
+webpack compiled with [1m[31m1 error[39m[22m
+Compiling...
+Failed to compile.
+
+SyntaxError: C:\Users\User\Documents\GitHub\SWfinal\frontend\src\pages\Chat\ChatTab.jsx: Unexpected token, expected "," (1481:6)
+[0m [90m 1479 |[39m       [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+ [90m 1480 |[39m
+[31m[1m>[22m[39m[90m 1481 |[39m       {[36mfalse[39m [33m&&[39m showMediaOptions [33m&&[39m (
+ [90m      |[39m       [31m[1m^[22m[39m
+ [90m 1482 |[39m         [33m<[39m[33mdiv[39m
+ [90m 1483 |[39m           className[33m=[39m[32m"chat-sheet-overlay"[39m
+ [90m 1484 |[39m           onClick[33m=[39m{() [33m=>[39m setShowMediaOptions([36mfalse[39m)}[0m
+[1m[31mERROR[39m[22m in [1m./src/pages/Chat/ChatTab.jsx[39m[22m
+Module build failed (from ./node_modules/babel-loader/lib/index.js):
+SyntaxError: C:\Users\User\Documents\GitHub\SWfinal\frontend\src\pages\Chat\ChatTab.jsx: Unexpected token, expected "," (1481:6)
+
+[0m [90m 1479 |[39m       [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+ [90m 1480 |[39m
+[31m[1m>[22m[39m[90m 1481 |[39m       {[36mfalse[39m [33m&&[39m showMediaOptions [33m&&[39m (
+ [90m      |[39m       [31m[1m^[22m[39m
+ [90m 1482 |[39m         [33m<[39m[33mdiv[39m
+ [90m 1483 |[39m           className[33m=[39m[32m"chat-sheet-overlay"[39m
+ [90m 1484 |[39m           onClick[33m=[39m{() [33m=>[39m setShowMediaOptions([36mfalse[39m)}[0m
+    at constructor (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+    at FlowParserMixin.raise (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:6616:19)
+    at FlowParserMixin.unexpected (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:6636:16)
+    at FlowParserMixin.expect (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:6916:12)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11678:14)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3603:18)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11348:23)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:4776:20)
+    at FlowParserMixin.parseExprSubscripts (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11098:23)
+    at FlowParserMixin.parseUpdate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11083:21)
+    at FlowParserMixin.parseMaybeUnary (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11063:23)
+    at FlowParserMixin.parseMaybeUnaryOrPrivate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10916:61)
+    at FlowParserMixin.parseExprOps (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10921:23)
+    at FlowParserMixin.parseMaybeConditional (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10898:23)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10848:21)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3561:18)
+    at FlowParserMixin.parseExpressionBase (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10801:23)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10797:39
+    at FlowParserMixin.allowInAnd (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12438:16)
+    at FlowParserMixin.parseExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10797:17)
+    at FlowParserMixin.parseReturnStatement (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13159:28)
+    at FlowParserMixin.parseStatementContent (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12815:21)
+    at FlowParserMixin.parseStatementLike (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12784:17)
+    at FlowParserMixin.parseStatementLike (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:2930:24)
+    at FlowParserMixin.parseStatementListItem (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12764:17)
+    at FlowParserMixin.parseBlockOrModuleBlockBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13333:61)
+    at FlowParserMixin.parseBlockBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13326:10)
+    at FlowParserMixin.parseBlock (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13314:10)
+    at FlowParserMixin.parseFunctionBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12117:24)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:2904:63
+    at FlowParserMixin.forwardNoArrowParamsConversionAt (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3080:16)
+    at FlowParserMixin.parseFunctionBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:2904:12)
+    at FlowParserMixin.parseArrowExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12092:10)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11704:12)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3603:18)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11348:23)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:4776:20)
+    at FlowParserMixin.parseExprSubscripts (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11098:23)
+    at FlowParserMixin.parseUpdate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11083:21)
+    at FlowParserMixin.parseMaybeUnary (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11063:23)
+    at FlowParserMixin.parseMaybeUnaryOrPrivate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10916:61)
+    at FlowParserMixin.parseExprOps (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10921:23)
+    at FlowParserMixin.parseMaybeConditional (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10898:23)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10848:21)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3561:18)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10817:39
+    at FlowParserMixin.allowInAnd (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12443:12)
+    at FlowParserMixin.parseMaybeAssignAllowIn (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10817:17)
+    at FlowParserMixin.parseMaybeAssignAllowInOrVoidPattern (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12510:17)
+    at FlowParserMixin.parseExprListItem (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12192:18)
+
+webpack compiled with [1m[31m1 error[39m[22m
+Compiling...
+Failed to compile.
+
+SyntaxError: C:\Users\User\Documents\GitHub\SWfinal\frontend\src\pages\Chat\ChatTab.jsx: Unexpected token, expected "," (1481:6)
+[0m [90m 1479 |[39m       [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+ [90m 1480 |[39m
+[31m[1m>[22m[39m[90m 1481 |[39m       {[36mfalse[39m [33m&&[39m showMediaOptions [33m&&[39m (
+ [90m      |[39m       [31m[1m^[22m[39m
+ [90m 1482 |[39m         [33m<[39m[33mdiv[39m
+ [90m 1483 |[39m           className[33m=[39m[32m"chat-sheet-overlay"[39m
+ [90m 1484 |[39m           onClick[33m=[39m{() [33m=>[39m setShowMediaOptions([36mfalse[39m)}[0m
+[1m[31mERROR[39m[22m in [1m./src/pages/Chat/ChatTab.jsx[39m[22m
+Module build failed (from ./node_modules/babel-loader/lib/index.js):
+SyntaxError: C:\Users\User\Documents\GitHub\SWfinal\frontend\src\pages\Chat\ChatTab.jsx: Unexpected token, expected "," (1481:6)
+
+[0m [90m 1479 |[39m       [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+ [90m 1480 |[39m
+[31m[1m>[22m[39m[90m 1481 |[39m       {[36mfalse[39m [33m&&[39m showMediaOptions [33m&&[39m (
+ [90m      |[39m       [31m[1m^[22m[39m
+ [90m 1482 |[39m         [33m<[39m[33mdiv[39m
+ [90m 1483 |[39m           className[33m=[39m[32m"chat-sheet-overlay"[39m
+ [90m 1484 |[39m           onClick[33m=[39m{() [33m=>[39m setShowMediaOptions([36mfalse[39m)}[0m
+    at constructor (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+    at FlowParserMixin.raise (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:6616:19)
+    at FlowParserMixin.unexpected (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:6636:16)
+    at FlowParserMixin.expect (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:6916:12)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11678:14)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3603:18)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11348:23)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:4776:20)
+    at FlowParserMixin.parseExprSubscripts (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11098:23)
+    at FlowParserMixin.parseUpdate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11083:21)
+    at FlowParserMixin.parseMaybeUnary (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11063:23)
+    at FlowParserMixin.parseMaybeUnaryOrPrivate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10916:61)
+    at FlowParserMixin.parseExprOps (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10921:23)
+    at FlowParserMixin.parseMaybeConditional (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10898:23)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10848:21)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3561:18)
+    at FlowParserMixin.parseExpressionBase (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10801:23)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10797:39
+    at FlowParserMixin.allowInAnd (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12438:16)
+    at FlowParserMixin.parseExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10797:17)
+    at FlowParserMixin.parseReturnStatement (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13159:28)
+    at FlowParserMixin.parseStatementContent (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12815:21)
+    at FlowParserMixin.parseStatementLike (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12784:17)
+    at FlowParserMixin.parseStatementLike (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:2930:24)
+    at FlowParserMixin.parseStatementListItem (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12764:17)
+    at FlowParserMixin.parseBlockOrModuleBlockBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13333:61)
+    at FlowParserMixin.parseBlockBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13326:10)
+    at FlowParserMixin.parseBlock (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13314:10)
+    at FlowParserMixin.parseFunctionBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12117:24)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:2904:63
+    at FlowParserMixin.forwardNoArrowParamsConversionAt (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3080:16)
+    at FlowParserMixin.parseFunctionBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:2904:12)
+    at FlowParserMixin.parseArrowExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12092:10)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11704:12)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3603:18)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11348:23)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:4776:20)
+    at FlowParserMixin.parseExprSubscripts (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11098:23)
+    at FlowParserMixin.parseUpdate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11083:21)
+    at FlowParserMixin.parseMaybeUnary (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11063:23)
+    at FlowParserMixin.parseMaybeUnaryOrPrivate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10916:61)
+    at FlowParserMixin.parseExprOps (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10921:23)
+    at FlowParserMixin.parseMaybeConditional (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10898:23)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10848:21)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3561:18)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10817:39
+    at FlowParserMixin.allowInAnd (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12443:12)
+    at FlowParserMixin.parseMaybeAssignAllowIn (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10817:17)
+    at FlowParserMixin.parseMaybeAssignAllowInOrVoidPattern (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12510:17)
+    at FlowParserMixin.parseExprListItem (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12192:18)
+
+webpack compiled with [1m[31m1 error[39m[22m
+Compiling...
+Failed to compile.
+
+SyntaxError: C:\Users\User\Documents\GitHub\SWfinal\frontend\src\pages\Chat\ChatTab.jsx: Unexpected token, expected "," (1482:6)
+[0m [90m 1480 |[39m       [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+ [90m 1481 |[39m
+[31m[1m>[22m[39m[90m 1482 |[39m       {[36mfalse[39m [33m&&[39m showMediaOptions [33m&&[39m (
+ [90m      |[39m       [31m[1m^[22m[39m
+ [90m 1483 |[39m         [33m<[39m[33mdiv[39m
+ [90m 1484 |[39m           className[33m=[39m[32m"chat-sheet-overlay"[39m
+ [90m 1485 |[39m           onClick[33m=[39m{() [33m=>[39m setShowMediaOptions([36mfalse[39m)}[0m
+[1m[31mERROR[39m[22m in [1m./src/pages/Chat/ChatTab.jsx[39m[22m
+Module build failed (from ./node_modules/babel-loader/lib/index.js):
+SyntaxError: C:\Users\User\Documents\GitHub\SWfinal\frontend\src\pages\Chat\ChatTab.jsx: Unexpected token, expected "," (1482:6)
+
+[0m [90m 1480 |[39m       [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+ [90m 1481 |[39m
+[31m[1m>[22m[39m[90m 1482 |[39m       {[36mfalse[39m [33m&&[39m showMediaOptions [33m&&[39m (
+ [90m      |[39m       [31m[1m^[22m[39m
+ [90m 1483 |[39m         [33m<[39m[33mdiv[39m
+ [90m 1484 |[39m           className[33m=[39m[32m"chat-sheet-overlay"[39m
+ [90m 1485 |[39m           onClick[33m=[39m{() [33m=>[39m setShowMediaOptions([36mfalse[39m)}[0m
+    at constructor (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+    at FlowParserMixin.raise (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:6616:19)
+    at FlowParserMixin.unexpected (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:6636:16)
+    at FlowParserMixin.expect (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:6916:12)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11678:14)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3603:18)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11348:23)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:4776:20)
+    at FlowParserMixin.parseExprSubscripts (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11098:23)
+    at FlowParserMixin.parseUpdate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11083:21)
+    at FlowParserMixin.parseMaybeUnary (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11063:23)
+    at FlowParserMixin.parseMaybeUnaryOrPrivate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10916:61)
+    at FlowParserMixin.parseExprOps (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10921:23)
+    at FlowParserMixin.parseMaybeConditional (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10898:23)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10848:21)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3561:18)
+    at FlowParserMixin.parseExpressionBase (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10801:23)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10797:39
+    at FlowParserMixin.allowInAnd (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12438:16)
+    at FlowParserMixin.parseExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10797:17)
+    at FlowParserMixin.parseReturnStatement (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13159:28)
+    at FlowParserMixin.parseStatementContent (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12815:21)
+    at FlowParserMixin.parseStatementLike (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12784:17)
+    at FlowParserMixin.parseStatementLike (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:2930:24)
+    at FlowParserMixin.parseStatementListItem (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12764:17)
+    at FlowParserMixin.parseBlockOrModuleBlockBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13333:61)
+    at FlowParserMixin.parseBlockBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13326:10)
+    at FlowParserMixin.parseBlock (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13314:10)
+    at FlowParserMixin.parseFunctionBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12117:24)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:2904:63
+    at FlowParserMixin.forwardNoArrowParamsConversionAt (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3080:16)
+    at FlowParserMixin.parseFunctionBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:2904:12)
+    at FlowParserMixin.parseArrowExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12092:10)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11704:12)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3603:18)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11348:23)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:4776:20)
+    at FlowParserMixin.parseExprSubscripts (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11098:23)
+    at FlowParserMixin.parseUpdate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11083:21)
+    at FlowParserMixin.parseMaybeUnary (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11063:23)
+    at FlowParserMixin.parseMaybeUnaryOrPrivate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10916:61)
+    at FlowParserMixin.parseExprOps (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10921:23)
+    at FlowParserMixin.parseMaybeConditional (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10898:23)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10848:21)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3561:18)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10817:39
+    at FlowParserMixin.allowInAnd (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12443:12)
+    at FlowParserMixin.parseMaybeAssignAllowIn (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10817:17)
+    at FlowParserMixin.parseMaybeAssignAllowInOrVoidPattern (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12510:17)
+    at FlowParserMixin.parseExprListItem (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12192:18)
+
+webpack compiled with [1m[31m1 error[39m[22m
+Compiling...
+Failed to compile.
+
+SyntaxError: C:\Users\User\Documents\GitHub\SWfinal\frontend\src\pages\Chat\ChatTab.jsx: Adjacent JSX elements must be wrapped in an enclosing tag. Did you want a JSX fragment <>...</>? (490:12)
+[0m [90m 488 |[39m                 )}
+ [90m 489 |[39m               [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+[31m[1m>[22m[39m[90m 490 |[39m             [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+ [90m     |[39m             [31m[1m^[22m[39m
+ [90m 491 |[39m           )[33m;[39m
+ [90m 492 |[39m }
+ [90m 493 |[39m[0m
+[1m[31mERROR[39m[22m in [1m./src/pages/Chat/ChatTab.jsx[39m[22m
+Module build failed (from ./node_modules/babel-loader/lib/index.js):
+SyntaxError: C:\Users\User\Documents\GitHub\SWfinal\frontend\src\pages\Chat\ChatTab.jsx: Adjacent JSX elements must be wrapped in an enclosing tag. Did you want a JSX fragment <>...</>? (490:12)
+
+[0m [90m 488 |[39m                 )}
+ [90m 489 |[39m               [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+[31m[1m>[22m[39m[90m 490 |[39m             [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+ [90m     |[39m             [31m[1m^[22m[39m
+ [90m 491 |[39m           )[33m;[39m
+ [90m 492 |[39m }
+ [90m 493 |[39m[0m
+    at constructor (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+    at FlowParserMixin.raise (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:6616:19)
+    at FlowParserMixin.jsxParseElementAt (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:4754:18)
+    at FlowParserMixin.jsxParseElement (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:4761:17)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:4771:19)
+    at FlowParserMixin.parseExprSubscripts (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11098:23)
+    at FlowParserMixin.parseUpdate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11083:21)
+    at FlowParserMixin.parseMaybeUnary (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11063:23)
+    at FlowParserMixin.parseMaybeUnaryOrPrivate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10916:61)
+    at FlowParserMixin.parseExprOps (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10921:23)
+    at FlowParserMixin.parseMaybeConditional (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10898:23)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10848:21)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3510:39
+    at FlowParserMixin.tryParse (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:6924:20)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3510:18)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10817:39
+    at FlowParserMixin.allowInAnd (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12443:12)
+    at FlowParserMixin.parseMaybeAssignAllowIn (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10817:17)
+    at FlowParserMixin.parseMaybeAssignAllowInOrVoidPattern (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12510:17)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11692:28)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3603:18)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11348:23)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:4776:20)
+    at FlowParserMixin.parseExprSubscripts (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11098:23)
+    at FlowParserMixin.parseUpdate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11083:21)
+    at FlowParserMixin.parseMaybeUnary (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11063:23)
+    at FlowParserMixin.parseMaybeUnaryOrPrivate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10916:61)
+    at FlowParserMixin.parseExprOps (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10921:23)
+    at FlowParserMixin.parseMaybeConditional (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10898:23)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10848:21)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3561:18)
+    at FlowParserMixin.parseExpressionBase (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10801:23)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10797:39
+    at FlowParserMixin.allowInAnd (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12438:16)
+    at FlowParserMixin.parseExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10797:17)
+    at FlowParserMixin.parseReturnStatement (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13159:28)
+    at FlowParserMixin.parseStatementContent (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12815:21)
+    at FlowParserMixin.parseStatementLike (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12784:17)
+    at FlowParserMixin.parseStatementLike (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:2930:24)
+    at FlowParserMixin.parseStatementListItem (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12764:17)
+    at FlowParserMixin.parseBlockOrModuleBlockBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13333:61)
+    at FlowParserMixin.parseBlockBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13326:10)
+    at FlowParserMixin.parseBlock (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13314:10)
+    at FlowParserMixin.parseFunctionBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12117:24)
+    at FlowParserMixin.parseFunctionBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:2907:11)
+    at FlowParserMixin.parseFunctionBodyAndFinish (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12103:10)
+    at FlowParserMixin.parseFunctionBodyAndFinish (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:2915:18)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13462:12
+    at FlowParserMixin.withSmartMixTopicForbiddingContext (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12420:14)
+    at FlowParserMixin.parseFunction (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13461:10)
+
+webpack compiled with [1m[31m1 error[39m[22m
+Compiling...
+Failed to compile.
+
+SyntaxError: C:\Users\User\Documents\GitHub\SWfinal\frontend\src\pages\Chat\ChatTab.jsx: Unexpected token, expected "," (1482:6)
+[0m [90m 1480 |[39m       [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+ [90m 1481 |[39m
+[31m[1m>[22m[39m[90m 1482 |[39m       {[36mfalse[39m [33m&&[39m showMediaOptions [33m&&[39m (
+ [90m      |[39m       [31m[1m^[22m[39m
+ [90m 1483 |[39m         [33m<[39m[33mdiv[39m
+ [90m 1484 |[39m           className[33m=[39m[32m"chat-sheet-overlay"[39m
+ [90m 1485 |[39m           onClick[33m=[39m{() [33m=>[39m setShowMediaOptions([36mfalse[39m)}[0m
+[1m[31mERROR[39m[22m in [1m./src/pages/Chat/ChatTab.jsx[39m[22m
+Module build failed (from ./node_modules/babel-loader/lib/index.js):
+SyntaxError: C:\Users\User\Documents\GitHub\SWfinal\frontend\src\pages\Chat\ChatTab.jsx: Unexpected token, expected "," (1482:6)
+
+[0m [90m 1480 |[39m       [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+ [90m 1481 |[39m
+[31m[1m>[22m[39m[90m 1482 |[39m       {[36mfalse[39m [33m&&[39m showMediaOptions [33m&&[39m (
+ [90m      |[39m       [31m[1m^[22m[39m
+ [90m 1483 |[39m         [33m<[39m[33mdiv[39m
+ [90m 1484 |[39m           className[33m=[39m[32m"chat-sheet-overlay"[39m
+ [90m 1485 |[39m           onClick[33m=[39m{() [33m=>[39m setShowMediaOptions([36mfalse[39m)}[0m
+    at constructor (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:365:19)
+    at FlowParserMixin.raise (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:6616:19)
+    at FlowParserMixin.unexpected (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:6636:16)
+    at FlowParserMixin.expect (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:6916:12)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11678:14)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3603:18)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11348:23)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:4776:20)
+    at FlowParserMixin.parseExprSubscripts (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11098:23)
+    at FlowParserMixin.parseUpdate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11083:21)
+    at FlowParserMixin.parseMaybeUnary (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11063:23)
+    at FlowParserMixin.parseMaybeUnaryOrPrivate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10916:61)
+    at FlowParserMixin.parseExprOps (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10921:23)
+    at FlowParserMixin.parseMaybeConditional (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10898:23)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10848:21)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3561:18)
+    at FlowParserMixin.parseExpressionBase (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10801:23)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10797:39
+    at FlowParserMixin.allowInAnd (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12438:16)
+    at FlowParserMixin.parseExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10797:17)
+    at FlowParserMixin.parseReturnStatement (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13159:28)
+    at FlowParserMixin.parseStatementContent (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12815:21)
+    at FlowParserMixin.parseStatementLike (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12784:17)
+    at FlowParserMixin.parseStatementLike (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:2930:24)
+    at FlowParserMixin.parseStatementListItem (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12764:17)
+    at FlowParserMixin.parseBlockOrModuleBlockBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13333:61)
+    at FlowParserMixin.parseBlockBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13326:10)
+    at FlowParserMixin.parseBlock (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:13314:10)
+    at FlowParserMixin.parseFunctionBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12117:24)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:2904:63
+    at FlowParserMixin.forwardNoArrowParamsConversionAt (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3080:16)
+    at FlowParserMixin.parseFunctionBody (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:2904:12)
+    at FlowParserMixin.parseArrowExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12092:10)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11704:12)
+    at FlowParserMixin.parseParenAndDistinguishExpression (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3603:18)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11348:23)
+    at FlowParserMixin.parseExprAtom (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:4776:20)
+    at FlowParserMixin.parseExprSubscripts (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11098:23)
+    at FlowParserMixin.parseUpdate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11083:21)
+    at FlowParserMixin.parseMaybeUnary (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:11063:23)
+    at FlowParserMixin.parseMaybeUnaryOrPrivate (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10916:61)
+    at FlowParserMixin.parseExprOps (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10921:23)
+    at FlowParserMixin.parseMaybeConditional (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10898:23)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10848:21)
+    at FlowParserMixin.parseMaybeAssign (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:3561:18)
+    at C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10817:39
+    at FlowParserMixin.allowInAnd (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12443:12)
+    at FlowParserMixin.parseMaybeAssignAllowIn (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:10817:17)
+    at FlowParserMixin.parseMaybeAssignAllowInOrVoidPattern (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12510:17)
+    at FlowParserMixin.parseExprListItem (C:\Users\User\Documents\GitHub\SWfinal\frontend\node_modules\@babel\parser\lib\index.js:12192:18)
+
+webpack compiled with [1m[31m1 error[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m
+Compiling...
+Compiled successfully!
+webpack compiled [1m[32msuccessfully[39m[22m

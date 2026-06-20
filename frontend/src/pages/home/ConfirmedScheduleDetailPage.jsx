@@ -92,6 +92,7 @@ function ConfirmedScheduleDetailPage() {
   );
   const [memberLocations, setMemberLocations] = useState([]);
   const [memberRoutePaths, setMemberRoutePaths] = useState([]);
+  const [memberRouteResults, setMemberRouteResults] = useState([]);
   const [voteExists, setVoteExists] = useState(null); // null=로딩중, true/false
 
   useEffect(() => {
@@ -285,10 +286,15 @@ function ConfirmedScheduleDetailPage() {
   };
 
   const refreshRouteEstimates = async (place = selectedMeetingPlace) => {
-    if (place?.lat == null || place?.lng == null) return;
+    if (place?.lat == null || place?.lng == null) {
+      setMemberRoutePaths([]);
+      setMemberRouteResults([]);
+      return;
+    }
 
     try {
       const pathResults = [];
+      const routeResults = [];
       await Promise.all(
         memberLocations
           .filter(
@@ -301,30 +307,58 @@ function ConfirmedScheduleDetailPage() {
             const mode = normalizeTransportMode(memberLocation.transportmode);
             if (!mode) return null;
 
+            const origin = {
+              lat: Number(memberLocation.latitude),
+              lng: Number(memberLocation.longitude),
+            };
+            const destination = {
+              lat: Number(place.lat),
+              lng: Number(place.lng),
+            };
+
             let hasPath = false;
-            const result = await getRouteTime({
-              origin: {
-                lat: Number(memberLocation.latitude),
-                lng: Number(memberLocation.longitude),
-              },
-              destination: {
-                lat: Number(place.lat),
-                lng: Number(place.lng),
-              },
+            const routeResult = {
+              userid: memberLocation.userid,
+              guestid: memberLocation.guestid,
               mode,
-            }).catch((error) => {
+              duration: null,
+              distance: null,
+              durationMinutes: null,
+              distanceKm: null,
+            };
+
+            let result = null;
+
+            if (mode === "transit") {
+              result = await getRouteTime({
+                origin,
+                destination,
+                mode,
+              }).catch((error) => {
               console.error("멤버 이동시간 계산 실패:", error);
               return null;
             });
 
+            }
+
+            if (result) {
+              routeResult.duration = result.duration ?? null;
+              routeResult.distance = result.distance ?? null;
+              routeResult.durationMinutes = result.duration
+                ? Math.round(result.duration / 60)
+                : null;
+              routeResult.distanceKm = result.distance
+                ? (result.distance / 1000).toFixed(1)
+                : null;
+            }
+
             if (mode === "transit" && result) {
-              const encodedPaths = [
-                result.encodedPolyline,
-                ...(result.steps || []).map((step) => step.encodedPolyline),
-              ].filter(Boolean);
-              const transitPath = encodedPaths.flatMap((encodedPath) =>
-                decodePolyline(encodedPath)
-              );
+              const transitPath = result.encodedPolyline
+                ? decodePolyline(result.encodedPolyline)
+                : (result.steps || [])
+                    .map((step) => step.encodedPolyline)
+                    .filter(Boolean)
+                    .flatMap((encodedPath) => decodePolyline(encodedPath));
 
               if (transitPath.length > 0) {
                 pathResults.push({
@@ -341,14 +375,8 @@ function ConfirmedScheduleDetailPage() {
               const apiBaseUrl = getApiBaseUrl();
               const url = `${apiBaseUrl}/kakao/route`;
               const requestBody = {
-                origin: {
-                  lat: Number(memberLocation.latitude),
-                  lng: Number(memberLocation.longitude),
-                },
-                destination: {
-                  lat: Number(place.lat),
-                  lng: Number(place.lng),
-                },
+                origin,
+                destination,
               };
               const response = await fetch(url, {
                 method: "POST",
@@ -367,6 +395,14 @@ function ConfirmedScheduleDetailPage() {
                 const pathResult = await response.json();
 
                 if (pathResult.path?.length > 0) {
+                  routeResult.duration = pathResult.duration ?? null;
+                  routeResult.distance = pathResult.distance ?? null;
+                  routeResult.durationMinutes = pathResult.duration
+                    ? Math.round(pathResult.duration / 60)
+                    : null;
+                  routeResult.distanceKm = pathResult.distance
+                    ? (pathResult.distance / 1000).toFixed(1)
+                    : null;
                   pathResults.push({
                     userid: memberLocation.userid,
                     guestid: memberLocation.guestid,
@@ -389,37 +425,16 @@ function ConfirmedScheduleDetailPage() {
             }
 
             if (!hasPath) {
-              const fallbackPath = buildFallbackRoutePath(
-                {
-                  lat: Number(memberLocation.latitude),
-                  lng: Number(memberLocation.longitude),
-                },
-                {
-                  lat: Number(place.lat),
-                  lng: Number(place.lng),
-                }
-              );
-
-              if (fallbackPath.length > 0) {
-                pathResults.push({
-                  userid: memberLocation.userid,
-                  guestid: memberLocation.guestid,
-                  mode,
-                  path: fallbackPath,
-                });
-              }
+              routeResult.error = "경로 검색 불가";
             }
 
-            return {
-              userid: memberLocation.userid,
-              guestid: memberLocation.guestid,
-              mode,
-              durationMinutes: result?.duration ? Math.round(result.duration / 60) : null,
-            };
+            routeResults.push(routeResult);
+            return routeResult;
           })
       );
 
       setMemberRoutePaths(pathResults);
+      setMemberRouteResults(routeResults);
     } catch (error) {
       console.error("경로 재검색 실패:", error);
     }
@@ -555,7 +570,7 @@ function ConfirmedScheduleDetailPage() {
       const savedLocation = await addAdditionalConfirmedLocation(
         schedule.roomid,
         schedule.id,
-        additionalPlace.name
+        additionalPlace
       );
 
       setAdditionalLocations((locations) => [...locations, savedLocation]);
@@ -576,6 +591,9 @@ function ConfirmedScheduleDetailPage() {
     middlePlace &&
     Number.isFinite(Number(middlePlace.lat)) &&
     Number.isFinite(Number(middlePlace.lng));
+  const additionalMapPlaces = additionalLocations
+    .map(toMapPlace)
+    .filter((place) => Number.isFinite(Number(place.lat)) && Number.isFinite(Number(place.lng)));
 
   const middlePlaceSection = (
     <>
@@ -599,9 +617,11 @@ function ConfirmedScheduleDetailPage() {
         <div style={{ marginBottom: "20px" }}>
           <KakaoMapView
             memberLocations={memberLocations}
-            places={[middlePlace]}
+            places={additionalMapPlaces}
             selectedPlace={middlePlace}
+            confirmedMeetingPlace={middlePlace}
             memberRoutePaths={memberRoutePaths}
+            memberRouteResults={memberRouteResults}
           />
         </div>
       )}
@@ -1291,21 +1311,16 @@ function normalizeTransportMode(mode) {
   return mode || "";
 }
 
-function buildFallbackRoutePath(origin, destination) {
-  if (!isValidMapPoint(origin?.lat, origin?.lng) || !isValidMapPoint(destination?.lat, destination?.lng)) {
-    return [];
-  }
-
-  return [
-    {
-      lat: Number(origin.lat),
-      lng: Number(origin.lng),
-    },
-    {
-      lat: Number(destination.lat),
-      lng: Number(destination.lng),
-    },
-  ];
+function toMapPlace(place = {}) {
+  return {
+    ...place,
+    id: place.id || place.placeid || place.kakaoPlaceId || place.placename || place.name,
+    name: place.name || place.placename || place.place_name || "Place",
+    address: place.address || place.placeaddress || place.locationaddress || "",
+    lat: Number(place.lat ?? place.latitude ?? place.placelat ?? place.locationlat),
+    lng: Number(place.lng ?? place.longitude ?? place.placelng ?? place.locationlng),
+    kakaoMapUrl: place.kakaoMapUrl || place.kakaomapurl || "",
+  };
 }
 
 function isValidMapPoint(lat, lng) {

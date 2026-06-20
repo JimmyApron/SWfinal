@@ -237,7 +237,7 @@ export async function createDraftConfirmedSchedule(roomId, title) {
 export async function getAdditionalConfirmedLocations(roomId, scheduleId = null) {
   let query = supabase
     .from("confirmed_locations")
-    .select("id, placename, voteid, scheduleid")
+    .select("id, placename, voteid, scheduleid, placeaddress, placelat, placelng, kakaomapurl")
     .eq("roomid", Number(roomId))
     .order("createdat", { ascending: true });
 
@@ -245,7 +245,23 @@ export async function getAdditionalConfirmedLocations(roomId, scheduleId = null)
     query = query.eq("scheduleid", Number(scheduleId));
   }
 
-  const { data, error } = query;
+  let { data, error } = await query;
+
+  if (error && isMissingConfirmedLocationCoordinateColumn(error)) {
+    query = supabase
+      .from("confirmed_locations")
+      .select("id, placename, voteid, scheduleid")
+      .eq("roomid", Number(roomId))
+      .order("createdat", { ascending: true });
+
+    if (scheduleId !== null) {
+      query = query.eq("scheduleid", Number(scheduleId));
+    }
+
+    const fallbackResult = await query;
+    data = fallbackResult.data;
+    error = fallbackResult.error;
+  }
 
   if (error) {
     console.error("추가 장소 조회 실패:", error);
@@ -268,6 +284,23 @@ export async function getAdditionalConfirmedLocations(roomId, scheduleId = null)
   }
 
   const voteMap = new Map((votes || []).map((vote) => [vote.id, vote]));
+  const { data: voteOptions, error: voteOptionError } = voteIds.length > 0
+    ? await supabase
+        .from("voteoptions")
+        .select("voteid, placename, placeaddress, placelat, placelng, kakaomapurl")
+        .in("voteid", voteIds)
+    : { data: [], error: null };
+
+  if (voteOptionError) {
+    console.warn("Additional place coordinate lookup failed:", voteOptionError);
+  }
+
+  const voteOptionMap = new Map(
+    (voteOptions || []).map((option) => [
+      `${option.voteid}:${normalizePlaceName(option.placename)}`,
+      option,
+    ])
+  );
 
   return (data || []).filter((location) => {
     if (!location.voteid) return true;
@@ -275,19 +308,52 @@ export async function getAdditionalConfirmedLocations(roomId, scheduleId = null)
     if (vote?.locationkind === "middle") return false;
     if (vote?.locationkind === "additional") return true;
     return vote?.title?.replace(/\s/g, "") !== "중간장소투표";
+  }).map((location) => {
+    const option = voteOptionMap.get(
+      `${location.voteid}:${normalizePlaceName(location.placename)}`
+    );
+
+    return {
+      ...location,
+      placeaddress: location.placeaddress || option?.placeaddress || null,
+      placelat: location.placelat ?? option?.placelat ?? null,
+      placelng: location.placelng ?? option?.placelng ?? null,
+      kakaomapurl: location.kakaomapurl || option?.kakaomapurl || null,
+      address: location.placeaddress || option?.placeaddress || null,
+      lat: location.placelat ?? option?.placelat ?? null,
+      lng: location.placelng ?? option?.placelng ?? null,
+      kakaoMapUrl: location.kakaomapurl || option?.kakaomapurl || null,
+    };
   });
 }
 
-export async function addAdditionalConfirmedLocation(roomId, scheduleId, placeName) {
+function normalizePlaceName(value) {
+  return String(value || "").replace(/\s+/g, "").trim();
+}
+
+function isMissingConfirmedLocationCoordinateColumn(error) {
+  return /placeaddress|placelat|placelng|kakaomapurl|schema cache|column/i.test(
+    `${error?.message || ""} ${error?.details || ""}`
+  );
+}
+
+export async function addAdditionalConfirmedLocation(roomId, scheduleId, place) {
+  const placeData = typeof place === "string" ? { name: place } : place || {};
+  const insertRow = {
+    roomid: Number(roomId),
+    scheduleid: Number(scheduleId),
+    placename: placeData.placename || placeData.name,
+    voteid: null,
+    placeaddress: placeData.placeaddress || placeData.address || null,
+    placelat: placeData.placelat ?? placeData.lat ?? null,
+    placelng: placeData.placelng ?? placeData.lng ?? null,
+    kakaomapurl: placeData.kakaomapurl || placeData.kakaoMapUrl || null,
+  };
+
   const { data, error } = await supabase
     .from("confirmed_locations")
-    .insert([{
-      roomid: Number(roomId),
-      scheduleid: Number(scheduleId),
-      placename: placeName,
-      voteid: null,
-    }])
-    .select("id, placename, scheduleid")
+    .insert([insertRow])
+    .select("id, placename, scheduleid, placeaddress, placelat, placelng, kakaomapurl")
     .single();
 
   if (error) {

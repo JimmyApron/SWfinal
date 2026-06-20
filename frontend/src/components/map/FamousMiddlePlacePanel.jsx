@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { FaMapMarkerAlt } from 'react-icons/fa'
 import { recommendFamousMiddlePlaces } from '../../utils/famousMiddlePlaceRecommendation'
 
 function FamousMiddlePlacePanel({
@@ -6,6 +7,8 @@ function FamousMiddlePlacePanel({
   onRecommendPlaces,
   onSelectMiddlePlace,
   onCreateMiddlePlaceVote,
+  onResultStateChange,
+  onCloseResults,
 }) {
   const [recommendedPlaces, setRecommendedPlaces] = useState([])
   const [selectedPlaceIds, setSelectedPlaceIds] = useState([])
@@ -17,8 +20,10 @@ function FamousMiddlePlacePanel({
 
     setRecommendedPlaces([])
     setSelectedPlaceIds([])
-    onRecommendPlaces([])
-  }, [canRecommend, onRecommendPlaces])
+    onRecommendPlaces?.([])
+    onResultStateChange?.(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canRecommend])
 
   const getMemberKey = (member) => {
     return member.userid || member.guestid || member.id
@@ -40,7 +45,7 @@ function FamousMiddlePlacePanel({
     }
 
     try {
-      setMessage('멤버별 이동수단 기준으로 유명 중간 장소를 계산하는 중입니다.')
+      setMessage('')
 
       const fixedMemberTransportModes = {}
 
@@ -60,7 +65,8 @@ function FamousMiddlePlacePanel({
       })
 
       setRecommendedPlaces(result)
-      onRecommendPlaces(result)
+      onRecommendPlaces?.(result)
+      onResultStateChange?.(result.length > 0)
 
       // 추천된 장소는 기본적으로 전부 투표 항목으로 체크
       setSelectedPlaceIds(result.map((place, index) => getPlaceKey(place, index)))
@@ -87,6 +93,16 @@ function FamousMiddlePlacePanel({
     })
   }
 
+  const handleSelectAllPlaces = () => {
+    setSelectedPlaceIds(
+      recommendedPlaces.map((place, index) => getPlaceKey(place, index))
+    )
+  }
+
+  const handleClearSelectedPlaces = () => {
+    setSelectedPlaceIds([])
+  }
+
   const handleCreateVote = () => {
     if (!canRecommend) {
       setMessage('중간 장소 투표는 2명 이상 위치를 등록해야 만들 수 있어요.')
@@ -110,114 +126,161 @@ function FamousMiddlePlacePanel({
     onCreateMiddlePlaceVote(selectedPlaces)
   }
 
+  const handleCloseResults = (event) => {
+    event?.preventDefault()
+    event?.stopPropagation()
+    setRecommendedPlaces([])
+    setSelectedPlaceIds([])
+    setMessage('')
+    onRecommendPlaces?.([])
+    onResultStateChange?.(false)
+    onCloseResults?.()
+  }
+
   return (
     <section className="middle-place-panel">
-      <h2>유명 중간 장소 추천</h2>
+      {recommendedPlaces.length > 0 && (
+        <>
+          <div className="map-sheet-header middle-place-result-header">
+            <button
+              type="button"
+              className="map-sheet-back-button"
+              onClick={handleCloseResults}
+              aria-label="중간 장소 추천 결과 닫기"
+            >
+              <span aria-hidden="true">←</span>
+            </button>
+            <div className="map-sheet-title-block">
+              <strong>추천된 중간 장소</strong>
+              <span>{recommendedPlaces.length}개 장소</span>
+            </div>
 
-      <p>
-        멤버들이 등록한 이동수단을 기준으로 각자 이동시간이 비슷한 유명 장소를
-        추천합니다.
-      </p>
-
-      {memberLocations.map((member) => {
-        const memberKey = getMemberKey(member)
-        const nickname = getMemberNickname(member)
-
-        return (
-          <div key={memberKey}>
-            <span>{nickname}</span>
-
-            <span>{getModeLabel(member.transportmode)}</span>
+            <button
+              type="button"
+              className="map-sheet-header-action"
+              onClick={handleCreateVote}
+            >
+              중간 장소 투표 만들기
+            </button>
           </div>
-        )
-      })}
 
-      <button type="button" onClick={handleRecommend} disabled={!canRecommend}>
-        유명 중간 장소 5개 추천
-      </button>
+          <div className="map-selection-actions">
+            <button type="button" onClick={handleSelectAllPlaces}>
+              모두 선택
+            </button>
+            <button type="button" onClick={handleClearSelectedPlaces}>
+              모두 해제
+            </button>
+          </div>
 
-      {!canRecommend && (
-        <p>중간 장소 추천은 2명 이상 위치를 등록하면 사용할 수 있어요.</p>
+          <div className="middle-place-result-list">
+            {recommendedPlaces.map((place, index) => {
+              const placeKey = getPlaceKey(place, index)
+              const isSelected = selectedPlaceIds.includes(placeKey)
+              const kakaoMapUrl = getKakaoMapUrl(place)
+
+              return (
+                <div
+                  key={place.id || `${place.name}-${index}`}
+                  className="middle-place-result-card"
+                >
+                  <label
+                    className="middle-place-vote-check"
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => handleTogglePlace(placeKey)}
+                    />
+                    <span>투표 항목으로 선택</span>
+                  </label>
+
+                  <div className="middle-place-result-title">
+                    <b>{index + 1}</b>
+                    <h4>{place.name}</h4>
+                  </div>
+
+                  <p>{place.address}</p>
+                  <div className="middle-place-result-meta">
+                    <span>{place.category || '정보 없음'}</span>
+                    <span>시간 차이 {Math.round(place.timeGap / 60)}분</span>
+                  </div>
+
+                  <div className="middle-place-route-list">
+                    {place.travelResults.map((result) => (
+                      <span key={result.userid || result.guestid || result.nickname}>
+                        {result.nickname} · {getModeLabel(result.mode)} · {result.durationMinutes}분
+                      </span>
+                    ))}
+                  </div>
+
+                  {kakaoMapUrl && (
+                    <a
+                      className="middle-place-kakao-button"
+                      href={kakaoMapUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <FaMapMarkerAlt aria-hidden="true" />
+                      <span>카카오맵에서 보기</span>
+                    </a>
+                  )}
+
+                  <button
+                    type="button"
+                    className="middle-place-confirm-button"
+                    onClick={() => onSelectMiddlePlace(place)}
+                  >
+                    이 장소를 중간 장소로 확정
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </>
       )}
 
-      {message && <p>{message}</p>}
+      {recommendedPlaces.length === 0 && (
+        <div className="middle-place-control-card">
+          <div className="middle-place-copy">
+            <span>만날 장소 추천</span>
+            <h2>유명 중간 장소 찾기</h2>
+            <p>
+              멤버들의 출발 위치와 이동수단을 비교해서 모두가 이동하기 좋은 유명 장소를 추천해요.
+            </p>
+          </div>
 
-      {recommendedPlaces.length > 0 && (
-        <div>
-          <h3>추천된 중간 장소</h3>
+          <div className="middle-place-member-strip">
+            {memberLocations.map((member) => {
+              const memberKey = getMemberKey(member)
+              const nickname = getMemberNickname(member)
+
+              return (
+                <div key={memberKey} className="middle-place-member-chip">
+                  <strong>{nickname}</strong>
+                  <span>{getModeLabel(member.transportmode)}</span>
+                </div>
+              )
+            })}
+          </div>
 
           <button
             type="button"
-            onClick={handleCreateVote}
-            style={{
-              marginBottom: '12px',
-              padding: '10px 14px',
-              border: '1px solid #7c79ff',
-              borderRadius: '8px',
-              backgroundColor: '#f0f0ff',
-              color: '#4b47d8',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-            }}
+            className="middle-place-recommend-button"
+            onClick={handleRecommend}
+            disabled={!canRecommend}
           >
-            선택한 장소로 중간 장소 투표 만들기
+            유명 중간 장소 5개 추천
           </button>
 
-          {recommendedPlaces.map((place, index) => {
-            const placeKey = getPlaceKey(place, index)
-            const isSelected = selectedPlaceIds.includes(placeKey)
+          {!canRecommend && (
+            <p className="middle-place-helper">
+              2명 이상 위치와 이동수단을 등록하면 추천을 받을 수 있어요.
+            </p>
+          )}
 
-            return (
-              <div
-                key={place.id || `${place.name}-${index}`}
-                style={{
-                  border: '1px solid #ddd',
-                  borderRadius: '8px',
-                  padding: '12px',
-                  marginBottom: '12px',
-                }}
-              >
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    marginBottom: '8px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => handleTogglePlace(placeKey)}
-                  />
-                  <span>투표 항목으로 선택</span>
-                </label>
-
-                <h4>
-                  {index + 1}. {place.name}
-                </h4>
-
-                <p>{place.address}</p>
-                <p>카테고리: {place.category || '정보 없음'}</p>
-                <p>이동시간 차이: {Math.round(place.timeGap / 60)}분</p>
-
-                {place.travelResults.map((result) => (
-                  <p key={result.userid || result.guestid || result.nickname}>
-                    {result.nickname} / {getModeLabel(result.mode)} /{' '}
-                    {result.durationMinutes}분
-                  </p>
-                ))}
-
-                <button
-                  type="button"
-                  onClick={() => onSelectMiddlePlace(place)}
-                >
-                  이 장소를 중간 장소로 확정
-                </button>
-              </div>
-            )
-          })}
+          {message && <p className="middle-place-message">{message}</p>}
         </div>
       )}
     </section>
@@ -235,6 +298,40 @@ function getModeLabel(mode) {
   if (mode === 'car') return '자동차'
   if (mode === 'transit') return '대중교통'
   return mode
+}
+
+function getKakaoMapUrl(place = {}) {
+  const explicitUrl = place.kakaoMapUrl || place.kakaomapurl
+  if (explicitUrl) return explicitUrl
+
+  const lat = place.lat ?? place.latitude ?? place.placelat ?? place.locationlat
+  const lng = place.lng ?? place.longitude ?? place.placelng ?? place.locationlng
+
+  if (!isValidLatLng(lat, lng)) return ''
+
+  const name =
+    place.name ||
+    place.placename ||
+    place.place_name ||
+    place.location ||
+    place.address ||
+    '선택한 장소'
+
+  return `https://map.kakao.com/link/map/${encodeURIComponent(name)},${Number(lat)},${Number(lng)}`
+}
+
+function isValidLatLng(lat, lng) {
+  const numberLat = Number(lat)
+  const numberLng = Number(lng)
+
+  return (
+    Number.isFinite(numberLat) &&
+    Number.isFinite(numberLng) &&
+    numberLat >= -90 &&
+    numberLat <= 90 &&
+    numberLng >= -180 &&
+    numberLng <= 180
+  )
 }
 
 export default FamousMiddlePlacePanel
