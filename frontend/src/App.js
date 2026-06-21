@@ -117,11 +117,6 @@ function getNotificationCreatedAt(notif) {
   return Number.isNaN(createdAt) ? Date.now() : createdAt;
 }
 
-function getPopupEnabledCutoff(key) {
-  const value = Number(localStorage.getItem(key) || 0);
-  return Number.isFinite(value) ? value : 0;
-}
-
 function getStoredPopupCutoffs(key) {
   try {
     return JSON.parse(localStorage.getItem(key) || "{}");
@@ -132,9 +127,6 @@ function getStoredPopupCutoffs(key) {
 
 function isBeforePopupResumeCutoff(notif) {
   const createdAt = getNotificationCreatedAt(notif);
-  const globalCutoff = getPopupEnabledCutoff("popup_global_enabled_at");
-  if (globalCutoff && createdAt < globalCutoff) return true;
-
   const roomId = notif?.roomid ? String(notif.roomid) : null;
   if (!roomId) return false;
 
@@ -148,35 +140,6 @@ function isBeforePopupResumeCutoff(notif) {
   const tabCutoffs = getStoredPopupCutoffs("popup_tab_enabled_at");
   const tabCutoff = Number(tabCutoffs?.[roomId]?.[settingColumn] || 0);
   return Boolean(tabCutoff && createdAt < tabCutoff);
-}
-
-function getSuppressedPopupIds() {
-  try {
-    return new Set(JSON.parse(localStorage.getItem("suppressed_popup_notification_ids") || "[]"));
-  } catch {
-    return new Set();
-  }
-}
-
-function saveSuppressedPopupId(notificationId) {
-  if (!notificationId) return;
-  const suppressedIds = getSuppressedPopupIds();
-  suppressedIds.add(notificationId);
-  localStorage.setItem(
-    "suppressed_popup_notification_ids",
-    JSON.stringify(Array.from(suppressedIds).slice(-500))
-  );
-}
-
-function saveSuppressedPopupIds(notificationIds) {
-  const ids = (notificationIds || []).filter(Boolean);
-  if (ids.length === 0) return;
-  const suppressedIds = getSuppressedPopupIds();
-  ids.forEach((id) => suppressedIds.add(id));
-  localStorage.setItem(
-    "suppressed_popup_notification_ids",
-    JSON.stringify(Array.from(suppressedIds).slice(-500))
-  );
 }
 
 function Layout({ children }) {
@@ -215,42 +178,17 @@ function NotificationListener() {
   const shownNotificationIdsRef = useRef(new Set());
   const notificationListenerStartedAtRef = useRef(Date.now());
 
-  const displayToast = (message, link) => {
-    const key = `${message || ""}|${link || ""}`;
+  const displayToast = (message, link, options = {}) => {
+    const key = options.id
+      ? `id:${options.id}`
+      : `${options.type || "toast"}|${message || ""}|${link || ""}`;
     const now = Date.now();
-    const stormBlockedUntil = Number(localStorage.getItem("toast_storm_blocked_until") || 0);
-    if (stormBlockedUntil && now < stormBlockedUntil) {
-      return;
-    }
 
-    if (recentToastRef.current.time && now - recentToastRef.current.time < 6000) {
+    if (recentToastRef.current.key === key && now - recentToastRef.current.time < 2000) {
       return;
     }
-
-    const shownToastKeys = getStoredPopupCutoffs("shown_toast_keys");
-    const lastShownAt = Number(shownToastKeys[key] || 0);
-    if (lastShownAt && now - lastShownAt < 10 * 60 * 1000) {
-      return;
-    }
-
-    let toastTimes = [];
-    try {
-      toastTimes = JSON.parse(localStorage.getItem("toast_recent_times") || "[]");
-    } catch {
-      toastTimes = [];
-    }
-    toastTimes = toastTimes.filter((time) => now - Number(time) < 30000);
-    if (toastTimes.length >= 2) {
-      localStorage.setItem("toast_storm_blocked_until", String(now + 60000));
-      localStorage.setItem("toast_recent_times", JSON.stringify(toastTimes));
-      return;
-    }
-    toastTimes.push(now);
-    localStorage.setItem("toast_recent_times", JSON.stringify(toastTimes));
 
     recentToastRef.current = { key, time: now };
-    shownToastKeys[key] = now;
-    localStorage.setItem("shown_toast_keys", JSON.stringify(shownToastKeys));
     setToast({ message, link });
     setTimeout(() => setToast(null), 4000);
   };
@@ -271,19 +209,16 @@ function NotificationListener() {
       const usesRoomSetting = hasRoomPopupSetting(nextToast.roomId, nextToast.type);
 
       if (!isGlobalPopupEnabled) return;
-      if (isRoomMuted) {
-        if (nextToast.id) saveSuppressedPopupId(nextToast.id);
-        return;
-      }
+      if (isRoomMuted) return;
 
       if (usesRoomSetting) {
-        if (!isSettingAllowed) {
-          if (nextToast.id) saveSuppressedPopupId(nextToast.id);
-          return;
-        }
+        if (!isSettingAllowed) return;
       }
 
-      displayToast(nextToast.message, nextToast.link);
+      displayToast(nextToast.message, nextToast.link, {
+        id: nextToast.id,
+        type: nextToast.type,
+      });
     };
 
     const handlePopupSettingEnabled = async (event) => {
@@ -331,7 +266,6 @@ function NotificationListener() {
           })
           .map((notif) => notif.id);
 
-        saveSuppressedPopupIds(existingIds);
         existingIds.forEach((id) => shownNotificationIdsRef.current.add(id));
       } catch (error) {
         console.error("팝업 설정 ON 기존 알림 처리 실패:", error);
@@ -381,26 +315,12 @@ function NotificationListener() {
           const isRoomMuted = notif.roomid && mutedRooms.some(id => String(id) === String(notif.roomid));
           const isSettingAllowed = await isRoomNotificationPopupAllowed(notif.roomid, notif.type);
           const usesRoomSetting = hasRoomPopupSetting(notif.roomid, notif.type);
-          const suppressedPopupIds = getSuppressedPopupIds();
 
-          if (notif.id && suppressedPopupIds.has(notif.id)) return false;
-          if (!isGlobalPopupEnabled) {
-            saveSuppressedPopupId(notif.id);
-            return false;
-          }
-          if (isRoomMuted) {
-            saveSuppressedPopupId(notif.id);
-            return false;
-          }
-          if (isBeforePopupResumeCutoff(notif)) {
-            saveSuppressedPopupId(notif.id);
-            return false;
-          }
+          if (!isGlobalPopupEnabled) return false;
+          if (isRoomMuted) return false;
+          if (isBeforePopupResumeCutoff(notif)) return false;
 
-          if (usesRoomSetting && !isSettingAllowed) {
-            saveSuppressedPopupId(notif.id);
-            return false;
-          }
+          if (usesRoomSetting && !isSettingAllowed) return false;
 
           return usesRoomSetting ? true : notif.issilent !== true;
         };
@@ -419,7 +339,10 @@ function NotificationListener() {
           if (notif.id) shownNotificationIdsRef.current.add(notif.id);
           if (!showToast) return;
 
-          displayToast(notif.message, notif.link);
+          displayToast(notif.message, notif.link, {
+            id: notif.id,
+            type: notif.type,
+          });
         };
 
         try {

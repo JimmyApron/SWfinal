@@ -23,11 +23,6 @@ function SettingsPage() {
     const nextValue = !isNotifEnabled;
     setIsNotifEnabled(nextValue);
     localStorage.setItem("global_popup_enabled", String(nextValue));
-    if (nextValue) {
-      window.dispatchEvent(new CustomEvent("popup-setting-enabled", {
-        detail: { allRooms: true },
-      }));
-    }
   };
 
   const handleLogout = async () => {
