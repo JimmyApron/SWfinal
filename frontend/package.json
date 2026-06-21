@@ -2,7 +2,6 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
-  "proxy": "http://localhost:5000",
   "dependencies": {
     "@react-oauth/google": "^0.13.5",
     "@supabase/supabase-js": "^2.105.4",
@@ -19,7 +18,7 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "PORT=8080 HOST=0.0.0.0 NODE_OPTIONS=--max-old-space-size=4096 DISABLE_ESLINT_PLUGIN=true CHOKIDAR_USEPOLLING=true WATCHPACK_POLLING=true DANGEROUSLY_DISABLE_HOST_CHECK=true react-scripts start",
+    "start": "set \"PORT=8080\" && set \"NODE_OPTIONS=--max-old-space-size=4096\" && set \"DISABLE_ESLINT_PLUGIN=true\" && react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
