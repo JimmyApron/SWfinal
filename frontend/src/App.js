@@ -150,6 +150,35 @@ function isBeforePopupResumeCutoff(notif) {
   return Boolean(tabCutoff && createdAt < tabCutoff);
 }
 
+function getSuppressedPopupIds() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem("suppressed_popup_notification_ids") || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveSuppressedPopupId(notificationId) {
+  if (!notificationId) return;
+  const suppressedIds = getSuppressedPopupIds();
+  suppressedIds.add(notificationId);
+  localStorage.setItem(
+    "suppressed_popup_notification_ids",
+    JSON.stringify(Array.from(suppressedIds).slice(-500))
+  );
+}
+
+function saveSuppressedPopupIds(notificationIds) {
+  const ids = (notificationIds || []).filter(Boolean);
+  if (ids.length === 0) return;
+  const suppressedIds = getSuppressedPopupIds();
+  ids.forEach((id) => suppressedIds.add(id));
+  localStorage.setItem(
+    "suppressed_popup_notification_ids",
+    JSON.stringify(Array.from(suppressedIds).slice(-500))
+  );
+}
+
 function Layout({ children }) {
   const location = useLocation();
   const showNav = !AUTH_PATHS.includes(location.pathname);
@@ -189,11 +218,39 @@ function NotificationListener() {
   const displayToast = (message, link) => {
     const key = `${message || ""}|${link || ""}`;
     const now = Date.now();
-    if (recentToastRef.current.key === key && now - recentToastRef.current.time < 2000) {
+    const stormBlockedUntil = Number(localStorage.getItem("toast_storm_blocked_until") || 0);
+    if (stormBlockedUntil && now < stormBlockedUntil) {
       return;
     }
 
+    if (recentToastRef.current.time && now - recentToastRef.current.time < 6000) {
+      return;
+    }
+
+    const shownToastKeys = getStoredPopupCutoffs("shown_toast_keys");
+    const lastShownAt = Number(shownToastKeys[key] || 0);
+    if (lastShownAt && now - lastShownAt < 10 * 60 * 1000) {
+      return;
+    }
+
+    let toastTimes = [];
+    try {
+      toastTimes = JSON.parse(localStorage.getItem("toast_recent_times") || "[]");
+    } catch {
+      toastTimes = [];
+    }
+    toastTimes = toastTimes.filter((time) => now - Number(time) < 30000);
+    if (toastTimes.length >= 2) {
+      localStorage.setItem("toast_storm_blocked_until", String(now + 60000));
+      localStorage.setItem("toast_recent_times", JSON.stringify(toastTimes));
+      return;
+    }
+    toastTimes.push(now);
+    localStorage.setItem("toast_recent_times", JSON.stringify(toastTimes));
+
     recentToastRef.current = { key, time: now };
+    shownToastKeys[key] = now;
+    localStorage.setItem("shown_toast_keys", JSON.stringify(shownToastKeys));
     setToast({ message, link });
     setTimeout(() => setToast(null), 4000);
   };
@@ -214,10 +271,16 @@ function NotificationListener() {
       const usesRoomSetting = hasRoomPopupSetting(nextToast.roomId, nextToast.type);
 
       if (!isGlobalPopupEnabled) return;
-      if (isRoomMuted) return;
+      if (isRoomMuted) {
+        if (nextToast.id) saveSuppressedPopupId(nextToast.id);
+        return;
+      }
 
       if (usesRoomSetting) {
-        if (!isSettingAllowed) return;
+        if (!isSettingAllowed) {
+          if (nextToast.id) saveSuppressedPopupId(nextToast.id);
+          return;
+        }
       }
 
       displayToast(nextToast.message, nextToast.link);
@@ -258,7 +321,7 @@ function NotificationListener() {
           ? await getMyNotifications(userId)
           : await getMyGuestNotifications(userId);
 
-        (notifications || [])
+        const existingIds = (notifications || [])
           .filter((notif) => {
             if (!notif.id) return false;
             if (allRooms) return true;
@@ -266,7 +329,10 @@ function NotificationListener() {
             if (allTabs) return true;
             return tabTypes.includes(notif.type);
           })
-          .forEach((notif) => shownNotificationIdsRef.current.add(notif.id));
+          .map((notif) => notif.id);
+
+        saveSuppressedPopupIds(existingIds);
+        existingIds.forEach((id) => shownNotificationIdsRef.current.add(id));
       } catch (error) {
         console.error("팝업 설정 ON 기존 알림 처리 실패:", error);
       }
@@ -315,27 +381,36 @@ function NotificationListener() {
           const isRoomMuted = notif.roomid && mutedRooms.some(id => String(id) === String(notif.roomid));
           const isSettingAllowed = await isRoomNotificationPopupAllowed(notif.roomid, notif.type);
           const usesRoomSetting = hasRoomPopupSetting(notif.roomid, notif.type);
+          const suppressedPopupIds = getSuppressedPopupIds();
 
-          if (!isGlobalPopupEnabled) return false;
-          if (isRoomMuted) return false;
-          if (isBeforePopupResumeCutoff(notif)) return false;
+          if (notif.id && suppressedPopupIds.has(notif.id)) return false;
+          if (!isGlobalPopupEnabled) {
+            saveSuppressedPopupId(notif.id);
+            return false;
+          }
+          if (isRoomMuted) {
+            saveSuppressedPopupId(notif.id);
+            return false;
+          }
+          if (isBeforePopupResumeCutoff(notif)) {
+            saveSuppressedPopupId(notif.id);
+            return false;
+          }
 
-          return usesRoomSetting
-            ? isSettingAllowed
-            : notif.issilent !== true;
+          if (usesRoomSetting && !isSettingAllowed) {
+            saveSuppressedPopupId(notif.id);
+            return false;
+          }
+
+          return usesRoomSetting ? true : notif.issilent !== true;
         };
 
         const handleIncomingNotification = async (notif) => {
           if (!notif || String(notif.receiverid) !== String(myUserId)) return;
-          const createdAt = getNotificationCreatedAt(notif);
-          const isNewSinceListenerStarted =
-            Number.isNaN(createdAt) ||
-            createdAt >= notificationListenerStartedAtRef.current - 3000;
 
           if (
             notif.id &&
-            shownNotificationIdsRef.current.has(notif.id) &&
-            !isNewSinceListenerStarted
+            shownNotificationIdsRef.current.has(notif.id)
           ) {
             return;
           }
@@ -353,10 +428,6 @@ function NotificationListener() {
             : await getMyNotifications(myUserId);
           shownNotificationIdsRef.current = new Set(
             (initialNotifications || [])
-              .filter((notif) => {
-                const createdAt = notif.createdat ? new Date(notif.createdat).getTime() : 0;
-                return createdAt < notificationListenerStartedAtRef.current - 3000;
-              })
               .map((notif) => notif.id)
               .filter(Boolean)
           );
@@ -392,6 +463,7 @@ function NotificationListener() {
               ? await getMyGuestNotifications(myUserId)
               : await getMyNotifications(myUserId);
             const recentNotifications = (notifications || [])
+              .filter((notif) => getNotificationCreatedAt(notif) >= notificationListenerStartedAtRef.current)
               .sort((a, b) => new Date(a.createdat) - new Date(b.createdat))
               .slice(-20);
 
