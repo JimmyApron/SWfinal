@@ -42,7 +42,7 @@ import {
 import SettingsPage from "./pages/settings/SettingsPage";
 import SettingEditPage from "./pages/settings/SettingEditPage";
 
-const AUTH_PATHS = ["/", "/login", "/signup", "/guest"];
+const AUTH_PATHS = ["/", "/login", "/signup", "/guest", "/reset-password"];
 
 const NOTIFICATION_SETTING_COLUMNS = {
   schedule_confirmed: "schedulenotifenabled",

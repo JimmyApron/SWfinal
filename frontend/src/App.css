@@ -1381,7 +1381,7 @@
 }
 
 .map-friends-sheet {
-  --sheet-collapsed-height: 176px;
+  --sheet-collapsed-height: 154px;
   --friend-sheet-top: var(--sheet-expanded-top);
   display: flex;
   flex-direction: column;
@@ -1404,9 +1404,13 @@
   height: calc(100% - var(--friend-sheet-top));
 }
 
-.map-friends-sheet.is-collapsed > :not(.map-sheet-handle):not(.map-sheet-header) {
-  visibility: hidden;
-  pointer-events: none;
+.map-friends-sheet.is-collapsed .friend-location-list {
+  display: none;
+}
+
+.map-friends-sheet.is-collapsed .my-departure-card,
+.map-friends-sheet.is-collapsed .departure-actions {
+  display: none;
 }
 
 .map-member-list-only-header {

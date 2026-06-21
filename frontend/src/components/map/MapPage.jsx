@@ -2769,13 +2769,20 @@ function MapPage({ roomId }) {
                     >
                       <span aria-hidden="true">←</span>
                     </button>
+                    <div>
+                      <small className="map-sheet-place-label">
+                        {activeMeetingPlace?.name || '만날 장소 미정'}
+                      </small>
+                      <strong>멤버위치</strong>
+                      <span>만날 장소까지 이동시간을 확인해요.</span>
+                    </div>
                   </div>
 
                   <section className="friend-location-list is-member-list-only">
                     <div className="friend-list-title">
                       <div>
                         <strong>멤버 위치 현황</strong>
-                        <small>만날 장소까지 이동시간</small>
+                        <small>만날 장소까지 이동시간을 확인해요.</small>
                       </div>
                       <div className="friend-list-actions">
                         <span>{registeredMemberCount}/{members.length || 0}</span>
@@ -2864,7 +2871,7 @@ function MapPage({ roomId }) {
                     <div className="friend-list-title">
                       <div>
                         <strong>멤버 위치 현황</strong>
-                        <small>만날 장소까지 이동시간</small>
+                        <small>만날 장소까지 이동시간을 확인해요.</small>
                       </div>
                       <div className="friend-list-actions">
                         <span>{registeredMemberCount}/{members.length || 0}</span>
