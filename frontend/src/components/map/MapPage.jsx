@@ -2686,7 +2686,7 @@ function MapPage({ roomId }) {
               {activeMeetingPlace && (
                 <div className="middle-place-summary">
                   <div>
-                    <strong>확정된 중간 장소</strong>
+                    <strong>확정된 만날 장소</strong>
                     <p>{activeMeetingPlace.name}</p>
                   </div>
                   <button type="button" onClick={handleShareMiddlePlace}>
