@@ -112,27 +112,6 @@ function hasRoomPopupSetting(roomId, type) {
   return Boolean(roomId && NOTIFICATION_SETTING_COLUMNS[type]);
 }
 
-async function isCurrentUserInRoom(roomId, userId) {
-  if (!roomId || !userId) return false;
-
-  const [{ data: member }, { data: guest }] = await Promise.all([
-    supabase
-      .from("room_members")
-      .select("id")
-      .eq("roomid", Number(roomId))
-      .eq("userid", userId)
-      .maybeSingle(),
-    supabase
-      .from("room_guests")
-      .select("id")
-      .eq("roomid", Number(roomId))
-      .eq("id", userId)
-      .maybeSingle(),
-  ]);
-
-  return Boolean(member || guest);
-}
-
 function Layout({ children }) {
   const location = useLocation();
   const showNav = !AUTH_PATHS.includes(location.pathname);
@@ -318,42 +297,6 @@ function NotificationListener() {
               await handleIncomingNotification(notif);
             }
           )
-          .on(
-            "postgres_changes",
-            {
-              event: "INSERT",
-              schema: "public",
-              table: "confirmed_schedules",
-            },
-            async (payload) => {
-              const schedule = payload.new;
-              const roomId = schedule?.roomid;
-              if (!roomId) return;
-
-              const isParticipant = await isCurrentUserInRoom(roomId, myUserId);
-              if (!isParticipant) return;
-
-              const isSettingAllowed = await isRoomNotificationPopupAllowed(
-                roomId,
-                "schedule_confirmed"
-              );
-              if (!isSettingAllowed) return;
-
-              const { data: roomData } = await supabase
-                .from("rooms")
-                .select("roomname")
-                .eq("id", Number(roomId))
-                .maybeSingle();
-
-              const roomName = roomData?.roomname || "방";
-              const scheduleTitle = schedule?.title?.trim()
-                ? `'${schedule.title}' `
-                : "";
-              const message = `[${roomName}] 방에 ${scheduleTitle}일정이 확정되었습니다.`;
-
-              displayToast(message, `/rooms/${roomId}?tab=schedule`);
-            }
-          );
 
         channel.subscribe((status) => {
           if (!isMounted) return;

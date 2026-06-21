@@ -56,7 +56,7 @@ export const sendVoteNotification = async ({
       ? `/rooms/${rId}/votes/${createdVoteId}`
       : `/rooms/${rId}?tab=vote`;
 
-    // 1. 방 참여자 전체에게 새 투표 알림 발송
+    // 1. 작성자를 제외한 방 참여자에게 새 투표 알림 발송
     await createRoomNotifications({
       roomId: rId,
       senderId,
@@ -68,22 +68,7 @@ export const sendVoteNotification = async ({
         ? `⚠️ 방에 마감이 ${diffInMinutes}분 남은 긴급 ${typeLabel} 투표 [${title}]이(가) 생성되었습니다!`
         : `🔔 방에 새로운 ${typeLabel} 투표 [${title}]이(가) 생성되었습니다!`,
       link,
-      includeSender: true,
     });
-
-    // 2. 마감까지 30분 미만이면 작성자 본인에게 긴급 리마인더도 추가 발송
-    if (isUrgent && senderId) {
-      const { createNotification } = await import("../../api/notificationApi");
-      await createNotification({
-        roomId: rId,
-        receiverId: senderId,
-        senderId,
-        type: "vote_reminder",
-        title: `⚠️ ${typeLabel} 투표 마감 임박`,
-        message: `⚠️ 작성하신 [${title}] (${typeLabel} 투표)의 마감 시간이 ${diffInMinutes}분 남았습니다!`,
-        link,
-      });
-    }
 
   } catch (error) {
     console.error("투표 알림 통합 연동 실패:", error);

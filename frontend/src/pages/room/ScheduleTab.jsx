@@ -456,16 +456,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
         message: scheduleMessage,
         link: notificationLink,
         targetUserIds,
-        includeSender: true,
       });
-      window.dispatchEvent(new CustomEvent("app-toast", {
-        detail: {
-          message: scheduleMessage,
-          link: notificationLink,
-          roomId: Number(roomId),
-          type: "schedule_confirmed",
-        },
-      }));
     } catch (notifError) {
       console.error("확정 일정 알림 생성 실패:", notifError);
     }

@@ -244,7 +244,6 @@ export async function createDraftConfirmedSchedule(roomId, title) {
       title: "📍 새 일정 생성",
       message: `방에 '${trimmedTitle}' 일정이 생성되었습니다. 만날 장소를 정해 주세요.`,
       link: `/rooms/${Number(roomId)}?tab=location&scheduleId=${data.id}`,
-      includeSender: true,
     });
   } catch (notifError) {
     console.error("장소 탭 새 일정 알림 생성 실패:", notifError);
