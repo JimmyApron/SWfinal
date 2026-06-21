@@ -2445,3 +2445,75 @@
   font-size: 14px;
   text-align: center;
 }
+
+.dark-mode .map-experience {
+  background: #292a2d;
+}
+
+.dark-mode .map-floating-search input,
+.dark-mode .map-floating-search .location-picker-results,
+.dark-mode .map-floating-search .location-picker-result-item,
+.dark-mode .map-search-control-card,
+.dark-mode .middle-place-control-card,
+.dark-mode .map-bottom-sheet,
+.dark-mode .map-filter-popover,
+.dark-mode .map-sheet-header button,
+.dark-mode .map-sheet-header .map-sheet-back-button,
+.dark-mode .middle-place-summary,
+.dark-mode .my-departure-card,
+.dark-mode .friend-location-row,
+.dark-mode .friend-route-list p,
+.dark-mode .friend-location-more-button,
+.dark-mode .participant-location-toggle,
+.dark-mode .participant-location-dialog,
+.dark-mode .participant-location-header button,
+.dark-mode .participant-location-row button,
+.dark-mode .location-register-dialog,
+.dark-mode .location-register-options button,
+.dark-mode .transport-mode-dialog,
+.dark-mode .transport-mode-dialog button,
+.dark-mode .departure-cancel-dialog,
+.dark-mode .departure-cancel-actions button:first-child,
+.dark-mode .meeting-place-confirm-actions button:last-child {
+  background: var(--card-bg) !important;
+  color: var(--text-color) !important;
+  border-color: var(--border-color) !important;
+}
+
+.dark-mode .middle-place-member-chip,
+.dark-mode .place-filter select,
+.dark-mode .departure-actions button:disabled,
+.dark-mode .friend-avatar,
+.dark-mode .location-register-icon {
+  background: var(--muted-bg) !important;
+  color: var(--text-color) !important;
+  border-color: var(--border-color) !important;
+}
+
+.dark-mode .map-sheet-header strong,
+.dark-mode .middle-place-copy h2,
+.dark-mode .middle-place-member-chip strong,
+.dark-mode .participant-location-header strong,
+.dark-mode .participant-location-row strong,
+.dark-mode .location-register-dialog h3,
+.dark-mode .location-register-options strong,
+.dark-mode .departure-cancel-dialog h3 {
+  color: var(--text-color) !important;
+}
+
+.dark-mode .map-sheet-header span,
+.dark-mode .middle-place-copy p,
+.dark-mode .middle-place-helper,
+.dark-mode .middle-place-message,
+.dark-mode .middle-place-member-chip span,
+.dark-mode .participant-location-row span,
+.dark-mode .location-register-dialog > p,
+.dark-mode .location-register-options small,
+.dark-mode .departure-cancel-dialog p,
+.dark-mode .friend-list-title small {
+  color: var(--secondary-text) !important;
+}
+
+.dark-mode .friend-location-list.has-more-members .friend-location-list-preview::after {
+  background: linear-gradient(rgba(48, 49, 52, 0), var(--card-bg));
+}

@@ -502,7 +502,7 @@ function NotificationPage() {
               padding: 0,
               fontSize: "24px",
               cursor: "pointer",
-              color: "#555",
+              color: "var(--secondary-text)",
             }}
           >
             &larr;
@@ -518,7 +518,8 @@ function NotificationPage() {
               border: "none",
               borderRadius: "8px",
               padding: "8px 12px",
-              backgroundColor: "#f2f2f2",
+              backgroundColor: "var(--btn-bg)",
+              color: "var(--btn-text)",
               cursor: "pointer",
             }}
           >
@@ -532,7 +533,8 @@ function NotificationPage() {
               border: "none",
               borderRadius: "8px",
               padding: "8px 12px",
-              backgroundColor: "#f2f2f2",
+              backgroundColor: "var(--btn-bg)",
+              color: "var(--btn-text)",
               cursor: "pointer",
             }}
           >
@@ -554,8 +556,11 @@ function NotificationPage() {
                 padding: "14px 44px 14px 14px",
                 marginBottom: "10px",
                 borderRadius: "12px",
-                border: "1px solid #ddd",
-                backgroundColor: notification.isread ? "#ffffff" : "#f0f4ff",
+                border: "1px solid var(--border-color)",
+                backgroundColor: notification.isread
+                  ? "var(--card-bg)"
+                  : "color-mix(in srgb, var(--accent-color) 18%, var(--card-bg))",
+                color: "var(--text-color)",
                 cursor: "pointer",
               }}
             >
@@ -571,8 +576,8 @@ function NotificationPage() {
                   height: "26px",
                   border: "none",
                   borderRadius: "50%",
-                  backgroundColor: "#eeeeee",
-                  color: "#555",
+                  backgroundColor: "var(--muted-bg)",
+                  color: "var(--secondary-text)",
                   fontSize: "16px",
                   fontWeight: "bold",
                   lineHeight: "26px",
@@ -588,7 +593,7 @@ function NotificationPage() {
                   display: "block",
                   fontSize: "16px",
                   fontWeight: "800",
-                  color: "#111111",
+                  color: "var(--text-color)",
                   marginBottom: "4px",
                 }}
               >
@@ -630,9 +635,9 @@ function NotificationPage() {
                     style={{
                       flex: 1,
                       padding: "8px",
-                      backgroundColor: "#fff",
-                      color: "#999",
-                      border: "1px solid #ddd",
+                      backgroundColor: "var(--btn-bg)",
+                      color: "var(--secondary-text)",
+                      border: "1px solid var(--border-color)",
                       borderRadius: "8px",
                       cursor: "pointer",
                       fontSize: "13px",
@@ -676,9 +681,9 @@ function NotificationPage() {
                     style={{
                       flex: 1,
                       padding: "8px",
-                      backgroundColor: "#fff",
-                      color: "#999",
-                      border: "1px solid #ddd",
+                      backgroundColor: "var(--btn-bg)",
+                      color: "var(--secondary-text)",
+                      border: "1px solid var(--border-color)",
                       borderRadius: "8px",
                       cursor: "pointer",
                       fontSize: "13px",
@@ -753,9 +758,9 @@ function NotificationPage() {
                     style={{
                       flex: 1,
                       padding: "8px",
-                      backgroundColor: "#fff",
-                      color: "#999",
-                      border: "1px solid #ddd",
+                      backgroundColor: "var(--btn-bg)",
+                      color: "var(--secondary-text)",
+                      border: "1px solid var(--border-color)",
                       borderRadius: "8px",
                       cursor: "pointer",
                       fontSize: "13px",
@@ -766,7 +771,7 @@ function NotificationPage() {
                 </div>
               )}
 
-              <small style={{ color: "#777" }}>
+              <small style={{ color: "var(--secondary-text)" }}>
                 {notification.createdat
                   ? new Date(notification.createdat).toLocaleString()
                   : ""}

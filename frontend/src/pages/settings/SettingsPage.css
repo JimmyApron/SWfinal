@@ -1,7 +1,7 @@
 .settings-page {
   min-height: 100dvh;
-  background: #ffffff;
-  color: #171827;
+  background: var(--bg-color);
+  color: var(--text-color);
   padding-bottom: calc(var(--bottom-nav-height, 64px) + 24px);
   box-sizing: border-box;
 }
@@ -20,7 +20,7 @@
   align-items: center;
   position: sticky;
   top: 0;
-  background: #ffffff;
+  background: var(--header-bg);
   z-index: 10;
   margin-bottom: 12px;
   gap: 10px;
@@ -32,7 +32,7 @@
   padding: 8px;
   font-size: 18px;
   cursor: pointer;
-  color: #111827;
+  color: var(--text-color);
 }
 
 .settings-title {
@@ -55,7 +55,7 @@
   height: 92px;
   border-radius: 50%;
   object-fit: cover;
-  border: 3px solid #ffffff;
+  border: 3px solid var(--card-bg);
   box-shadow: 0 4px 12px rgba(31, 29, 71, 0.08);
 }
 
@@ -63,12 +63,12 @@
   width: 92px;
   height: 92px;
   border-radius: 50%;
-  background: #e5e7eb;
+  background: var(--muted-bg);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 40px;
-  border: 3px solid #ffffff;
+  border: 3px solid var(--card-bg);
   box-shadow: 0 4px 12px rgba(31, 29, 71, 0.08);
 }
 
@@ -80,7 +80,7 @@
 
 .email {
   font-size: 14px;
-  color: #667085;
+  color: var(--secondary-text);
   margin: 0 0 10px;
 }
 
@@ -94,7 +94,7 @@
   margin-bottom: 10px;
 }
 
-.provider-google { background: #fff; border: 1px solid #e0e0e0; color: #444; }
+.provider-google { background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-color); }
 .provider-kakao { background: #FEE500; color: #000; font-weight: bold; }
 
 .section-title {
@@ -102,7 +102,7 @@
   font-weight: 800;
   margin: 0 0 8px;
   line-height: 1.2;
-  color: #111827;
+  color: var(--text-color);
 }
 
 .settings-card {
@@ -110,7 +110,7 @@
   border-radius: 0;
   padding: 0;
   box-shadow: none;
-  border-top: 1px solid #ececf3;
+  border-top: 1px solid var(--border-color);
   margin-bottom: 24px;
 }
 
@@ -119,7 +119,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #ececf3;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .settings-row:last-child {
@@ -136,7 +136,7 @@
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: #f1edff;
+  background: color-mix(in srgb, var(--accent-color) 16%, var(--card-bg));
   color: #7c4dff;
   display: flex;
   align-items: center;
@@ -154,7 +154,7 @@
   height: 25px;
   border-radius: 99px;
   border: none;
-  background: #ccc;
+  background: var(--border-color);
   position: relative;
   cursor: pointer;
   transition: background 0.3s;
@@ -168,7 +168,7 @@
 .toggle-knob {
   width: 19px;
   height: 19px;
-  background: white;
+  background: #ffffff;
   border-radius: 50%;
   position: absolute;
   top: 3px;
@@ -192,7 +192,7 @@
   margin-bottom: 0;
   cursor: pointer;
   border: none;
-  border-top: 1px solid #ececf3;
+  border-top: 1px solid var(--border-color);
   width: 100%;
 }
 
@@ -203,7 +203,7 @@
 
 .version {
   text-align: center;
-  color: #9ca3af;
+  color: var(--secondary-text);
   font-size: 13px;
   margin: 20px 0;
 }

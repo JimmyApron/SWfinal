@@ -109,12 +109,12 @@ function FriendCalendarPage() {
   const selectedConfirmed = selectedKey ? (confirmedMap[selectedKey] || []) : [];
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#fff", paddingBottom: "80px" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: "var(--bg-color)", color: "var(--text-color)", paddingBottom: "80px" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "14px 16px", borderBottom: "1px solid #eee" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "14px 16px", borderBottom: "1px solid var(--border-color)" }}>
         <button
           onClick={() => navigate(-1)}
-          style={{ border: "none", background: "none", fontSize: "22px", cursor: "pointer", color: "#555", padding: 0 }}
+          style={{ border: "none", background: "none", fontSize: "22px", cursor: "pointer", color: "var(--secondary-text)", padding: 0 }}
         >
           ‹
         </button>
@@ -125,9 +125,9 @@ function FriendCalendarPage() {
 
       {/* Month nav */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "12px 20px" }}>
-        <button onClick={prevMonth} style={{ border: "none", background: "none", fontSize: "24px", cursor: "pointer", color: "#555" }}>‹</button>
+        <button onClick={prevMonth} style={{ border: "none", background: "none", fontSize: "24px", cursor: "pointer", color: "var(--secondary-text)" }}>‹</button>
         <span style={{ fontSize: "17px", fontWeight: "bold", margin: "0 12px" }}>{year}년 {month + 1}월</span>
-        <button onClick={nextMonth} style={{ border: "none", background: "none", fontSize: "24px", cursor: "pointer", color: "#555" }}>›</button>
+        <button onClick={nextMonth} style={{ border: "none", background: "none", fontSize: "24px", cursor: "pointer", color: "var(--secondary-text)" }}>›</button>
       </div>
 
       {/* Weekday row */}
@@ -151,13 +151,13 @@ function FriendCalendarPage() {
           const isSun = col === 0;
           const isSat = col === 6;
           const isSelected = selectedDay === d;
-          const textColor = isToday(d) ? "#fff" : isSun ? "#f44" : isSat ? "#7c79ff" : "#222";
+          const textColor = isToday(d) ? "#fff" : isSun ? "#f44" : isSat ? "#7c79ff" : "var(--text-color)";
 
           return (
             <div
               key={i}
               onClick={() => d && setSelectedDay(isSelected ? null : d)}
-              style={{ minHeight: "60px", padding: "4px 2px", display: "flex", flexDirection: "column", alignItems: "center", cursor: d ? "pointer" : "default", backgroundColor: isSelected ? "#f0f0ff" : "transparent", borderRadius: "8px" }}
+              style={{ minHeight: "60px", padding: "4px 2px", display: "flex", flexDirection: "column", alignItems: "center", cursor: d ? "pointer" : "default", backgroundColor: isSelected ? "color-mix(in srgb, var(--accent-color) 18%, var(--card-bg))" : "transparent", borderRadius: "8px" }}
             >
               {d && (
                 <>
@@ -181,16 +181,16 @@ function FriendCalendarPage() {
 
       {/* Selected day detail */}
       {selectedDay && (selectedEvents.length > 0 || selectedConfirmed.length > 0) && (
-        <div style={{ margin: "12px 16px", padding: "14px", backgroundColor: "#fff8f0", borderRadius: "12px" }}>
-          <p style={{ margin: "0 0 8px", fontWeight: "bold", fontSize: "14px", color: "#555" }}>{month + 1}월 {selectedDay}일</p>
+        <div style={{ margin: "12px 16px", padding: "14px", backgroundColor: "var(--card-bg)", border: "1px solid var(--border-color)", borderRadius: "12px" }}>
+          <p style={{ margin: "0 0 8px", fontWeight: "bold", fontSize: "14px", color: "var(--text-color)" }}>{month + 1}월 {selectedDay}일</p>
           {selectedConfirmed.map((s, i) => (
             <div key={`sc${i}`} style={{ margin: "4px 0 0", fontSize: "13px", color: "#7c79ff", display: "flex", alignItems: "flex-start", gap: "4px" }}>
               <span>📌</span>
               <div>
                 <span style={{ fontWeight: "500" }}>{s.title || s.date}</span>
-                {!s.isallday && s.starttime && <span style={{ color: "#888", marginLeft: "6px" }}>{s.starttime}{s.endtime ? ` ~ ${s.endtime}` : ""}</span>}
-                {s.isallday && <span style={{ color: "#aaa", marginLeft: "6px" }}>(하루종일)</span>}
-                {s.roomname && <span style={{ color: "#aaa", fontSize: "12px", marginLeft: "4px" }}>· {s.roomname}</span>}
+                {!s.isallday && s.starttime && <span style={{ color: "var(--secondary-text)", marginLeft: "6px" }}>{s.starttime}{s.endtime ? ` ~ ${s.endtime}` : ""}</span>}
+                {s.isallday && <span style={{ color: "var(--secondary-text)", marginLeft: "6px" }}>(하루종일)</span>}
+                {s.roomname && <span style={{ color: "var(--secondary-text)", fontSize: "12px", marginLeft: "4px" }}>· {s.roomname}</span>}
               </div>
             </div>
           ))}
@@ -199,9 +199,9 @@ function FriendCalendarPage() {
               <span>{e.isGoogle ? "📅" : "●"}</span>
               <div>
                 <span style={{ fontWeight: "500" }}>{e.title}</span>
-                {!e.isallday && e.starttime && <span style={{ color: "#888", marginLeft: "6px" }}>{e.starttime}{e.endtime ? ` ~ ${e.endtime}` : ""}</span>}
-                {e.isallday && <span style={{ color: "#aaa", marginLeft: "6px" }}>(하루종일)</span>}
-                {e.location && <div style={{ fontSize: "12px", color: "#aaa" }}>📍 {e.location}</div>}
+                {!e.isallday && e.starttime && <span style={{ color: "var(--secondary-text)", marginLeft: "6px" }}>{e.starttime}{e.endtime ? ` ~ ${e.endtime}` : ""}</span>}
+                {e.isallday && <span style={{ color: "var(--secondary-text)", marginLeft: "6px" }}>(하루종일)</span>}
+                {e.location && <div style={{ fontSize: "12px", color: "var(--secondary-text)" }}>📍 {e.location}</div>}
               </div>
             </div>
           ))}
