@@ -492,6 +492,7 @@ function RoomDetailPage() {
                         gap: "10px",
                         padding: "0 5px",
                         paddingRight: (isCurrentUserHost && !isMe) ? "30px" : "5px", // 버튼 공간 확보
+                        position: "relative",
                       }}
                     >
                       {p.type === "member" && p.nickname !== "알 수 없음" && profileImg ? (
