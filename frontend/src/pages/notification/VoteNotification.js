@@ -9,7 +9,6 @@ export const sendVoteNotification = async ({
   title,
   createdVoteId,
   currentUser,
-  roomName,
   endtimeenabled,
   reminderenabled,
   endtime,
@@ -19,7 +18,6 @@ export const sendVoteNotification = async ({
     const rId = Number(roomid);
     if (!rId) return;
 
-    const rName = roomName || "참여 중인 방";
     const senderId = currentUser?.id || null;
 
     const typeLabel =
@@ -58,7 +56,7 @@ export const sendVoteNotification = async ({
       ? `/rooms/${rId}/votes/${createdVoteId}`
       : `/rooms/${rId}?tab=vote`;
 
-    // 1. 작성자를 제외한 멤버에게 새 투표 알림 발송 (createRoomNotifications 사용)
+    // 1. 방 참여자 전체에게 새 투표 알림 발송
     await createRoomNotifications({
       roomId: rId,
       senderId,
@@ -67,12 +65,13 @@ export const sendVoteNotification = async ({
         ? `⚠️ [긴급] ${typeLabel} 투표 마감 임박`
         : `${typeTitle} 등장`,
       message: isUrgent
-        ? `⚠️ [${rName}] 방에 마감이 ${diffInMinutes}분 남은 긴급 ${typeLabel} 투표 [${title}]이(가) 생성되었습니다!`
-        : `🔔 [${rName}] 방에 새로운 ${typeLabel} 투표 [${title}]이(가) 생성되었습니다!`,
+        ? `⚠️ 방에 마감이 ${diffInMinutes}분 남은 긴급 ${typeLabel} 투표 [${title}]이(가) 생성되었습니다!`
+        : `🔔 방에 새로운 ${typeLabel} 투표 [${title}]이(가) 생성되었습니다!`,
       link,
+      includeSender: true,
     });
 
-    // 2. 마감까지 30분 미만이면 작성자 본인에게도 긴급 알림 발송 (작성자는 createRoomNotifications에서 필터링되므로 따로 생성)
+    // 2. 마감까지 30분 미만이면 작성자 본인에게 긴급 리마인더도 추가 발송
     if (isUrgent && senderId) {
       const { createNotification } = await import("../../api/notificationApi");
       await createNotification({

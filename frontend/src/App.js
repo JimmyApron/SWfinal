@@ -33,6 +33,11 @@ import CalendarPage from "./pages/calendar/CalendarPage";
 import FriendCalendarPage from "./pages/calendar/FriendCalendarPage";
 
 import NotificationPage from "./pages/notification/NotificationPage";
+import {
+  getMyGuestNotifications,
+  getMyNotifications,
+  TAB_TYPE_MAP,
+} from "./api/notificationApi";
 
 import SettingsPage from "./pages/settings/SettingsPage";
 import SettingEditPage from "./pages/settings/SettingEditPage";
@@ -184,8 +189,39 @@ function NotificationListener() {
       displayToast(nextToast.message, nextToast.link);
     };
 
+    const handlePopupSettingEnabled = async (event) => {
+      const { roomId, tabName } = event.detail || {};
+      const tabTypes = TAB_TYPE_MAP[tabName] || [];
+      if (!roomId || tabTypes.length === 0) return;
+
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const guestId = localStorage.getItem("guest_id");
+        const userId = user?.id || guestId;
+        if (!userId) return;
+
+        const notifications = user?.id
+          ? await getMyNotifications(userId)
+          : await getMyGuestNotifications(userId);
+
+        (notifications || [])
+          .filter((notif) =>
+            Number(notif.roomid) === Number(roomId) &&
+            tabTypes.includes(notif.type) &&
+            notif.id
+          )
+          .forEach((notif) => shownNotificationIdsRef.current.add(notif.id));
+      } catch (error) {
+        console.error("팝업 설정 ON 기존 알림 처리 실패:", error);
+      }
+    };
+
     window.addEventListener("app-toast", handleAppToast);
-    return () => window.removeEventListener("app-toast", handleAppToast);
+    window.addEventListener("popup-setting-enabled", handlePopupSettingEnabled);
+    return () => {
+      window.removeEventListener("app-toast", handleAppToast);
+      window.removeEventListener("popup-setting-enabled", handlePopupSettingEnabled);
+    };
   }, []);
 
   useEffect(() => {
@@ -197,6 +233,7 @@ function NotificationListener() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!isMounted) return;
 
+        const isGuestUser = !user?.id && Boolean(localStorage.getItem("guest_id"));
         let myUserId = user?.id || localStorage.getItem("guest_id");
 
         if (!myUserId) {
@@ -234,13 +271,22 @@ function NotificationListener() {
           if (notif.id && shownNotificationIdsRef.current.has(notif.id)) return;
 
           const showToast = await shouldShowNotificationToast(notif);
+          if (notif.id) shownNotificationIdsRef.current.add(notif.id);
           if (!showToast) return;
 
-          if (notif.id) shownNotificationIdsRef.current.add(notif.id);
           displayToast(notif.message, notif.link);
         };
 
-        const pollStartedAt = new Date(Date.now() - 1000).toISOString();
+        try {
+          const initialNotifications = isGuestUser
+            ? await getMyGuestNotifications(myUserId)
+            : await getMyNotifications(myUserId);
+          shownNotificationIdsRef.current = new Set(
+            (initialNotifications || []).map((notif) => notif.id).filter(Boolean)
+          );
+        } catch (error) {
+          console.error("초기 팝업 알림 목록 조회 실패:", error);
+        }
 
         const channel = supabase
           .channel(`notifications-${myUserId}-${Date.now()}`)
@@ -301,21 +347,19 @@ function NotificationListener() {
         });
 
         pollIntervalRef.current = setInterval(async () => {
-          const { data, error } = await supabase
-            .from("notifications")
-            .select("*")
-            .eq("receiverid", myUserId)
-            .gt("createdat", pollStartedAt)
-            .order("createdat", { ascending: true })
-            .limit(10);
+          try {
+            const notifications = isGuestUser
+              ? await getMyGuestNotifications(myUserId)
+              : await getMyNotifications(myUserId);
+            const recentNotifications = (notifications || [])
+              .sort((a, b) => new Date(a.createdat) - new Date(b.createdat))
+              .slice(-20);
 
-          if (error) {
+            for (const notif of recentNotifications) {
+              await handleIncomingNotification(notif);
+            }
+          } catch (error) {
             console.error("팝업 알림 백업 조회 실패:", error);
-            return;
-          }
-
-          for (const notif of data || []) {
-            await handleIncomingNotification(notif);
           }
         }, 3000);
       } catch (err) {

@@ -40,25 +40,8 @@ async function getSettingsForReceivers(roomId, targetReceivers, type) {
 
   try {
     // 방 관련 설정인 경우 (room_members, room_guests)
-    if (roomId && ["votenotifenabled", "schedulenotifenabled", "locationnotifenabled", "chatnotifenabled", "roomnotifenabled"].includes(settingColumn)) {
-      const [{ data: members }, { data: guests }] = await Promise.all([
-        supabase.from("room_members").select(`userid, ${settingColumn}`).eq("roomid", Number(roomId)),
-        supabase.from("room_guests").select(`id, ${settingColumn}`).eq("roomid", Number(roomId)),
-      ]);
-
-      const memberMap = new Map((members || []).map(m => [m.userid, m[settingColumn]]));
-      const guestMap = new Map((guests || []).map(g => [g.id, g[settingColumn]]));
-
-      return targetReceivers.map(receiver => {
-        let isSilent = false;
-        const recId = receiver.receiverid;
-        if (memberMap.has(recId)) {
-          isSilent = memberMap.get(recId) === false;
-        } else if (guestMap.has(recId)) {
-          isSilent = guestMap.get(recId) === false;
-        }
-        return { ...receiver, issilent: isSilent };
-      });
+    if (roomId && ["votenotifenabled", "schedulenotifenabled", "locationnotifenabled", "chatnotifenabled"].includes(settingColumn)) {
+      return targetReceivers.map(receiver => ({ ...receiver, issilent: false }));
     } 
     
     // 방과 무관한 전역 설정인 경우 (예: profiles 테이블 - 현재는 컬럼이 없을 수 있음)
@@ -322,7 +305,7 @@ export async function getVisibleNotifications(recipientId, isGuest, unreadOnly =
     .in("type", NON_ROOM_NOTIFICATION_TYPES);
 
   if (unreadOnly) {
-    nonRoomQuery = nonRoomQuery.or("isread.is.null,isread.eq.false").or("issilent.is.null,issilent.eq.false");
+    nonRoomQuery = nonRoomQuery.or("isread.is.null,isread.eq.false");
   }
 
   const { data: nonRoomData, error: nonRoomError } = await nonRoomQuery;
@@ -343,7 +326,7 @@ export async function getVisibleNotifications(recipientId, isGuest, unreadOnly =
     .order("createdat", { ascending: false });
 
   if (unreadOnly) {
-    query = query.or("isread.is.null,isread.eq.false").or("issilent.is.null,issilent.eq.false");
+    query = query.or("isread.is.null,isread.eq.false");
   }
 
   const { data, error } = await query;
@@ -387,7 +370,14 @@ export async function getMyGuestNotifications(guestId) {
 
 export const TAB_TYPE_MAP = {
   schedule: ["schedule_confirmed", "schedule_cancelled", "schedule_new", "schedule_request"],
-  location: ["location_request", "middle_place_confirmed", "location_schedule_created"],
+  location: [
+    "location_request",
+    "member_departed",
+    "arrival_approaching",
+    "arrival_completed",
+    "middle_place_confirmed",
+    "location_schedule_created",
+  ],
   vote: ["vote_closed", "vote_reminder", "vote_new"],
   chat: ["chat_new"],
 };

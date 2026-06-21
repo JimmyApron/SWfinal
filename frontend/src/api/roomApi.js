@@ -161,10 +161,9 @@ export async function getRooms(userId) {
   // 2. 안 읽은 알림 전체 조회 (receiverid === 본인, isread === false)
   const { data: notifications, error: notifError } = await supabase
     .from("notifications")
-    .select("roomid, createdat, issilent")
+    .select("roomid, createdat")
     .eq("receiverid", userId)
-    .eq("isread", false)
-    .or("issilent.is.null,issilent.eq.false");
+    .eq("isread", false);
 
   if (notifError) {
     console.error(notifError);

@@ -23,8 +23,6 @@ import {
 import {
   createNotification,
   deleteNotification,
-  markNotificationsAsReadInRoomByType,
-  TAB_TYPE_MAP
 } from "../../api/notificationApi";
 
 function RoomDetailPage() {
@@ -58,28 +56,12 @@ function RoomDetailPage() {
     chat: true,
   });
 
-  // 실시간 리스너에서 최신 상태를 참조하기 위한 Refs
-  const tabRef = useRef(tab);
-  const currentUserRef = useRef(currentUser);
-
-  useEffect(() => { tabRef.current = tab; }, [tab]);
-  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
-
   useEffect(() => {
     const queryTab = searchParams.get("tab");
     if (["schedule", "location", "vote", "chat"].includes(queryTab)) {
       setTab(queryTab);
     }
   }, [searchParams]);
-
-  useEffect(() => {
-    const currentUserId = currentUser?.id || localStorage.getItem("guest_id");
-    if (!currentUserId || !roomId) return;
-
-    markNotificationsAsReadInRoomByType(Number(roomId), currentUserId, TAB_TYPE_MAP[tab])
-      .catch((error) => console.error("탭 알림 읽음 처리 실패:", error));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, currentUser?.id, roomId]);
 
   const fetchRoomData = async () => {
     console.log("🚀 [RoomDetailPage] fetchRoomData 시작, roomId:", roomId);
@@ -126,7 +108,6 @@ function RoomDetailPage() {
       setCurrentUser({ ...user, type: "member" });
       const me = memberData?.find(m => String(m.userid) === String(uId));
       if (me) setMyEntryId(me.id);
-      await markNotificationsAsReadInRoomByType(Number(roomId), uId, TAB_TYPE_MAP[tab]);
 
       const { data: sett } = await supabase.from("room_members").select("schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled").eq("roomid", Number(roomId)).eq("userid", uId).maybeSingle();
       if (sett) setNotifSettings({
@@ -139,7 +120,6 @@ function RoomDetailPage() {
       const guestId = localStorage.getItem("guest_id");
       if (guestId) {
         setCurrentUser({ id: guestId, type: "guest" });
-        await markNotificationsAsReadInRoomByType(Number(roomId), guestId, TAB_TYPE_MAP[tab]);
         const { data: sett } = await supabase.from("room_guests").select("schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled").eq("id", guestId).maybeSingle();
         if (sett) setNotifSettings({
           schedule: sett.schedulenotifenabled !== false,
@@ -153,20 +133,9 @@ function RoomDetailPage() {
 
   useEffect(() => {
     fetchRoomData();
-    const currentUserId = currentUserRef.current?.id || localStorage.getItem("guest_id");
-    if (!currentUserId) return;
 
     const channels = [
       supabase.channel(`room_info_${roomId}`).on("postgres_changes", { event: "*", schema: "public", table: "rooms", filter: `id=eq.${roomId}` }, () => fetchRoomData()).subscribe(),
-      supabase.channel(`room_notifs_${roomId}_${currentUserId}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `receiverid=eq.${currentUserId}` }, async (payload) => {
-        const newNotif = payload.new;
-        if (Number(newNotif.roomid) !== Number(roomId)) return;
-        if (newNotif.issilent === true) return;
-        const types = TAB_TYPE_MAP[tabRef.current] || [];
-        if (types.includes(newNotif.type)) {
-          await markNotificationsAsReadInRoomByType(roomId, currentUserId, [newNotif.type]);
-        }
-      }).subscribe(),
       supabase.channel(`room_parts_${roomId}`).on("postgres_changes", { event: "*", schema: "public", table: "room_members", filter: `roomid=eq.${roomId}` }, () => fetchRoomData())
       .on("postgres_changes", { event: "*", schema: "public", table: "room_guests", filter: `roomid=eq.${roomId}` }, () => fetchRoomData())
       .on("broadcast", { event: "PARTICIPANTS_CHANGED" }, () => fetchRoomData()).subscribe()
@@ -337,6 +306,11 @@ function RoomDetailPage() {
       return;
     }
     setNotifSettings(prev => ({ ...prev, [tabName]: next }));
+    if (next) {
+      window.dispatchEvent(new CustomEvent("popup-setting-enabled", {
+        detail: { roomId: Number(roomId), tabName },
+      }));
+    }
   };
 
   if (!room) return <div>로딩 중...</div>;

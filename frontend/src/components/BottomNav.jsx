@@ -120,7 +120,7 @@ function BottomNav() {
     const reloadRoomUnreadTabs = async () => {
       const { data, error } = await supabase
         .from("notifications")
-        .select("type, isread, issilent")
+        .select("type, isread")
         .eq("roomid", Number(roomId))
         .eq("receiverid", currentUserId)
         .or("isread.is.null,isread.eq.false");
@@ -131,10 +131,10 @@ function BottomNav() {
       }
 
       setRoomUnreadTabs({
-        schedule: data?.some((n) => n.issilent !== true && TAB_TYPE_MAP.schedule.includes(n.type)) ?? false,
-        location: data?.some((n) => n.issilent !== true && TAB_TYPE_MAP.location.includes(n.type)) ?? false,
-        vote: data?.some((n) => n.issilent !== true && TAB_TYPE_MAP.vote.includes(n.type)) ?? false,
-        chat: data?.some((n) => n.issilent !== true && TAB_TYPE_MAP.chat.includes(n.type)) ?? false,
+        schedule: data?.some((n) => TAB_TYPE_MAP.schedule.includes(n.type)) ?? false,
+        location: data?.some((n) => TAB_TYPE_MAP.location.includes(n.type)) ?? false,
+        vote: data?.some((n) => TAB_TYPE_MAP.vote.includes(n.type)) ?? false,
+        chat: data?.some((n) => TAB_TYPE_MAP.chat.includes(n.type)) ?? false,
       });
     };
 
