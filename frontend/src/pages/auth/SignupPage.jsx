@@ -185,7 +185,7 @@ function SignupPage() {
   return (
     <div className="signup-page">
       <section className="signup-card">
-        <button type="button" className="signup-back-button" onClick={() => navigate('/login')} aria-label="로그인 화면으로 돌아가기">
+        <button type="button" className="signup-back-button" onClick={() => navigate('/')} aria-label="메인 화면으로 돌아가기">
           <FaChevronLeft size={20} />
         </button>
 
