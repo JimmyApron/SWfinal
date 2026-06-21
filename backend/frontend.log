@@ -1,0 +1,28 @@
+nohup: ignoring input
+
+> backend@1.0.0 start
+> node server.js
+
+◇ injected env (4) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+◇ injected env (0) from .env // tip: ⌘ override existing { override: true }
+/home/d2443567/SWfinal/backend/node_modules/@supabase/realtime-js/dist/main/lib/websocket-factory.js:103
+        throw new Error(errorMessage);
+        ^
+
+Error: Node.js 20 detected without native WebSocket support.
+
+Suggested solution: For Node.js < 22, install "ws" package and provide it via the transport option:
+import ws from "ws"
+new RealtimeClient(url, { transport: ws })
+    at WebSocketFactory.getWebSocketConstructor (/home/d2443567/SWfinal/backend/node_modules/@supabase/realtime-js/dist/main/lib/websocket-factory.js:103:15)
+    at RealtimeClient._initializeOptions (/home/d2443567/SWfinal/backend/node_modules/@supabase/realtime-js/dist/main/RealtimeClient.js:642:164)
+    at new RealtimeClient (/home/d2443567/SWfinal/backend/node_modules/@supabase/realtime-js/dist/main/RealtimeClient.js:185:43)
+    at SupabaseClient._initRealtimeClient (/home/d2443567/SWfinal/backend/node_modules/@supabase/supabase-js/dist/index.cjs:554:10)
+    at new SupabaseClient (/home/d2443567/SWfinal/backend/node_modules/@supabase/supabase-js/dist/index.cjs:389:24)
+    at createClient (/home/d2443567/SWfinal/backend/node_modules/@supabase/supabase-js/dist/index.cjs:587:9)
+    at Object.<anonymous> (/home/d2443567/SWfinal/backend/jobs/voteJob.js:4:18)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+
+Node.js v20.20.2
