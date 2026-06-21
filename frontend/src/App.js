@@ -146,6 +146,7 @@ function NotificationListener() {
   const pollIntervalRef = useRef(null);
   const recentToastRef = useRef({ key: "", time: 0 });
   const shownNotificationIdsRef = useRef(new Set());
+  const notificationListenerStartedAtRef = useRef(Date.now());
 
   const displayToast = (message, link) => {
     const key = `${message || ""}|${link || ""}`;
@@ -246,6 +247,7 @@ function NotificationListener() {
           clearInterval(pollIntervalRef.current);
           pollIntervalRef.current = null;
         }
+        notificationListenerStartedAtRef.current = Date.now();
 
         const shouldShowNotificationToast = async (notif) => {
           const isGlobalPopupEnabled = localStorage.getItem("global_popup_enabled") !== "false";
@@ -264,7 +266,18 @@ function NotificationListener() {
 
         const handleIncomingNotification = async (notif) => {
           if (!notif || String(notif.receiverid) !== String(myUserId)) return;
-          if (notif.id && shownNotificationIdsRef.current.has(notif.id)) return;
+          const createdAt = notif.createdat ? new Date(notif.createdat).getTime() : Date.now();
+          const isNewSinceListenerStarted =
+            Number.isNaN(createdAt) ||
+            createdAt >= notificationListenerStartedAtRef.current - 3000;
+
+          if (
+            notif.id &&
+            shownNotificationIdsRef.current.has(notif.id) &&
+            !isNewSinceListenerStarted
+          ) {
+            return;
+          }
 
           const showToast = await shouldShowNotificationToast(notif);
           if (notif.id) shownNotificationIdsRef.current.add(notif.id);
@@ -278,7 +291,13 @@ function NotificationListener() {
             ? await getMyGuestNotifications(myUserId)
             : await getMyNotifications(myUserId);
           shownNotificationIdsRef.current = new Set(
-            (initialNotifications || []).map((notif) => notif.id).filter(Boolean)
+            (initialNotifications || [])
+              .filter((notif) => {
+                const createdAt = notif.createdat ? new Date(notif.createdat).getTime() : 0;
+                return createdAt < notificationListenerStartedAtRef.current - 3000;
+              })
+              .map((notif) => notif.id)
+              .filter(Boolean)
           );
         } catch (error) {
           console.error("초기 팝업 알림 목록 조회 실패:", error);

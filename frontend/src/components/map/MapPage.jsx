@@ -965,6 +965,8 @@ function MapPage({ roomId }) {
         return
       }
 
+      const requestLink = `/rooms/${currentRoomId}?tab=location&request=location-${Date.now()}`
+
       if (member.guestid) {
         await createGuestNotification({
           roomId: currentRoomId,
@@ -972,7 +974,7 @@ function MapPage({ roomId }) {
           type: 'location_request',
           title: '위치 등록 요청',
           message: '아직 위치를 등록하지 않았습니다. 위치를 등록해주세요!',
-          link: `/rooms/${currentRoomId}?tab=location`,
+          link: requestLink,
         })
       } else {
         await createNotification({
@@ -982,7 +984,7 @@ function MapPage({ roomId }) {
           type: 'location_request',
           title: '위치 등록 요청',
           message: '아직 위치를 등록하지 않았습니다. 위치를 등록해주세요!',
-          link: `/rooms/${currentRoomId}?tab=location`,
+          link: requestLink,
         })
       }
 
