@@ -52,6 +52,11 @@ function RoomListPage() {
     }
     setMutedRooms(newMuted);
     localStorage.setItem("muted_rooms", JSON.stringify(newMuted));
+    if (isMuted) {
+      window.dispatchEvent(new CustomEvent("popup-setting-enabled", {
+        detail: { roomId: Number(roomId), allTabs: true },
+      }));
+    }
     setContextMenu(null);
   };
 

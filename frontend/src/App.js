@@ -112,6 +112,44 @@ function hasRoomPopupSetting(roomId, type) {
   return Boolean(roomId && NOTIFICATION_SETTING_COLUMNS[type]);
 }
 
+function getNotificationCreatedAt(notif) {
+  const createdAt = notif?.createdat ? new Date(notif.createdat).getTime() : Date.now();
+  return Number.isNaN(createdAt) ? Date.now() : createdAt;
+}
+
+function getPopupEnabledCutoff(key) {
+  const value = Number(localStorage.getItem(key) || 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function getStoredPopupCutoffs(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function isBeforePopupResumeCutoff(notif) {
+  const createdAt = getNotificationCreatedAt(notif);
+  const globalCutoff = getPopupEnabledCutoff("popup_global_enabled_at");
+  if (globalCutoff && createdAt < globalCutoff) return true;
+
+  const roomId = notif?.roomid ? String(notif.roomid) : null;
+  if (!roomId) return false;
+
+  const roomCutoffs = getStoredPopupCutoffs("popup_room_enabled_at");
+  const roomCutoff = Number(roomCutoffs[roomId] || 0);
+  if (roomCutoff && createdAt < roomCutoff) return true;
+
+  const settingColumn = NOTIFICATION_SETTING_COLUMNS[notif?.type];
+  if (!settingColumn) return false;
+
+  const tabCutoffs = getStoredPopupCutoffs("popup_tab_enabled_at");
+  const tabCutoff = Number(tabCutoffs?.[roomId]?.[settingColumn] || 0);
+  return Boolean(tabCutoff && createdAt < tabCutoff);
+}
+
 function Layout({ children }) {
   const location = useLocation();
   const showNav = !AUTH_PATHS.includes(location.pathname);
@@ -186,9 +224,29 @@ function NotificationListener() {
     };
 
     const handlePopupSettingEnabled = async (event) => {
-      const { roomId, tabName } = event.detail || {};
-      const tabTypes = TAB_TYPE_MAP[tabName] || [];
-      if (!roomId || tabTypes.length === 0) return;
+      const { roomId, tabName, allRooms, allTabs } = event.detail || {};
+      const enabledAt = Date.now();
+      const tabTypes = tabName ? TAB_TYPE_MAP[tabName] || [] : [];
+      const settingColumn = tabName ? NOTIFICATION_SETTING_COLUMNS[tabTypes[0]] : null;
+
+      if (allRooms) {
+        localStorage.setItem("popup_global_enabled_at", String(enabledAt));
+      } else if (roomId && allTabs) {
+        const roomCutoffs = getStoredPopupCutoffs("popup_room_enabled_at");
+        roomCutoffs[String(roomId)] = enabledAt;
+        localStorage.setItem("popup_room_enabled_at", JSON.stringify(roomCutoffs));
+      } else if (roomId && settingColumn) {
+        const tabCutoffs = getStoredPopupCutoffs("popup_tab_enabled_at");
+        const roomKey = String(roomId);
+        tabCutoffs[roomKey] = {
+          ...(tabCutoffs[roomKey] || {}),
+          [settingColumn]: enabledAt,
+        };
+        localStorage.setItem("popup_tab_enabled_at", JSON.stringify(tabCutoffs));
+      }
+
+      if (!allRooms && !roomId) return;
+      if (!allRooms && !allTabs && tabTypes.length === 0) return;
 
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -201,11 +259,13 @@ function NotificationListener() {
           : await getMyGuestNotifications(userId);
 
         (notifications || [])
-          .filter((notif) =>
-            Number(notif.roomid) === Number(roomId) &&
-            tabTypes.includes(notif.type) &&
-            notif.id
-          )
+          .filter((notif) => {
+            if (!notif.id) return false;
+            if (allRooms) return true;
+            if (Number(notif.roomid) !== Number(roomId)) return false;
+            if (allTabs) return true;
+            return tabTypes.includes(notif.type);
+          })
           .forEach((notif) => shownNotificationIdsRef.current.add(notif.id));
       } catch (error) {
         console.error("팝업 설정 ON 기존 알림 처리 실패:", error);
@@ -258,6 +318,7 @@ function NotificationListener() {
 
           if (!isGlobalPopupEnabled) return false;
           if (isRoomMuted) return false;
+          if (isBeforePopupResumeCutoff(notif)) return false;
 
           return usesRoomSetting
             ? isSettingAllowed
@@ -266,7 +327,7 @@ function NotificationListener() {
 
         const handleIncomingNotification = async (notif) => {
           if (!notif || String(notif.receiverid) !== String(myUserId)) return;
-          const createdAt = notif.createdat ? new Date(notif.createdat).getTime() : Date.now();
+          const createdAt = getNotificationCreatedAt(notif);
           const isNewSinceListenerStarted =
             Number.isNaN(createdAt) ||
             createdAt >= notificationListenerStartedAtRef.current - 3000;
