@@ -590,8 +590,6 @@ function ConfirmedScheduleDetailPage() {
       setAdditionalLocations((locations) => [...locations, savedLocation]);
       setAdditionalPlace(null);
       setShowAdditionalPicker(false);
-
-      alert("추가 장소가 저장되었습니다.");
     } catch (error) {
       alert("추가 장소 저장 실패: " + error.message);
     } finally {
@@ -811,7 +809,7 @@ function ConfirmedScheduleDetailPage() {
               background: "#fff",
               padding: "18px",
               borderRadius: "18px",
-              width: "min(90vw, 300px)",
+              width: "min(92vw, 380px)",
               maxHeight: "85vh",
               overflowY: "auto",
               boxShadow: "0 10px 25px rgba(0,0,0,0.1)",

@@ -520,6 +520,31 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
+  useEffect(() => {
+    const refreshParticipants = async () => {
+      try {
+        const [memberData, guestData] = await Promise.all([
+          getRoomMembers(roomId),
+          getRoomGuests(roomId),
+        ]);
+        setMembers(memberData);
+        setGuests(guestData);
+      } catch (error) {
+        console.error("참여자 현황 갱신 실패:", error);
+      }
+    };
+
+    const channel = supabase
+      .channel(`schedule_parts_${roomId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "room_members", filter: `roomid=eq.${roomId}` }, refreshParticipants)
+      .on("postgres_changes", { event: "*", schema: "public", table: "room_guests", filter: `roomid=eq.${roomId}` }, refreshParticipants)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [roomId]);
+
   const myUserId = currentUser?.id || localStorage.getItem("guest_id");
   const myAvailability = availabilities.some((item) => item.userid === myUserId);
 

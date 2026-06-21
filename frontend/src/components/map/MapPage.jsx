@@ -207,22 +207,14 @@ function MapPage({ roomId }) {
     if (!isTracking) return
 
     const intervalId = setInterval(() => {
-      updateDepartedLocation()
-    }, 30000)
+      refreshMemberRoutesFromDb()
+    }, 5000)
 
     return () => {
       clearInterval(intervalId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    isTracking,
-    currentRoomId,
-    currentUserId,
-    currentGuestId,
-    activeMeetingPlace?.lat,
-    activeMeetingPlace?.lng,
-    selectedScheduleId,
-  ])
+  }, [isTracking, currentRoomId, activeMeetingPlace?.lat, activeMeetingPlace?.lng, selectedScheduleId])
 
   useEffect(() => {
     if (!currentRoomId) return
@@ -709,43 +701,17 @@ function MapPage({ roomId }) {
     })
   }
 
-  const updateDepartedLocation = async () => {
-    if (!currentRoomId || (!currentUserId && !currentGuestId)) return
+  const refreshMemberRoutesFromDb = async () => {
+    if (!currentRoomId) return
 
     try {
-      const location = await getCurrentPosition()
-
-      setCurrentLocation(location)
-      setLocationUpdateError('')
-
-      await saveCurrentUserLocation(location, {
-        isDeparted: true,
-        locationStatus: 'tracking',
-        locationError: null,
-      })
-
       await loadMemberLocations()
 
       if (activeMeetingPlace) {
         await calculateAllMemberRoutesToMiddlePlace(activeMeetingPlace)
       }
     } catch (error) {
-      const nextStatus = error?.code === 1 ? 'denied' : 'error'
-      const nextMessage =
-        nextStatus === 'denied'
-          ? '위치 권한이 거부되어 자동 갱신을 할 수 없습니다.'
-          : '위치 자동 갱신에 실패했습니다.'
-
-      console.error('출발 후 위치 자동 갱신 실패:', error)
-      setLocationUpdateError(nextMessage)
-
-      await saveCurrentUserLocation(null, {
-        isDeparted: true,
-        locationStatus: nextStatus,
-        locationError: nextMessage,
-      })
-
-      await loadMemberLocations()
+      console.error('DB 위치 기반 경로 재계산 실패:', error)
     }
   }
 
@@ -852,11 +818,8 @@ function MapPage({ roomId }) {
     }
 
     try {
-      const location = await getCurrentPosition()
+      const location = getSavedLocationSnapshot()
       const now = new Date().toISOString()
-
-      setCurrentLocation(location)
-      setLocationUpdateError('')
 
       await saveCurrentUserLocation(location, {
         isDeparted: true,
@@ -888,23 +851,8 @@ function MapPage({ roomId }) {
 
       setMessage('출발했습니다.')
     } catch (error) {
-      const nextStatus = error?.code === 1 ? 'denied' : 'error'
-      const nextMessage =
-        nextStatus === 'denied'
-          ? '위치 권한이 거부되어 출발 처리를 완료하지 못했습니다.'
-          : '현재 위치를 가져오지 못해 출발 처리를 완료하지 못했습니다.'
-
       console.error('출발 처리 실패:', error)
-      setLocationUpdateError(nextMessage)
-      setMessage(nextMessage)
-
-      await saveCurrentUserLocation(null, {
-        isDeparted: false,
-        locationStatus: nextStatus,
-        locationError: nextMessage,
-      })
-
-      await loadMemberLocations()
+      setMessage('출발 처리 중 오류가 발생했습니다.')
     }
   }
 
@@ -1669,10 +1617,14 @@ function MapPage({ roomId }) {
 
   const isFriendPanelOpen = activeMapPanel === 'friends'
   const mapCurrentLocation = isFriendPanelOpen ? null : currentLocation
-  const mapMemberLocations = isFriendPanelOpen ? registeredMemberLocations : []
-  const mapMemberRoutePaths = isFriendPanelOpen ? memberRoutePaths : []
-  const mapMemberRouteResults = isFriendPanelOpen ? memberRouteResults : []
-  const mapMemberLocationLabels = isFriendPanelOpen ? memberLocationLabels : {}
+  const isAnyMemberTracking = registeredMemberLocations.some(
+    (location) => location.isdeparted && !location.arrivedat
+  )
+  const shouldShowMemberRoutesOnMap = isFriendPanelOpen || isTracking || isAnyMemberTracking
+  const mapMemberLocations = shouldShowMemberRoutesOnMap ? registeredMemberLocations : []
+  const mapMemberRoutePaths = shouldShowMemberRoutesOnMap ? memberRoutePaths : []
+  const mapMemberRouteResults = shouldShowMemberRoutesOnMap ? memberRouteResults : []
+  const mapMemberLocationLabels = shouldShowMemberRoutesOnMap ? memberLocationLabels : {}
   const registeredMemberCount = members.filter(isMemberLocationRegistered).length
   const hasMoreFriendMembers = members.length > FRIEND_LOCATION_PREVIEW_COUNT
   const displayedFriendMembers = showFriendMemberListOnly
