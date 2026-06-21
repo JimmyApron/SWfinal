@@ -25,6 +25,22 @@ import {
   deleteNotification,
 } from "../../api/notificationApi";
 
+function cacheRoomPopupSetting(roomId, column, value) {
+  if (!roomId || !column) return;
+
+  try {
+    const settings = JSON.parse(localStorage.getItem("room_popup_settings") || "{}");
+    const roomKey = String(roomId);
+    settings[roomKey] = {
+      ...(settings[roomKey] || {}),
+      [column]: value,
+    };
+    localStorage.setItem("room_popup_settings", JSON.stringify(settings));
+  } catch (error) {
+    console.warn("알림 설정 캐시 저장 실패:", error);
+  }
+}
+
 function RoomDetailPage() {
   const navigate = useNavigate();
   const { roomId } = useParams();
@@ -110,23 +126,37 @@ function RoomDetailPage() {
       if (me) setMyEntryId(me.id);
 
       const { data: sett } = await supabase.from("room_members").select("schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled").eq("roomid", Number(roomId)).eq("userid", uId).maybeSingle();
-      if (sett) setNotifSettings({
-        schedule: sett.schedulenotifenabled !== false,
-        location: sett.locationnotifenabled !== false,
-        vote: sett.votenotifenabled !== false,
-        chat: sett.chatnotifenabled !== false,
-      });
+      if (sett) {
+        const nextSettings = {
+          schedule: sett.schedulenotifenabled !== false,
+          location: sett.locationnotifenabled !== false,
+          vote: sett.votenotifenabled !== false,
+          chat: sett.chatnotifenabled !== false,
+        };
+        setNotifSettings(nextSettings);
+        cacheRoomPopupSetting(roomId, "schedulenotifenabled", nextSettings.schedule);
+        cacheRoomPopupSetting(roomId, "locationnotifenabled", nextSettings.location);
+        cacheRoomPopupSetting(roomId, "votenotifenabled", nextSettings.vote);
+        cacheRoomPopupSetting(roomId, "chatnotifenabled", nextSettings.chat);
+      }
     } else {
       const guestId = localStorage.getItem("guest_id");
       if (guestId) {
         setCurrentUser({ id: guestId, type: "guest" });
         const { data: sett } = await supabase.from("room_guests").select("schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled").eq("id", guestId).maybeSingle();
-        if (sett) setNotifSettings({
-          schedule: sett.schedulenotifenabled !== false,
-          location: sett.locationnotifenabled !== false,
-          vote: sett.votenotifenabled !== false,
-          chat: sett.chatnotifenabled !== false,
-        });
+        if (sett) {
+          const nextSettings = {
+            schedule: sett.schedulenotifenabled !== false,
+            location: sett.locationnotifenabled !== false,
+            vote: sett.votenotifenabled !== false,
+            chat: sett.chatnotifenabled !== false,
+          };
+          setNotifSettings(nextSettings);
+          cacheRoomPopupSetting(roomId, "schedulenotifenabled", nextSettings.schedule);
+          cacheRoomPopupSetting(roomId, "locationnotifenabled", nextSettings.location);
+          cacheRoomPopupSetting(roomId, "votenotifenabled", nextSettings.vote);
+          cacheRoomPopupSetting(roomId, "chatnotifenabled", nextSettings.chat);
+        }
       }
     }
   };
@@ -306,6 +336,7 @@ function RoomDetailPage() {
       return;
     }
     setNotifSettings(prev => ({ ...prev, [tabName]: next }));
+    cacheRoomPopupSetting(roomId, col, next);
     if (next) {
       window.dispatchEvent(new CustomEvent("popup-setting-enabled", {
         detail: { roomId: Number(roomId), tabName },

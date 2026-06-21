@@ -61,9 +61,24 @@ const NOTIFICATION_SETTING_COLUMNS = {
   chat_new: "chatnotifenabled",
 };
 
+function getCachedRoomPopupSetting(roomId, settingColumn) {
+  if (!roomId || !settingColumn) return null;
+
+  try {
+    const settings = JSON.parse(localStorage.getItem("room_popup_settings") || "{}");
+    const value = settings?.[String(roomId)]?.[settingColumn];
+    return typeof value === "boolean" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 async function isRoomNotificationPopupAllowed(roomId, type) {
   const settingColumn = NOTIFICATION_SETTING_COLUMNS[type];
   if (!roomId || !settingColumn) return true;
+
+  const cachedSetting = getCachedRoomPopupSetting(roomId, settingColumn);
+  if (cachedSetting !== null) return cachedSetting;
 
   try {
     const { data: { user } } = await supabase.auth.getUser();
