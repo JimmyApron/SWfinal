@@ -82,7 +82,7 @@ function KakaoMapView({
     infoWindow.open(mapObjectRef.current, marker)
   }, [closeActiveInfoWindow])
 
-  const openPlaceInfoWindow = useCallback((place, marker) => {
+  const openPlaceInfoWindow = useCallback((place, marker, options = {}) => {
     const infoKey = getMarkerInfoKey('place', place)
 
     if (selectedInfoWindowRef.current && selectedInfoWindowKeyRef.current === infoKey) {
@@ -136,7 +136,10 @@ function KakaoMapView({
       place.isConfirmedMiddlePlace ||
       isSameMapPlace(place, confirmedMeetingPlaceRef.current)
 
-    if (onSetMeetingPlaceRef.current && !isCurrentMeetingPlace) {
+    if (
+      onSetMeetingPlaceRef.current &&
+      (options.forceShowSetMeetingButton || !isCurrentMeetingPlace)
+    ) {
       const button = document.createElement('button')
       button.type = 'button'
       button.textContent = '만날 장소로 설정하기'
@@ -697,11 +700,15 @@ function KakaoMapView({
       markerContent.addEventListener('click', (event) => {
         event.preventDefault()
         event.stopPropagation()
-        openPlaceInfoWindow(place, anchorMarker)
+        openPlaceInfoWindow(place, anchorMarker, {
+          forceShowSetMeetingButton: true,
+        })
       })
 
       window.kakao.maps.event.addListener(anchorMarker, 'click', () => {
-        openPlaceInfoWindow(place, anchorMarker)
+        openPlaceInfoWindow(place, anchorMarker, {
+          forceShowSetMeetingButton: true,
+        })
       })
 
       placeMarkerRefs.current.push({ overlay, anchor: anchorMarker, position, place })
@@ -849,7 +856,9 @@ function KakaoMapView({
       mapObjectRef.current.setCenter(selectedLocation)
 
       if (meetingPlaceMarkerRef.current?.anchor) {
-        openPlaceInfoWindow(selectedPlace, meetingPlaceMarkerRef.current.anchor)
+        openPlaceInfoWindow(selectedPlace, meetingPlaceMarkerRef.current.anchor, {
+          forceShowSetMeetingButton: true,
+        })
       }
       return
     }
@@ -892,11 +901,15 @@ function KakaoMapView({
       markerContent.addEventListener('click', (event) => {
         event.preventDefault()
         event.stopPropagation()
-        openPlaceInfoWindow(selectedPlace, anchorMarker)
+        openPlaceInfoWindow(selectedPlace, anchorMarker, {
+          forceShowSetMeetingButton: true,
+        })
       })
 
       window.kakao.maps.event.addListener(anchorMarker, 'click', () => {
-        openPlaceInfoWindow(selectedPlace, anchorMarker)
+        openPlaceInfoWindow(selectedPlace, anchorMarker, {
+          forceShowSetMeetingButton: true,
+        })
       })
 
       selectedPlaceMarkerRef.current = { overlay, anchor: anchorMarker }
@@ -905,7 +918,9 @@ function KakaoMapView({
 
     mapObjectRef.current.relayout()
     mapObjectRef.current.setCenter(selectedLocation)
-    openPlaceInfoWindow(selectedPlace, activeMarker)
+    openPlaceInfoWindow(selectedPlace, activeMarker, {
+      forceShowSetMeetingButton: true,
+    })
   }, [
     selectedPlace,
     confirmedMeetingPlaceViewportKey,

@@ -985,7 +985,7 @@ function CalendarPage() {
           const dayTodos = key ? todoMap[key] || [] : [];
           const isSun = col === 0;
           const isSat = col === 6;
-          const isSelected = selectedDay === d;
+          const isSelected = d != null && selectedDay === d;
 
           const textColor = isToday(d)
             ? "#fff"

@@ -1462,7 +1462,13 @@
 
 .friend-location-list-preview {
   position: relative;
+  overflow: visible;
+  padding-bottom: 2px;
+}
+
+.friend-location-list.has-more-members .friend-location-list-preview {
   overflow: hidden;
+  padding-bottom: 0;
 }
 
 .friend-location-list.has-more-members .friend-location-list-preview::after {
@@ -1471,7 +1477,7 @@
   right: 0;
   bottom: 0;
   left: 0;
-  height: 54px;
+  height: 34px;
   pointer-events: none;
   background: linear-gradient(rgba(255, 255, 255, 0), #fff);
 }

@@ -193,15 +193,23 @@ function MapPage({ roomId }) {
       try {
         const locations = await getRoomMemberLocations(currentRoomId, selectedScheduleId)
         setMemberLocations(locations)
+
+        if (activeMeetingPlace) {
+          await calculateAllMemberRoutesToMiddlePlace(activeMeetingPlace, {
+            locations,
+            silent: true,
+          })
+        }
       } catch (error) {
         console.error('실시간 멤버 위치 갱신 오류:', error)
       }
-    }, 5000)
+    }, 3000)
 
     return () => {
       clearInterval(intervalId)
     }
-  }, [currentRoomId, selectedScheduleId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRoomId, selectedScheduleId, activeMeetingPlace?.lat, activeMeetingPlace?.lng])
 
   useEffect(() => {
     if (!isTracking) return
@@ -1057,12 +1065,12 @@ function MapPage({ roomId }) {
     }
   }
 
-  const calculateAllMemberRoutesToMiddlePlace = async (place) => {
+  const calculateAllMemberRoutesToMiddlePlace = async (place, options = {}) => {
     if (!place) {
       return
     }
 
-    const latestLocations = await loadMemberLocations()
+    const latestLocations = options.locations || await loadMemberLocations()
 
     if (!latestLocations || latestLocations.length === 0) {
       return
@@ -1170,7 +1178,7 @@ function MapPage({ roomId }) {
             mode,
             path: routePath,
           })
-        } else {
+        } else if (durationMinutes === null) {
           routeResult.error = '경로 검색 불가'
         }
 

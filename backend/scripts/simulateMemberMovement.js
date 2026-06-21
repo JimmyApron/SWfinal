@@ -3,8 +3,17 @@ require('dotenv').config()
 const fs = require('fs')
 const path = require('path')
 const { createClient } = require('@supabase/supabase-js')
+const WebSocket = require('ws')
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY)
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY,
+  {
+    realtime: {
+      transport: WebSocket,
+    },
+  }
+)
 
 const TICK_MS = 3 * 1000
 
@@ -17,55 +26,217 @@ function parseArgs() {
   return args
 }
 
+let configFilePath = null
+
 function loadConfig(configPath) {
   const resolved = path.resolve(process.cwd(), configPath)
+  configFilePath = resolved
   return JSON.parse(fs.readFileSync(resolved, 'utf-8'))
 }
 
 const args = parseArgs()
 const config = args.config ? loadConfig(args.config) : null
 
-const ROOM_ID = Number(args.room || config?.room)
-const SCHEDULE_ID = Number(args.schedule || config?.schedule)
 const DURATION_MIN = Number(args.duration || config?.duration || 5)
 const TOTAL_TICKS = Math.max(1, Math.round((DURATION_MIN * 60 * 1000) / TICK_MS))
-
-if (!ROOM_ID || !SCHEDULE_ID) {
-  console.error(
-    '사용법: node scripts/simulateMemberMovement.js --room=<roomId> --schedule=<scheduleId> [--duration=분(기본 5)]'
-  )
-  console.error(
-    '   또는: node scripts/simulateMemberMovement.js --config=scripts/seed.json  (출발 등록까지 한번에 처리)'
-  )
-  process.exit(1)
+const context = {
+  roomId: null,
+  scheduleId: null,
 }
 
 function lerp(start, end, t) {
   return start + (end - start) * t
 }
 
+async function resolveRunContext() {
+  let roomId = Number(args.room || config?.room)
+  let scheduleId = Number(args.schedule || config?.schedule)
+  const useLatestRoom =
+    args.latestRoom === 'true' ||
+    args.latestRoom === '1' ||
+    config?.latestRoom === true
+
+  if (useLatestRoom || !roomId) {
+    const { data: latestRoom, error } = await supabase
+      .from('rooms')
+      .select('id, roomname')
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (error) throw error
+    if (!latestRoom?.id) {
+      throw new Error('rooms 테이블에서 최신 방을 찾지 못했습니다.')
+    }
+
+    roomId = Number(latestRoom.id)
+    console.log(`최신 방 사용: ${latestRoom.roomname || '이름 없음'} (#${roomId})`)
+  }
+
+  if (useLatestRoom || !scheduleId) {
+    const { data: latestSchedule, error } = await supabase
+      .from('confirmed_schedules')
+      .select('id, title, location, locationlat, locationlng')
+      .eq('roomid', roomId)
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (error) throw error
+    if (!latestSchedule?.id) {
+      throw new Error(`room ${roomId}의 confirmed_schedules에서 사용할 일정을 찾지 못했습니다.`)
+    }
+
+    scheduleId = Number(latestSchedule.id)
+    console.log(`최신 일정 사용: ${latestSchedule.title || '제목 없음'} (#${scheduleId})`)
+  }
+
+  if (!roomId || !scheduleId) {
+    console.error(
+      '사용법: node scripts/simulateMemberMovement.js --room=<roomId> --schedule=<scheduleId> [--duration=분(기본 5)]'
+    )
+    console.error(
+      '   또는: node scripts/simulateMemberMovement.js --config=scripts/seed.json  (출발 등록까지 한번에 처리)'
+    )
+    process.exit(1)
+  }
+
+  context.roomId = roomId
+  context.scheduleId = scheduleId
+
+  persistResolvedContext()
+}
+
+function persistResolvedContext() {
+  if (!config || !configFilePath) return
+
+  const nextConfig = {
+    ...config,
+    room: context.roomId,
+    schedule: context.scheduleId,
+  }
+
+  fs.writeFileSync(configFilePath, `${JSON.stringify(nextConfig, null, 2)}\n`)
+  config.room = context.roomId
+  config.schedule = context.scheduleId
+}
+
+function getParticipantIdentity(participant) {
+  const isUser = Boolean(participant.userid)
+
+  if (!isUser && !participant.guestid) {
+    throw new Error('config의 participants 항목에는 userid 또는 guestid가 필요합니다.')
+  }
+
+  return {
+    isUser,
+    userId: isUser ? participant.userid : null,
+    guestId: isUser ? null : participant.guestid,
+  }
+}
+
+async function getSavedTransportMode(participant) {
+  const { isUser, userId, guestId } = getParticipantIdentity(participant)
+  const applyParticipantFilter = (query) =>
+    isUser ? query.eq('userid', userId) : query.eq('guestid', guestId)
+
+  const scheduledQuery = applyParticipantFilter(
+    supabase
+      .from('schedule_user_locations')
+      .select('transportmode, createdat')
+      .eq('roomid', context.roomId)
+      .eq('scheduleid', context.scheduleId)
+      .not('transportmode', 'is', null)
+      .order('createdat', { ascending: false })
+      .limit(1)
+  )
+
+  const { data: scheduledRows, error: scheduledError } = await scheduledQuery
+  if (scheduledError) throw scheduledError
+
+  if (scheduledRows?.[0]?.transportmode) {
+    return scheduledRows[0].transportmode
+  }
+
+  const defaultQuery = applyParticipantFilter(
+    supabase
+      .from('user_locations')
+      .select('transportmode, createdat')
+      .eq('roomid', context.roomId)
+      .not('transportmode', 'is', null)
+      .order('createdat', { ascending: false })
+      .limit(1)
+  )
+
+  const { data: defaultRows, error: defaultError } = await defaultQuery
+  if (defaultError) throw defaultError
+
+  return defaultRows?.[0]?.transportmode || null
+}
+
+function getConfigDestination() {
+  const destination = config?.destination
+  if (!destination) return null
+
+  const lat = Number(destination.lat ?? destination.locationlat)
+  const lng = Number(destination.lng ?? destination.locationlng)
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    throw new Error('config.destination에는 숫자 lat/lng가 필요합니다.')
+  }
+
+  return {
+    lat,
+    lng,
+    name: destination.name || destination.location || '시연 목적지',
+  }
+}
+
+async function saveDestinationToSchedule(dest) {
+  const { error } = await supabase
+    .from('confirmed_schedules')
+    .update({
+      location: dest.name,
+      locationlat: dest.lat,
+      locationlng: dest.lng,
+    })
+    .eq('id', context.scheduleId)
+    .eq('roomid', context.roomId)
+
+  if (error) throw error
+}
+
 async function getDestination() {
   const { data, error } = await supabase
     .from('confirmed_schedules')
     .select('location, locationlat, locationlng')
-    .eq('id', SCHEDULE_ID)
-    .eq('roomid', ROOM_ID)
+    .eq('id', context.scheduleId)
+    .eq('roomid', context.roomId)
     .maybeSingle()
 
   if (error) throw error
-  if (!data || data.locationlat == null || data.locationlng == null) {
-    throw new Error('이 일정에 확정된 만날 장소가 없습니다. 먼저 투표/일정에서 장소를 확정하세요.')
+  const configDestination = getConfigDestination()
+  if (configDestination) {
+    await saveDestinationToSchedule(configDestination)
+    console.log('config.destination을 일정의 만날 장소로 저장했습니다.')
+    return configDestination
   }
 
-  return { lat: Number(data.locationlat), lng: Number(data.locationlng), name: data.location || '확정된 장소' }
+  if (data?.locationlat != null && data?.locationlng != null) {
+    return { lat: Number(data.locationlat), lng: Number(data.locationlng), name: data.location || '확정된 장소' }
+  }
+
+  throw new Error(
+    '이 일정에 확정된 만날 장소가 없습니다. 앱에서 장소를 확정하거나 config.destination을 추가하세요.'
+  )
 }
 
 async function getMovingParticipants() {
   const { data, error } = await supabase
     .from('schedule_user_locations')
     .select('userid, guestid, latitude, longitude, isdeparted, createdat')
-    .eq('roomid', ROOM_ID)
-    .eq('scheduleid', SCHEDULE_ID)
+    .eq('roomid', context.roomId)
+    .eq('scheduleid', context.scheduleId)
     .order('createdat', { ascending: false })
 
   if (error) throw error
@@ -93,21 +264,21 @@ async function getMovingParticipants() {
 async function seedParticipants(participants) {
   await Promise.all(
     participants.map(async (participant) => {
-      const isUser = Boolean(participant.userid)
-
-      if (!isUser && !participant.guestid) {
-        throw new Error('config의 participants 항목에는 userid 또는 guestid가 필요합니다.')
-      }
+      const { isUser, userId, guestId } = getParticipantIdentity(participant)
+      const transportMode =
+        await getSavedTransportMode(participant) ||
+        participant.transportmode ||
+        'car'
 
       const row = {
-        roomid: ROOM_ID,
-        scheduleid: SCHEDULE_ID,
-        userid: isUser ? participant.userid : null,
-        guestid: isUser ? null : participant.guestid,
+        roomid: context.roomId,
+        scheduleid: context.scheduleId,
+        userid: userId,
+        guestid: guestId,
         latitude: Number(participant.startLat),
         longitude: Number(participant.startLng),
         accuracy: participant.accuracy ?? null,
-        transportmode: participant.transportmode || 'car',
+        transportmode: transportMode,
         isdeparted: true,
         departedat: new Date().toISOString(),
         arrivedat: null,
@@ -143,8 +314,8 @@ async function updateParticipant(participant, dest, t, isLast) {
   let query = supabase
     .from('schedule_user_locations')
     .update(updateData)
-    .eq('roomid', ROOM_ID)
-    .eq('scheduleid', SCHEDULE_ID)
+    .eq('roomid', context.roomId)
+    .eq('scheduleid', context.scheduleId)
 
   query = participant.userid
     ? query.eq('userid', participant.userid)
@@ -155,6 +326,8 @@ async function updateParticipant(participant, dest, t, isLast) {
 }
 
 async function main() {
+  await resolveRunContext()
+
   const dest = await getDestination()
 
   let participants
@@ -178,9 +351,10 @@ async function main() {
     process.exit(1)
   }
 
+  console.log(`방/일정: room ${context.roomId}, schedule ${context.scheduleId}`)
   console.log(`목적지: ${dest.name} (${dest.lat}, ${dest.lng})`)
   console.log(
-    `이동 대상 ${participants.length}명, 총 ${TOTAL_TICKS}틱 x 30초 (약 ${DURATION_MIN}분) 후 도착 처리`
+    `이동 대상 ${participants.length}명, 총 ${TOTAL_TICKS}틱 x ${TICK_MS / 1000}초 (약 ${DURATION_MIN}분) 후 도착 처리`
   )
 
   let tick = 0

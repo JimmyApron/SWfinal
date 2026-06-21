@@ -60,6 +60,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const [showEditCandidateModal, setShowEditCandidateModal] = useState(false); // 추가: 후보지 수정 팝업(중앙) 표시 여부
 
   const timetableScrollRef = useRef(null);
+  const scheduleRealtimeRefreshTimerRef = useRef(null);
 
   useEffect(() => {
     if (!selectedScheduleId || confirmedSchedules.length === 0) return;
@@ -136,12 +137,11 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     (t) => (!startCutoff || t >= startCutoff) && (!endCutoff || t <= endCutoff)
   );
 
-  const getHeatmapColor = (count, total) => {
-    const ratio = count / total;
-    if (ratio >= 1) return "#7C5CFF"; // 전원 가능
-    if (ratio >= 0.75) return "color-mix(in srgb, var(--accent-color) 68%, var(--card-bg))";
-    if (ratio >= 0.4) return "color-mix(in srgb, var(--accent-color) 44%, var(--card-bg))";
-    return "color-mix(in srgb, var(--accent-color) 24%, var(--card-bg))";
+  const getHeatmapColor = (count) => {
+    if (count >= 4) return "color-mix(in srgb, var(--accent-color) 76%, var(--card-bg))";
+    if (count === 3) return "color-mix(in srgb, var(--accent-color) 58%, var(--card-bg))";
+    if (count === 2) return "color-mix(in srgb, var(--accent-color) 40%, var(--card-bg))";
+    return "color-mix(in srgb, var(--accent-color) 22%, var(--card-bg))";
   };
 
   const getMemberColor = (userid) => {
@@ -367,6 +367,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
         }
 
         alert(`후보 일정 ${dateStrings.length}개가 추가되었습니다.`);
+        setShowAddCandidateForm(false);
       }
 
       await updateRoomLastActivity(roomId);
@@ -376,6 +377,10 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
       console.error(error);
       alert("후보 일정 저장 실패");
     }
+  };
+
+  const closeAddCandidatePopup = () => {
+    setShowAddCandidateForm(false);
   };
 
   const handleEditCandidate = (candidate) => {
@@ -564,6 +569,45 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     return () => {
       supabase.removeChannel(channel);
     };
+  }, [roomId]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const refreshScheduleRealtimeData = () => {
+      window.clearTimeout(scheduleRealtimeRefreshTimerRef.current);
+      scheduleRealtimeRefreshTimerRef.current = window.setTimeout(async () => {
+        try {
+          const [candidateData, availabilityData] = await Promise.all([
+            getScheduleCandidates(roomId),
+            getMemberAvailabilities(roomId),
+          ]);
+
+          if (!isActive) return;
+
+          setCandidates(candidateData);
+          setAvailabilities(availabilityData);
+          await loadConfirmedSchedules();
+        } catch (error) {
+          console.error("일정 실시간 갱신 실패:", error);
+        }
+      }, 120);
+    };
+
+    const channel = supabase
+      .channel(`schedule_realtime_${roomId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "member_availabilities", filter: `roomid=eq.${roomId}` }, refreshScheduleRealtimeData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedule_candidates", filter: `roomid=eq.${roomId}` }, refreshScheduleRealtimeData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "confirmed_schedules", filter: `roomid=eq.${roomId}` }, refreshScheduleRealtimeData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "confirmed_locations", filter: `roomid=eq.${roomId}` }, refreshScheduleRealtimeData)
+      .subscribe();
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(scheduleRealtimeRefreshTimerRef.current);
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
   const myUserId = currentUser?.id || localStorage.getItem("guest_id");
@@ -758,25 +802,30 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
         </div>
       </div>
 
-      {/* 직접 시간 추가 바텀시트 */}
+      {/* 직접 시간 추가 팝업 */}
       {showAddCandidateForm && (
         <>
           <div
-            onClick={() => setShowAddCandidateForm(false)}
-            style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 3000, backdropFilter: "blur(2px)" }}
+            onClick={closeAddCandidatePopup}
+            style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 10000, backdropFilter: "blur(2px)" }}
           />
           <div
             style={{
               position: "fixed",
-              bottom: 0, left: 0, right: 0,
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
               backgroundColor: "var(--card-bg)",
-              borderTopLeftRadius: "24px", borderTopRightRadius: "24px",
-              padding: "24px 20px 40px", zIndex: 3001,
-              boxShadow: "0 -4px 20px rgba(0,0,0,0.15)",
-              animation: "slideUp 0.3s ease-out",
+              borderRadius: "20px",
+              padding: "24px 20px",
+              zIndex: 10001,
+              width: "min(360px, calc(100vw - 32px))",
+              maxHeight: "calc(100dvh - 96px)",
+              overflowY: "auto",
+              boxSizing: "border-box",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.22)",
             }}
           >
-            <div style={{ width: "40px", height: "4px", backgroundColor: "var(--border-color)", borderRadius: "2px", margin: "0 auto 20px" }} />
             <h3 style={{ margin: "0 0 8px", fontSize: "18px", fontWeight: "700", color: "var(--text-color)" }}>
               직접 시간 추가
             </h3>
@@ -906,7 +955,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
 
               <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
                 <button
-                  onClick={() => setShowAddCandidateForm(false)}
+                  onClick={closeAddCandidatePopup}
                   style={{ flex: 1, padding: "14px", backgroundColor: "var(--card-bg)", color: "var(--secondary-text)", border: "1px solid var(--border-color)", borderRadius: "12px", fontSize: "15px", fontWeight: "700", cursor: "pointer" }}
                 >
                   취소
@@ -1103,9 +1152,11 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                     <th style={{
                       position: "sticky",
                       left: 0,
-                      zIndex: 10,
+                      zIndex: 30,
                       backgroundColor: "var(--card-bg)",
                       width: "60px",
+                      minWidth: "60px",
+                      boxSizing: "border-box",
                       padding: "16px 8px",
                       fontSize: "12px",
                       fontWeight: "600",
@@ -1243,11 +1294,16 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                       <td style={{
                         position: "sticky",
                         left: 0,
-                        zIndex: 5,
+                        zIndex: 30,
                         backgroundColor: "var(--card-bg)",
+                        width: "60px",
+                        minWidth: "60px",
+                        boxSizing: "border-box",
+                        padding: "0 8px",
                         textAlign: "center",
                         fontSize: "11px",
                         fontWeight: "600",
+                        whiteSpace: "nowrap",
                         color: time.endsWith(":00") ? "var(--secondary-text)" : "var(--border-color)",
                         borderRight: "1px solid var(--border-color)",
                         borderBottom: time.endsWith(":30") ? "1px solid var(--border-color)" : "none",
@@ -1261,8 +1317,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                         const isSelected = selectedSlots.some((slot) => slot.key === key);
                         const slotMembers = getSlotAvailabilities(candidate.id, time);
 
-                        const totalParticipants = members.length + guests.length;
-                        const availableCount = slotMembers.length;
+                        const availableCount = new Set(slotMembers.map((member) => member.userid)).size;
 
                         const mySaved = !isSelectMode && slotMembers.some((member) => member.userid === currentUser?.id);
                         const showMySelection = isSelectMode ? isSelected : mySaved;
@@ -1279,13 +1334,13 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                           ? "color-mix(in srgb, var(--secondary-text) 18%, var(--card-bg))"
                           : (availableCount === 0
                             ? "var(--card-bg)"
-                            : getHeatmapColor(availableCount, totalParticipants));
+                            : getHeatmapColor(availableCount));
 
                         const isSegmentStart = showMySelection && !isPrevMySelection;
-                        const isSegmentMiddle = showMySelection && isPrevMySelection && isNextMySelection;
                         const isSegmentEnd = showMySelection && isPrevMySelection && !isNextMySelection;
                         const isSegmentSingle = showMySelection && !isPrevMySelection && !isNextMySelection;
-                        const mySelectionBorderColor = "#7C5CFF";
+                        const mySelectionBorderColor = "#6D4CFF";
+                        const mySelectionBorder = `2px solid ${mySelectionBorderColor}`;
 
                         return (
                           <td
@@ -1306,15 +1361,14 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                             }}
                             style={{
                               backgroundColor: bgColor,
-                              // Seamless block styling
                               position: "relative",
-                              borderTop: showMySelection && (isSegmentStart || isSegmentSingle) ? `4px solid ${mySelectionBorderColor}` : "none",
+                              borderTop: showMySelection && (isSegmentStart || isSegmentSingle) ? mySelectionBorder : "none",
                               borderBottom: showMySelection
-                                ? ((isSegmentEnd || isSegmentSingle) ? `4px solid ${mySelectionBorderColor}` : "none")
+                                ? ((isSegmentEnd || isSegmentSingle) ? mySelectionBorder : "none")
                                 : (time.endsWith(":30") ? "1px solid var(--border-color)" : "1px solid color-mix(in srgb, var(--border-color) 55%, transparent)"),
-                              borderLeft: showMySelection ? `4px solid ${mySelectionBorderColor}` : "none",
-                              borderRight: showMySelection ? `4px solid ${mySelectionBorderColor}` : "1px solid var(--border-color)",
-                              boxShadow: showMySelection ? `0 0 0 1px color-mix(in srgb, ${mySelectionBorderColor} 30%, transparent)` : "none",
+                              borderLeft: showMySelection ? mySelectionBorder : "none",
+                              borderRight: showMySelection ? mySelectionBorder : "1px solid var(--border-color)",
+                              boxShadow: showMySelection ? `0 0 0 1px color-mix(in srgb, ${mySelectionBorderColor} 18%, transparent)` : "none",
 
                               cursor: selectable ? "pointer" : "default",
                               padding: 0,
@@ -1335,7 +1389,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
             {/* 범례 영역 */}
             <div style={{ padding: "12px 16px", backgroundColor: "var(--muted-bg)", display: "flex", gap: "12px", flexWrap: "wrap", borderTop: "1px solid var(--border-color)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <div style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: "var(--card-bg)", border: "3px solid #7C5CFF" }} />
+                <div style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: "var(--card-bg)", border: "2px solid #6D4CFF" }} />
                 <span style={{ fontSize: "11px", color: "var(--secondary-text)", fontWeight: "600" }}>내 선택</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>

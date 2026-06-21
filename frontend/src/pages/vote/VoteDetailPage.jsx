@@ -2727,8 +2727,8 @@ function VoteDetailPage() {
               {isManualLocationVote
                 ? " 중간 장소 확정 또는 주변 장소 등록 "
                 : isMiddlePlaceVote
-                ? " 중간 장소 확정하기 "
-                : " 주변 장소 확정하기 "}
+                ? " 장소 확정하기 "
+                : " 장소 확정하기 "}
             </strong>
             버튼을 눌러야 최종 확정됩니다.
           </p>
@@ -3248,8 +3248,8 @@ function VoteDetailPage() {
                                 }}
                               >
                                 {isMiddleLocationRegistered
-                                  ? "중간 장소 확정됨"
-                                  : "중간 장소 확정"}
+                                  ? "장소 확정됨"
+                                  : "장소 확정"}
                               </button>
                               <button
                                 onClick={() =>
@@ -3272,8 +3272,8 @@ function VoteDetailPage() {
                                 }}
                               >
                                 {isAdditionalLocationRegistered
-                                  ? "추가 장소 등록됨"
-                                  : "추가 장소 등록"}
+                                  ? "장소 등록됨"
+                                  : "장소 등록"}
                               </button>
                             </>
                           ) : vote.locationkind === "additional" ? (
@@ -3296,8 +3296,8 @@ function VoteDetailPage() {
                               }}
                             >
                               {isAdditionalLocationRegistered
-                                ? "추가 장소 등록됨"
-                                : "추가 장소 등록"}
+                                ? "장소 등록됨"
+                                : "장소 등록"}
                             </button>
                           ) : isMiddlePlaceVote ? (
                             <button
@@ -3317,8 +3317,8 @@ function VoteDetailPage() {
                               }}
                             >
                               {isMiddleLocationRegistered
-                                ? "중간 장소 확정됨"
-                                : "중간 장소 확정"}
+                                ? "장소 확정됨"
+                                : "장소 확정"}
                             </button>
                           ) : vote.votetype !== "general" && (
                             <button

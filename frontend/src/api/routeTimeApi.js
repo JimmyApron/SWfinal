@@ -1,6 +1,6 @@
-const API_BASE_URL = (
-  process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api'
-).replace(/\/$/, '')
+import { getApiBaseUrl } from './apiBaseUrl'
+
+const API_BASE_URL = getApiBaseUrl()
 
 export async function getRouteTime({ origin, destination, mode }) {
   const url = `${API_BASE_URL}/route/time`

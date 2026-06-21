@@ -41,6 +41,49 @@ function cacheRoomPopupSetting(roomId, column, value) {
   }
 }
 
+async function copyTextToClipboard(text) {
+  const value = String(text ?? "");
+  if (!value) return false;
+
+  if (navigator.clipboard?.writeText && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch (error) {
+      console.warn("Clipboard API copy failed, trying fallback:", error);
+    }
+  }
+
+  const textArea = document.createElement("textarea");
+  textArea.value = value;
+  textArea.setAttribute("readonly", "");
+  textArea.style.position = "fixed";
+  textArea.style.top = "-9999px";
+  textArea.style.left = "-9999px";
+
+  const selection = document.getSelection();
+  const selectedRange = selection?.rangeCount ? selection.getRangeAt(0) : null;
+  const activeElement = document.activeElement;
+
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } finally {
+    document.body.removeChild(textArea);
+    if (selectedRange && selection) {
+      selection.removeAllRanges();
+      selection.addRange(selectedRange);
+    }
+    activeElement?.focus?.();
+  }
+
+  return copied;
+}
+
 function RoomDetailPage() {
   const navigate = useNavigate();
   const { roomId } = useParams();
@@ -183,10 +226,14 @@ function RoomDetailPage() {
   }, [roomId, currentUser, myEntryId, navigate]);
 
   const handleCopyInviteCode = async () => {
+    const inviteCode = room?.invitecode;
+
     try {
-      await navigator.clipboard.writeText(room.invitecode);
+      const copied = await copyTextToClipboard(inviteCode);
+      if (!copied) throw new Error("Clipboard copy returned false");
       alert("초대코드가 복사되었습니다.");
     } catch (error) {
+      console.warn("초대코드 복사 실패:", error);
       alert("복사 실패");
     }
   };

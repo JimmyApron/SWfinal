@@ -30,10 +30,26 @@ function BottomNav() {
     chat: false,
   });
   const [showGuestModal, setShowGuestModal] = useState(false);
-  const roomMatch = location.pathname.match(/^\/rooms\/([^/]+)$/);
+  const roomMatch = location.pathname.match(
+    /^\/rooms\/(?!create(?:\/|$)|invite(?:\/|$))([^/]+)(?:\/(schedule|location|votes|chat|available-result|vote-create)(?:\/.*)?)?$/
+  );
   const roomId = roomMatch?.[1] ?? null;
   const isRoomPage = Boolean(roomId);
-  const currentRoomTab = new URLSearchParams(location.search).get("tab") || "schedule";
+  const roomSubPage = roomMatch?.[2] ?? null;
+  const tabFromPath =
+    roomSubPage === "location"
+      ? "location"
+      : roomSubPage === "votes" || roomSubPage === "vote-create"
+      ? "vote"
+      : roomSubPage === "chat"
+      ? "chat"
+      : roomSubPage === "schedule" || roomSubPage === "available-result"
+      ? "schedule"
+      : null;
+  const currentRoomTab =
+    tabFromPath ||
+    new URLSearchParams(location.search).get("tab") ||
+    "schedule";
 
   useEffect(() => {
     const loadUserAndCount = async (userParam) => {

@@ -150,7 +150,7 @@ function FriendCalendarPage() {
           const dayConfirmed = key ? (confirmedMap[key] || []) : [];
           const isSun = col === 0;
           const isSat = col === 6;
-          const isSelected = selectedDay === d;
+          const isSelected = d != null && selectedDay === d;
           const textColor = isToday(d) ? "#fff" : isSun ? "#f44" : isSat ? "#7c79ff" : "var(--text-color)";
 
           return (
