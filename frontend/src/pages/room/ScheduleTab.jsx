@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import DatePicker from "react-multi-date-picker";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   getScheduleCandidates,
   getRoomMembers,
@@ -21,6 +21,8 @@ import { getTodayStr } from "../../utils/scheduleUtils";
 
 function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const selectedScheduleId = searchParams.get("scheduleId");
   const [candidates, setCandidates] = useState([]);
   const [members, setMembers] = useState([]);
   const [guests, setGuests] = useState([]);
@@ -58,6 +60,26 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const [showEditCandidateModal, setShowEditCandidateModal] = useState(false); // 추가: 후보지 수정 팝업(중앙) 표시 여부
 
   const timetableScrollRef = useRef(null);
+
+  useEffect(() => {
+    if (!selectedScheduleId || confirmedSchedules.length === 0) return;
+
+    const selectedIndex = confirmedSchedules.findIndex(
+      (schedule) => Number(schedule.id) === Number(selectedScheduleId)
+    );
+    if (selectedIndex === -1) return;
+
+    if (selectedIndex > 0 && !isConfirmedExpanded) {
+      setIsConfirmedExpanded(true);
+      return;
+    }
+
+    window.setTimeout(() => {
+      document
+        .getElementById(`confirmed-schedule-${selectedScheduleId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+  }, [selectedScheduleId, confirmedSchedules, isConfirmedExpanded]);
 
   const memberColors = [
     "#7C5CFF",
@@ -634,17 +656,27 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
             >
               {(isConfirmedExpanded ? confirmedSchedules : confirmedSchedules.slice(0, 1)).map((s) => {
                 const isAbsent = (s.absentees || []).includes(currentUser?.id);
+                const isSelectedSchedule = Number(s.id) === Number(selectedScheduleId);
                 return (
-                  <ConfirmedScheduleCard
+                  <div
                     key={s.id}
-                    schedule={{
-                      ...s,
-                      roomname: roomName,
-                      additionalLocations: additionalLocations.filter((location) => Number(location.scheduleid) === Number(s.id)),
-                      isAbsent,
+                    id={`confirmed-schedule-${s.id}`}
+                    style={{
+                      borderRadius: "12px",
+                      outline: isSelectedSchedule ? "2px solid #7C5CFF" : "none",
+                      outlineOffset: "2px",
                     }}
-                    onClick={() => navigate("/confirmed-schedule", { state: { schedule: { ...s, roomname: roomName } } })}
-                  />
+                  >
+                    <ConfirmedScheduleCard
+                      schedule={{
+                        ...s,
+                        roomname: roomName,
+                        additionalLocations: additionalLocations.filter((location) => Number(location.scheduleid) === Number(s.id)),
+                        isAbsent,
+                      }}
+                      onClick={() => navigate("/confirmed-schedule", { state: { schedule: { ...s, roomname: roomName } } })}
+                    />
+                  </div>
                 );
               })}
             </div>

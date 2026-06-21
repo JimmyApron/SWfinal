@@ -174,10 +174,11 @@ function NotificationListener() {
       const isSettingAllowed = await isRoomNotificationPopupAllowed(nextToast.roomId, nextToast.type);
       const usesRoomSetting = hasRoomPopupSetting(nextToast.roomId, nextToast.type);
 
+      if (!isGlobalPopupEnabled) return;
+      if (isRoomMuted) return;
+
       if (usesRoomSetting) {
         if (!isSettingAllowed) return;
-      } else if (!isGlobalPopupEnabled || isRoomMuted) {
-        return;
       }
 
       displayToast(nextToast.message, nextToast.link);
@@ -253,11 +254,12 @@ function NotificationListener() {
           const isSettingAllowed = await isRoomNotificationPopupAllowed(notif.roomid, notif.type);
           const usesRoomSetting = hasRoomPopupSetting(notif.roomid, notif.type);
 
+          if (!isGlobalPopupEnabled) return false;
+          if (isRoomMuted) return false;
+
           return usesRoomSetting
             ? isSettingAllowed
-            : notif.issilent !== true &&
-              isGlobalPopupEnabled &&
-              !isRoomMuted;
+            : notif.issilent !== true;
         };
 
         const handleIncomingNotification = async (notif) => {

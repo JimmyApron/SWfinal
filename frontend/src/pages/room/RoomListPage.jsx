@@ -36,7 +36,7 @@ function RoomListPage() {
   const [contextMenu, setContextMenu] = useState(null); // { x, y, roomId }
   const [isRoomsExpanded, setIsRoomsExpanded] = useState(false);
 
-  // 알림 끄기 관리 (Local Storage 사용)
+  // 방별 팝업 끄기 관리 (Local Storage 사용)
   const [mutedRooms, setMutedRooms] = useState(() => {
     const saved = localStorage.getItem("muted_rooms");
     return saved ? JSON.parse(saved) : []; // [roomId1, roomId2, ...]
