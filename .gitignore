@@ -4,3 +4,4 @@ backend/.env
 frontend/.env
 .env.local
 .vscode/mcp.json
+backend/scripts/seed.json

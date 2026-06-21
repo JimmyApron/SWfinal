@@ -403,7 +403,7 @@ function RoomDetailPage() {
             : {}),
         }}
       >
-        {tab === "schedule" && <ScheduleTab roomId={roomId} ownerUserId={room.createdby} roomName={room.roomname} />}
+        {tab === "schedule" && <ScheduleTab roomId={roomId} ownerUserId={room.createdby} roomName={room.roomname} />} 
         {tab === "location" && <MapPage roomId={roomId} />}
         {tab === "vote" && <VoteListPage roomid={roomId} />}
         {tab === "chat" && <ChatTab roomId={roomId} />}
