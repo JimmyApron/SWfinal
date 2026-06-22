@@ -82,6 +82,23 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     }, 100);
   }, [selectedScheduleId, confirmedSchedules, isConfirmedExpanded]);
 
+  const handleToggleConfirmedExpanded = () => {
+    if (isConfirmedExpanded) {
+      setIsConfirmedExpanded(false);
+
+      if (selectedScheduleId) {
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete("scheduleId");
+        if (!nextParams.get("tab")) nextParams.set("tab", "schedule");
+        navigate(`/rooms/${roomId}?${nextParams.toString()}`, { replace: true });
+      }
+
+      return;
+    }
+
+    setIsConfirmedExpanded(true);
+  };
+
   const memberColors = [
     "#7C5CFF",
     "#FF8A80",
@@ -744,7 +761,11 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                         additionalLocations: additionalLocations.filter((location) => Number(location.scheduleid) === Number(s.id)),
                         isAbsent,
                       }}
-                      onClick={() => navigate("/confirmed-schedule", { state: { schedule: { ...s, roomname: roomName } } })}
+                      onClick={() =>
+                        navigate(`/rooms/${roomId}/confirmed-schedule`, {
+                          state: { schedule: { ...s, roomname: roomName } },
+                        })
+                      }
                     />
                   </div>
                 );
@@ -752,7 +773,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
             </div>
             {confirmedSchedules.length > 1 && (
               <button
-                onClick={() => setIsConfirmedExpanded(!isConfirmedExpanded)}
+                onClick={handleToggleConfirmedExpanded}
                 style={{
                   width: "100%",
                   padding: "8px",

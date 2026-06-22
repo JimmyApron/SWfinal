@@ -41,7 +41,39 @@ async function getSettingsForReceivers(roomId, targetReceivers, type) {
   try {
     // 방 관련 설정인 경우 (room_members, room_guests)
     if (roomId && ["votenotifenabled", "schedulenotifenabled", "locationnotifenabled", "chatnotifenabled"].includes(settingColumn)) {
-      return targetReceivers.map(receiver => ({ ...receiver, issilent: false }));
+      const receiverIds = targetReceivers
+        .map((receiver) => String(receiver.receiverid))
+        .filter(Boolean);
+
+      const [{ data: members }, { data: guests }] = await Promise.all([
+        supabase
+          .from("room_members")
+          .select(`userid, ${settingColumn}`)
+          .eq("roomid", Number(roomId))
+          .in("userid", receiverIds),
+        supabase
+          .from("room_guests")
+          .select(`id, ${settingColumn}`)
+          .eq("roomid", Number(roomId))
+          .in("id", receiverIds),
+      ]);
+
+      const settingByReceiverId = new Map();
+      (members || []).forEach((member) => {
+        settingByReceiverId.set(String(member.userid), member[settingColumn] !== false);
+      });
+      (guests || []).forEach((guest) => {
+        settingByReceiverId.set(String(guest.id), guest[settingColumn] !== false);
+      });
+
+      return targetReceivers.map((receiver) => {
+        const receiverId = String(receiver.receiverid);
+        const isEnabled = settingByReceiverId.get(receiverId);
+        return {
+          ...receiver,
+          issilent: isEnabled === false,
+        };
+      });
     }
 
     // 방과 무관한 전역 설정인 경우 (예: profiles 테이블 - 현재는 컬럼이 없을 수 있음)

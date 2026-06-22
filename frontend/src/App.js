@@ -38,11 +38,15 @@ import {
   getMyNotifications,
   TAB_TYPE_MAP,
 } from "./api/notificationApi";
+import { getPersonalEvents } from "./api/personalEventApi";
 
 import SettingsPage from "./pages/settings/SettingsPage";
 import SettingEditPage from "./pages/settings/SettingEditPage";
 
 const AUTH_PATHS = ["/", "/login", "/signup", "/guest", "/reset-password"];
+const PERSONAL_REMINDER_POPUP_WINDOW_MS = 60 * 1000;
+const PERSONAL_REMINDER_CHECK_INTERVAL_MS = 30 * 1000;
+const holidayCache = {};
 
 const NOTIFICATION_SETTING_COLUMNS = {
   schedule_confirmed: "schedulenotifenabled",
@@ -60,6 +64,106 @@ const NOTIFICATION_SETTING_COLUMNS = {
   vote_reminder: "votenotifenabled",
   chat_new: "chatnotifenabled",
 };
+
+function pad(value) {
+  return String(value).padStart(2, "0");
+}
+
+function getLocalDateKey(date) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+async function fetchHolidays(year, month) {
+  const cacheKey = `${year}-${month}`;
+  if (holidayCache[cacheKey]) return holidayCache[cacheKey];
+
+  const serviceKey = process.env.REACT_APP_HOLIDAY_API_KEY;
+  const mm = String(month + 1).padStart(2, "0");
+  const url = `https://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo?serviceKey=${serviceKey}&solYear=${year}&solMonth=${mm}&_type=json&numOfRows=20`;
+
+  try {
+    const res = await fetch(url);
+    const json = await res.json();
+    const raw = json?.response?.body?.items?.item;
+
+    if (!raw) {
+      holidayCache[cacheKey] = {};
+      return {};
+    }
+
+    const items = Array.isArray(raw) ? raw : [raw];
+    const result = {};
+
+    items.forEach((item) => {
+      const d = String(item.locdate);
+      const dateStr = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+      const name = item.dateName || "";
+      const isAlternativeHoliday = /대체|임시/.test(name);
+      result[dateStr] = {
+        name,
+        public: item.isHoliday === "Y" && !isAlternativeHoliday,
+        alternative: isAlternativeHoliday,
+      };
+    });
+
+    holidayCache[cacheKey] = result;
+    return result;
+  } catch {
+    holidayCache[cacheKey] = {};
+    return {};
+  }
+}
+
+function getPersonalEventStartAt(event) {
+  if (!event?.date) return null;
+  const time = event.starttime || "00:00";
+  const startAt = new Date(`${event.date}T${time.slice(0, 5)}:00`);
+  return Number.isNaN(startAt.getTime()) ? null : startAt;
+}
+
+function getPersonalEventReminderAt(event) {
+  if (!event?.reminder || event.reminder === "none") return null;
+
+  const reminderMinutes = Number(event.reminder);
+  if (!Number.isFinite(reminderMinutes) || reminderMinutes < 0) return null;
+
+  const startAt = getPersonalEventStartAt(event);
+  if (!startAt) return null;
+
+  return new Date(startAt.getTime() - reminderMinutes * 60 * 1000);
+}
+
+function getPersonalEventReminderKey(event, reminderAt) {
+  return `personal-event:${event.id || `${event.userid || ""}:${event.title}:${event.date}:${event.starttime || ""}`}:${reminderAt.getTime()}`;
+}
+
+function getPersonalEventReminderMessage(event) {
+  const startLabel = event.starttime ? ` ${event.starttime}` : "";
+  return `[개인 일정] ${event.title}${startLabel} 일정이 곧 시작됩니다.`;
+}
+
+async function shouldSkipPersonalReminderDate(reminderAt) {
+  if (localStorage.getItem("notif_skip_enabled") !== "true") return false;
+
+  const skipSunday = localStorage.getItem("notif_skip_sunday") !== "false";
+  const skipSaturday = localStorage.getItem("notif_skip_saturday") !== "false";
+  const skipHoliday = localStorage.getItem("notif_skip_holiday") !== "false";
+  const skipAltHoliday = localStorage.getItem("notif_skip_alt_holiday") !== "false";
+
+  const day = reminderAt.getDay();
+  if (skipSunday && day === 0) return true;
+  if (skipSaturday && day === 6) return true;
+
+  const reminderDateKey = getLocalDateKey(reminderAt);
+  const holidays = await fetchHolidays(reminderAt.getFullYear(), reminderAt.getMonth());
+  const holiday = holidays?.[reminderDateKey];
+
+  if (!holiday) return false;
+  if (skipHoliday && holiday.public) return true;
+  if (skipAltHoliday && holiday.alternative) return true;
+
+  return false;
+}
 
 function getCachedRoomPopupSetting(roomId, settingColumn) {
   if (!roomId || !settingColumn) return null;
@@ -176,6 +280,7 @@ function NotificationListener() {
   const pollIntervalRef = useRef(null);
   const recentToastRef = useRef({ key: "", time: 0 });
   const shownNotificationIdsRef = useRef(new Set());
+  const shownPersonalReminderKeysRef = useRef(new Set());
   const notificationListenerStartedAtRef = useRef(Date.now());
 
   const displayToast = (message, link, options = {}) => {
@@ -292,13 +397,6 @@ function NotificationListener() {
         const isGuestUser = !user?.id && Boolean(localStorage.getItem("guest_id"));
         let myUserId = user?.id || localStorage.getItem("guest_id");
 
-        if (!myUserId) {
-          console.log("🚀 [App.js] currentReceiverId 없음 - 알림 구독 생략");
-          return;
-        }
-
-        console.log("🚀 [App.js] currentReceiverId:", myUserId);
-
         if (channelRef.current) {
           supabase.removeChannel(channelRef.current);
           channelRef.current = null;
@@ -307,6 +405,13 @@ function NotificationListener() {
           clearInterval(pollIntervalRef.current);
           pollIntervalRef.current = null;
         }
+
+        if (!myUserId) {
+          console.log("🚀 [App.js] currentReceiverId 없음 - 알림 구독 생략");
+          return;
+        }
+
+        console.log("🚀 [App.js] currentReceiverId:", myUserId);
         notificationListenerStartedAtRef.current = Date.now();
 
         const shouldShowNotificationToast = async (notif) => {
@@ -405,14 +510,78 @@ function NotificationListener() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
       setupRealtimeNotification();
     });
+    const handleGuestSessionChanged = () => {
+      setupRealtimeNotification();
+    };
 
+    window.addEventListener("guest-session-changed", handleGuestSessionChanged);
     setupRealtimeNotification();
 
     return () => {
       isMounted = false;
       subscription.unsubscribe();
+      window.removeEventListener("guest-session-changed", handleGuestSessionChanged);
       if (channelRef.current) supabase.removeChannel(channelRef.current);
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    let intervalId = null;
+
+    const checkPersonalEventReminders = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!isMounted || !user?.id) return;
+
+        const events = await getPersonalEvents(user.id);
+        if (!isMounted) return;
+
+        const now = Date.now();
+
+        for (const event of events || []) {
+          const reminderAt = getPersonalEventReminderAt(event);
+          if (!reminderAt) continue;
+
+          const reminderTime = reminderAt.getTime();
+          if (reminderTime > now) continue;
+          if (now - reminderTime > PERSONAL_REMINDER_POPUP_WINDOW_MS) continue;
+
+          const reminderKey = getPersonalEventReminderKey(event, reminderAt);
+          if (shownPersonalReminderKeysRef.current.has(reminderKey)) continue;
+
+          shownPersonalReminderKeysRef.current.add(reminderKey);
+
+          if (await shouldSkipPersonalReminderDate(reminderAt)) continue;
+          if (!isMounted) return;
+
+          window.dispatchEvent(new CustomEvent("app-toast", {
+            detail: {
+              id: reminderKey,
+              type: "personal_event_reminder",
+              message: getPersonalEventReminderMessage(event),
+              link: "/calendar",
+            },
+          }));
+        }
+      } catch (error) {
+        console.error("개인 일정 알림 확인 실패:", error);
+      }
+    };
+
+    checkPersonalEventReminders();
+    intervalId = setInterval(checkPersonalEventReminders, PERSONAL_REMINDER_CHECK_INTERVAL_MS);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      shownPersonalReminderKeysRef.current = new Set();
+      checkPersonalEventReminders();
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+      if (intervalId) clearInterval(intervalId);
     };
   }, []);
 
@@ -467,6 +636,7 @@ function App() {
               <Route path="/rooms/:roomid/available-result" element={<AvailableResultPage />} />
               <Route path="/rooms/:roomid/vote-create" element={<VoteCreatePage />} />
               <Route path="/rooms/:roomid/votes/:voteid" element={<VoteDetailPage />} />
+              <Route path="/rooms/:roomid/confirmed-schedule" element={<ConfirmedScheduleDetailPage />} />
               <Route path="/confirmed-schedule" element={<ConfirmedScheduleDetailPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/calendar/friend/:friendId" element={<FriendCalendarPage />} />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FaCalendarAlt, FaMapMarkerAlt, FaBell } from "react-icons/fa";
 import { supabase } from "../../lib/supabaseClient";
 import {
@@ -15,6 +15,7 @@ import {
 import { createRoomNotifications } from "../../api/notificationApi";
 import {
   getRoomMemberLocations,
+  getRoomParticipants,
 } from "../../api/mapApi";
 import { getRouteTime } from "../../api/routeTimeApi";
 import { decodePolyline } from "../../utils/decodePolyline";
@@ -42,7 +43,13 @@ function getTimeUntil(date, starttime) {
 function ConfirmedScheduleDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { roomid: routeRoomId } = useParams();
   const schedule = location.state?.schedule;
+  const detailRoomId = routeRoomId || schedule?.roomid;
+  const roomScheduleReturnPath = detailRoomId
+    ? `/rooms/${detailRoomId}?tab=schedule`
+    : null;
+  const isRoomDetailContext = Boolean(routeRoomId);
 
   const [locationText, setLocationText] = useState(schedule?.location || "");
   const [locationAddress, setLocationAddress] = useState(
@@ -103,6 +110,11 @@ function ConfirmedScheduleDetailPage() {
 
   useEffect(() => {
     if (!schedule) {
+      if (routeRoomId) {
+        navigate(`/rooms/${routeRoomId}?tab=schedule`, { replace: true });
+        return;
+      }
+
       navigate(-1);
       return;
     }
@@ -146,34 +158,31 @@ function ConfirmedScheduleDetailPage() {
         setAbsentees(scheduleData.absentees || []);
       }
 
-      const { data: memberData } = await supabase
-        .from("room_members")
-        .select("userid")
-        .eq("roomid", schedule.roomid);
-
-      const memberIds = (memberData || []).map((m) => m.userid).filter(Boolean);
-      if (memberIds.length === 0) return;
-
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, nickname, profileimageurl")
-        .in("id", memberIds);
-
-      const profileMap = Object.fromEntries(
-        (profiles || []).map((p) => [p.id, p])
-      );
+      const participants = await getRoomParticipants(schedule.roomid);
 
       setAttendees(
-        memberIds.map((uid) => ({
-          userid: uid,
-          nickname: profileMap[uid]?.nickname || uid,
-          profileimageurl: profileMap[uid]?.profileimageurl || null,
-        }))
+        participants.map((participant) => {
+          const isGuest = participant.participantType === "guest";
+          const participantId = isGuest ? participant.guestid : participant.userid;
+          const profile = participant.profiles || {};
+
+          return {
+            participantKey: `${isGuest ? "guest" : "member"}:${participantId}`,
+            participantId,
+            participantType: participant.participantType,
+            userid: participantId,
+            nickname:
+              profile.nickname ||
+              participant.nickname ||
+              (isGuest ? "비회원" : participantId),
+            profileimageurl: profile.profileimageurl || null,
+          };
+        })
       );
     };
 
     fetchData();
-  }, [schedule, navigate]);
+  }, [schedule, navigate, routeRoomId]);
 
   useEffect(() => {
     if (!schedule?.roomid) return;
@@ -214,7 +223,7 @@ function ConfirmedScheduleDetailPage() {
   const isLocationOnly = Boolean(schedule.isLocationOnly);
   const isAbsent = currentUser?.id ? absentees.includes(currentUser.id) : false;
   const attendingCount = attendees.filter(
-    (attendee) => !absentees.includes(attendee.userid)
+    (attendee) => !absentees.includes(attendee.participantId)
   ).length;
 
   const isPastSchedule = (() => {
@@ -232,6 +241,15 @@ function ConfirmedScheduleDetailPage() {
     : `${scheduleTiming.date} ${scheduleTiming.starttime ?? ""} ~${
         scheduleTiming.endtime ? ` ${scheduleTiming.endtime}` : ""
       }`;
+
+  const handleBack = () => {
+    if (isRoomDetailContext && roomScheduleReturnPath) {
+      navigate(roomScheduleReturnPath, { replace: true });
+      return;
+    }
+
+    navigate(-1);
+  };
 
   const handleSaveTiming = async () => {
     if (!timingDraft.date) {
@@ -476,7 +494,7 @@ function ConfirmedScheduleDetailPage() {
       });
 
       alert("일정 확정이 취소되었습니다.");
-      navigate(-1);
+      handleBack();
     } catch (error) {
       alert("취소 실패: " + error.message);
     }
@@ -537,7 +555,7 @@ function ConfirmedScheduleDetailPage() {
           });
 
           alert("참여 인원이 1명만 남아 일정이 자동 취소되었습니다.");
-          navigate(-1);
+          handleBack();
         }
       }
     } catch (error) {
@@ -874,7 +892,7 @@ function ConfirmedScheduleDetailPage() {
           }}
         >
           <button
-            onClick={() => navigate("/home")}
+            onClick={handleBack}
             style={{ border: "none", background: "none", fontSize: "20px" }}
           >
             ←
@@ -1000,7 +1018,7 @@ function ConfirmedScheduleDetailPage() {
         }}
       >
         <button
-          onClick={() => navigate(-1)}
+          onClick={handleBack}
           style={{ border: "none", background: "none", fontSize: "20px", color: "var(--text-color)", flex: "0 0 28px" }}
         >
           ←
@@ -1162,7 +1180,7 @@ function ConfirmedScheduleDetailPage() {
                   👥
                 </div>
                 <span style={{ fontWeight: "700", fontSize: "14px", color: "#1F2933" }}>
-                  참여 멤버 {attendingCount}명
+                  참여 인원 {attendingCount}명
                 </span>
               </div>
               <span
@@ -1181,7 +1199,7 @@ function ConfirmedScheduleDetailPage() {
             {showAttendees &&
               attendees.map((attendee) => (
                 <div
-                  key={attendee.userid}
+                  key={attendee.participantKey}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -1213,9 +1231,12 @@ function ConfirmedScheduleDetailPage() {
                     )}
                   </div>
                   <span style={{ fontSize: "13px", color: "#4B5563" }}>
-                    {attendee.nickname || attendee.userid}
+                    {attendee.nickname || attendee.participantId}
                   </span>
-                  {absentees.includes(attendee.userid) && (
+                  {attendee.participantType === "guest" && (
+                    <span style={{ color: "#7C5CFF", fontSize: "11px" }}>비회원</span>
+                  )}
+                  {absentees.includes(attendee.participantId) && (
                     <span style={{ color: "#EF4444", fontSize: "11px" }}>불참</span>
                   )}
                 </div>

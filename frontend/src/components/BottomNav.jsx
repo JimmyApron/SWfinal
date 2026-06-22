@@ -31,7 +31,7 @@ function BottomNav() {
   });
   const [showGuestModal, setShowGuestModal] = useState(false);
   const roomMatch = location.pathname.match(
-    /^\/rooms\/(?!create(?:\/|$)|invite(?:\/|$))([^/]+)(?:\/(schedule|location|votes|chat|available-result|vote-create)(?:\/.*)?)?$/
+    /^\/rooms\/(?!create(?:\/|$)|invite(?:\/|$))([^/]+)(?:\/(schedule|location|votes|chat|available-result|vote-create|confirmed-schedule)(?:\/.*)?)?$/
   );
   const roomId = roomMatch?.[1] ?? null;
   const isRoomPage = Boolean(roomId);
@@ -43,7 +43,9 @@ function BottomNav() {
       ? "vote"
       : roomSubPage === "chat"
       ? "chat"
-      : roomSubPage === "schedule" || roomSubPage === "available-result"
+      : roomSubPage === "schedule" ||
+        roomSubPage === "available-result" ||
+        roomSubPage === "confirmed-schedule"
       ? "schedule"
       : null;
   const currentRoomTab =
@@ -88,6 +90,7 @@ function BottomNav() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         localStorage.removeItem("guest_id");
+        window.dispatchEvent(new Event("guest-session-changed"));
       }
       loadUserAndCount(session?.user ?? null);
     });

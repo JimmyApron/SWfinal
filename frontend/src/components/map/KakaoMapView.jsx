@@ -465,7 +465,24 @@ function KakaoMapView({
 
   // 내 브라우저 현재 위치 마커
   useEffect(() => {
-    if (!isMapReady || !mapObjectRef.current || !currentLocation) {
+    if (!isMapReady || !mapObjectRef.current) {
+      return
+    }
+
+    if (userMarkerRef.current) {
+      if (userMarkerRef.current.overlay) {
+        userMarkerRef.current.overlay.setMap(null)
+      }
+      if (userMarkerRef.current.anchor) {
+        userMarkerRef.current.anchor.setMap(null)
+      }
+      if (userMarkerRef.current.setMap) {
+        userMarkerRef.current.setMap(null)
+      }
+      userMarkerRef.current = null
+    }
+
+    if (!currentLocation) {
       return
     }
 
@@ -473,36 +490,69 @@ function KakaoMapView({
       return
     }
 
-    const location = new window.kakao.maps.LatLng(
+    const position = new window.kakao.maps.LatLng(
       Number(currentLocation.lat),
       Number(currentLocation.lng)
     )
 
-    if (userMarkerRef.current) {
-      userMarkerRef.current.setMap(null)
-    }
+    const nickname = getMemberNickname(currentLocation)
+    const profileImageUrl = getMemberProfileImageUrl(currentLocation)
+    const isDeparted = isMemberDeparted(currentLocation)
+    const locationLabel =
+      getRegisteredLocationLabel(currentLocation) ||
+      getCoordinateLabel({
+        latitude: currentLocation.lat,
+        longitude: currentLocation.lng,
+      })
 
-    userMarkerRef.current = new window.kakao.maps.Marker({
-      position: location,
+    const anchorMarker = new window.kakao.maps.Marker({
+      position,
       map: mapObjectRef.current,
-      title: '내 위치',
+      title: nickname || '내 위치',
+      image: createInfoAnchorImage('member'),
+    })
+    anchorMarker.setOpacity?.(0)
+
+    const markerContent = createMemberMarkerContent({
+      nickname,
+      profileImageUrl,
+      isGuest: Boolean(currentLocation.guestid),
+      isDeparted,
+      hasRouteError: false,
+    })
+    const overlay = new window.kakao.maps.CustomOverlay({
+      position,
+      content: markerContent,
+      xAnchor: 0.5,
+      yAnchor: 0.33,
+      zIndex: 4,
     })
 
+    overlay.setMap(mapObjectRef.current)
+
     const infoWindow = new window.kakao.maps.InfoWindow({
-      content: `
-        <div style="padding:8px; font-size:13px;">
-          <strong>내 위치</strong>
-        </div>
-      `,
+      content: createMemberInfoContent({
+        nickname,
+        locationLabel,
+        transportMode: currentLocation.transportmode,
+      }),
       zIndex: 100,
     })
 
-    window.kakao.maps.event.addListener(userMarkerRef.current, 'click', () => {
-      toggleInfoWindow(infoWindow, userMarkerRef.current, getMarkerInfoKey('user', currentLocation))
+    markerContent.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      toggleInfoWindow(infoWindow, anchorMarker, getMarkerInfoKey('user', currentLocation))
     })
 
+    window.kakao.maps.event.addListener(anchorMarker, 'click', () => {
+      toggleInfoWindow(infoWindow, anchorMarker, getMarkerInfoKey('user', currentLocation))
+    })
+
+    userMarkerRef.current = { overlay, anchor: anchorMarker, position }
+
     if (!preferredCenter && !selectedPlace && places.length === 0) {
-      mapObjectRef.current.setCenter(location)
+      mapObjectRef.current.setCenter(position)
     }
     mapObjectRef.current.relayout()
   }, [
@@ -753,6 +803,9 @@ function KakaoMapView({
       if (meetingPlaceMarkerRef.current.anchor) {
         meetingPlaceMarkerRef.current.anchor.setMap(null)
       }
+      if (meetingPlaceMarkerRef.current.setMap) {
+        meetingPlaceMarkerRef.current.setMap(null)
+      }
       meetingPlaceMarkerRef.current = null
     }
 
@@ -779,34 +832,15 @@ function KakaoMapView({
       position,
       map: mapObjectRef.current,
       title: normalizedMeetingPlace.name,
-      image: createInfoAnchorImage('meeting'),
-    })
-    anchorMarker.setOpacity?.(0)
-
-    const markerContent = createPlaceMarkerContent({
-      label: normalizedMeetingPlace.name,
-      variant: 'meeting',
-    })
-    const overlay = new window.kakao.maps.CustomOverlay({
-      position,
-      content: markerContent,
-      yAnchor: 1,
+      image: createPlaceMarkerImage('meeting'),
       zIndex: 7,
-    })
-
-    overlay.setMap(mapObjectRef.current)
-
-    markerContent.addEventListener('click', (event) => {
-      event.preventDefault()
-      event.stopPropagation()
-      openPlaceInfoWindow(normalizedMeetingPlace, anchorMarker)
     })
 
     window.kakao.maps.event.addListener(anchorMarker, 'click', () => {
       openPlaceInfoWindow(normalizedMeetingPlace, anchorMarker)
     })
 
-    meetingPlaceMarkerRef.current = { overlay, anchor: anchorMarker, position }
+    meetingPlaceMarkerRef.current = { anchor: anchorMarker, position }
     mapObjectRef.current.relayout()
   }, [confirmedMeetingPlaceViewportKey, isMapReady, openPlaceInfoWindow])
 
@@ -1314,6 +1348,39 @@ function createInfoAnchorImage(variant = 'nearby') {
     new window.kakao.maps.Size(width, height),
     {
       offset: new window.kakao.maps.Point(width / 2, height),
+    }
+  )
+}
+
+function createPlaceMarkerImage(variant = 'nearby') {
+  const isMeeting = variant === 'meeting'
+  const width = isMeeting ? 40 : 34
+  const height = isMeeting ? 50 : 42
+  const color = isMeeting ? '#ff4d57' : '#b9a7ff'
+  const shadowColor = isMeeting ? '#ef4444' : '#7c79ff'
+  const shadowOpacity = isMeeting ? '0.32' : '0.24'
+  const innerRadius = isMeeting ? 7 : 6
+  const dotRadius = isMeeting ? 2.5 : 2
+  const centerX = width / 2
+  const centerY = isMeeting ? 18 : 15
+  const bodyRadius = isMeeting ? 15 : 13
+  const tipY = height - 4
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <filter id="shadow" x="-40%" y="-30%" width="180%" height="180%">
+        <feDropShadow dx="0" dy="6" stdDeviation="4" flood-color="${shadowColor}" flood-opacity="${shadowOpacity}"/>
+      </filter>
+      <path filter="url(#shadow)" d="M ${centerX} ${tipY} C ${centerX - 11} ${centerY + 12}, ${centerX - bodyRadius} ${centerY + 5}, ${centerX - bodyRadius} ${centerY} A ${bodyRadius} ${bodyRadius} 0 1 1 ${centerX + bodyRadius} ${centerY} C ${centerX + bodyRadius} ${centerY + 5}, ${centerX + 11} ${centerY + 12}, ${centerX} ${tipY} Z" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <circle cx="${centerX}" cy="${centerY}" r="${innerRadius}" fill="none" stroke="#fff" stroke-width="2"/>
+      <circle cx="${centerX}" cy="${centerY}" r="${dotRadius}" fill="#fff"/>
+    </svg>
+  `
+
+  return new window.kakao.maps.MarkerImage(
+    `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+    new window.kakao.maps.Size(width, height),
+    {
+      offset: new window.kakao.maps.Point(centerX, tipY),
     }
   )
 }

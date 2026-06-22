@@ -28,6 +28,7 @@ function LoginPage() {
       // 2. 가이드라인 미션 반영: 로컬스토리지에 유저 식별자 굽기
       localStorage.setItem('user_id', loggedInUserId)
       localStorage.removeItem('guest_id')
+      window.dispatchEvent(new Event('guest-session-changed'))
 
       setMessage(`${result.profile?.nickname || '회원'}님 환영합니다! 잠시 후 홈 화면으로 이동합니다.`)
 
@@ -37,7 +38,15 @@ function LoginPage() {
       }, 1000)
     } catch (error) {
       console.error('로그인 오류:', error)
-      setMessage(error.message || '로그인에 실패했습니다. 정보를 확인해주세요.')
+      const isInvalidCredentials =
+        error.message === 'Invalid login credentials' ||
+        error.message?.includes('Invalid login credentials')
+
+      setMessage(
+        isInvalidCredentials
+          ? '비밀번호가 틀렸습니다.'
+          : error.message || '로그인에 실패했습니다. 정보를 확인해주세요.'
+      )
     }
   }
 

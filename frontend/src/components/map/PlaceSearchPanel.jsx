@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { searchNearbyPlaces } from '../../api/kakaoPlacesApi'
 import { attachGoogleRatings } from '../../api/googlePlacesApi'
 import PlaceCategoryTabs from './PlaceCategoryTabs'
@@ -28,6 +28,16 @@ function PlaceSearchPanel({
   const [selectedPlaceIds, setSelectedPlaceIds] = useState([])
   const [message, setMessage] = useState('')
   const [isFilterOpen, setIsFilterOpen] = useState(false)
+
+  useEffect(() => {
+    if (!message) return undefined
+
+    const timeoutId = setTimeout(() => {
+      setMessage('')
+    }, 2400)
+
+    return () => clearTimeout(timeoutId)
+  }, [message])
 
   const handleChangeCategory = (category) => {
     setSelectedCategory(category)
@@ -89,7 +99,7 @@ function PlaceSearchPanel({
       }
 
       if (filteredPlaces.length === 0) {
-        setMessage('조건에 맞는 장소가 없습니다. 거리 반경을 넓히거나 별점/리뷰 조건을 바꿔보세요.')
+        setMessage('맞는 장소를 못 찾았어요. 반경을 넓히거나 필터를 살짝 낮춰보세요.')
       } else {
         setMessage('')
       }
@@ -209,7 +219,11 @@ function PlaceSearchPanel({
         )}
       </div>
 
-      {message && <p>{message}</p>}
+      {message && (
+        <div className="map-toast-message" role="status" aria-live="polite">
+          {message}
+        </div>
+      )}
 
       {places.length > 0 && (
         <div

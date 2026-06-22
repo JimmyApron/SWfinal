@@ -122,13 +122,31 @@ function VoteDetailPage() {
   }, []);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => setCurrentUser(user));
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setCurrentUser(user);
+        return;
+      }
+
+      const guestId = localStorage.getItem("guest_id");
+      if (guestId) {
+        setCurrentUser({
+          id: guestId,
+          type: "guest",
+          nickname: localStorage.getItem("guest_nickname") || "게스트",
+        });
+      }
+    });
   }, []);
 
   useEffect(() => {
     const timerId = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(timerId);
   }, []);
+
+  const isGuestVoteUser =
+    currentUser?.type === "guest" ||
+    (!currentUser?.id && Boolean(localStorage.getItem("guest_id")));
 
   const makeEditablePlaceOptions = (options = []) =>
     options.map((option) => ({
@@ -675,7 +693,11 @@ function VoteDetailPage() {
     }
 
     try {
-      const nickname = currentUser.user_metadata?.nickname || currentUser.email;
+      const nickname =
+        currentUser.nickname ||
+        currentUser.user_metadata?.nickname ||
+        currentUser.email ||
+        "게스트";
 
       await submitVote(Number(voteid), selectedOptions, currentUser.id, nickname);
       await loadVote();
@@ -1036,7 +1058,7 @@ function VoteDetailPage() {
 
       if (goToLocation) {
         navigate(`/rooms/${roomid}?tab=location`, { state: { selectedScheduleId: pendingLocationScheduleId } });
-      } else {
+      } else if (!isGuestVoteUser) {
         navigate("/home");
       }
     } catch (error) {
@@ -1431,19 +1453,31 @@ function VoteDetailPage() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
+    const guestId = user ? null : localStorage.getItem("guest_id");
 
-    if (!user) {
+    if (!user && !guestId) {
       alert("로그인이 필요합니다.");
       return;
     }
 
-    const nickname = user?.user_metadata?.nickname || user?.email || "익명";
+    let senderId = user?.id || guestId;
+    let nickname =
+      user?.user_metadata?.nickname ||
+      user?.email ||
+      localStorage.getItem("guest_nickname") ||
+      "게스트";
+    let profileImageUrl = null;
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("nickname, profileimageurl")
-      .eq("id", user.id)
-      .maybeSingle();
+    if (user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("nickname, profileimageurl")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      nickname = profile?.nickname || nickname;
+      profileImageUrl = profile?.profileimageurl || null;
+    }
 
     const meta = JSON.stringify({
       __type: "vote",
@@ -1458,9 +1492,9 @@ function VoteDetailPage() {
     const { error } = await supabase.from("room_messages").insert([
       {
         roomid: Number(roomid),
-        userid: user.id,
-        nickname: profile?.nickname || nickname,
-        profileimageurl: profile?.profileimageurl || null,
+        userid: senderId,
+        nickname,
+        profileimageurl: profileImageUrl,
         content: meta,
       },
     ]);
@@ -1688,7 +1722,10 @@ function VoteDetailPage() {
             </p>
             <div style={{ display: "flex", gap: "8px" }}>
               <button
-                onClick={() => { setShowAfterLinkLocationModal(false); navigate("/home"); }}
+                onClick={() => {
+                  setShowAfterLinkLocationModal(false);
+                  if (!isGuestVoteUser) navigate("/home");
+                }}
                 style={{ flex: 1, padding: "12px", backgroundColor: "var(--card-bg)", color: "var(--text-color)", border: "1px solid var(--border-color)", borderRadius: "10px", fontSize: "15px", cursor: "pointer" }}
               >
                 나중에 등록하기
@@ -1738,7 +1775,10 @@ function VoteDetailPage() {
             </p>
             <div style={{ display: "flex", gap: "8px" }}>
               <button
-                onClick={() => { setShowAfterUpdateLocationModal(false); navigate("/home"); }}
+                onClick={() => {
+                  setShowAfterUpdateLocationModal(false);
+                  if (!isGuestVoteUser) navigate("/home");
+                }}
                 style={{ flex: 1, padding: "12px", backgroundColor: "var(--card-bg)", color: "var(--text-color)", border: "1px solid var(--border-color)", borderRadius: "10px", fontSize: "15px", cursor: "pointer" }}
               >
                 나중에 정하기
@@ -2212,7 +2252,7 @@ function VoteDetailPage() {
                 type="button"
                 onClick={() => {
                   setShowScheduleVoteLocationModal(false);
-                  navigate("/home");
+                  if (!isGuestVoteUser) navigate("/home");
                 }}
                 style={{
                   flex: 1,

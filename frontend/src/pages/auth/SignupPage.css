@@ -133,6 +133,30 @@
   color: #6b7280;
 }
 
+.signup-field-message {
+  margin: 7px 4px 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.signup-field-message.message-success {
+  background: transparent;
+  color: #059669;
+}
+
+.signup-field-message.message-error {
+  background: transparent;
+  color: #dc2626;
+}
+
+.signup-field-message.message-info {
+  background: transparent;
+  color: #6d28d9;
+}
+
 .signup-submit-button {
   width: 100%;
   height: 56px;
@@ -181,13 +205,21 @@
 }
 
 .signup-login-link {
-  padding: 0;
+  padding: 2px 4px;
   border: 0;
+  border-radius: 6px;
   background: transparent;
   color: #7547ef;
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+}
+
+.signup-login-link:hover,
+.signup-login-link:focus-visible {
+  color: #5b21d6;
+  background: #f5f3ff;
+  outline: none;
 }
 
 .message-area {

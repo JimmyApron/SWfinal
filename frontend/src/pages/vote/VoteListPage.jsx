@@ -46,7 +46,19 @@ function VoteListPage({ roomid }) {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
-      setCurrentUser(user);
+      if (user) {
+        setCurrentUser(user);
+        return;
+      }
+
+      const guestId = localStorage.getItem("guest_id");
+      if (guestId) {
+        setCurrentUser({
+          id: guestId,
+          type: "guest",
+          nickname: localStorage.getItem("guest_nickname") || "게스트",
+        });
+      }
     });
   }, []);
 

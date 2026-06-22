@@ -228,6 +228,7 @@ function GuestLoginPage() {
       localStorage.setItem('guest_id', guestData.id)
       localStorage.setItem('current_room_code', trimmedInviteCode)
       localStorage.setItem('guest_nickname', trimmedNickname)
+      window.dispatchEvent(new Event('guest-session-changed'))
 
       const targetRoomId = guestData.roomid || roomRealId
 

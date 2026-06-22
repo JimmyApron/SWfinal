@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { FaKeyboard, FaLocationArrow, FaUserFriends } from 'react-icons/fa'
 
@@ -46,7 +46,7 @@ const FRIEND_SHEET_HIDDEN_SNAP_DISTANCE = 18
 const SHEET_EXPANDED_SNAP_DISTANCE = 36
 const SHEET_COLLAPSED_SNAP_DISTANCE = 24
 const SHEET_HIDDEN_SNAP_DISTANCE = 18
-const SHEET_HIDDEN_VISIBLE_HEIGHT = 54
+const SHEET_HIDDEN_VISIBLE_HEIGHT = 64
 
 function MapPage({ roomId }) {
   const navigate = useNavigate()
@@ -408,10 +408,15 @@ function MapPage({ roomId }) {
     return {
       nickname:
         myMember?.profiles?.nickname ||
+        myMember?.room_guests?.nickname ||
         myMember?.nickname ||
         localStorage.getItem('guest_nickname') ||
         '익명',
-      profileimageurl: myMember?.profiles?.profileimageurl || null,
+      profileimageurl:
+        myMember?.profiles?.profileimageurl ||
+        myMember?.room_guests?.profileimageurl ||
+        myMember?.profileimageurl ||
+        null,
     }
   }
 
@@ -668,6 +673,11 @@ function MapPage({ roomId }) {
 
   const handleSelectTransportMode = async (transportMode) => {
     if (!transportModePrompt?.location) return
+    if (transportModePrompt.isEdit && isDeparted) {
+      setTransportModePrompt(null)
+      setMessage('출발 중에는 이동수단을 수정할 수 없습니다.')
+      return
+    }
 
     try {
       await saveCurrentUserLocation(transportModePrompt.location, {
@@ -698,6 +708,10 @@ function MapPage({ roomId }) {
 
   const handleEditTransportMode = () => {
     if (!myLocationRecord) return
+    if (isDeparted) {
+      setMessage('출발 중에는 이동수단을 수정할 수 없습니다.')
+      return
+    }
 
     setTransportModePrompt({
       isEdit: true,
@@ -1497,7 +1511,7 @@ function MapPage({ roomId }) {
   const handleOpenCreatedSchedule = () => {
     if (!createdLocationOnlySchedule) return
 
-    navigate('/confirmed-schedule', {
+    navigate(`/rooms/${currentRoomId}/confirmed-schedule`, {
       state: {
         schedule: {
           ...createdLocationOnlySchedule,
@@ -1668,8 +1682,39 @@ function MapPage({ roomId }) {
   }
 
   const isFriendPanelOpen = activeMapPanel === 'friends'
-  const mapCurrentLocation = isFriendPanelOpen ? null : currentLocation
-  const mapMemberLocations = isFriendPanelOpen ? registeredMemberLocations : []
+  const mapCurrentLocation = useMemo(() => {
+    if (isFriendPanelOpen) return null
+
+    const myMember = members.find((member) => {
+      if (currentUserId) return member.userid === currentUserId
+      if (currentGuestId) return member.guestid === currentGuestId
+      return false
+    })
+    const profile = {
+      nickname:
+        '내 위치',
+      profileimageurl:
+        myMember?.profiles?.profileimageurl ||
+        myMember?.room_guests?.profileimageurl ||
+        myMember?.profileimageurl ||
+        null,
+    }
+
+    return getProfileCurrentLocation({
+      currentLocation,
+      myLocationRecord,
+      profile,
+      currentUserId,
+      currentGuestId,
+    })
+  }, [currentGuestId, currentLocation, currentUserId, isFriendPanelOpen, members, myLocationRecord])
+  const mapMemberLocations = isFriendPanelOpen
+    ? registeredMemberLocations.map((location) =>
+        isMyLocationRecord(location, { currentUserId, currentGuestId })
+          ? getDisplayMyLocationRecord(location)
+          : location
+      )
+    : []
   const mapMemberRoutePaths = isFriendPanelOpen ? memberRoutePaths : []
   const mapMemberRouteResults = isFriendPanelOpen ? memberRouteResults : []
   const mapMemberLocationLabels = isFriendPanelOpen ? memberLocationLabels : {}
@@ -1776,7 +1821,7 @@ function MapPage({ roomId }) {
         FRIEND_SHEET_MIN_TOP,
         containerRect.height - FRIEND_SHEET_BOTTOM_VISIBLE_HEIGHT
       ),
-      hiddenTop: Math.max(FRIEND_SHEET_MIN_TOP, containerRect.height - 54),
+      hiddenTop: Math.max(FRIEND_SHEET_MIN_TOP, containerRect.height - SHEET_HIDDEN_VISIBLE_HEIGHT),
     }
   }
 
@@ -1820,7 +1865,8 @@ function MapPage({ roomId }) {
 
   const handleSheetPointerDown = (event) => {
     if (event.button !== undefined && event.button !== 0) return
-    if (isInteractiveSheetTarget(event.target)) return
+    const isHandleTarget = Boolean(event.target.closest?.('.map-sheet-handle'))
+    if (!isHandleTarget && isInteractiveSheetTarget(event.target)) return
 
     const sheetRect = event.currentTarget.getBoundingClientRect()
     const dragZoneHeight = sheetSnap === 'expanded' ? 140 : 170
@@ -2532,7 +2578,6 @@ function MapPage({ roomId }) {
       {showLocationRegisterModal && (
         <div className="transport-mode-overlay">
           <div className="location-register-dialog">
-            <div className="map-sheet-handle" />
             <h3>내 위치 등록</h3>
             <p>위치를 등록할 방법을 선택해주세요.</p>
 
@@ -2835,8 +2880,13 @@ function MapPage({ roomId }) {
                       <span>{getLocationStatusLabel(myLocationRecord)}</span>
                     </div>
                     {myLocationRecord?.transportmode && (
-                      <button type="button" onClick={handleEditTransportMode}>
-                        교통수단 수정
+                      <button
+                        type="button"
+                        onClick={handleEditTransportMode}
+                        disabled={isDeparted}
+                        title={isDeparted ? '출발 중에는 이동수단을 수정할 수 없습니다.' : undefined}
+                      >
+                        이동수단 수정
                       </button>
                     )}
                   </div>
@@ -3082,6 +3132,76 @@ function getDefaultMapCenter({ middlePlace, myLocationRecord }) {
   return {
     lat: 35.1796,
     lng: 129.0756,
+  }
+}
+
+function getProfileCurrentLocation({
+  currentLocation,
+  myLocationRecord,
+  profile,
+  currentUserId,
+  currentGuestId,
+}) {
+  const baseLocation = isValidMapPoint(currentLocation?.lat, currentLocation?.lng)
+    ? currentLocation
+    : isValidMapPoint(myLocationRecord?.latitude, myLocationRecord?.longitude)
+      ? {
+          lat: Number(myLocationRecord.latitude),
+          lng: Number(myLocationRecord.longitude),
+          accuracy: myLocationRecord.accuracy ?? null,
+        }
+      : null
+
+  if (!baseLocation) return null
+
+  return {
+    ...myLocationRecord,
+    ...baseLocation,
+    latitude: baseLocation.lat,
+    longitude: baseLocation.lng,
+    profiles: {
+      ...(myLocationRecord?.profiles || {}),
+      nickname: profile?.nickname || '내 위치',
+    },
+    room_guests: {
+      ...(myLocationRecord?.room_guests || {}),
+      nickname: profile?.nickname || '내 위치',
+    },
+    userid: myLocationRecord?.userid || currentUserId || null,
+    guestid: myLocationRecord?.guestid || currentGuestId || null,
+    nickname:
+      profile?.nickname ||
+      myLocationRecord?.profiles?.nickname ||
+      myLocationRecord?.room_guests?.nickname ||
+      myLocationRecord?.nickname ||
+      '내 위치',
+    profileimageurl:
+      profile?.profileimageurl ||
+      myLocationRecord?.profiles?.profileimageurl ||
+      myLocationRecord?.room_guests?.profileimageurl ||
+      myLocationRecord?.profileimageurl ||
+      null,
+  }
+}
+
+function isMyLocationRecord(location, { currentUserId, currentGuestId }) {
+  if (currentUserId && location?.userid === currentUserId) return true
+  if (currentGuestId && location?.guestid === currentGuestId) return true
+  return false
+}
+
+function getDisplayMyLocationRecord(location) {
+  return {
+    ...location,
+    profiles: {
+      ...(location?.profiles || {}),
+      nickname: '내 위치',
+    },
+    room_guests: {
+      ...(location?.room_guests || {}),
+      nickname: '내 위치',
+    },
+    nickname: '내 위치',
   }
 }
 

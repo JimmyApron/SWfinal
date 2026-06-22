@@ -313,6 +313,10 @@ function RoomDetailPage() {
     if (!window.confirm("정말 방을 나가시겠습니까?")) return;
     isLeavingRef.current = true;
     setIsLeaving(true);
+    const isGuestLeaving =
+      currentUser?.type === "guest" ||
+      (!currentUser?.id && Boolean(localStorage.getItem("guest_id")));
+
     if (String(room?.createdby) === String(currentUser?.id)) {
       const others = members.filter(m => String(m.userid) !== String(currentUser.id)).sort((a, b) => new Date(a.joinedat) - new Date(b.joinedat));
       if (others.length > 0) await transferRoomOwnership(roomId, others[0].userid);
@@ -320,6 +324,15 @@ function RoomDetailPage() {
     const table = currentUser.type === "member" ? "room_members" : "room_guests";
     const filter = currentUser.type === "member" ? { roomid: Number(roomId), userid: currentUser.id } : { roomid: Number(roomId), id: currentUser.id };
     await supabase.from(table).delete().match(filter);
+    if (isGuestLeaving) {
+      localStorage.removeItem("guest_id");
+      localStorage.removeItem("current_room_code");
+      localStorage.removeItem("guest_nickname");
+      window.dispatchEvent(new Event("guest-session-changed"));
+      navigate("/", { replace: true });
+      return;
+    }
+
     navigate("/home");
   };
 
@@ -409,6 +422,16 @@ function RoomDetailPage() {
   });
   const isLocationTab = tab === "location";
   const isFixedHeightTab = isLocationTab || tab === "chat";
+  const isGuestRoomUser =
+    currentUser?.type === "guest" ||
+    (!currentUser?.id && Boolean(localStorage.getItem("guest_id")));
+  const headerIconSlotStyle = {
+    width: "32px",
+    height: "32px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
 
   return (
     <div
@@ -425,9 +448,23 @@ function RoomDetailPage() {
       }}
     >
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", backgroundColor: "#fff", position: "sticky", top: 0, zIndex: 100, borderBottom: "1px solid #E5E7EB" }}>
-        <button onClick={() => navigate("/home")} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>←</button>
+        {isGuestRoomUser ? (
+          <span aria-hidden="true" style={headerIconSlotStyle} />
+        ) : (
+          <button
+            onClick={() => navigate("/home")}
+            style={{ ...headerIconSlotStyle, background: "none", border: "none", fontSize: "20px", cursor: "pointer", padding: 0 }}
+          >
+            ←
+          </button>
+        )}
         <span style={{ fontWeight: "700", fontSize: "17px" }}>{room.roomname}</span>
-        <button onClick={() => setIsSidebarOpen(true)} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>⚙</button>
+        <button
+          onClick={() => setIsSidebarOpen(true)}
+          style={{ ...headerIconSlotStyle, background: "none", border: "none", fontSize: "20px", cursor: "pointer", padding: 0 }}
+        >
+          ⚙
+        </button>
       </header>
       <div
         className={
