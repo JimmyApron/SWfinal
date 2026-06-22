@@ -1,3 +1,25 @@
+const GEOLOCATION_ERROR_MESSAGES = {
+  1: '위치 권한이 거부되었습니다.',
+  2: '현재 위치를 확인할 수 없습니다.',
+  3: '위치 확인 시간이 초과되었습니다.',
+}
+
+function normalizeGeolocationError(error) {
+  if (error instanceof Error) {
+    return error
+  }
+
+  const normalizedError = new Error(
+    GEOLOCATION_ERROR_MESSAGES[error?.code] || '현재 위치를 가져오지 못했습니다.'
+  )
+
+  normalizedError.name = error?.name || 'GeolocationError'
+  normalizedError.code = error?.code
+  normalizedError.originalError = error
+
+  return normalizedError
+}
+
 export function getCurrentPosition() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
@@ -14,7 +36,7 @@ export function getCurrentPosition() {
         })
       },
       (error) => {
-        reject(error)
+        reject(normalizeGeolocationError(error))
       },
       {
         enableHighAccuracy: true,
@@ -40,7 +62,7 @@ export function startWatchingPosition(onSuccess, onError) {
       })
     },
     (error) => {
-      onError(error)
+      onError(normalizeGeolocationError(error))
     },
     {
       enableHighAccuracy: true,

@@ -476,6 +476,16 @@ function MapPage({ roomId }) {
     })
   }
 
+  const saveLocationStatusSafely = async (location, statusFields = {}, logLabel) => {
+    try {
+      await saveCurrentUserLocation(location, statusFields)
+      return true
+    } catch (error) {
+      console.warn(logLabel, error)
+      return false
+    }
+  }
+
   const sendMapShareToChat = async ({ shareType, place }) => {
     if (!currentRoomId) {
       setMessage('방 정보를 찾을 수 없어 채팅에 공유할 수 없습니다.')
@@ -753,11 +763,15 @@ function MapPage({ roomId }) {
       console.error('출발 후 위치 자동 갱신 실패:', error)
       setLocationUpdateError(nextMessage)
 
-      await saveCurrentUserLocation(null, {
-        isDeparted: true,
-        locationStatus: nextStatus,
-        locationError: nextMessage,
-      })
+      await saveLocationStatusSafely(
+        getSavedLocationSnapshot(),
+        {
+          isDeparted: true,
+          locationStatus: nextStatus,
+          locationError: nextMessage,
+        },
+        '출발 후 위치 자동 갱신 실패 상태 저장 오류:'
+      )
 
       await loadMemberLocations()
     }
@@ -912,11 +926,15 @@ function MapPage({ roomId }) {
       setLocationUpdateError(nextMessage)
       setMessage(nextMessage)
 
-      await saveCurrentUserLocation(null, {
-        isDeparted: false,
-        locationStatus: nextStatus,
-        locationError: nextMessage,
-      })
+      await saveLocationStatusSafely(
+        getSavedLocationSnapshot(),
+        {
+          isDeparted: false,
+          locationStatus: nextStatus,
+          locationError: nextMessage,
+        },
+        '출발 실패 상태 저장 오류:'
+      )
 
       await loadMemberLocations()
     }
