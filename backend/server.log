@@ -1,0 +1,8 @@
+
+> backend@1.0.0 start
+> node server.js
+
+[1G[0K◇ injected env (4) from .env [2m// tip: ⌁ auth for agents [www.vestauth.com][0m
+◇ injected env (0) from .env [2m// tip: ⌁ auth for agents [www.vestauth.com][0m
+🚀 [백엔드] 투표 감시 프로세스 활성화됨 (1분 간격)
+서버 실행 완료: http://localhost:5000

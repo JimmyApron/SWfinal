@@ -1,0 +1,23 @@
+{
+  "latestRoom": true,
+  "duration": 0.5,
+  "participants": [
+    {
+      "userid": "c78c605e-31f9-49d2-92db-6cde4acb89f6",
+      "startLat": 35.1631,
+      "startLng": 129.1609
+    },
+    {
+      "userid": "63442bdd-8c1f-4ed1-8a0b-d74e9aee806d",
+      "startLat": 35.0487,
+      "startLng": 128.9654
+    },
+    {
+      "userid": "7417eeb4-51e7-4dd1-aff0-e9511908997f",
+      "startLat": 35.2056,
+      "startLng": 129.0785
+    }
+  ],
+  "room": 51,
+  "schedule": 160
+}
