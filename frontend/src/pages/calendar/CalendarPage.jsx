@@ -985,7 +985,7 @@ function CalendarPage() {
           const dayTodos = key ? todoMap[key] || [] : [];
           const isSun = col === 0;
           const isSat = col === 6;
-          const isSelected = selectedDay === d;
+          const isSelected = d != null && selectedDay === d;
 
           const textColor = isToday(d)
             ? "#fff"
@@ -1006,7 +1006,9 @@ function CalendarPage() {
                 flexDirection: "column",
                 alignItems: "center",
                 cursor: d ? "pointer" : "default",
-                backgroundColor: isSelected ? "#f0f0ff" : "transparent",
+                backgroundColor: isSelected
+                  ? "color-mix(in srgb, var(--accent-color) 18%, var(--card-bg))"
+                  : "transparent",
                 borderRadius: "8px",
               }}
             >
@@ -1116,7 +1118,8 @@ function CalendarPage() {
           style={{
             margin: "12px 16px",
             padding: "14px",
-            backgroundColor: "#f9f9ff",
+            backgroundColor: "var(--card-bg)",
+            border: "1px solid var(--border-color)",
             borderRadius: "12px",
           }}
         >
@@ -1125,7 +1128,7 @@ function CalendarPage() {
               margin: "0 0 8px",
               fontWeight: "bold",
               fontSize: "14px",
-              color: "#555",
+              color: "var(--text-color)",
             }}
           >
             {month + 1}월 {selectedDay}일
@@ -1158,7 +1161,7 @@ function CalendarPage() {
                   padding: "8px 10px",
                   fontSize: "13px",
                   color: "#7c79ff",
-                  backgroundColor: "#f0f0ff",
+                  backgroundColor: "color-mix(in srgb, var(--accent-color) 18%, var(--card-bg))",
                   borderRadius: "8px",
                   cursor: "pointer",
                 }}
@@ -1173,7 +1176,7 @@ function CalendarPage() {
                 </div>
                 {[s.roomname, s.location, s.memberCount > 0 ? `${attendees}명 참여` : null]
                   .filter(Boolean).length > 0 && (
-                  <div style={{ fontSize: "12px", color: "#888", marginTop: "3px" }}>
+                  <div style={{ fontSize: "12px", color: "var(--secondary-text)", marginTop: "3px" }}>
                     {[s.roomname, s.location, s.memberCount > 0 ? `${attendees}명 참여` : null]
                       .filter(Boolean)
                       .join(" · ")}
@@ -1320,7 +1323,7 @@ function CalendarPage() {
               zIndex: 101,
             }}
           >
-            <span style={{ fontSize: "13px", color: "#555", backgroundColor: "#fff", padding: "3px 8px", borderRadius: "10px", boxShadow: "0 2px 6px rgba(0,0,0,0.1)" }}>일정</span>
+            <span style={{ fontSize: "13px", color: "var(--text-color)", backgroundColor: "var(--card-bg)", padding: "3px 8px", borderRadius: "10px", boxShadow: "0 2px 6px rgba(0,0,0,0.1)" }}>일정</span>
             <button
               onClick={() => {
                 setShowFabMenu(false);
@@ -1356,7 +1359,7 @@ function CalendarPage() {
               zIndex: 101,
             }}
           >
-            <span style={{ fontSize: "13px", color: "#555", backgroundColor: "#fff", padding: "3px 8px", borderRadius: "10px", boxShadow: "0 2px 6px rgba(0,0,0,0.1)" }}>할일</span>
+            <span style={{ fontSize: "13px", color: "var(--text-color)", backgroundColor: "var(--card-bg)", padding: "3px 8px", borderRadius: "10px", boxShadow: "0 2px 6px rgba(0,0,0,0.1)" }}>할일</span>
             <button
               onClick={() => {
                 setShowFabMenu(false);
@@ -1431,7 +1434,8 @@ function CalendarPage() {
         >
           <div
             style={{
-              backgroundColor: "#fff",
+              backgroundColor: "var(--card-bg)",
+              color: "var(--text-color)",
               borderRadius: "16px",
               padding: "24px",
               width: "300px",
@@ -1497,9 +1501,9 @@ function CalendarPage() {
                       borderRadius: "10px",
                       fontSize: "14px",
                       cursor: "pointer",
-                      border: selected ? "2px solid #7c79ff" : "1px solid #eee",
-                      backgroundColor: selected ? "#f0f0ff" : "#fff",
-                      color: selected ? "#7c79ff" : "#333",
+                      border: selected ? "2px solid #7c79ff" : "1px solid var(--border-color)",
+                      backgroundColor: selected ? "color-mix(in srgb, var(--accent-color) 18%, var(--card-bg))" : "var(--card-bg)",
+                      color: selected ? "#7c79ff" : "var(--text-color)",
                       fontWeight: selected ? "bold" : "normal",
                     }}
                   >
@@ -1517,7 +1521,8 @@ function CalendarPage() {
                 padding: "12px",
                 border: "none",
                 borderRadius: "10px",
-                backgroundColor: "#f5f5f5",
+                backgroundColor: "var(--btn-bg)",
+                color: "var(--btn-text)",
                 fontSize: "15px",
                 cursor: "pointer",
               }}
@@ -1623,7 +1628,7 @@ function CalendarPage() {
                           width: "32px",
                           height: "32px",
                           borderRadius: "50%",
-                          backgroundColor: "#fff3e0",
+                          backgroundColor: "color-mix(in srgb, var(--accent-color) 14%, var(--card-bg))",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -1918,7 +1923,7 @@ function CalendarPage() {
                         width: "20px",
                         height: "20px",
                         borderRadius: "50%",
-                        backgroundColor: "white",
+                        backgroundColor: "var(--toggle-thumb-bg, var(--text-color))",
                         position: "absolute",
                         top: "2px",
                         left: googleAutoSync ? "22px" : "2px",
@@ -2100,7 +2105,8 @@ function CalendarPage() {
               bottom: 0,
               left: 0,
               right: 0,
-              backgroundColor: "#fff",
+              backgroundColor: "var(--card-bg)",
+              color: "var(--text-color)",
               borderRadius: "20px 20px 0 0",
               padding: "24px 20px 88px",
               zIndex: 201,
@@ -2128,7 +2134,7 @@ function CalendarPage() {
                 width: "100%",
                 padding: "12px",
                 fontSize: "15px",
-                border: "1px solid #ddd",
+                border: "1px solid var(--border-color)",
                 borderRadius: "10px",
                 boxSizing: "border-box",
                 marginBottom: "12px",
@@ -2138,7 +2144,7 @@ function CalendarPage() {
 
             {/* 마감일/시간 */}
             <div style={{ marginBottom: "10px" }}>
-              <span style={{ fontSize: "13px", fontWeight: "600", color: "#555", display: "block", marginBottom: "8px" }}>마감</span>
+              <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--secondary-text)", display: "block", marginBottom: "8px" }}>마감</span>
               <div style={{ display: "flex", gap: "8px" }}>
                 <input
                   type="date"
@@ -2148,7 +2154,7 @@ function CalendarPage() {
                     flex: 1,
                     padding: "9px 10px",
                     fontSize: "14px",
-                    border: "1px solid #ddd",
+                    border: "1px solid var(--border-color)",
                     borderRadius: "8px",
                     outline: "none",
                   }}
@@ -2161,7 +2167,7 @@ function CalendarPage() {
                     flex: 1,
                     padding: "9px 10px",
                     fontSize: "14px",
-                    border: "1px solid #ddd",
+                    border: "1px solid var(--border-color)",
                     borderRadius: "8px",
                     outline: "none",
                   }}
@@ -2171,7 +2177,7 @@ function CalendarPage() {
 
             {/* 알림 */}
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
-              <span style={{ fontSize: "13px", fontWeight: "600", color: "#555", whiteSpace: "nowrap" }}>알림</span>
+              <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--secondary-text)", whiteSpace: "nowrap" }}>알림</span>
               <select
                 value={todoReminder}
                 onChange={(e) => setTodoReminder(e.target.value)}
@@ -2179,10 +2185,11 @@ function CalendarPage() {
                   flex: 1,
                   padding: "9px 10px",
                   fontSize: "14px",
-                  border: "1px solid #ddd",
+                  border: "1px solid var(--border-color)",
                   borderRadius: "8px",
                   outline: "none",
-                  backgroundColor: "#fff",
+                  backgroundColor: "var(--input-bg)",
+                  color: "var(--text-color)",
                 }}
               >
                 <option value="none">알림 없음</option>
@@ -2229,7 +2236,8 @@ function CalendarPage() {
               bottom: 0,
               left: 0,
               right: 0,
-              backgroundColor: "#fff",
+              backgroundColor: "var(--card-bg)",
+              color: "var(--text-color)",
               borderRadius: "20px 20px 0 0",
               padding: "24px 20px 88px",
               zIndex: 301,
@@ -2246,20 +2254,20 @@ function CalendarPage() {
               value={editTodoTitle}
               onChange={(e) => setEditTodoTitle(e.target.value)}
               autoFocus
-              style={{ width: "100%", padding: "12px", fontSize: "15px", border: "1px solid #ddd", borderRadius: "10px", boxSizing: "border-box", marginBottom: "12px", outline: "none" }}
+              style={{ width: "100%", padding: "12px", fontSize: "15px", border: "1px solid var(--border-color)", borderRadius: "10px", boxSizing: "border-box", marginBottom: "12px", outline: "none", backgroundColor: "var(--input-bg)", color: "var(--text-color)" }}
             />
 
             <div style={{ marginBottom: "10px" }}>
-              <span style={{ fontSize: "13px", fontWeight: "600", color: "#555", display: "block", marginBottom: "8px" }}>마감</span>
+              <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--secondary-text)", display: "block", marginBottom: "8px" }}>마감</span>
               <div style={{ display: "flex", gap: "8px" }}>
-                <input type="date" value={editTodoDueDate} onChange={(e) => setEditTodoDueDate(e.target.value)} style={{ flex: 1, padding: "9px 10px", fontSize: "14px", border: "1px solid #ddd", borderRadius: "8px", outline: "none" }} />
-                <input type="time" value={editTodoDueTime} onChange={(e) => setEditTodoDueTime(e.target.value)} style={{ flex: 1, padding: "9px 10px", fontSize: "14px", border: "1px solid #ddd", borderRadius: "8px", outline: "none" }} />
+                <input type="date" value={editTodoDueDate} onChange={(e) => setEditTodoDueDate(e.target.value)} style={{ flex: 1, padding: "9px 10px", fontSize: "14px", border: "1px solid var(--border-color)", borderRadius: "8px", outline: "none", backgroundColor: "var(--input-bg)", color: "var(--text-color)" }} />
+                <input type="time" value={editTodoDueTime} onChange={(e) => setEditTodoDueTime(e.target.value)} style={{ flex: 1, padding: "9px 10px", fontSize: "14px", border: "1px solid var(--border-color)", borderRadius: "8px", outline: "none", backgroundColor: "var(--input-bg)", color: "var(--text-color)" }} />
               </div>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
-              <span style={{ fontSize: "13px", fontWeight: "600", color: "#555", whiteSpace: "nowrap" }}>알림</span>
-              <select value={editTodoReminder} onChange={(e) => setEditTodoReminder(e.target.value)} style={{ flex: 1, padding: "9px 10px", fontSize: "14px", border: "1px solid #ddd", borderRadius: "8px", outline: "none", backgroundColor: "#fff" }}>
+              <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--secondary-text)", whiteSpace: "nowrap" }}>알림</span>
+              <select value={editTodoReminder} onChange={(e) => setEditTodoReminder(e.target.value)} style={{ flex: 1, padding: "9px 10px", fontSize: "14px", border: "1px solid var(--border-color)", borderRadius: "8px", outline: "none", backgroundColor: "var(--input-bg)", color: "var(--text-color)" }}>
                 <option value="none">알림 없음</option>
                 <option value="0">마감 정시</option>
                 <option value="10">10분 전</option>
@@ -2271,7 +2279,7 @@ function CalendarPage() {
             <div style={{ display: "flex", gap: "8px" }}>
               <button
                 onClick={() => handleTodoDelete(editingTodo.id)}
-                style={{ flex: 1, padding: "13px", backgroundColor: "#fff", color: "#f44", border: "1px solid #f44", borderRadius: "10px", fontSize: "15px", cursor: "pointer" }}
+                style={{ flex: 1, padding: "13px", backgroundColor: "var(--card-bg)", color: "#f44", border: "1px solid #f44", borderRadius: "10px", fontSize: "15px", cursor: "pointer" }}
               >삭제</button>
               <button
                 onClick={handleTodoUpdate}
@@ -2422,7 +2430,7 @@ function CalendarPage() {
                     width: "20px",
                     height: "20px",
                     borderRadius: "50%",
-                    backgroundColor: "white",
+                    backgroundColor: "var(--toggle-thumb-bg, var(--text-color))",
                     position: "absolute",
                     top: "2px",
                     left: form.isallday ? "22px" : "2px",
@@ -2733,7 +2741,7 @@ function CalendarPage() {
                       width: "20px",
                       height: "20px",
                       borderRadius: "50%",
-                      backgroundColor: "white",
+                      backgroundColor: "var(--toggle-thumb-bg, var(--text-color))",
                       position: "absolute",
                       top: "2px",
                       left: skipEnabled ? "22px" : "2px",
@@ -2810,7 +2818,7 @@ function CalendarPage() {
                             width: "20px",
                             height: "20px",
                             borderRadius: "50%",
-                            backgroundColor: "white",
+                            backgroundColor: "var(--toggle-thumb-bg, var(--text-color))",
                             position: "absolute",
                             top: "2px",
                             left: value ? "22px" : "2px",

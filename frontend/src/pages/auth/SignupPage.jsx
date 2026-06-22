@@ -173,8 +173,8 @@ function SignupPage() {
       setMessageType('success');
       setTimeout(() => navigate('/login'), 2000);
     } catch (error) {
-      
-      
+
+
       setMessage(error.message || '회원가입에 실패했습니다.');
       setMessageType('error');
     } finally {
@@ -185,7 +185,7 @@ function SignupPage() {
   return (
     <div className="signup-page">
       <section className="signup-card">
-        <button type="button" className="signup-back-button" onClick={() => navigate('/login')} aria-label="로그인 화면으로 돌아가기">
+        <button type="button" className="signup-back-button" onClick={() => navigate('/')} aria-label="메인 화면으로 돌아가기">
           <FaChevronLeft size={20} />
         </button>
 
@@ -205,7 +205,7 @@ function SignupPage() {
                 {emailVerified ? '인증완료' : '중복 확인'}
               </button>
             </div>
-            
+
             {isEmailChecked && !emailVerified && (
               <button type="button" onClick={handleSendOtp} disabled={loading} className="signup-submit-button">
                 {otpSent ? '인증 코드 재전송' : '인증번호 발송'}

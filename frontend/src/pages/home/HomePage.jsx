@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaCalendarAlt } from "react-icons/fa";
+import { FiUser } from "react-icons/fi";
 import { supabase } from "../../lib/supabaseClient";
 import {
   getAdditionalConfirmedLocations,
@@ -390,7 +391,29 @@ function HomePage() {
             padding: "4px",
           }}
         >
-          ⋮
+          <span
+            style={{
+              position: "relative",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <FiUser />
+            <span
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                top: "-7px",
+                right: "-8px",
+                fontSize: "14px",
+                fontWeight: 700,
+                lineHeight: 1,
+              }}
+            >
+              +
+            </span>
+          </span>
 
           {pendingRequests.length > 0 && (
             <span

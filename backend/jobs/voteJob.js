@@ -1,9 +1,15 @@
 const { createClient } = require('@supabase/supabase-js');
+const WebSocket = require('ws');
 require('dotenv').config();
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
+  process.env.SUPABASE_KEY,
+  {
+    realtime: {
+      transport: WebSocket,
+    },
+  }
 );
 
 /**
@@ -14,7 +20,7 @@ async function checkAndCloseExpiredVotes() {
     // KST 시간 (UTC + 9)으로 변환하여 DB의 'Z' 없는 시간과 맞춤
     const now = new Date();
     const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-    const nowIso = kstNow.toISOString().replace('Z', ''); 
+    const nowIso = kstNow.toISOString().replace('Z', '');
 
     // 1. 마감 시간은 지났는데 아직 'isclosed'가 false인 투표 사냥 및 즉시 마감 처리 (원자적)
     const { data: closedVotes, error: updateError } = await supabase
@@ -52,9 +58,9 @@ async function checkAndSendReminders() {
     const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
     const thirtyMinsLater = new Date(kstNow.getTime() + 30 * 60 * 1000).toISOString().replace('Z', '');
     const nowIso = kstNow.toISOString().replace('Z', '');
-    
-    // isclosed = false 이고, 
-    // is_reminder_sent = false 이며, 
+
+    // isclosed = false 이고,
+    // is_reminder_sent = false 이며,
     // endtime <= NOW() + 30분 인 투표 사냥 및 플래그 업데이트
     const { data: reminderVotes, error: updateError } = await supabase
       .from("votes")
@@ -97,7 +103,7 @@ async function isDuplicateNotification(receiverId, type, roomId, link) {
 
     if (roomId) query = query.eq("roomid", Number(roomId));
     if (link) query = query.eq("link", link);
-    
+
     // 최근 1시간 이내의 동일한 알림이 있는지 확인
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     query = query.gt("createdat", oneHourAgo);
@@ -123,7 +129,7 @@ async function sendClosedNotifications(vote) {
       .select("roomname")
       .eq("id", roomId)
       .maybeSingle();
-    
+
     const roomName = roomData?.roomname || "참여 중인 방";
 
     // 대상 조회 (설정값 포함)
@@ -182,7 +188,7 @@ async function sendReminderNotifications(vote) {
       .select("roomname")
       .eq("id", roomId)
       .maybeSingle();
-    
+
     const roomName = roomData?.roomname || "참여 중인 방";
 
     // 대상 조회 (설정값 포함)
@@ -199,12 +205,12 @@ async function sendReminderNotifications(vote) {
     if (allReceivers.length > 0) {
       const link = `/rooms/${roomId}/votes/${voteId}`;
       const type = "vote_reminder";
-      
+
       // 남은 시간(분) 계산
       const endTimestamp = new Date(endtime.replace(' ', 'T') + "+09:00").getTime();
       const nowTimestamp = new Date().getTime();
       const diffInMinutes = Math.max(1, Math.ceil((endTimestamp - nowTimestamp) / (1000 * 60)));
-      
+
       const notifications = [];
 
       for (const receiver of allReceivers) {
@@ -240,11 +246,11 @@ async function sendReminderNotifications(vote) {
  */
 function startVoteCloserJob() {
   console.log("🚀 [백엔드] 투표 감시 프로세스 활성화됨 (1분 간격)");
-  
+
   // 서버 시작 시 즉시 한 번 실행
   checkAndCloseExpiredVotes();
   checkAndSendReminders();
-  
+
   // 이후 1분마다 주기적 실행
   setInterval(() => {
     checkAndCloseExpiredVotes();

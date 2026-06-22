@@ -105,10 +105,10 @@ function SettingsPage() {
           </div>
           <h1 className="nickname">{userProfile?.nickname || '닉네임 없음'}</h1>
           <p className="email">{userProfile?.email || '이메일 정보 없음'}</p>
-          
+
           {loginProvider === 'google' && <div className="provider-badge provider-google"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="16" /> Google</div>}
           {loginProvider === 'kakao' && <div className="provider-badge provider-kakao">카카오</div>}
-          
+
         </section>
 
         <h3 className="section-title">앱 설정</h3>

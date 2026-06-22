@@ -30,10 +30,26 @@ function BottomNav() {
     chat: false,
   });
   const [showGuestModal, setShowGuestModal] = useState(false);
-  const roomMatch = location.pathname.match(/^\/rooms\/([^/]+)$/);
+  const roomMatch = location.pathname.match(
+    /^\/rooms\/(?!create(?:\/|$)|invite(?:\/|$))([^/]+)(?:\/(schedule|location|votes|chat|available-result|vote-create)(?:\/.*)?)?$/
+  );
   const roomId = roomMatch?.[1] ?? null;
   const isRoomPage = Boolean(roomId);
-  const currentRoomTab = new URLSearchParams(location.search).get("tab") || "schedule";
+  const roomSubPage = roomMatch?.[2] ?? null;
+  const tabFromPath =
+    roomSubPage === "location"
+      ? "location"
+      : roomSubPage === "votes" || roomSubPage === "vote-create"
+      ? "vote"
+      : roomSubPage === "chat"
+      ? "chat"
+      : roomSubPage === "schedule" || roomSubPage === "available-result"
+      ? "schedule"
+      : null;
+  const currentRoomTab =
+    tabFromPath ||
+    new URLSearchParams(location.search).get("tab") ||
+    "schedule";
 
   useEffect(() => {
     const loadUserAndCount = async (userParam) => {
@@ -120,7 +136,7 @@ function BottomNav() {
     const reloadRoomUnreadTabs = async () => {
       const { data, error } = await supabase
         .from("notifications")
-        .select("type, isread, issilent")
+        .select("type, isread")
         .eq("roomid", Number(roomId))
         .eq("receiverid", currentUserId)
         .or("isread.is.null,isread.eq.false");
@@ -131,10 +147,10 @@ function BottomNav() {
       }
 
       setRoomUnreadTabs({
-        schedule: data?.some((n) => n.issilent !== true && TAB_TYPE_MAP.schedule.includes(n.type)) ?? false,
-        location: data?.some((n) => n.issilent !== true && TAB_TYPE_MAP.location.includes(n.type)) ?? false,
-        vote: data?.some((n) => n.issilent !== true && TAB_TYPE_MAP.vote.includes(n.type)) ?? false,
-        chat: data?.some((n) => n.issilent !== true && TAB_TYPE_MAP.chat.includes(n.type)) ?? false,
+        schedule: data?.some((n) => TAB_TYPE_MAP.schedule.includes(n.type)) ?? false,
+        location: data?.some((n) => TAB_TYPE_MAP.location.includes(n.type)) ?? false,
+        vote: data?.some((n) => TAB_TYPE_MAP.vote.includes(n.type)) ?? false,
+        chat: data?.some((n) => TAB_TYPE_MAP.chat.includes(n.type)) ?? false,
       });
     };
 
@@ -179,7 +195,7 @@ function BottomNav() {
 
   const roomNavItems = [
     { key: "schedule", label: "일정", icon: FaCalendarAlt },
-    { key: "location", label: "장소", icon: FaMapMarkerAlt },
+    { key: "location", label: "위치", icon: FaMapMarkerAlt },
     { key: "vote", label: "투표", icon: FaVoteYea },
     { key: "chat", label: "채팅", icon: FaComments },
   ];

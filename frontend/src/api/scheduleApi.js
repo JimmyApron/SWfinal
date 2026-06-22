@@ -172,7 +172,7 @@ export async function createConfirmedScheduleForRoom(roomId, schedule) {
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData.user?.id;
 
-  const { error } = await supabase.from("confirmed_schedules").insert([
+  const { data: confirmedSchedule, error } = await supabase.from("confirmed_schedules").insert([
     {
       roomid: Number(roomId),
       title: schedule.title?.trim() || null,
@@ -183,7 +183,7 @@ export async function createConfirmedScheduleForRoom(roomId, schedule) {
       location: schedule.location || null,
       locationaddress: schedule.locationaddress || null,
     },
-  ]);
+  ]).select("id").single();
 
   if (error) {
     console.error("확정 일정 저장 실패:", error);
@@ -199,7 +199,9 @@ export async function createConfirmedScheduleForRoom(roomId, schedule) {
       type: "schedule_confirmed",
       title: "🗓️ 일정 확정",
       message: `방에 ${scheduleTitle}일정이 확정되었습니다.`,
-      link: `/rooms/${roomId}?tab=schedule`,
+      link: `/rooms/${roomId}?tab=schedule${
+        confirmedSchedule?.id ? `&scheduleId=${confirmedSchedule.id}` : ""
+      }`,
     });
   } catch (notifError) {
     console.error("일정 확정 알림 생성 실패:", notifError);
@@ -229,6 +231,24 @@ export async function createDraftConfirmedSchedule(roomId, title) {
   if (error) {
     console.error("준비 중 일정 생성 실패:", error);
     throw new Error("일정을 만들지 못했습니다.");
+  }
+
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    const senderId =
+      userData.user?.id ||
+      (typeof localStorage !== "undefined" ? localStorage.getItem("guest_id") : null);
+
+    await createRoomNotifications({
+      roomId: Number(roomId),
+      senderId,
+      type: "location_schedule_created",
+      title: "📍 새 일정 생성",
+      message: `방에 '${trimmedTitle}' 일정이 생성되었습니다. 만날 장소를 정해 주세요.`,
+      link: `/rooms/${Number(roomId)}?tab=location&scheduleId=${data.id}`,
+    });
+  } catch (notifError) {
+    console.error("장소 탭 새 일정 알림 생성 실패:", notifError);
   }
 
   return data;

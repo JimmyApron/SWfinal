@@ -17,7 +17,7 @@ function formatRelativeTime(dateStr) {
   if (diffMin < 60) return `${diffMin}분 전`;
   if (diffHr < 24) return `${diffHr}시간 전`;
   if (diffDay < 7) return `${diffDay}일 전`;
-  
+
   return `${date.getMonth() + 1}월 ${date.getDate()}일`;
 }
 
@@ -36,7 +36,7 @@ function RoomListPage() {
   const [contextMenu, setContextMenu] = useState(null); // { x, y, roomId }
   const [isRoomsExpanded, setIsRoomsExpanded] = useState(false);
 
-  // 알림 끄기 관리 (Local Storage 사용)
+  // 방별 팝업 끄기 관리 (Local Storage 사용)
   const [mutedRooms, setMutedRooms] = useState(() => {
     const saved = localStorage.getItem("muted_rooms");
     return saved ? JSON.parse(saved) : []; // [roomId1, roomId2, ...]
@@ -52,6 +52,11 @@ function RoomListPage() {
     }
     setMutedRooms(newMuted);
     localStorage.setItem("muted_rooms", JSON.stringify(newMuted));
+    if (isMuted) {
+      window.dispatchEvent(new CustomEvent("popup-setting-enabled", {
+        detail: { roomId: Number(roomId), allTabs: true },
+      }));
+    }
     setContextMenu(null);
   };
 
@@ -155,15 +160,12 @@ function RoomListPage() {
         (payload) => {
           if (payload.eventType === "INSERT") {
             const newNotif = payload.new;
-            if (newNotif.issilent === true) {
-              return;
-            }
             if (newNotif.roomid) {
               setRooms((prevRooms) => {
                 const targetIdx = prevRooms.findIndex(r => String(r.id) === String(newNotif.roomid));
-                
+
                 if (targetIdx === -1) {
-                  handleGetRooms(); 
+                  handleGetRooms();
                   return prevRooms;
                 }
 
@@ -214,9 +216,9 @@ function RoomListPage() {
         <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
           {(isRoomsExpanded ? sortedRooms : sortedRooms.slice(0, 2)).map((room) => {
             const isPinned = !!pinnedRooms[room.id];
-            
+
             return (
-              <li 
+              <li
                 key={room.id}
                 onClick={() => navigate(`/rooms/${room.id}`)}
                 onContextMenu={(e) => {
@@ -255,10 +257,10 @@ function RoomListPage() {
                     overflow: "hidden"
                   }}>
                     {room.roomimageurl ? (
-                      <img 
-                        src={room.roomimageurl} 
-                        alt={room.roomname} 
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+                      <img
+                        src={room.roomimageurl}
+                        alt={room.roomname}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
                       />
                     ) : (
                       "🏠"
@@ -378,7 +380,7 @@ function RoomListPage() {
           minWidth: "120px",
           border: "1px solid var(--border-color)"
         }} onClick={(e) => e.stopPropagation()}>
-          <button 
+          <button
             onClick={() => togglePin(contextMenu.roomId)}
             style={{
               width: "100%",
@@ -399,7 +401,7 @@ function RoomListPage() {
             {pinnedRooms[contextMenu.roomId] ? "📌 고정 해제" : "📌 상단 고정"}
           </button>
 
-          <button 
+          <button
             onClick={() => toggleMute(contextMenu.roomId)}
             style={{
               width: "100%",

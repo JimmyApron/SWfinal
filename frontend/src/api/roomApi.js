@@ -161,10 +161,9 @@ export async function getRooms(userId) {
   // 2. 안 읽은 알림 전체 조회 (receiverid === 본인, isread === false)
   const { data: notifications, error: notifError } = await supabase
     .from("notifications")
-    .select("roomid, createdat, issilent")
+    .select("roomid, createdat")
     .eq("receiverid", userId)
-    .eq("isread", false)
-    .or("issilent.is.null,issilent.eq.false");
+    .eq("isread", false);
 
   if (notifError) {
     console.error(notifError);
@@ -175,7 +174,7 @@ export async function getRooms(userId) {
   const latestNotificationAtMap = {};
   const unreadCountMap = (notifications || []).reduce((acc, notif) => {
     const myParticipation = memberData.find(m => Number(m.rooms.id) === Number(notif.roomid));
-    
+
     // 가시성 규칙: 가입 시간(joinedat) 이후에 생성된 알림만 합산
     if (myParticipation && new Date(notif.createdat) >= new Date(myParticipation.joinedat)) {
       acc[notif.roomid] = (acc[notif.roomid] || 0) + 1;

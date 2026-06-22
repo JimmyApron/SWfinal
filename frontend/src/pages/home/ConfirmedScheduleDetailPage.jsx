@@ -590,8 +590,6 @@ function ConfirmedScheduleDetailPage() {
       setAdditionalLocations((locations) => [...locations, savedLocation]);
       setAdditionalPlace(null);
       setShowAdditionalPicker(false);
-
-      alert("추가 장소가 저장되었습니다.");
     } catch (error) {
       alert("추가 장소 저장 실패: " + error.message);
     } finally {
@@ -811,7 +809,7 @@ function ConfirmedScheduleDetailPage() {
               background: "#fff",
               padding: "18px",
               borderRadius: "18px",
-              width: "min(90vw, 300px)",
+              width: "min(92vw, 380px)",
               maxHeight: "85vh",
               overflowY: "auto",
               boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
@@ -987,15 +985,15 @@ function ConfirmedScheduleDetailPage() {
   const timeUntil = getTimeUntil(schedule.date, schedule.starttime);
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#F7F7FA" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: "var(--bg-color)", color: "var(--text-color)" }}>
       <div
         style={{
           height: "48px",
           display: "flex",
           alignItems: "center",
           padding: "0 14px",
-          backgroundColor: "#fff",
-          borderBottom: "1px solid #E5E7EB",
+          backgroundColor: "var(--header-bg)",
+          borderBottom: "1px solid var(--border-color)",
           position: "sticky",
           top: 0,
           zIndex: 10,
@@ -1003,12 +1001,12 @@ function ConfirmedScheduleDetailPage() {
       >
         <button
           onClick={() => navigate(-1)}
-          style={{ border: "none", background: "none", fontSize: "20px", color: "#1F2933", flex: "0 0 28px" }}
+          style={{ border: "none", background: "none", fontSize: "20px", color: "var(--text-color)", flex: "0 0 28px" }}
         >
           ←
         </button>
 
-        <h3 style={{ margin: 0, flex: 1, textAlign: "center", fontSize: "15px", color: "#1F2933" }}>확정 일정 상세</h3>
+        <h3 style={{ margin: 0, flex: 1, textAlign: "center", fontSize: "15px", color: "var(--text-color)" }}>확정 일정 상세</h3>
 
         <div style={{ flex: "0 0 28px" }} />
       </div>
@@ -1019,7 +1017,7 @@ function ConfirmedScheduleDetailPage() {
         </p>
 
         {schedule.title && (
-          <h2 style={{ margin: "0 0 4px", fontSize: "18px", color: "#1F2933" }}>{schedule.title}</h2>
+          <h2 style={{ margin: "0 0 4px", fontSize: "18px", color: "var(--text-color)" }}>{schedule.title}</h2>
         )}
 
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginBottom: "10px" }}>
@@ -1027,7 +1025,7 @@ function ConfirmedScheduleDetailPage() {
             <p
               style={{
                 margin: 0,
-                color: "#1F2933",
+                color: "var(--text-color)",
                 fontSize: "14px",
                 display: "flex",
                 alignItems: "center",
@@ -1082,10 +1080,10 @@ function ConfirmedScheduleDetailPage() {
             style={{
               padding: "8px 12px",
               marginBottom: "10px",
-              backgroundColor: "#F3F4F6",
+              backgroundColor: "var(--muted-bg)",
               borderRadius: "10px",
               fontSize: "12px",
-              color: "#6B7280",
+              color: "var(--secondary-text)",
             }}
           >
             지난 일정입니다. 날짜·위치 수정은 불가합니다.
@@ -1118,7 +1116,7 @@ function ConfirmedScheduleDetailPage() {
               <button
                 type="button"
                 onClick={openInScheduleTab}
-                style={{ ...shortcutButtonStyle, color: "#f44", borderColor: "#ffcccc" }}
+              style={{ ...shortcutButtonStyle, color: "#f44", borderColor: "color-mix(in srgb, #f44 35%, var(--border-color))" }}
               >
                 일정 탭에서 정하기
               </button>
@@ -1131,9 +1129,9 @@ function ConfirmedScheduleDetailPage() {
             style={{
               marginBottom: "10px",
               padding: "10px 12px",
-              backgroundColor: "#FFFFFF",
+              backgroundColor: "var(--card-bg)",
               borderRadius: "14px",
-              border: "1px solid #E5E7EB",
+              border: "1px solid var(--border-color)",
               boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
             }}
           >
@@ -1610,10 +1608,10 @@ const secondaryButtonStyle = {
 const shortcutButtonStyle = {
   flexShrink: 0,
   padding: "5px 8px",
-  border: "1px solid #d8d8ff",
+  border: "1px solid color-mix(in srgb, var(--accent-color) 35%, var(--border-color))",
   borderRadius: "6px",
-  backgroundColor: "#f9f9ff",
-  color: "#5c58d8",
+  backgroundColor: "color-mix(in srgb, var(--accent-color) 14%, var(--card-bg))",
+  color: "var(--accent-color)",
   cursor: "pointer",
   fontSize: "12px",
 };

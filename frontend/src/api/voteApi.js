@@ -81,7 +81,7 @@ export async function createVote({
     throw new Error("roomid가 없습니다. 투표를 생성할 방 정보가 필요합니다.");
   }
 
-  const isUrgent = endtimeenabled && endtime && 
+  const isUrgent = endtimeenabled && endtime &&
     (new Date(endtime).getTime() - new Date().getTime()) < 30 * 60 * 1000;
 
   const { data: vote, error: voteError } = await supabase
@@ -308,6 +308,8 @@ export async function confirmVote(
       .eq("voteid", Number(voteid))
       .maybeSingle();
 
+    let confirmedScheduleId = existing?.id || null;
+
     if (existing) {
       // 기존 일정이 있으면 날짜/시간만 업데이트 (absentees, location 등 보존)
       const updatePayload = {
@@ -328,7 +330,7 @@ export async function confirmVote(
         throw error;
       }
     } else {
-      const { error } = await supabase.from("confirmed_schedules").insert([
+      const { data: insertedSchedule, error } = await supabase.from("confirmed_schedules").insert([
         {
           roomid: Number(roomid),
           voteid: Number(voteid),
@@ -340,12 +342,14 @@ export async function confirmVote(
           location: null,
           locationaddress: null,
         },
-      ]);
+      ]).select("id").single();
 
       if (error) {
         console.error("일정 확정 저장 실패:", error);
         throw error;
       }
+
+      confirmedScheduleId = insertedSchedule?.id || null;
     }
 
     // 알림 생성
@@ -358,7 +362,9 @@ export async function confirmVote(
         type: "schedule_confirmed",
         title: "🗓️ 일정 확정",
         message: `방에 ${scheduleTitle}일정이 확정되었습니다.`,
-        link: `/rooms/${roomid}?tab=schedule`,
+        link: `/rooms/${roomid}?tab=schedule${
+          confirmedScheduleId ? `&scheduleId=${confirmedScheduleId}` : ""
+        }`,
       });
     } catch (notifError) {
       console.error("일정 확정 알림 생성 실패:", notifError);
@@ -648,7 +654,7 @@ export async function applyScheduleVoteToExisting(scheduleId, option, voteid, ro
       type: "schedule_confirmed",
       title: "🗓️ 일정 확정",
       message: "확정된 일정이 업데이트되었습니다.",
-      link: `/rooms/${roomid}?tab=schedule`,
+      link: `/rooms/${roomid}?tab=schedule&scheduleId=${Number(scheduleId)}`,
     });
   } catch (notifError) {
     console.error("알림 생성 실패:", notifError);

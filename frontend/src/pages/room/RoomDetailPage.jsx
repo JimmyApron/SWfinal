@@ -23,9 +23,66 @@ import {
 import {
   createNotification,
   deleteNotification,
-  markNotificationsAsReadInRoomByType,
-  TAB_TYPE_MAP
 } from "../../api/notificationApi";
+
+function cacheRoomPopupSetting(roomId, column, value) {
+  if (!roomId || !column) return;
+
+  try {
+    const settings = JSON.parse(localStorage.getItem("room_popup_settings") || "{}");
+    const roomKey = String(roomId);
+    settings[roomKey] = {
+      ...(settings[roomKey] || {}),
+      [column]: value,
+    };
+    localStorage.setItem("room_popup_settings", JSON.stringify(settings));
+  } catch (error) {
+    console.warn("알림 설정 캐시 저장 실패:", error);
+  }
+}
+
+async function copyTextToClipboard(text) {
+  const value = String(text ?? "");
+  if (!value) return false;
+
+  if (navigator.clipboard?.writeText && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch (error) {
+      console.warn("Clipboard API copy failed, trying fallback:", error);
+    }
+  }
+
+  const textArea = document.createElement("textarea");
+  textArea.value = value;
+  textArea.setAttribute("readonly", "");
+  textArea.style.position = "fixed";
+  textArea.style.top = "-9999px";
+  textArea.style.left = "-9999px";
+
+  const selection = document.getSelection();
+  const selectedRange = selection?.rangeCount ? selection.getRangeAt(0) : null;
+  const activeElement = document.activeElement;
+
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } finally {
+    document.body.removeChild(textArea);
+    if (selectedRange && selection) {
+      selection.removeAllRanges();
+      selection.addRange(selectedRange);
+    }
+    activeElement?.focus?.();
+  }
+
+  return copied;
+}
 
 function RoomDetailPage() {
   const navigate = useNavigate();
@@ -58,28 +115,12 @@ function RoomDetailPage() {
     chat: true,
   });
 
-  // 실시간 리스너에서 최신 상태를 참조하기 위한 Refs
-  const tabRef = useRef(tab);
-  const currentUserRef = useRef(currentUser);
-
-  useEffect(() => { tabRef.current = tab; }, [tab]);
-  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
-
   useEffect(() => {
     const queryTab = searchParams.get("tab");
     if (["schedule", "location", "vote", "chat"].includes(queryTab)) {
       setTab(queryTab);
     }
   }, [searchParams]);
-
-  useEffect(() => {
-    const currentUserId = currentUser?.id || localStorage.getItem("guest_id");
-    if (!currentUserId || !roomId) return;
-
-    markNotificationsAsReadInRoomByType(Number(roomId), currentUserId, TAB_TYPE_MAP[tab])
-      .catch((error) => console.error("탭 알림 읽음 처리 실패:", error));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, currentUser?.id, roomId]);
 
   const fetchRoomData = async () => {
     console.log("🚀 [RoomDetailPage] fetchRoomData 시작, roomId:", roomId);
@@ -126,47 +167,48 @@ function RoomDetailPage() {
       setCurrentUser({ ...user, type: "member" });
       const me = memberData?.find(m => String(m.userid) === String(uId));
       if (me) setMyEntryId(me.id);
-      await markNotificationsAsReadInRoomByType(Number(roomId), uId, TAB_TYPE_MAP[tab]);
 
       const { data: sett } = await supabase.from("room_members").select("schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled").eq("roomid", Number(roomId)).eq("userid", uId).maybeSingle();
-      if (sett) setNotifSettings({
-        schedule: sett.schedulenotifenabled !== false,
-        location: sett.locationnotifenabled !== false,
-        vote: sett.votenotifenabled !== false,
-        chat: sett.chatnotifenabled !== false,
-      });
-    } else {
-      const guestId = localStorage.getItem("guest_id");
-      if (guestId) {
-        setCurrentUser({ id: guestId, type: "guest" });
-        await markNotificationsAsReadInRoomByType(Number(roomId), guestId, TAB_TYPE_MAP[tab]);
-        const { data: sett } = await supabase.from("room_guests").select("schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled").eq("id", guestId).maybeSingle();
-        if (sett) setNotifSettings({
+      if (sett) {
+        const nextSettings = {
           schedule: sett.schedulenotifenabled !== false,
           location: sett.locationnotifenabled !== false,
           vote: sett.votenotifenabled !== false,
           chat: sett.chatnotifenabled !== false,
-        });
+        };
+        setNotifSettings(nextSettings);
+        cacheRoomPopupSetting(roomId, "schedulenotifenabled", nextSettings.schedule);
+        cacheRoomPopupSetting(roomId, "locationnotifenabled", nextSettings.location);
+        cacheRoomPopupSetting(roomId, "votenotifenabled", nextSettings.vote);
+        cacheRoomPopupSetting(roomId, "chatnotifenabled", nextSettings.chat);
+      }
+    } else {
+      const guestId = localStorage.getItem("guest_id");
+      if (guestId) {
+        setCurrentUser({ id: guestId, type: "guest" });
+        const { data: sett } = await supabase.from("room_guests").select("schedulenotifenabled, locationnotifenabled, votenotifenabled, chatnotifenabled").eq("id", guestId).maybeSingle();
+        if (sett) {
+          const nextSettings = {
+            schedule: sett.schedulenotifenabled !== false,
+            location: sett.locationnotifenabled !== false,
+            vote: sett.votenotifenabled !== false,
+            chat: sett.chatnotifenabled !== false,
+          };
+          setNotifSettings(nextSettings);
+          cacheRoomPopupSetting(roomId, "schedulenotifenabled", nextSettings.schedule);
+          cacheRoomPopupSetting(roomId, "locationnotifenabled", nextSettings.location);
+          cacheRoomPopupSetting(roomId, "votenotifenabled", nextSettings.vote);
+          cacheRoomPopupSetting(roomId, "chatnotifenabled", nextSettings.chat);
+        }
       }
     }
   };
 
   useEffect(() => {
     fetchRoomData();
-    const currentUserId = currentUserRef.current?.id || localStorage.getItem("guest_id");
-    if (!currentUserId) return;
 
     const channels = [
       supabase.channel(`room_info_${roomId}`).on("postgres_changes", { event: "*", schema: "public", table: "rooms", filter: `id=eq.${roomId}` }, () => fetchRoomData()).subscribe(),
-      supabase.channel(`room_notifs_${roomId}_${currentUserId}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `receiverid=eq.${currentUserId}` }, async (payload) => {
-        const newNotif = payload.new;
-        if (Number(newNotif.roomid) !== Number(roomId)) return;
-        if (newNotif.issilent === true) return;
-        const types = TAB_TYPE_MAP[tabRef.current] || [];
-        if (types.includes(newNotif.type)) {
-          await markNotificationsAsReadInRoomByType(roomId, currentUserId, [newNotif.type]);
-        }
-      }).subscribe(),
       supabase.channel(`room_parts_${roomId}`).on("postgres_changes", { event: "*", schema: "public", table: "room_members", filter: `roomid=eq.${roomId}` }, () => fetchRoomData())
       .on("postgres_changes", { event: "*", schema: "public", table: "room_guests", filter: `roomid=eq.${roomId}` }, () => fetchRoomData())
       .on("broadcast", { event: "PARTICIPANTS_CHANGED" }, () => fetchRoomData()).subscribe()
@@ -184,10 +226,14 @@ function RoomDetailPage() {
   }, [roomId, currentUser, myEntryId, navigate]);
 
   const handleCopyInviteCode = async () => {
+    const inviteCode = room?.invitecode;
+
     try {
-      await navigator.clipboard.writeText(room.invitecode);
+      const copied = await copyTextToClipboard(inviteCode);
+      if (!copied) throw new Error("Clipboard copy returned false");
       alert("초대코드가 복사되었습니다.");
     } catch (error) {
+      console.warn("초대코드 복사 실패:", error);
       alert("복사 실패");
     }
   };
@@ -337,6 +383,12 @@ function RoomDetailPage() {
       return;
     }
     setNotifSettings(prev => ({ ...prev, [tabName]: next }));
+    cacheRoomPopupSetting(roomId, col, next);
+    if (next) {
+      window.dispatchEvent(new CustomEvent("popup-setting-enabled", {
+        detail: { roomId: Number(roomId), tabName },
+      }));
+    }
   };
 
   if (!room) return <div>로딩 중...</div>;
@@ -487,6 +539,7 @@ function RoomDetailPage() {
                         gap: "10px",
                         padding: "0 5px",
                         paddingRight: (isCurrentUserHost && !isMe) ? "30px" : "5px", // 버튼 공간 확보
+                        position: "relative",
                       }}
                     >
                       {p.type === "member" && p.nickname !== "알 수 없음" && profileImg ? (

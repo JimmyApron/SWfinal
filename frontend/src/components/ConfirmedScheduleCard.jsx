@@ -52,15 +52,15 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
       }`;
 
   const timeUntil = getTimeUntil(schedule.date, schedule.starttime);
-  
+
   // 알림 표시 여부 결정
   // 1. timeUntil이 정상 계산되어야 함 (startTime, date 기반)
   // 2. prompt에서 언급된 필드들이 있다면 유효성 검사 (null, undefined, NaN, 빈 문자열 방지)
   const isTimeValid = (val) => val !== null && val !== undefined && val !== "" && !Number.isNaN(val);
-  
-  const showReminder = 
-    timeUntil !== null && 
-    isTimeValid(schedule.date) && 
+
+  const showReminder =
+    timeUntil !== null &&
+    isTimeValid(schedule.date) &&
     (schedule.isallday || isTimeValid(schedule.starttime));
 
   return (
@@ -70,11 +70,11 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
         padding: "10px",
         borderRadius: "14px",
         cursor: "pointer",
-        backgroundColor: "#FFFFFF",
+        backgroundColor: "var(--card-bg)",
         width: "100%",
         boxSizing: "border-box",
         boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
-        border: "1px solid #E5E7EB",
+        border: "1px solid var(--border-color)",
         display: "flex",
         flexDirection: "column",
         gap: "8px",
@@ -85,7 +85,7 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
           style={{
             margin: 0,
             fontWeight: "700",
-            color: "#1F2933",
+            color: "var(--text-color)",
             fontSize: "14px",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -98,8 +98,8 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
               style={{
                 marginLeft: "6px",
                 fontSize: "9px",
-                color: "#6B7280",
-                backgroundColor: "#F3F4F6",
+                color: "var(--secondary-text)",
+                backgroundColor: "var(--muted-bg)",
                 borderRadius: "4px",
                 padding: "1px 5px",
                 fontWeight: "500",
@@ -112,22 +112,22 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
         </p>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginTop: "2px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#6B7280", fontSize: "12px", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--secondary-text)", fontSize: "12px", flexShrink: 0 }}>
             <FaClock size={11} color="#7C5CFF" />
             <span>{dateLabel}{dateLabel && timeLabel ? " · " : ""}{timeLabel}</span>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "4px", color: schedule.location ? "#4B5563" : "#9CA3AF", flex: 1, minWidth: 0, fontSize: "12px", justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "4px", color: schedule.location ? "var(--text-color)" : "var(--secondary-text)", flex: 1, minWidth: 0, fontSize: "12px", justifyContent: "flex-end" }}>
             <FaMapMarkerAlt size={11} color={schedule.location ? "#7C5CFF" : "#9CA3AF"} />
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {schedule.location || "위치 미정"}
+              {schedule.location || "장소 미정"}
             </span>
           </div>
         </div>
       </div>
 
       {/* 구분선 */}
-      <div style={{ height: "1px", backgroundColor: "#F3F4F6", margin: "0 -4px" }} />
+      <div style={{ height: "1px", backgroundColor: "var(--border-color)", margin: "0 -4px" }} />
 
       {/* 하단 정보 영역: 주변 장소 태그 | 남은 시간 */}
       {(schedule.additionalLocations?.length > 0 || showReminder) && (
@@ -138,11 +138,11 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
                 key={place.id}
                 style={{
                   fontSize: "10px",
-                  backgroundColor: "#F9FAFB",
-                  color: "#6B7280",
+                  backgroundColor: "var(--muted-bg)",
+                  color: "var(--secondary-text)",
                   padding: "1px 6px",
                   borderRadius: "6px",
-                  border: "1px solid #E5E7EB",
+                  border: "1px solid var(--border-color)",
                 }}
               >
                 #{place.placename}
@@ -153,7 +153,7 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
           {showReminder && (
             <>
               {schedule.additionalLocations?.length > 0 && (
-                <div style={{ width: "1px", height: "11px", backgroundColor: "#E5E7EB" }} />
+                <div style={{ width: "1px", height: "11px", backgroundColor: "var(--border-color)" }} />
               )}
               <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#F59E0B", fontWeight: "500", flexShrink: 0 }}>
                 <FaBell size={11} />
