@@ -15,6 +15,7 @@ import GuestLoginPage from "./pages/auth/GuestLoginPage";
 
 import HomePage from "./pages/home/HomePage";
 import ConfirmedScheduleDetailPage from "./pages/home/ConfirmedScheduleDetailPage";
+import PrepChecklistPage from "./pages/home/PrepChecklistPage";
 
 import RoomCreatePage from "./pages/room/RoomCreatePage";
 import RoomInvitePage from "./pages/room/RoomInvitePage";
@@ -53,6 +54,10 @@ const NOTIFICATION_SETTING_COLUMNS = {
   schedule_cancelled: "schedulenotifenabled",
   schedule_new: "schedulenotifenabled",
   schedule_request: "schedulenotifenabled",
+  prep_assignment_request: "schedulenotifenabled",
+  prep_assignment_response: "schedulenotifenabled",
+  prep_assignment_vacated: "schedulenotifenabled",
+  prep_reminder: "schedulenotifenabled",
   location_request: "locationnotifenabled",
   member_departed: "locationnotifenabled",
   arrival_approaching: "locationnotifenabled",
@@ -638,6 +643,7 @@ function App() {
               <Route path="/rooms/:roomid/votes/:voteid" element={<VoteDetailPage />} />
               <Route path="/rooms/:roomid/confirmed-schedule" element={<ConfirmedScheduleDetailPage />} />
               <Route path="/confirmed-schedule" element={<ConfirmedScheduleDetailPage />} />
+              <Route path="/schedules/:scheduleId/prep" element={<PrepChecklistPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/calendar/friend/:friendId" element={<FriendCalendarPage />} />
               <Route path="/notifications" element={<NotificationPage />} />

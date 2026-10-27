@@ -20,6 +20,7 @@ import {
 } from "../../api/calendarShareApi";
 import { acceptFriendRequest, rejectFriendRequest } from "../../api/friendApi";
 import { createNotification } from "../../api/notificationApi";
+import { handlePrepRequest } from "../../api/prepApi";
 
 function NotificationPage() {
   const navigate = useNavigate();
@@ -164,6 +165,61 @@ function NotificationPage() {
       }
     } catch (error) {
       console.error(error);
+    }
+  };
+
+  const handlePrepRequestDecision = async (event, notification, accepted) => {
+    event.stopPropagation();
+    if (!currentUserId) return;
+
+    const assignmentId = new URLSearchParams(
+      (notification.link || "").split("?")[1] || ""
+    ).get("assignmentId");
+
+    if (!assignmentId) {
+      alert("부탁 정보를 찾을 수 없습니다.");
+      return;
+    }
+
+    const identity = {
+      id: String(currentUserId),
+      type: isGuestUser ? "guest" : "member",
+    };
+
+    try {
+      const assignment = await handlePrepRequest(
+        assignmentId,
+        identity,
+        accepted
+      );
+
+      if (assignment.requestedby) {
+        await createNotification({
+          roomId: notification.roomid,
+          receiverId: assignment.requestedby,
+          senderId: currentUserId,
+          type: "prep_assignment_response",
+          title: accepted
+            ? "준비물 부탁을 수락했어요"
+            : "준비물 부탁을 거절했어요",
+          message: `"${assignment.prep_items?.name || "준비물"}" 부탁을 ${
+            accepted ? "수락" : "거절"
+          }했습니다.`,
+          link: `${notification.link.split("?")[0]}?responseAssignmentId=${assignment.id}`,
+        });
+      }
+
+      if (notification.source === "guest" || isGuestUser) {
+        await deleteGuestNotification(notification.id);
+      } else {
+        await deleteNotification(notification.id);
+      }
+      setNotifications((prev) =>
+        prev.filter((item) => item.id !== notification.id)
+      );
+    } catch (error) {
+      console.error("준비물 부탁 처리 실패:", error);
+      alert(error.message || "부탁을 처리하지 못했습니다.");
     }
   };
 
@@ -601,6 +657,55 @@ function NotificationPage() {
               </strong>
 
               <p style={{ margin: "6px 0" }}>{notification.message}</p>
+
+              {notification.type === "prep_assignment_request" && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    marginTop: "10px",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={(e) =>
+                      handlePrepRequestDecision(e, notification, true)
+                    }
+                    style={{
+                      flex: 1,
+                      padding: "8px",
+                      backgroundColor: "#7c79ff",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      fontWeight: "bold",
+                      fontSize: "13px",
+                    }}
+                  >
+                    수락
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) =>
+                      handlePrepRequestDecision(e, notification, false)
+                    }
+                    style={{
+                      flex: 1,
+                      padding: "8px",
+                      backgroundColor: "var(--btn-bg)",
+                      color: "var(--secondary-text)",
+                      border: "1px solid var(--border-color)",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      fontSize: "13px",
+                    }}
+                  >
+                    거절
+                  </button>
+                </div>
+              )}
 
               {notification.type === "room_invite" && (
                 <div

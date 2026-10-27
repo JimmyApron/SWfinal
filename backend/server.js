@@ -5,7 +5,9 @@ const cors = require('cors')
 const kakaoRouteRouter = require('./routes/kakaoRoute')
 const googlePlaceRouter = require("./routes/googlePlace")
 const routeTimeRouter = require('./routes/routeTime')
+const prepRouter = require('./routes/prep')
 const { startVoteCloserJob } = require('./jobs/voteJob')
+const { startPrepReminderJob } = require('./jobs/prepReminderJob')
 
 const app = express()
 
@@ -15,9 +17,11 @@ app.use(express.json())
 app.use('/api/kakao', kakaoRouteRouter)
 app.use("/api/google", googlePlaceRouter)
 app.use('/api/route', routeTimeRouter)
+app.use('/api/prep', prepRouter)
 
 // 🚀 백엔드 자동 마감 작업 시작
 startVoteCloserJob()
+startPrepReminderJob()
 
 let myLocation = null
 

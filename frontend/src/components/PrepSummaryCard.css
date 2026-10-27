@@ -1,0 +1,150 @@
+.prep-summary-card {
+  margin: 0 0 14px;
+  padding: 12px;
+  border: 1px solid #e6e7eb;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+}
+
+.prep-summary-card-heading,
+.prep-summary-card-heading > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.prep-summary-card-heading strong {
+  color: #141826;
+  font-size: 14px;
+}
+
+.prep-summary-card-badge {
+  padding: 3px 6px;
+  border-radius: 7px;
+  color: #7f5ef6;
+  background: #f0ecfd;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.prep-summary-card-count {
+  flex: 0 0 auto;
+  color: #7f5ef6;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.prep-summary-card-items {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+}
+
+.prep-summary-card-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 3px 0;
+  border: 0;
+  border-bottom: 1px solid #eeeef2;
+  color: #141826;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.prep-summary-card-item:last-child {
+  border-bottom: 0;
+}
+
+.prep-summary-card-item:disabled {
+  cursor: default;
+}
+
+.prep-summary-card-checkbox {
+  display: inline-flex;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #c8cbd5;
+  border-radius: 5px;
+  color: #fff;
+  font-size: 11px;
+}
+
+.prep-summary-card-item.checked .prep-summary-card-checkbox {
+  border-color: #847af6;
+  background: #847af6;
+}
+
+.prep-summary-card-emoji {
+  font-size: 14px;
+}
+
+.prep-summary-card-name {
+  overflow: hidden;
+  flex: 1;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prep-summary-card-item.checked .prep-summary-card-name {
+  color: #8a8d98;
+  text-decoration: line-through;
+}
+
+.prep-summary-card-owner {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  border-radius: 6px;
+  color: #9c6900;
+  background: #fff4d8;
+  font-size: 10px;
+}
+
+.prep-summary-card-warning,
+.prep-summary-card-location,
+.prep-summary-card-error,
+.prep-summary-card-muted {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.prep-summary-card-warning,
+.prep-summary-card-error {
+  color: #e5484d;
+}
+
+.prep-summary-card-location {
+  color: #847af6;
+}
+
+.prep-summary-card-muted {
+  color: #6a7083;
+}
+
+.prep-summary-card-recommend {
+  width: 100%;
+  min-height: 36px;
+  margin-top: 9px;
+  border: 1px solid #d5ccff;
+  border-radius: 9px;
+  color: #7f5ef6;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.prep-summary-card-recommend:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

@@ -21,7 +21,9 @@ import { getRouteTime } from "../../api/routeTimeApi";
 import { decodePolyline } from "../../utils/decodePolyline";
 import KakaoMapView from "../../components/map/KakaoMapView";
 import LocationPicker from "../../components/map/LocationPicker";
+import PrepSummaryCard from "../../components/PrepSummaryCard";
 import { getTodayStr } from "../../utils/scheduleUtils";
+import { getPrepWeather } from "../../api/prepApi";
 
 function getTimeUntil(date, starttime) {
   if (!date || !date.match(/^\d{4}-\d{2}-\d{2}$/)) return null;
@@ -107,6 +109,7 @@ function ConfirmedScheduleDetailPage() {
   const [showAttendees, setShowAttendees] = useState(false);
   const [showLocationEditChoice, setShowLocationEditChoice] = useState(false);
   const [isEditingLocationMap, setIsEditingLocationMap] = useState(false);
+  const [dayWeather, setDayWeather] = useState(null);
 
   useEffect(() => {
     if (!schedule) {
@@ -201,6 +204,36 @@ function ConfirmedScheduleDetailPage() {
       }
     }
   }, [schedule]);
+
+  useEffect(() => {
+    if (!schedule?.id || !scheduleTiming.date || schedule.isLocationOnly) {
+      setDayWeather(null);
+      return undefined;
+    }
+
+    let active = true;
+    getPrepWeather(schedule.id)
+      .then((result) => {
+        if (active) setDayWeather(result.weather || null);
+      })
+      .catch((error) => {
+        console.error("일정 날씨 조회 실패:", error);
+        if (active) setDayWeather(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    schedule?.id,
+    schedule?.isLocationOnly,
+    scheduleTiming.date,
+    scheduleTiming.starttime,
+    locationText,
+    locationAddress,
+    selectedMeetingPlace?.lat,
+    selectedMeetingPlace?.lng,
+  ]);
 
   useEffect(() => {
     if (!schedule?.roomid) return;
@@ -1069,6 +1102,27 @@ function ConfirmedScheduleDetailPage() {
                 <span>{timeUntil}</span>
               </p>
             )}
+            {dayWeather && (
+              <p
+                style={{
+                  margin: "3px 0 0",
+                  fontSize: "12px",
+                  color: "#6A7083",
+                  fontWeight: "500",
+                }}
+              >
+                🌧️ 당일 날씨: {dayWeather.description}{" "}
+                {dayWeather.precipitationProbability}%
+                {dayWeather.temperatureMin != null &&
+                dayWeather.temperatureMax != null
+                  ? ` · 최고 ${dayWeather.temperatureMax}° · 최저 ${dayWeather.temperatureMin}°C`
+                  : dayWeather.temperature != null
+                    ? ` · ${dayWeather.temperature}°C`
+                    : ""}
+                {" · "}
+                {locationText || schedule.location || "약속 장소"} 기준
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -1245,6 +1299,19 @@ function ConfirmedScheduleDetailPage() {
         )}
 
         {middlePlaceSection}
+
+        {schedule.date && (
+          <PrepSummaryCard
+            schedule={schedule}
+            attendees={attendees}
+            absentees={absentees}
+            isPast={isPastSchedule}
+            hasPlace={
+              selectedMeetingPlace?.lat != null &&
+              selectedMeetingPlace?.lng != null
+            }
+          />
+        )}
 
         <div style={{ marginBottom: "16px" }} />
 
