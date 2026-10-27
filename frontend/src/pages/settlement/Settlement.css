@@ -1,0 +1,1624 @@
+.settle-page {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 0 16px 112px;
+  color: #141826;
+  background: #fff;
+}
+
+.settle-page button {
+  font-family: inherit;
+}
+
+.settle-header {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  height: 54px;
+  margin: 0 -16px;
+  padding: 0 12px;
+  border-bottom: 1px solid #e6e7eb;
+}
+
+.settle-header h1 {
+  margin: 0;
+  font-size: 16px;
+  text-align: center;
+}
+
+.settle-back {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: none;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.settle-muted {
+  padding: 40px 0;
+  color: #6a7083;
+  text-align: center;
+}
+
+.settle-toast {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  z-index: 10020;
+  max-width: calc(100vw - 32px);
+  padding: 10px 16px;
+  border-radius: 10px;
+  color: #fff;
+  background: #141826e6;
+  font-size: 13px;
+  transform: translateX(-50%);
+}
+
+.settle-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0 12px;
+}
+
+.settle-tabs button {
+  flex: 1;
+  padding: 12px 0;
+  border: 1px solid #e6e7eb;
+  border-radius: 12px;
+  color: #6a7083;
+  background: #f5f5f8;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settle-tabs button.active {
+  border-color: #7f5ef6;
+  color: #fff;
+  background: #7f5ef6;
+}
+
+.settle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 12px;
+  padding: 13px 14px;
+  border-radius: 12px;
+  background: #f0ecfd;
+  font-size: 13px;
+}
+
+.settle-info span {
+  color: #6a7083;
+  font-size: 12px;
+}
+
+.settle-card {
+  padding: 4px 14px;
+  border: 1px solid #e6e7eb;
+  border-radius: 14px;
+}
+
+.settle-field {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #303546;
+}
+
+.settle-field input,
+.settle-field select,
+.settle-custom-input input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid #e6e7eb;
+  border-radius: 10px;
+  color: #141826;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.settle-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settle-input-wrap em {
+  position: absolute;
+  right: 12px;
+  color: #6a7083;
+  font-size: 13px;
+  font-style: normal;
+}
+
+.settle-input-wrap input {
+  padding-right: 34px;
+}
+
+.settle-clear {
+  position: absolute;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: #c4c7d1;
+  cursor: pointer;
+}
+
+.settle-section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 20px 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.settle-section-title small {
+  color: #7f5ef6;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.settle-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settle-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border: 1px solid #e6e7eb;
+  border-radius: 999px;
+  color: #303546;
+  background: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.settle-chips button.on {
+  border-color: #7f5ef6;
+  color: #7f5ef6;
+  background: #f0ecfd;
+  font-weight: 700;
+}
+
+.settle-chips small {
+  color: #e5484d;
+  font-size: 11px;
+}
+
+.settle-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid #c4c7d1;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 11px;
+}
+
+.settle-chips button.on .settle-check {
+  border-color: #7f5ef6;
+  background: #7f5ef6;
+}
+
+.settle-primary {
+  display: block;
+  width: 100%;
+  margin-top: 22px;
+  padding: 15px 0;
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  background: #7f5ef6;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settle-primary:disabled {
+  background: #cfc6f7;
+  cursor: default;
+}
+
+.settle-outline {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 11px 0;
+  border: 1px solid #7f5ef6;
+  border-radius: 10px;
+  color: #7f5ef6;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settle-outline:disabled {
+  border-color: #e6e7eb;
+  color: #b9bcc8;
+  cursor: default;
+}
+
+.settle-error {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  color: #bd3137;
+  background: #fff0f0;
+  font-size: 13px;
+}
+
+.settle-amount-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 18px;
+  border-radius: 14px;
+  background: #f0ecfd;
+}
+
+.settle-amount-card > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settle-amount-card strong {
+  font-size: 24px;
+}
+
+.settle-amount-card small {
+  color: #6a7083;
+  font-size: 12px;
+}
+
+.settle-coin {
+  font-size: 30px;
+}
+
+.settle-mode {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.settle-mode button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 13px 12px;
+  border: 1px solid #e6e7eb;
+  border-radius: 12px;
+  color: #303546;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settle-mode button.on {
+  border-color: #7f5ef6;
+  background: #f0ecfd;
+}
+
+.settle-mode b {
+  font-size: 13px;
+}
+
+.settle-mode small {
+  color: #6a7083;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.settle-radio {
+  color: #7f5ef6;
+}
+
+.settle-list {
+  border: 1px solid #e6e7eb;
+  border-radius: 14px;
+}
+
+.settle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 0 14px;
+  border-bottom: 1px solid #f0f0f4;
+}
+
+.settle-row:last-child {
+  border-bottom: 0;
+}
+
+.settle-row.me {
+  background: #f0ecfd;
+}
+
+.settle-row-name {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.settle-initial {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: #7f5ef6;
+  background: #e6defc;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.settle-custom-input {
+  width: 130px;
+}
+
+.settle-note {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  color: #6a7083;
+  background: #f5f5f8;
+  font-size: 12px;
+}
+
+.settle-custom-summary {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  background: #f5f5f8;
+}
+
+.settle-custom-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+.settle-custom-total strong {
+  font-size: 18px;
+}
+
+.settle-ok,
+.settle-bad {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settle-ok {
+  color: #1f9d55;
+}
+
+.settle-bad {
+  color: #e5484d;
+}
+
+.settle-schedule-card,
+.settle-expense-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid #e6e7eb;
+  border-radius: 14px;
+}
+
+.settle-schedule-card span,
+.settle-expense-card > span {
+  color: #6a7083;
+  font-size: 13px;
+}
+
+.settle-expense-card {
+  margin-top: 0;
+}
+
+.settle-expense-card small {
+  color: #8b90a0;
+  font-size: 12px;
+}
+
+.settle-expense-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 16px;
+}
+
+.settle-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #d9d3fb;
+  border-radius: 12px;
+  background: #f7f5ff;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.settle-account small {
+  color: #6a7083;
+}
+
+.settle-account button {
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border: 1px solid #7f5ef6;
+  border-radius: 8px;
+  color: #7f5ef6;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settle-done-note {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  background: #f0ecfd;
+}
+
+.settle-done-note > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+}
+
+.settle-done-note small {
+  color: #6a7083;
+  font-size: 12px;
+}
+
+.settle-done-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #fff;
+  background: #7f5ef6;
+}
+
+.settle-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.settle-actions .settle-primary,
+.settle-actions .settle-secondary {
+  flex: 1;
+  margin-top: 0;
+}
+
+.settle-secondary {
+  padding: 15px 0;
+  border: 1px solid #7f5ef6;
+  border-radius: 12px;
+  color: #7f5ef6;
+  background: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settle-field.needs input,
+.settle-field.needs select {
+  border-color: #f0a030;
+  background: #fffaf0;
+  box-shadow: 0 0 0 2px #f0a03028;
+}
+
+.settle-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 260px;
+  border: 2px dashed #c9bdfa;
+  border-radius: 14px;
+  color: #7f5ef6;
+  background: #faf9ff;
+  cursor: pointer;
+}
+
+.settle-dropzone-icon {
+  font-size: 40px;
+}
+
+.settle-dropzone strong {
+  font-size: 18px;
+}
+
+.settle-dropzone small {
+  color: #8b90a0;
+}
+
+.settle-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e6e7eb;
+  border-radius: 14px;
+}
+
+.settle-preview img {
+  max-width: 100%;
+  max-height: 340px;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.settle-preview button {
+  padding: 7px 14px;
+  border: 1px solid #d9d3fb;
+  border-radius: 8px;
+  color: #7f5ef6;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settle-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 22px;
+  padding: 15px 0;
+  border-radius: 12px;
+  color: #7f5ef6;
+  background: #f0ecfd;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.settle-spinner {
+  width: 18px;
+  height: 18px;
+  border: 3px solid #d9d3fb;
+  border-top-color: #7f5ef6;
+  border-radius: 50%;
+  animation: settle-spin 0.8s linear infinite;
+}
+
+@keyframes settle-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.settle-ocr-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 16px 0 12px;
+  padding: 12px;
+  border: 1px solid #e6e7eb;
+  border-radius: 14px;
+}
+
+.settle-ocr-card img {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 80px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #f5f5f8;
+}
+
+.settle-ocr-card > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.settle-ocr-card strong {
+  font-size: 16px;
+}
+
+.settle-ocr-card span {
+  color: #8b90a0;
+  font-size: 12px;
+}
+
+.settle-ocr-card b {
+  font-size: 17px;
+}
+
+.settle-warnings {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  color: #a85d00;
+  background: #fff6e8;
+  font-size: 12px;
+  line-height: 1.6;
+  list-style: none;
+}
+
+.settle-warnings p {
+  margin: 0;
+}
+
+.settle-attached {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  color: #6a7083;
+  background: #f5f5f8;
+  font-size: 12px;
+}
+
+.settle-attached button {
+  border: 0;
+  background: none;
+  color: #6a7083;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.settle-add-more {
+  margin-top: 16px;
+  padding: 14px 0;
+  font-size: 15px;
+}
+
+/* ---- 정산하기 한 화면 (지출 카드 여러 개) ---- */
+.settle-item {
+  margin-top: 14px;
+  padding: 6px 14px 14px;
+  border: 1px solid #e6e7eb;
+  border-radius: 14px;
+}
+
+.settle-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0 4px;
+  font-size: 15px;
+}
+
+.settle-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settle-chip-btn {
+  padding: 6px 10px;
+  border: 1px solid #d9d3fb;
+  border-radius: 999px;
+  color: #7f5ef6;
+  background: #f7f5ff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settle-chip-btn:disabled {
+  color: #b9bcc8;
+  cursor: default;
+}
+
+.settle-remove {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  color: #6a7083;
+  background: #f0f0f4;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.settle-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 6px;
+  padding: 11px 2px;
+  border: 0;
+  border-top: 1px solid #f0f0f4;
+  color: #303546;
+  background: none;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settle-toggle b {
+  margin-right: auto;
+  margin-left: 6px;
+  color: #7f5ef6;
+}
+
+.settle-toggle span {
+  color: #8b90a0;
+  font-size: 11px;
+}
+
+.settle-chips-inner {
+  padding-bottom: 8px;
+}
+
+.settle-split-toggle {
+  display: flex;
+  gap: 4px;
+  margin: 8px 0 10px;
+  padding: 4px;
+  border-radius: 12px;
+  background: #f1f1f5;
+}
+
+.settle-split-toggle button {
+  flex: 1;
+  padding: 9px 0;
+  border: 0;
+  border-radius: 9px;
+  color: #6a7083;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settle-split-toggle button.on {
+  color: #7f5ef6;
+  background: #fff;
+  box-shadow: 0 1px 4px #14182614;
+}
+
+.settle-list-inner {
+  margin-top: 4px;
+}
+
+.settle-row.compact {
+  min-height: 48px;
+}
+
+.settle-row.compact .settle-row-name {
+  font-size: 14px;
+}
+
+.settle-attach-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: #6a7083;
+  background: #f5f5f8;
+  font-size: 12px;
+}
+
+.settle-attach-row img {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 44px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.settle-attach-row span {
+  flex: 1;
+}
+
+.settle-attach-row button {
+  border: 0;
+  background: none;
+  color: #6a7083;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.settle-loading.small {
+  margin: 6px 0 8px;
+  padding: 11px 0;
+  font-size: 13px;
+}
+
+.settle-add-item {
+  margin-top: 14px;
+  padding: 14px 0;
+  font-size: 14px;
+}
+
+.settle-total-card {
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid #d9d3fb;
+  border-radius: 14px;
+  background: #faf9ff;
+}
+
+.settle-total-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.settle-total-head strong {
+  font-size: 20px;
+}
+
+.settle-section-title.small {
+  margin: 14px 0 6px;
+  font-size: 13px;
+}
+
+.settle-summary-me {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.settle-summary-me > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #e6e7eb;
+}
+
+.settle-summary-me small {
+  color: #6a7083;
+  font-size: 11px;
+}
+
+.settle-summary-me strong {
+  font-size: 16px;
+}
+
+.settle-result-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 14px;
+  border: 1px solid #e6e7eb;
+  border-radius: 14px;
+}
+
+.settle-sub {
+  color: #6a7083;
+  font-size: 12px;
+}
+
+/* ---- 정산 요청 확인 창 ---- */
+.settle-overlay {
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: #14182670;
+}
+
+.settle-confirm {
+  box-sizing: border-box;
+  width: min(100%, 560px);
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 22px 18px max(22px, env(safe-area-inset-bottom));
+  border-radius: 24px 24px 0 0;
+  background: #fff;
+  box-shadow: 0 -10px 40px #14182620;
+}
+
+.settle-confirm h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.settle-confirm-desc {
+  margin: 6px 0 14px;
+  color: #6a7083;
+  font-size: 13px;
+}
+
+.settle-confirm-list {
+  margin: 0;
+  padding: 0;
+  border: 1px solid #e6e7eb;
+  border-radius: 14px;
+  list-style: none;
+}
+
+.settle-confirm-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f4;
+  color: #6a7083;
+  font-size: 12px;
+}
+
+.settle-confirm-list li:last-child {
+  border-bottom: 0;
+}
+
+.settle-confirm-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #141826;
+  font-size: 15px;
+}
+
+.settle-confirm-mine {
+  color: #7f5ef6;
+  font-weight: 700;
+}
+
+.settle-confirm-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f0ecfd;
+  font-size: 14px;
+}
+
+.settle-confirm-total strong {
+  font-size: 18px;
+}
+
+.settle-confirm .settle-actions .settle-primary,
+.settle-confirm .settle-actions .settle-secondary {
+  margin-top: 0;
+}
+
+/* ---- OCR 결제 후보 고르기 ---- */
+.settle-pick-list {
+  margin: 0;
+  padding: 0;
+  border: 1px solid #e6e7eb;
+  border-radius: 14px;
+  list-style: none;
+}
+
+.settle-pick-list li {
+  border-bottom: 1px solid #f0f0f4;
+}
+
+.settle-pick-list li:last-child {
+  border-bottom: 0;
+}
+
+.settle-pick-list button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 14px;
+  border: 0;
+  color: #141826;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settle-pick-list button.on {
+  background: #f0ecfd;
+}
+
+.settle-pick-info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settle-pick-info small {
+  color: #8b90a0;
+  font-size: 12px;
+}
+
+.settle-pick-list b {
+  font-size: 15px;
+}
+
+.settle-radio-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid #c4c7d1;
+  border-radius: 50%;
+  color: #7f5ef6;
+  font-size: 11px;
+}
+
+.settle-pick-list button.on .settle-radio-mark {
+  border-color: #7f5ef6;
+}
+
+.settle-pick-list button.on .settle-check {
+  border-color: #7f5ef6;
+  background: #7f5ef6;
+}
+
+.settle-link {
+  display: block;
+  margin: 12px auto 0;
+  padding: 6px 4px;
+  border: 0;
+  color: #7f5ef6;
+  background: none;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ---- 정산 내역 / 상세 / 증빙 뷰어 ---- */
+.settle-hint {
+  margin: 8px 2px 0;
+  color: #8b90a0;
+  font-size: 11px;
+}
+
+.settle-expense-list {
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.settle-expense-list li {
+  margin-bottom: 10px;
+}
+
+.settle-expense-list button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #e6e7eb;
+  border-radius: 14px;
+  color: #141826;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settle-expense-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: #f0ecfd;
+  font-size: 20px;
+}
+
+.settle-expense-info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settle-expense-info strong {
+  font-size: 15px;
+}
+
+.settle-expense-info b {
+  font-size: 16px;
+}
+
+.settle-expense-info small {
+  color: #8b90a0;
+  font-size: 12px;
+}
+
+.settle-expense-side {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  color: #8b90a0;
+}
+
+.settle-expense-side em {
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: #7f5ef6;
+  background: #f0ecfd;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.settle-expense-side em.done {
+  color: #1f9d55;
+  background: #e9f8ef;
+}
+
+.settle-receipt-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid #e6e7eb;
+  border-radius: 14px;
+  color: #141826;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settle-receipt-row > span:nth-child(2) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settle-receipt-row small {
+  color: #8b90a0;
+  font-size: 12px;
+}
+
+.settle-receipt-row em {
+  color: #7f5ef6;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.settle-receipt-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: #f5f5f8;
+  font-size: 20px;
+}
+
+.settle-highlight {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #f0ecfd;
+}
+
+.settle-highlight small {
+  color: #7f5ef6;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.settle-highlight strong {
+  font-size: 26px;
+}
+
+.settle-highlight span {
+  color: #6a7083;
+  font-size: 12px;
+}
+
+.settle-progress {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e6e7eb;
+  border-radius: 12px;
+}
+
+.settle-progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.settle-progress-bar {
+  height: 8px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #ececf0;
+}
+
+.settle-progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: #7f5ef6;
+}
+
+.settle-status-line {
+  display: block;
+  margin-top: 2px;
+  color: #8b90a0;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.settle-share-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.settle-mini {
+  padding: 5px 10px;
+  border: 1px solid #d9d3fb;
+  border-radius: 999px;
+  color: #7f5ef6;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settle-mini.on {
+  border-color: #7f5ef6;
+  color: #fff;
+  background: #7f5ef6;
+}
+
+.settle-mini:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.settle-viewer {
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  color: #fff;
+  background: #111;
+}
+
+.settle-viewer-header {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  height: 54px;
+  padding: 0 8px;
+}
+
+.settle-viewer-header h1 {
+  margin: 0;
+  font-size: 16px;
+  text-align: center;
+}
+
+.settle-viewer-header button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  color: #fff;
+  background: none;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.settle-viewer-stage {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  touch-action: pan-x pan-y pinch-zoom;
+}
+
+.settle-viewer-stage img {
+  max-width: 100%;
+  max-height: 100%;
+  margin: auto;
+  object-fit: contain;
+  cursor: zoom-in;
+}
+
+.settle-viewer-stage img.zoomed {
+  max-width: none;
+  max-height: none;
+  width: 250%;
+  margin: 0;
+  cursor: zoom-out;
+}
+
+.settle-viewer-message {
+  margin: auto;
+  color: #c9ccd6;
+  font-size: 14px;
+}
+
+.settle-viewer-caption {
+  margin: 0;
+  padding: 14px 16px max(18px, env(safe-area-inset-bottom));
+  color: #c9ccd6;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ---- 지출 카드 좌우 넘기기 ---- */
+.settle-pager-tabs {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 2px 0 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.settle-pager-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.settle-pager-tabs button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid #e6e7eb;
+  border-radius: 999px;
+  color: #6a7083;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settle-pager-tabs button.on {
+  border-color: #7f5ef6;
+  color: #fff;
+  background: #7f5ef6;
+}
+
+.settle-pager-tabs button.add {
+  border-style: dashed;
+  border-color: #c9bdfa;
+  color: #7f5ef6;
+  background: #faf9ff;
+}
+
+.settle-pager-tabs button i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  color: #fff;
+  background: #e5484d;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1;
+}
+
+.settle-track {
+  display: flex;
+  align-items: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  transition: height 0.2s ease;
+  -webkit-overflow-scrolling: touch;
+}
+
+.settle-track::-webkit-scrollbar {
+  display: none;
+}
+
+.settle-slide {
+  box-sizing: border-box;
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+.settle-slide .settle-item {
+  margin-top: 0;
+}
+
+.settle-pager-tabs.result {
+  margin-top: 0;
+}
+
+.settle-slide .settle-result-item {
+  margin-bottom: 0;
+}
+
+/* ---- 수정/삭제, 내 계좌 저장 ---- */
+.settle-pager-tabs.hidden {
+  display: none;
+}
+
+.settle-header.with-actions {
+  grid-template-columns: 44px 1fr auto;
+}
+
+.settle-header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.settle-header-actions button {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  color: #7f5ef6;
+  background: none;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settle-header-actions button.danger {
+  color: #e5484d;
+}
+
+.settle-primary.settle-danger {
+  background: #e5484d;
+}
+
+.settle-primary.settle-danger:disabled {
+  background: #f1b3b5;
+}
+
+.settle-save-account {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 6px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  color: #303546;
+  background: #f5f5f8;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settle-save-account input {
+  width: 18px;
+  height: 18px;
+  accent-color: #7f5ef6;
+}
+
+/* 가운데 팝업형 확인 창 (정산 삭제) */
+.settle-overlay.center {
+  align-items: center;
+  padding: 0 24px;
+}
+
+.settle-confirm.center {
+  width: min(100%, 340px);
+  max-height: 80vh;
+  padding: 24px 20px 20px;
+  border-radius: 20px;
+  text-align: center;
+  box-shadow: 0 12px 40px #14182640;
+}
+
+.settle-confirm.center .settle-confirm-desc {
+  margin: 10px 0 18px;
+  line-height: 1.6;
+}
+
+.settle-confirm-warning {
+  margin: -6px 0 16px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: #b4540a;
+  background: #fff4e5;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.settle-confirm-people {
+  color: #6a7083;
+  line-height: 1.5;
+  word-break: keep-all;
+}
+
+.settle-confirm-all {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 12px 0 0;
+  padding: 11px 14px;
+  border-radius: 12px;
+  color: #303546;
+  background: #f5f5f8;
+  font-size: 13px;
+}
+
+.settle-confirm-all b {
+  color: #7f5ef6;
+}
+
+.settle-confirm-all span {
+  color: #6a7083;
+  font-size: 12px;
+  line-height: 1.5;
+}

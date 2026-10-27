@@ -25,6 +25,7 @@ import PrepSummaryCard from "../../components/PrepSummaryCard";
 import { getTodayStr } from "../../utils/scheduleUtils";
 import { getPrepWeather } from "../../api/prepApi";
 import { getWeatherEmoji } from "../../utils/weatherEmoji";
+import { listExpenses } from "../../api/settlementApi";
 
 function getTimeUntil(date, starttime) {
   if (!date || !date.match(/^\d{4}-\d{2}-\d{2}$/)) return null;
@@ -112,6 +113,7 @@ function ConfirmedScheduleDetailPage() {
   const [isEditingLocationMap, setIsEditingLocationMap] = useState(false);
   const [dayWeather, setDayWeather] = useState(null);
   const [liveRoomName, setLiveRoomName] = useState(schedule?.roomname || "");
+  const [settlementCount, setSettlementCount] = useState(0);
 
   useEffect(() => {
     if (!schedule) {
@@ -206,6 +208,22 @@ function ConfirmedScheduleDetailPage() {
       }
     }
   }, [schedule]);
+
+  // 이 약속에 등록된 지출이 있으면 "정산 내역 보기" 버튼을 보여준다.
+  useEffect(() => {
+    if (!schedule?.id || schedule.isLocationOnly) return undefined;
+    let active = true;
+    listExpenses(schedule.id)
+      .then((result) => {
+        if (active) setSettlementCount(result.summary.count);
+      })
+      .catch(() => {
+        if (active) setSettlementCount(0);
+      });
+    return () => {
+      active = false;
+    };
+  }, [schedule?.id, schedule?.isLocationOnly]);
 
   // 이전 화면에서 넘겨받은 방 이름 대신 최신 값을 조회하고, 바뀌면 바로 반영한다.
   useEffect(() => {
@@ -1376,6 +1394,54 @@ function ConfirmedScheduleDetailPage() {
           absentees={absentees}
           isPast={isPastSchedule}
         />
+
+        <button
+          type="button"
+          onClick={() => navigate(`/schedules/${schedule.id}/settlement/new`)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            width: "100%",
+            marginTop: "12px",
+            padding: "14px 0",
+            border: "none",
+            borderRadius: "12px",
+            background: "#7F5EF6",
+            color: "#fff",
+            fontSize: "15px",
+            fontWeight: "700",
+            cursor: "pointer",
+          }}
+        >
+          🧾 정산하기
+        </button>
+
+        {settlementCount > 0 && (
+          <button
+            type="button"
+            onClick={() => navigate(`/schedules/${schedule.id}/settlement`)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              width: "100%",
+              marginTop: "8px",
+              padding: "13px 0",
+              border: "1px solid #7F5EF6",
+              borderRadius: "12px",
+              background: "var(--card-bg, #fff)",
+              color: "#7F5EF6",
+              fontSize: "15px",
+              fontWeight: "700",
+              cursor: "pointer",
+            }}
+          >
+            정산 내역 보기 ({settlementCount}건)
+          </button>
+        )}
 
         <div style={{ marginBottom: "16px" }} />
 

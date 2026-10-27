@@ -6,6 +6,7 @@ const kakaoRouteRouter = require('./routes/kakaoRoute')
 const googlePlaceRouter = require("./routes/googlePlace")
 const routeTimeRouter = require('./routes/routeTime')
 const prepRouter = require('./routes/prep')
+const settlementRouter = require('./routes/settlement')
 const { startVoteCloserJob } = require('./jobs/voteJob')
 const { startPrepReminderJob } = require('./jobs/prepReminderJob')
 
@@ -18,6 +19,7 @@ app.use('/api/kakao', kakaoRouteRouter)
 app.use("/api/google", googlePlaceRouter)
 app.use('/api/route', routeTimeRouter)
 app.use('/api/prep', prepRouter)
+app.use('/api/settlement', settlementRouter)
 
 // 🚀 백엔드 자동 마감 작업 시작
 startVoteCloserJob()

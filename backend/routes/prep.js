@@ -157,6 +157,24 @@ function weatherBasisOf(origin) {
   return origin.type === "place" ? "place" : "none";
 }
 
+// OpenWeatherMap 한국어 번역 중 어색한 표현을 사람이 쓰는 말로 바꾼다. (예: "실 비" = light drizzle)
+const WEATHER_DESCRIPTION_LABELS = {
+  "실 비": "이슬비",
+  "가벼운 비": "약한 비",
+  "보통 비": "비",
+  "강한 비": "강한 비",
+  "튼구름": "구름 많음",
+  "구름조금": "구름 조금",
+  "온흐림": "흐림",
+  "박무": "옅은 안개",
+  "연무": "연무",
+};
+
+function describeWeather(description) {
+  if (!description) return "날씨 정보";
+  return WEATHER_DESCRIPTION_LABELS[description.trim()] || description;
+}
+
 function formatForecastEntry(entry, timezoneOffset) {
   const localDate = new Date((entry.dt + timezoneOffset) * 1000);
   return {
@@ -186,7 +204,7 @@ function summarizeForecast(entries, schedule, timezoneOffset) {
       .filter(Number.isFinite);
 
     return {
-      description: selected.entry.weather?.[0]?.description || "날씨 정보",
+      description: describeWeather(selected.entry.weather?.[0]?.description),
       precipitationProbability: Math.round(
         Math.max(...localEntries.map(({ entry }) => Number(entry.pop || 0))) * 100
       ),
@@ -206,7 +224,7 @@ function summarizeForecast(entries, schedule, timezoneOffset) {
   const entry = closest.entry;
 
   return {
-    description: entry.weather?.[0]?.description || "날씨 정보",
+    description: describeWeather(entry.weather?.[0]?.description),
     precipitationProbability: Math.round(Number(entry.pop || 0) * 100),
     temperature: Number.isFinite(Number(entry.main?.temp))
       ? Math.round(Number(entry.main.temp))

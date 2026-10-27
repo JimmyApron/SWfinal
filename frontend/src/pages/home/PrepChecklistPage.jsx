@@ -263,6 +263,8 @@ function PrepChecklistPage() {
     return () => {
       active = false;
     };
+    // 일정이 바뀔 때만 다시 불러온다. (추천 시트 열기 여부는 처음 한 번만 읽는다)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleId]);
 
   useEffect(() => {
