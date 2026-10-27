@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import {
+  PREP_EVENT_CATEGORIES,
   addPrepItem,
   addPrepSeat,
   claimPrepItem,
   deletePrepItem,
+  getPrepContext,
   getPrepData,
   getPrepSchedule,
   getPrepWeather,
@@ -13,11 +15,14 @@ import {
   recommendPrepItems,
   removePrepAssignment,
   requestPrepAssignment,
+  savePrepContext,
   setPrepCheck,
   updatePrepAssignment,
   updatePrepItem,
 } from "../../api/prepApi";
 import { createNotification } from "../../api/notificationApi";
+import { getCurrentPosition } from "../../services/geolocationService";
+import { getWeatherEmoji, PREP_BASIS_ICONS } from "../../utils/weatherEmoji";
 import "./PrepChecklistPage.css";
 
 const QUICK_NOTES = ["1개 가져갈게요", "집에 있어요", "사갈게요", "빌려올게요"];
@@ -44,7 +49,7 @@ function formatScheduleDate(schedule) {
   return `${dateText} ${time}`;
 }
 
-function formatWeather(weather) {
+function formatWeather(weather, air) {
   if (!weather) return "";
   const temperature =
     weather.temperatureMin != null && weather.temperatureMax != null
@@ -54,8 +59,9 @@ function formatWeather(weather) {
         : "";
   const details = [
     weather.description,
-    `${weather.precipitationProbability}%`,
+    `강수 ${weather.precipitationProbability}%`,
     temperature,
+    air?.level ? `미세먼지 ${air.level}` : "",
   ].filter(Boolean);
   return details.join(" · ");
 }
@@ -75,8 +81,61 @@ function Avatar({ participant, done = false }) {
   );
 }
 
+const SHEET_CLOSE_DISTANCE = 110;
+
+// 손잡이를 아래로 끌어내리면 시트가 따라 내려가고, 충분히 내리면 닫힌다.
+function SheetGrabber({ onClose }) {
+  const dragRef = useRef(null);
+
+  const getSheet = (event) => event.currentTarget.closest(".prep-sheet");
+
+  const handlePointerDown = (event) => {
+    const sheet = getSheet(event);
+    if (!sheet) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    sheet.style.transition = "none";
+    dragRef.current = { startY: event.clientY, offset: 0 };
+  };
+
+  const handlePointerMove = (event) => {
+    const drag = dragRef.current;
+    const sheet = getSheet(event);
+    if (!drag || !sheet) return;
+    drag.offset = Math.max(0, event.clientY - drag.startY);
+    sheet.style.transform = `translateY(${drag.offset}px)`;
+  };
+
+  const handlePointerEnd = (event) => {
+    const drag = dragRef.current;
+    const sheet = getSheet(event);
+    dragRef.current = null;
+    if (!drag || !sheet) return;
+    sheet.style.transition = "transform 0.2s ease";
+    if (drag.offset > SHEET_CLOSE_DISTANCE) {
+      onClose();
+    } else {
+      sheet.style.transform = "";
+    }
+  };
+
+  return (
+    <div
+      className="prep-sheet-grabber-area"
+      role="button"
+      aria-label="아래로 끌어서 닫기"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerEnd}
+      onPointerCancel={handlePointerEnd}
+    >
+      <div className="prep-sheet-grabber" />
+    </div>
+  );
+}
+
 function PrepChecklistPage() {
   const navigate = useNavigate();
+  const routeLocation = useLocation();
   const { scheduleId } = useParams();
   const [schedule, setSchedule] = useState(null);
   const [attendees, setAttendees] = useState([]);
@@ -92,6 +151,8 @@ function PrepChecklistPage() {
   const [notice, setNotice] = useState("");
   const [weather, setWeather] = useState(null);
   const [weatherBasis, setWeatherBasis] = useState("none");
+  const [weatherSource, setWeatherSource] = useState(null);
+  const [air, setAir] = useState(null);
   const [weatherError, setWeatherError] = useState("");
   const [editingItem, setEditingItem] = useState(null);
   const [addingKind, setAddingKind] = useState(null);
@@ -101,6 +162,9 @@ function PrepChecklistPage() {
   const [claimNote, setClaimNote] = useState("");
   const [claimAssignmentId, setClaimAssignmentId] = useState(null);
   const [detailItemId, setDetailItemId] = useState(null);
+  const [prepContext, setPrepContext] = useState({ category: null, note: "" });
+  const [contextSheet, setContextSheet] = useState(null);
+  const [contextDraft, setContextDraft] = useState({ category: null, note: "" });
   const [form, setForm] = useState({
     name: "",
     kind: "personal",
@@ -108,7 +172,13 @@ function PrepChecklistPage() {
     memo: "",
     selfAssign: false,
   });
-  const [editForm, setEditForm] = useState({ name: "", emoji: "", memo: "" });
+  const [editForm, setEditForm] = useState({ name: "", memo: "" });
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timer = setTimeout(() => setNotice(""), 3000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   const refreshPrep = useCallback(async () => {
     if (!identity) return;
@@ -147,8 +217,12 @@ function PrepChecklistPage() {
         setSchedule(context.schedule);
         setAttendees(context.attendees);
         setAbsentees(context.absentees);
-        const [data, weatherData] = await Promise.all([
+        const [data, contextData, weatherData] = await Promise.all([
           getPrepData(scheduleId, currentIdentity),
+          getPrepContext(scheduleId).catch((error) => {
+            console.error("약속 종류 조회 실패:", error);
+            return { category: null, note: "" };
+          }),
           getPrepWeather(scheduleId).catch((error) => {
             console.error("준비물 화면 날씨 조회 실패:", error);
             if (active) {
@@ -167,9 +241,16 @@ function PrepChecklistPage() {
         setItems(data.items);
         setAssignments(data.assignments);
         setChecks(data.checks);
+        setPrepContext(contextData);
+        if (routeLocation.state?.openRecommend && data.items.length === 0) {
+          setContextDraft(contextData);
+          setContextSheet("recommend");
+        }
         if (weatherData) {
           setWeather(weatherData.weather);
           setWeatherBasis(weatherData.weatherBasis || "none");
+          setWeatherSource(weatherData.weatherSource || null);
+          setAir(weatherData.air || null);
         }
       } catch (error) {
         if (active) setPageError(error.message || "준비물 화면을 불러오지 못했습니다.");
@@ -201,6 +282,11 @@ function PrepChecklistPage() {
         "postgres_changes",
         { event: "*", schema: "public", table: "prep_checks" },
         () => refreshPrep().catch((error) => setPageError(error.message))
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "prep_contexts", filter: `scheduleid=eq.${scheduleId}` },
+        () => getPrepContext(scheduleId).then(setPrepContext).catch((error) => console.error(error))
       )
       .subscribe((status) => {
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
@@ -327,27 +413,6 @@ function PrepChecklistPage() {
     runAction(() => setPrepCheck(item.id, identityForActions, !checked));
   };
 
-  const handleToggleMine = (item) => {
-    if (item.kind === "personal") {
-      handleTogglePersonal(item);
-      return;
-    }
-    const mine = assignments.find(
-      (assignment) =>
-        assignment.itemid === item.id &&
-        assignment.memberid === identity?.id &&
-        assignment.membertype === identity?.type &&
-        assignment.status === "assigned"
-    );
-    if (!mine || isReadOnly) return;
-    runAction(() =>
-      updatePrepAssignment(mine.id, identity, {
-        isdone: !mine.isdone,
-        doneat: mine.isdone ? null : new Date().toISOString(),
-      })
-    );
-  };
-
   const handleClaim = (item) => {
     const own = assignments.find(
       (assignment) =>
@@ -372,7 +437,7 @@ function PrepChecklistPage() {
       () => claimAssignmentId
         ? updatePrepAssignment(claimAssignmentId, identityForActions, { note: claimNote.trim() || null })
         : claimPrepItem(claimItem.id, identityForActions, claimNote),
-      claimAssignmentId ? "한마디를 수정했습니다." : "담당자로 등록했습니다."
+      claimAssignmentId ? "메모를 수정했습니다." : "담당자로 등록했습니다."
     );
     setClaimItem(null);
     setClaimAssignmentId(null);
@@ -423,7 +488,7 @@ function PrepChecklistPage() {
         senderId: identityForActions.id,
         type: "prep_assignment_request",
         title: "준비물 부탁이 도착했어요",
-        message: `${requester?.nickname || "멤버"}님이 "${detailItem.name}" 준비를 부탁했어요.${requestNote ? ` 한마디: ${requestNote}` : ""}`,
+        message: `${requester?.nickname || "멤버"}님이 "${detailItem.name}" 준비를 부탁했어요.${requestNote ? ` 메모: ${requestNote}` : ""}`,
         link: `/schedules/${schedule.id}/prep?assignmentId=${request.id}`,
       });
     };
@@ -484,7 +549,6 @@ function PrepChecklistPage() {
     setEditingItem(item);
     setEditForm({
       name: item.name || "",
-      emoji: item.emoji || "",
       memo: item.memo || "",
     });
   };
@@ -510,6 +574,43 @@ function PrepChecklistPage() {
     runAction(() => addPrepSeat(item.id, item.neededcount), "담당 자리를 추가했습니다.");
   };
 
+  const openContextSheet = (mode) => {
+    if (isReadOnly) return;
+    setContextDraft(prepContext);
+    setContextSheet(mode);
+  };
+
+  const submitContext = async (recommendAfter) => {
+    if (!identityForActions) return;
+    const changed =
+      (contextDraft.category || null) !== (prepContext.category || null) ||
+      (contextDraft.note || "").trim() !== (prepContext.note || "").trim();
+    try {
+      setBusy(true);
+      setPageError("");
+      if (changed) {
+        await savePrepContext(scheduleId, contextDraft, identityForActions);
+        setPrepContext({ category: contextDraft.category, note: contextDraft.note.trim() });
+      }
+      setContextSheet(null);
+      if (recommendAfter) {
+        setBusy(false);
+        await handleRecommend(false);
+      } else if (changed && items.length > 0) {
+        setNotice("약속 종류가 바뀌었어요. ↻ AI 다시 추천을 눌러 반영해 보세요.");
+      }
+    } catch (error) {
+      setPageError(error.message || "약속 종류를 저장하지 못했습니다.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const skipContextAndRecommend = async () => {
+    setContextSheet(null);
+    await handleRecommend(false);
+  };
+
   const handleRecommend = async (regenerate) => {
     if (!schedule || isReadOnly || busy) return;
     try {
@@ -517,9 +618,20 @@ function PrepChecklistPage() {
       setPageError("");
       setNotice("");
       setWeatherError("");
-      const result = await recommendPrepItems(schedule.id, regenerate);
+      // 확정/함께 가고 싶은 장소가 없을 때만 현재 위치를 요청한다(권한 거부·실패 시 날씨 없이 추천).
+      let userLocation = null;
+      const basisCheck = await getPrepWeather(schedule.id).catch(() => null);
+      if (basisCheck?.needsLocation) {
+        userLocation = await getCurrentPosition().catch((error) => {
+          console.error("현재 위치를 가져오지 못해 날씨 없이 추천합니다:", error.message);
+          return null;
+        });
+      }
+      const result = await recommendPrepItems(schedule.id, regenerate, userLocation);
       setWeather(result.weather || null);
       setWeatherBasis(result.weatherBasis || "none");
+      setWeatherSource(result.weatherSource || null);
+      setAir(result.air || null);
       await refreshPrep();
       setNotice(
         result.weatherWarning ||
@@ -545,6 +657,18 @@ function PrepChecklistPage() {
     setAddingKind(kind);
   };
 
+  const claimSummary = claimItem
+    ? (() => {
+        const occupied = assignments.filter(
+          (a) => a.itemid === claimItem.id && ["assigned", "requested"].includes(a.status)
+        );
+        const names = occupied
+          .map((a) => attendees.find((p) => p.id === String(a.memberid) && p.type === a.membertype)?.nickname)
+          .filter(Boolean);
+        return `항목 메모: ${claimItem.memo || "없음"} · ${claimItem.neededcount}명 중 ${occupied.length}명 담당 중${names.length ? `(${names.join(", ")})` : ""}`;
+      })()
+    : "";
+
   const memberByKey = useMemo(
     () => new Map(attendees.map((person) => [getIdentityKey(person), person])),
     [attendees]
@@ -562,10 +686,21 @@ function PrepChecklistPage() {
       </header>
 
       {schedule && (
-        <p className="prep-schedule-line">
-          {schedule.title || "모임"} · {formatScheduleDate(schedule)} · {schedule.location || "장소 미정"}
-          {weather && ` · ${formatWeather(weather)}`}
-        </p>
+        <div className="prep-info">
+          <p className="prep-schedule-line">
+            {schedule.title || "모임"} · {formatScheduleDate(schedule)} · {schedule.location || "장소 미정"}
+          </p>
+          {weather && (
+            <p className="prep-weather-line">
+              {getWeatherEmoji(weather)} {formatWeather(weather, air)}
+              {weatherSource?.label ? ` · ${weatherSource.label} 기준` : ""}
+            </p>
+          )}
+          <button type="button" className="prep-context-edit" disabled={isReadOnly} onClick={() => openContextSheet("edit")}>
+            ✎ {prepContext.category ? PREP_EVENT_CATEGORIES.find((c) => c.value === prepContext.category)?.label.replace(/^\S+\s/, "") : "약속 종류"}
+            {prepContext.note ? ` · ${prepContext.note}` : ""}
+          </button>
+        </div>
       )}
       {weatherError && <p className="prep-weather-error">{weatherError}</p>}
       {weatherBasis === "none" && schedule?.date && (
@@ -582,21 +717,6 @@ function PrepChecklistPage() {
           <span>{summaryItems.length ? Math.round((doneCount / summaryItems.length) * 100) : 0}%</span>
         </div>
         <div className="prep-progress"><span style={{ width: `${summaryItems.length ? (doneCount / summaryItems.length) * 100 : 0}%` }} /></div>
-        <div className="prep-chips">
-          {summaryItems.length ? summaryItems.map((item) => (
-            <button
-              type="button"
-              key={item.id}
-              disabled={isReadOnly || busy}
-              className={`prep-chip ${item.checked ? "is-done" : ""}`}
-              onClick={() => handleToggleMine(item)}
-            >
-              {item.emoji || (item.kind === "shared" ? "🧺" : "☑️")} {item.name}
-              {item.assigned && <b>담당</b>}
-            </button>
-          )) : <span className="prep-muted">아직 나의 준비물이 없습니다.</span>}
-        </div>
-        <p className="prep-summary-help">칩을 누르면 바로 체크돼요 · 각자 챙길 것 + 내가 맡은 것</p>
       </section>
 
       <div className="prep-tabs" role="tablist">
@@ -611,7 +731,7 @@ function PrepChecklistPage() {
       {items.length === 0 && (
         <section className="prep-empty-recommend">
           <p>AI가 일정과 날씨에 맞는 준비물을 추천해 드려요.</p>
-          <button type="button" className="prep-primary" disabled={busy || isReadOnly} onClick={() => handleRecommend(false)}>
+          <button type="button" className="prep-primary" disabled={busy || isReadOnly} onClick={() => openContextSheet("recommend")}>
             {busy ? "추천 중..." : "AI로 준비물 추천받기"}
           </button>
         </section>
@@ -631,9 +751,9 @@ function PrepChecklistPage() {
             return (
               <label className={`prep-personal-row ${checked ? "is-done" : ""}`} key={item.id}>
                 <input type="checkbox" checked={checked} disabled={isReadOnly || busy} onChange={() => handleTogglePersonal(item)} />
-                <span className="prep-item-emoji">{item.emoji || "☑️"}</span>
-                <span className="prep-personal-text"><strong>{item.name}</strong>{item.reason && <small>{item.reason}</small>}{item.memo && <small>{item.memo}</small>}</span>
+                <span className="prep-personal-text"><strong>{item.name}</strong>{item.reason && <small>{item.basis && PREP_BASIS_ICONS[item.basis] ? `${PREP_BASIS_ICONS[item.basis]} ` : ""}{item.reason}</small>}{item.memo && <small>{item.memo}</small>}</span>
                 {item.source === "ai" && <span className="prep-ai-badge">AI</span>}
+                <button type="button" className="prep-item-delete" aria-label={`${item.name} 삭제`} disabled={isReadOnly || busy} onClick={(event) => { event.preventDefault(); confirmDelete(item); }}>삭제</button>
               </label>
             );
           })}
@@ -645,7 +765,7 @@ function PrepChecklistPage() {
         </section>
       ) : (
         <section className="prep-list">
-          <p className="prep-list-help">필요한 인원만큼 담당자를 정해요 · 빈자리부터</p>
+          <p className="prep-list-help">항목마다 필요한 인원이 정해져 있어요 · 자리가 남은 항목이 위에 보여요</p>
           {items.filter((item) => item.kind === "shared").sort((a, b) => {
             const availableA = a.neededcount - assignments.filter((x) => x.itemid === a.id && ["assigned", "requested"].includes(x.status)).length;
             const availableB = b.neededcount - assignments.filter((x) => x.itemid === b.id && ["assigned", "requested"].includes(x.status)).length;
@@ -666,10 +786,11 @@ function PrepChecklistPage() {
               <article className="prep-shared-row" key={item.id}>
                 <button type="button" className="prep-shared-main" onClick={() => setDetailItemId(item.id)}>
                   <span className="prep-shared-heading">
-                    <strong>{item.emoji || "🧺"} {item.name}</strong>
+                    <strong>{item.name}</strong>
                     <span className={occupied.length === item.neededcount ? "prep-count full" : "prep-count"}>{occupied.length}/{item.neededcount}명</span>
                   </span>
                   {item.memo && <small>{item.memo}</small>}
+                  {item.reason && <small>{item.basis && PREP_BASIS_ICONS[item.basis] ? `${PREP_BASIS_ICONS[item.basis]} ` : ""}{item.reason}</small>}
                   <span className="prep-assignee-list">
                     {people.map(({ assignment, participant }) => (
                       <span className={`prep-assignee ${assignment.status === "requested" ? "requested" : ""}`} key={assignment.id}>
@@ -705,8 +826,8 @@ function PrepChecklistPage() {
       {addingKind && (
         <div className="prep-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setAddingKind(null); }}>
           <form className="prep-sheet" onSubmit={handleAddItem}>
-            <div className="prep-sheet-grabber" />
-            <div className="prep-sheet-title"><h2>준비물 추가</h2><button type="button" onClick={() => setAddingKind(null)}>×</button></div>
+            <SheetGrabber onClose={() => setAddingKind(null)} />
+            <div className="prep-sheet-title"><h2>준비물 추가</h2></div>
             <label>이름<input autoFocus maxLength={60} value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} required placeholder="예: 돗자리" /></label>
             <label>누가 챙기나요?
               <select value={form.kind} onChange={(event) => { setForm((prev) => ({ ...prev, kind: event.target.value })); setAddingKind(event.target.value); }}>
@@ -734,10 +855,10 @@ function PrepChecklistPage() {
       {claimItem && (
         <div className="prep-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setClaimItem(null); }}>
           <section className="prep-sheet">
-            <div className="prep-sheet-grabber" />
-            <div className="prep-sheet-title"><h2>{claimItem.emoji || "🧺"} {claimItem.name} {claimAssignmentId ? "한마디 수정" : "담당하기"}</h2><button type="button" onClick={() => { setClaimItem(null); setClaimAssignmentId(null); }}>×</button></div>
-            <p className="prep-sheet-description">메모: {claimItem.memo || "없음"} · {assignments.filter((a) => a.itemid === claimItem.id && ["assigned", "requested"].includes(a.status)).length}명 담당 중</p>
-            <label>한마디 (선택) · 다른 멤버에게 보여요
+            <SheetGrabber onClose={() => { setClaimItem(null); setClaimAssignmentId(null); }} />
+            <div className="prep-sheet-title"><h2>{claimItem.name} {claimAssignmentId ? "메모 수정" : "담당하기"}</h2></div>
+            <p className="prep-sheet-description">{claimSummary}</p>
+            <label>메모 (선택) · 다른 멤버에게 보여요
               <input maxLength={30} value={claimNote} onChange={(event) => setClaimNote(event.target.value)} />
             </label>
             <span className="prep-char-count">{claimNote.length}/30</span>
@@ -750,18 +871,18 @@ function PrepChecklistPage() {
       {detailItem && (
         <div className="prep-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setDetailItemId(null); }}>
           <section className="prep-sheet prep-detail-sheet">
-            <div className="prep-sheet-grabber" />
+            <SheetGrabber onClose={() => setDetailItemId(null)} />
             <div className="prep-sheet-title">
-              <h2>{detailItem.emoji || "🧺"} {detailItem.name}</h2>
-              <div><button type="button" disabled={isReadOnly} onClick={() => openEdit(detailItem)}>항목 수정</button><button type="button" disabled={isReadOnly} onClick={() => confirmDelete(detailItem)}>삭제</button><button type="button" onClick={() => setDetailItemId(null)}>×</button></div>
+              <h2>{detailItem.name}</h2>
+              <div><button type="button" disabled={isReadOnly} onClick={() => openEdit(detailItem)}>항목 수정</button><button type="button" disabled={isReadOnly} onClick={() => confirmDelete(detailItem)}>삭제</button></div>
             </div>
             <p className="prep-sheet-description">{detailItem.memo || "메모 없음"} · 필요 {detailItem.neededcount}명 중 {itemAssignments.filter((a) => ["assigned", "requested"].includes(a.status)).length}명 담당</p>
             {detailPeople.map((entry) => (
               <div className="prep-detail-person" key={entry.id}>
                 <Avatar participant={entry.participant} done={entry.status === "assigned" && entry.isdone} />
                 <div className="prep-detail-person-info">
-                  <strong>{entry.participant.nickname}{entry.memberid === identity?.id && entry.membertype === identity?.type ? <small> 내 담당 · <button type="button" disabled={isReadOnly} onClick={() => { setDetailItemId(null); setClaimItem(detailItem); setClaimNote(entry.note || ""); setClaimAssignmentId(entry.id); }}>✎</button></small> : null}</strong>
-                  <span>💬 {entry.note || "한마디 없음"}</span>
+                  <strong>{entry.participant.nickname}{entry.memberid === identity?.id && entry.membertype === identity?.type ? <small> 내 담당 · <button type="button" disabled={isReadOnly} onClick={() => { setDetailItemId(null); setClaimItem(detailItem); setClaimNote(entry.note || ""); setClaimAssignmentId(entry.id); }}>수정</button></small> : null}</strong>
+                  <span>메모: {entry.note || "없음"}</span>
                 </div>
                 <span className={`prep-assignment-state ${entry.status === "requested" ? "waiting" : entry.isdone ? "done" : ""}`}>
                   {entry.status === "requested" ? "부탁 보냄 · 대기" : entry.isdone ? "✓ 챙겼어요" : "준비 전"}
@@ -778,7 +899,9 @@ function PrepChecklistPage() {
               <div className="prep-vacant-row" key={`vacant-${index}`}>
                 <span className="prep-empty-seat">＋</span><strong>빈자리</strong>
                 <button type="button" disabled={isReadOnly || busy} onClick={() => { setRequestTarget({}); setRequestNote(""); }}>부탁하기</button>
-                <button type="button" className="prep-primary compact" disabled={isReadOnly || busy} onClick={() => handleClaim(detailItem)}>내가 할게요</button>
+                {!itemAssignments.some((a) => a.memberid === identity?.id && a.membertype === identity?.type) && (
+                  <button type="button" className="prep-primary compact" disabled={isReadOnly || busy} onClick={() => handleClaim(detailItem)}>내가 할게요</button>
+                )}
               </div>
             ))}
             {!isReadOnly && detailItem.neededcount < activeAttendees.length && (
@@ -797,8 +920,8 @@ function PrepChecklistPage() {
       {requestTarget && detailItem && (
         <div className="prep-overlay prep-overlay-top" onMouseDown={(event) => { if (event.target === event.currentTarget) setRequestTarget(null); }}>
           <section className="prep-sheet prep-request-sheet">
-            <div className="prep-sheet-grabber" />
-            <div className="prep-sheet-title"><h2>{detailItem.emoji || "🧺"} {detailItem.name} · 부탁하기</h2><button type="button" onClick={() => setRequestTarget(null)}>×</button></div>
+            <SheetGrabber onClose={() => setRequestTarget(null)} />
+            <div className="prep-sheet-title"><h2>{detailItem.name} · 부탁하기</h2></div>
             <p className="prep-sheet-description">빈자리 {Math.max(0, detailItem.neededcount - itemAssignments.filter((a) => ["assigned", "requested"].includes(a.status)).length)}개 · 부탁받은 친구가 수락하면 담당이 돼요</p>
             <strong>누구에게 부탁할까요?</strong>
             <div className="prep-request-list">
@@ -821,9 +944,46 @@ function PrepChecklistPage() {
                 return <button type="button" className={selected ? "selected" : ""} key={getIdentityKey(person)} onClick={() => setRequestTarget(person)}><Avatar participant={person} /><span><strong>{person.nickname}</strong><small>{currentlyAssigned.length ? `${currentlyAssigned.join(", ")} 담당 중` : "아직 담당 없음"}</small></span><span>{selected ? "✓" : "○"}</span></button>;
               })}
             </div>
-            <label>한마디 (선택)<input maxLength={30} value={requestNote} onChange={(event) => setRequestNote(event.target.value)} /></label>
+            <label>메모 (선택)<input maxLength={30} value={requestNote} onChange={(event) => setRequestNote(event.target.value)} /></label>
             <span className="prep-char-count">{requestNote.length}/30</span>
             <button type="button" className="prep-primary prep-submit" disabled={busy || !requestTarget.id} onClick={handleRequestSubmit}>부탁 보내기</button>
+          </section>
+        </div>
+      )}
+
+      {contextSheet && (
+        <div className="prep-overlay prep-overlay-top" onMouseDown={(event) => { if (event.target === event.currentTarget) setContextSheet(null); }}>
+          <section className="prep-sheet">
+            <SheetGrabber onClose={() => setContextSheet(null)} />
+            <div className="prep-sheet-title"><h2>어떤 약속인가요? (선택)</h2></div>
+            <p className="prep-sheet-description">약속 종류를 알려주면 더 맞는 준비물을 추천해요</p>
+            <div className="prep-note-chips prep-context-chips">
+              {PREP_EVENT_CATEGORIES.map((category) => (
+                <button
+                  type="button"
+                  key={category.value}
+                  className={contextDraft.category === category.value ? "selected" : ""}
+                  onClick={() => setContextDraft((prev) => ({ ...prev, category: prev.category === category.value ? null : category.value }))}
+                >
+                  {category.label}
+                </button>
+              ))}
+            </div>
+            <label>한 줄 설명 (선택)
+              <input maxLength={40} value={contextDraft.note} placeholder="예: 아이유 콘서트 · 스탠딩" onChange={(event) => setContextDraft((prev) => ({ ...prev, note: event.target.value }))} />
+            </label>
+            <span className="prep-char-count">{contextDraft.note.length}/40</span>
+            {contextSheet === "recommend" ? (
+              <div className="prep-detail-footer">
+                <button type="button" className="prep-outline" disabled={busy} onClick={skipContextAndRecommend}>건너뛰고 추천받기</button>
+                <button type="button" className="prep-primary" disabled={busy} onClick={() => submitContext(true)}>이걸로 추천받기</button>
+              </div>
+            ) : (
+              <div className="prep-detail-footer">
+                <button type="button" className="prep-outline" disabled={busy} onClick={() => setContextSheet(null)}>취소</button>
+                <button type="button" className="prep-primary" disabled={busy} onClick={() => submitContext(false)}>저장</button>
+              </div>
+            )}
           </section>
         </div>
       )}
@@ -831,9 +991,8 @@ function PrepChecklistPage() {
       {editingItem && (
         <div className="prep-overlay prep-overlay-top" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditingItem(null); }}>
           <form className="prep-sheet" onSubmit={saveEdit}>
-            <div className="prep-sheet-grabber" />
-            <div className="prep-sheet-title"><h2>준비물 수정</h2><button type="button" onClick={() => setEditingItem(null)}>×</button></div>
-            <label>이모지<input maxLength={8} value={editForm.emoji} onChange={(event) => setEditForm((prev) => ({ ...prev, emoji: event.target.value }))} /></label>
+            <SheetGrabber onClose={() => setEditingItem(null)} />
+            <div className="prep-sheet-title"><h2>준비물 수정</h2></div>
             <label>이름<input maxLength={60} required value={editForm.name} onChange={(event) => setEditForm((prev) => ({ ...prev, name: event.target.value }))} /></label>
             <label>메모<textarea maxLength={160} value={editForm.memo} onChange={(event) => setEditForm((prev) => ({ ...prev, memo: event.target.value }))} /></label>
             <button type="submit" className="prep-primary prep-submit" disabled={busy}>저장</button>

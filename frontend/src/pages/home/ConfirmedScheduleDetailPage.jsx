@@ -24,6 +24,7 @@ import LocationPicker from "../../components/map/LocationPicker";
 import PrepSummaryCard from "../../components/PrepSummaryCard";
 import { getTodayStr } from "../../utils/scheduleUtils";
 import { getPrepWeather } from "../../api/prepApi";
+import { getWeatherEmoji } from "../../utils/weatherEmoji";
 
 function getTimeUntil(date, starttime) {
   if (!date || !date.match(/^\d{4}-\d{2}-\d{2}$/)) return null;
@@ -110,6 +111,7 @@ function ConfirmedScheduleDetailPage() {
   const [showLocationEditChoice, setShowLocationEditChoice] = useState(false);
   const [isEditingLocationMap, setIsEditingLocationMap] = useState(false);
   const [dayWeather, setDayWeather] = useState(null);
+  const [liveRoomName, setLiveRoomName] = useState(schedule?.roomname || "");
 
   useEffect(() => {
     if (!schedule) {
@@ -205,6 +207,38 @@ function ConfirmedScheduleDetailPage() {
     }
   }, [schedule]);
 
+  // 이전 화면에서 넘겨받은 방 이름 대신 최신 값을 조회하고, 바뀌면 바로 반영한다.
+  useEffect(() => {
+    const roomId = schedule?.roomid;
+    if (!roomId) return undefined;
+
+    let active = true;
+    supabase
+      .from("rooms")
+      .select("roomname")
+      .eq("id", Number(roomId))
+      .maybeSingle()
+      .then(({ data }) => {
+        if (active && data?.roomname) setLiveRoomName(data.roomname);
+      });
+
+    const channel = supabase
+      .channel(`confirmed-detail-room-${roomId}-${Date.now()}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "rooms", filter: `id=eq.${roomId}` },
+        (payload) => {
+          if (payload.new?.roomname) setLiveRoomName(payload.new.roomname);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      active = false;
+      supabase.removeChannel(channel);
+    };
+  }, [schedule?.roomid]);
+
   useEffect(() => {
     if (!schedule?.id || !scheduleTiming.date || schedule.isLocationOnly) {
       setDayWeather(null);
@@ -214,7 +248,17 @@ function ConfirmedScheduleDetailPage() {
     let active = true;
     getPrepWeather(schedule.id)
       .then((result) => {
-        if (active) setDayWeather(result.weather || null);
+        if (active) {
+          setDayWeather(
+            result.weather
+              ? {
+                  ...result.weather,
+                  sourceLabel: result.weatherSource?.label || null,
+                  airLevel: result.air?.level || null,
+                }
+              : null
+          );
+        }
       })
       .catch((error) => {
         console.error("일정 날씨 조회 실패:", error);
@@ -936,7 +980,17 @@ function ConfirmedScheduleDetailPage() {
 
         <div style={{ padding: "16px" }}>
           <p style={{ color: "#888", fontSize: "12px", marginBottom: "4px" }}>
-            {schedule.roomname}
+            {schedule.roomid ? (
+              <button
+                type="button"
+                onClick={() => navigate(`/rooms/${schedule.roomid}?tab=schedule`)}
+                style={{ padding: 0, border: "none", background: "none", color: "inherit", font: "inherit", cursor: "pointer", textDecoration: "underline" }}
+              >
+                {liveRoomName || schedule.roomname} ›
+              </button>
+            ) : (
+              schedule.roomname
+            )}
           </p>
 
           <h2 style={{ marginBottom: "2px", fontSize: "18px" }}>일정 미정</h2>
@@ -1064,7 +1118,17 @@ function ConfirmedScheduleDetailPage() {
 
       <div style={{ padding: "14px", paddingBottom: "24px" }}>
         <p style={{ color: "#7C5CFF", fontSize: "12px", fontWeight: "700", margin: "0 0 4px" }}>
-          {schedule.roomname}
+          {schedule.roomid ? (
+            <button
+              type="button"
+              onClick={() => navigate(`/rooms/${schedule.roomid}?tab=schedule`)}
+              style={{ padding: 0, border: "none", background: "none", color: "inherit", font: "inherit", cursor: "pointer" }}
+            >
+              {liveRoomName || schedule.roomname} ›
+            </button>
+          ) : (
+            schedule.roomname
+          )}
         </p>
 
         {schedule.title && (
@@ -1111,7 +1175,7 @@ function ConfirmedScheduleDetailPage() {
                   fontWeight: "500",
                 }}
               >
-                🌧️ 당일 날씨: {dayWeather.description}{" "}
+                {getWeatherEmoji(dayWeather)} 당일 날씨: {dayWeather.description}{" "}
                 {dayWeather.precipitationProbability}%
                 {dayWeather.temperatureMin != null &&
                 dayWeather.temperatureMax != null
@@ -1119,8 +1183,9 @@ function ConfirmedScheduleDetailPage() {
                   : dayWeather.temperature != null
                     ? ` · ${dayWeather.temperature}°C`
                     : ""}
+                {dayWeather.airLevel ? ` · 미세먼지 ${dayWeather.airLevel}` : ""}
                 {" · "}
-                {locationText || schedule.location || "약속 장소"} 기준
+                {dayWeather.sourceLabel || locationText || schedule.location || "약속 장소"} 기준
               </p>
             )}
           </div>
@@ -1300,18 +1365,17 @@ function ConfirmedScheduleDetailPage() {
 
         {middlePlaceSection}
 
-        {schedule.date && (
-          <PrepSummaryCard
-            schedule={schedule}
-            attendees={attendees}
-            absentees={absentees}
-            isPast={isPastSchedule}
-            hasPlace={
-              selectedMeetingPlace?.lat != null &&
-              selectedMeetingPlace?.lng != null
-            }
-          />
-        )}
+        <PrepSummaryCard
+          schedule={{
+            ...schedule,
+            date: scheduleTiming.date || null,
+            starttime: scheduleTiming.starttime || null,
+            endtime: scheduleTiming.endtime || null,
+          }}
+          attendees={attendees}
+          absentees={absentees}
+          isPast={isPastSchedule}
+        />
 
         <div style={{ marginBottom: "16px" }} />
 

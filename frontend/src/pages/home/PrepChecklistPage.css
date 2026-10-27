@@ -453,8 +453,56 @@
 }
 
 .prep-notice {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  z-index: 10020;
+  width: max-content;
+  max-width: calc(100vw - 32px);
   color: #236a43;
   background: #e9f8ef;
+  box-shadow: 0 6px 20px #14182626;
+  text-align: center;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: prep-toast 3s ease forwards;
+}
+
+@keyframes prep-toast {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -12px);
+  }
+  8%,
+  80% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+}
+
+.prep-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 14px 0;
+}
+
+.prep-info .prep-schedule-line {
+  margin: 0;
+  color: #141826;
+  font-weight: 600;
+}
+
+.prep-weather-line {
+  margin: 0;
+  color: #6a7083;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .prep-error {
@@ -464,7 +512,7 @@
 
 .prep-overlay {
   position: fixed;
-  z-index: 7000;
+  z-index: 10000;
   inset: 0;
   display: flex;
   align-items: flex-end;
@@ -474,7 +522,7 @@
 }
 
 .prep-overlay-top {
-  z-index: 7010;
+  z-index: 10010;
 }
 
 .prep-sheet {
@@ -488,10 +536,21 @@
   box-shadow: 0 -10px 40px #14182620;
 }
 
+.prep-sheet-grabber-area {
+  margin: 0 -18px 4px;
+  padding: 6px 0 10px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.prep-sheet-grabber-area:active {
+  cursor: grabbing;
+}
+
 .prep-sheet-grabber {
   width: 42px;
   height: 5px;
-  margin: 0 auto 13px;
+  margin: 0 auto;
   border-radius: 9px;
   background: #d3d4dc;
 }
@@ -762,4 +821,62 @@
     padding-right: 24px;
     padding-left: 24px;
   }
+}
+
+.prep-context-edit {
+  padding: 2px 8px;
+  border: 1px solid #d9d3fb;
+  border-radius: 999px;
+  color: #7f5ef6;
+  background: #f0ecfd;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.prep-context-edit:disabled {
+  color: #9a9fae;
+  border-color: #e6e7eb;
+  background: #f5f5f7;
+  cursor: default;
+}
+
+.prep-context-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.prep-context-chips button {
+  padding: 8px 12px;
+  border: 1px solid #e2e3e9;
+  border-radius: 999px;
+  color: #303546;
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.prep-context-chips button.selected {
+  border-color: #7f5ef6;
+  color: #7f5ef6;
+  background: #f0ecfd;
+  font-weight: 700;
+}
+
+.prep-item-delete {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border: 1px solid #e6e7eb;
+  border-radius: 8px;
+  color: #e5484d;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.prep-item-delete:disabled {
+  color: #b9bcc8;
+  cursor: default;
 }

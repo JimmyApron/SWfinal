@@ -9,7 +9,6 @@ function PrepSummaryCard({
   attendees,
   absentees = [],
   isPast = false,
-  hasPlace = false,
 }) {
   const navigate = useNavigate();
   const [identity, setIdentity] = useState(null);
@@ -156,19 +155,13 @@ function PrepSummaryCard({
             assignment.status === "assigned"
         )
     );
-  const hasPlaceCoordinates =
-    hasPlace ||
-    (schedule.locationlat != null &&
-      schedule.locationlng != null &&
-      Number.isFinite(Number(schedule.locationlat)) &&
-      Number.isFinite(Number(schedule.locationlng)));
   const scheduleTime = schedule?.date
     ? new Date(`${schedule.date}T${schedule.starttime || "23:59:59"}`)
     : null;
   const readOnly = isPast || Boolean(scheduleTime && scheduleTime.getTime() < Date.now());
 
-  const openChecklist = () =>
-    navigate(`/schedules/${schedule.id}/prep`, { state: { schedule } });
+  const openChecklist = (openRecommend = false) =>
+    navigate(`/schedules/${schedule.id}/prep`, { state: { schedule, openRecommend } });
 
   const toggleItem = async (event, item) => {
     event.stopPropagation();
@@ -204,7 +197,7 @@ function PrepSummaryCard({
   return (
     <section
       className="prep-summary-card"
-      onClick={openChecklist}
+      onClick={() => openChecklist()}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget) return;
         if (event.key === "Enter" || event.key === " ") openChecklist();
@@ -218,20 +211,21 @@ function PrepSummaryCard({
           <strong>🎒 나의 준비물</strong>
           <span className="prep-summary-card-badge">AI 추천</span>
         </div>
-        <span className="prep-summary-card-count">
-          {completedCount}/{myItems.length} 완료 ›
-        </span>
       </div>
 
       {loading ? (
         <p className="prep-summary-card-muted">준비물을 불러오는 중...</p>
+      ) : items.length === 0 && !schedule.date ? (
+        <p className="prep-summary-card-muted">
+          날짜를 정하면 AI가 준비물을 추천해 드려요
+        </p>
       ) : items.length === 0 ? (
         <button
           type="button"
           className="prep-summary-card-recommend"
           onClick={(event) => {
             event.stopPropagation();
-            openChecklist();
+            openChecklist(true);
           }}
           disabled={readOnly || !isAttending}
         >
@@ -248,7 +242,6 @@ function PrepSummaryCard({
               onClick={(event) => toggleItem(event, item)}
             >
               <span className="prep-summary-card-checkbox">{item.checked ? "✓" : ""}</span>
-              <span className="prep-summary-card-emoji">{item.emoji || "☑️"}</span>
               <span className="prep-summary-card-name">{item.name}</span>
               {item.isMine && <span className="prep-summary-card-owner">내 담당</span>}
             </button>
@@ -256,15 +249,23 @@ function PrepSummaryCard({
         </div>
       )}
 
+      {!loading && items.length > 0 && (
+        <button
+          type="button"
+          className="prep-summary-card-more"
+          onClick={(event) => {
+            event.stopPropagation();
+            openChecklist();
+          }}
+        >
+          준비물 전체보기 ({completedCount}/{myItems.length}) ›
+        </button>
+      )}
+
       {vacantItems.length > 0 && (
         <p className="prep-summary-card-warning">
           ⚠ 아직 아무도 안 맡은 것 {vacantItems.length} ·{" "}
           {vacantItems.map((item) => item.name).join(", ")}
-        </p>
-      )}
-      {!hasPlaceCoordinates && (
-        <p className="prep-summary-card-location">
-          📍 장소를 정하면 그곳 날씨로 다시 추천해 드려요
         </p>
       )}
       {error && <p className="prep-summary-card-error">{error}</p>}

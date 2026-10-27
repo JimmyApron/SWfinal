@@ -148,3 +148,19 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.prep-summary-card-more {
+  display: block;
+  width: 100%;
+  margin: 10px 0 0;
+  padding: 9px 0 0;
+  border: 0;
+  border-top: 1px solid #e6e7eb;
+  color: #7f5ef6;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+}

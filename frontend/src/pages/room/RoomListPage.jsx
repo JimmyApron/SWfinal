@@ -192,6 +192,39 @@ function RoomListPage() {
     };
   }, [userId, handleGetRooms]);
 
+  // 목록에 있는 방의 이름/이미지가 바뀌면 그 방만 갱신한다.
+  const roomIdsKey = rooms.map((room) => room.id).join(",");
+  useEffect(() => {
+    if (!roomIdsKey) return undefined;
+
+    const channel = supabase
+      .channel(`room-list-info-${Date.now()}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "rooms",
+          filter: `id=in.(${roomIdsKey})`,
+        },
+        (payload) => {
+          const updated = payload.new;
+          setRooms((prevRooms) =>
+            prevRooms.map((room) =>
+              String(room.id) === String(updated.id)
+                ? { ...room, roomname: updated.roomname, roomimageurl: updated.roomimageurl }
+                : room
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [roomIdsKey]);
+
   if (loading) {
     return <div style={{ padding: "20px", textAlign: "center" }}>로딩 중...</div>;
   }

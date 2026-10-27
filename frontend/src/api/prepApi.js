@@ -21,15 +21,62 @@ async function requestPrepBackend(path, options = {}) {
   return data;
 }
 
-export async function getPrepWeather(scheduleId) {
-  return requestPrepBackend(`/weather/${encodeURIComponent(scheduleId)}`);
+// userLocation({ lat, lng })은 확정/함께 가고 싶은 장소가 없을 때만 서버가 날씨 기준으로 쓴다.
+export async function getPrepWeather(scheduleId, userLocation = null) {
+  const query = userLocation
+    ? `?lat=${encodeURIComponent(userLocation.lat)}&lng=${encodeURIComponent(userLocation.lng)}`
+    : "";
+  return requestPrepBackend(`/weather/${encodeURIComponent(scheduleId)}${query}`);
 }
 
-export async function recommendPrepItems(scheduleId, regenerate = false) {
+export async function recommendPrepItems(scheduleId, regenerate = false, userLocation = null) {
   return requestPrepBackend("/recommend", {
     method: "POST",
-    body: JSON.stringify({ scheduleId, regenerate }),
+    body: JSON.stringify({
+      scheduleId,
+      regenerate,
+      ...(userLocation ? { userLocation: { lat: userLocation.lat, lng: userLocation.lng } } : {}),
+    }),
   });
+}
+
+export const PREP_EVENT_CATEGORIES = [
+  { value: "meal", label: "🍽️ 식사·카페" },
+  { value: "drink", label: "🍻 술자리" },
+  { value: "birthday", label: "🎂 생일·기념일" },
+  { value: "concert", label: "🎤 콘서트·공연" },
+  { value: "sports", label: "⚾ 스포츠·관람" },
+  { value: "trip", label: "🧳 여행·MT" },
+  { value: "picnic", label: "🧺 피크닉·야외" },
+  { value: "study", label: "📚 스터디·회의" },
+  { value: "etc", label: "기타" },
+];
+
+export async function getPrepContext(scheduleId) {
+  const { data, error } = await supabase
+    .from("prep_contexts")
+    .select("category, note")
+    .eq("scheduleid", Number(scheduleId))
+    .maybeSingle();
+
+  throwOnError(error, "약속 종류를 불러오지 못했습니다.");
+  return { category: data?.category || null, note: data?.note || "" };
+}
+
+export async function savePrepContext(scheduleId, { category, note }, participant) {
+  const { error } = await supabase.from("prep_contexts").upsert(
+    {
+      scheduleid: Number(scheduleId),
+      category: category || null,
+      note: note?.trim() || null,
+      updatedby: participant.id,
+      updatedbytype: participant.type,
+      updatedat: new Date().toISOString(),
+    },
+    { onConflict: "scheduleid" }
+  );
+
+  throwOnError(error, "약속 종류를 저장하지 못했습니다.");
 }
 
 export async function getPrepSchedule(scheduleId) {
@@ -123,7 +170,7 @@ export async function addPrepItem({
       source: "manual",
       createdby: createdBy.id,
       createdbytype: createdBy.type,
-      sortorder: Date.now(),
+      sortorder: Math.floor(Date.now() / 1000),
     })
     .select("*")
     .single();
@@ -132,12 +179,11 @@ export async function addPrepItem({
   return data;
 }
 
-export async function updatePrepItem(itemId, { name, emoji, memo }) {
+export async function updatePrepItem(itemId, { name, memo }) {
   const { error } = await supabase
     .from("prep_items")
     .update({
       name: name.trim(),
-      emoji: emoji.trim() || null,
       memo: memo.trim() || null,
     })
     .eq("id", itemId);

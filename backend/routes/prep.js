@@ -27,7 +27,7 @@ async function getSchedule(scheduleId) {
   const { data, error } = await getSupabase()
     .from("confirmed_schedules")
     .select(
-      "id, roomid, title, date, starttime, endtime, isallday, location, locationaddress, locationlat, locationlng, absentees"
+      "id, roomid, title, date, starttime, endtime, isallday, location, locationaddress, locationlat, locationlng, locationcategory, absentees"
     )
     .eq("id", scheduleId)
     .maybeSingle();
@@ -41,17 +41,120 @@ async function getSchedule(scheduleId) {
   return data;
 }
 
-function getWeatherBasis(schedule) {
-  const lat = Number(schedule.locationlat);
-  const lng = Number(schedule.locationlng);
-  return Number.isFinite(lat) &&
-    Number.isFinite(lng) &&
-    lat >= -90 &&
-    lat <= 90 &&
-    lng >= -180 &&
-    lng <= 180
-    ? "place"
-    : "none";
+const originMemory = new Map();
+
+function validCoordinates(lat, lng) {
+  const latitude = Number(lat);
+  const longitude = Number(lng);
+  return (
+    lat != null &&
+    lng != null &&
+    lat !== "" &&
+    lng !== "" &&
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180
+  );
+}
+
+function parseUserLocation(input) {
+  if (!input || !validCoordinates(input.lat, input.lng)) return null;
+  return { lat: Number(input.lat), lng: Number(input.lng) };
+}
+
+function describeOrigin(origin) {
+  return { type: origin.type, label: origin.label || null };
+}
+
+async function geocodePlaceName(query) {
+  const apiKey = process.env.KAKAO_REST_API_KEY;
+  if (!apiKey || !query) return null;
+
+  const url = new URL("https://dapi.kakao.com/v2/local/search/keyword.json");
+  url.searchParams.set("query", query);
+  url.searchParams.set("size", "1");
+
+  try {
+    const response = await fetch(url, {
+      headers: { Authorization: `KakaoAK ${apiKey}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return null;
+    const place = (await response.json())?.documents?.[0];
+    if (!place || !validCoordinates(place.y, place.x)) return null;
+    return { lat: Number(place.y), lng: Number(place.x) };
+  } catch (error) {
+    console.error("카카오 장소 좌표 조회 실패:", error.message);
+    return null;
+  }
+}
+
+// 현재 좌표를 구 단위 이름(예: 부산진구)으로 바꾼다. 좌표 자체는 화면에 내보내지 않는다.
+async function getRegionLabel(lat, lng) {
+  const apiKey = process.env.KAKAO_REST_API_KEY;
+  if (!apiKey) return null;
+
+  const url = new URL("https://dapi.kakao.com/v2/local/geo/coord2regioncode.json");
+  url.searchParams.set("x", String(lng));
+  url.searchParams.set("y", String(lat));
+
+  try {
+    const response = await fetch(url, {
+      headers: { Authorization: `KakaoAK ${apiKey}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return null;
+    const region = (await response.json())?.documents?.[0];
+    return region?.region_2depth_name || region?.region_1depth_name || null;
+  } catch (error) {
+    console.error("현재 위치 지역명 조회 실패:", error.message);
+    return null;
+  }
+}
+
+// 날씨 기준 위치: ① 확정 장소 ② 함께 가고 싶은 장소 첫 번째 ③ 요청한 사람의 현재 위치 ④ 없음
+async function resolveWeatherOrigin(schedule, userLocation) {
+  if (validCoordinates(schedule.locationlat, schedule.locationlng)) {
+    return {
+      type: "place",
+      lat: Number(schedule.locationlat),
+      lng: Number(schedule.locationlng),
+      label: schedule.location || schedule.locationaddress || "확정 장소",
+    };
+  }
+
+  const { data: wishPlaces, error } = await getSupabase()
+    .from("confirmed_locations")
+    .select("placename")
+    .eq("scheduleid", schedule.id)
+    .order("id", { ascending: true })
+    .limit(1);
+  if (error) console.error("함께 가고 싶은 장소 조회 실패:", error.message);
+
+  const wishName = wishPlaces?.[0]?.placename;
+  if (wishName) {
+    const point = await geocodePlaceName(wishName);
+    if (point) return { type: "wish", ...point, label: wishName };
+  }
+
+  if (userLocation) {
+    const label = (await getRegionLabel(userLocation.lat, userLocation.lng)) || "현재 위치";
+    const origin = { type: "current", ...userLocation, label };
+    originMemory.set(schedule.id, { origin, expiresAt: Date.now() + WEATHER_CACHE_MS });
+    return origin;
+  }
+
+  const remembered = originMemory.get(schedule.id);
+  if (remembered && remembered.expiresAt > Date.now()) return remembered.origin;
+
+  return { type: "none", lat: null, lng: null, label: null };
+}
+
+function weatherBasisOf(origin) {
+  return origin.type === "place" ? "place" : "none";
 }
 
 function formatForecastEntry(entry, timezoneOffset) {
@@ -113,29 +216,30 @@ function summarizeForecast(entries, schedule, timezoneOffset) {
   };
 }
 
-async function getScheduleWeather(schedule, { logErrors = true } = {}) {
-  const weatherBasis = getWeatherBasis(schedule);
-  if (weatherBasis !== "place" || !schedule.date) {
-    return { weather: null, weatherBasis };
+async function getScheduleWeather(schedule, origin, { logErrors = true } = {}) {
+  const weatherBasis = weatherBasisOf(origin);
+  const weatherSource = describeOrigin(origin);
+  if (origin.type === "none" || !schedule.date) {
+    return { weather: null, weatherBasis, weatherSource };
   }
 
   const apiKey =
     process.env.OPENWEATHERMAP_API_KEY || process.env.OPENWEATHER_API_KEY;
-  if (!apiKey) return { weather: null, weatherBasis };
+  if (!apiKey) return { weather: null, weatherBasis, weatherSource };
 
   const cacheKey = [
     schedule.id,
     schedule.date,
     schedule.starttime || "",
-    schedule.locationlat,
-    schedule.locationlng,
+    origin.lat,
+    origin.lng,
   ].join(":");
   const cached = weatherCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
   const url = new URL("https://api.openweathermap.org/data/2.5/forecast");
-  url.searchParams.set("lat", String(schedule.locationlat));
-  url.searchParams.set("lon", String(schedule.locationlng));
+  url.searchParams.set("lat", String(origin.lat));
+  url.searchParams.set("lon", String(origin.lng));
   url.searchParams.set("appid", apiKey);
   url.searchParams.set("units", "metric");
   url.searchParams.set("lang", "kr");
@@ -181,7 +285,7 @@ async function getScheduleWeather(schedule, { logErrors = true } = {}) {
     schedule,
     Number(payload?.city?.timezone || 0)
   );
-  const value = { weather, weatherBasis };
+  const value = { weather, weatherBasis, weatherSource };
   weatherCache.set(cacheKey, {
     value,
     expiresAt: Date.now() + WEATHER_CACHE_MS,
@@ -219,6 +323,261 @@ async function getAttendingCount(schedule) {
   return attending.length;
 }
 
+const BASIS_TYPES = ["weather", "place", "time", "event", "date", "people", "air"];
+const EVENT_CATEGORY_LABELS = {
+  meal: "식사·카페",
+  drink: "술자리",
+  birthday: "생일·기념일",
+  concert: "콘서트·공연",
+  sports: "스포츠·관람",
+  trip: "여행·MT",
+  picnic: "피크닉·야외",
+  study: "스터디·회의",
+  etc: "기타",
+};
+const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+// 양력 고정 공휴일 + 2026년 음력 공휴일(설날·부처님오신날·추석 연휴)
+const FIXED_HOLIDAYS = {
+  "01-01": "신정",
+  "03-01": "삼일절",
+  "05-05": "어린이날",
+  "06-06": "현충일",
+  "08-15": "광복절",
+  "10-03": "개천절",
+  "10-09": "한글날",
+  "12-25": "크리스마스",
+};
+const LUNAR_HOLIDAYS_2026 = {
+  "2026-02-16": "설날 연휴",
+  "2026-02-17": "설날",
+  "2026-02-18": "설날 연휴",
+  "2026-05-24": "부처님오신날",
+  "2026-09-24": "추석 연휴",
+  "2026-09-25": "추석",
+  "2026-09-26": "추석 연휴",
+};
+const KST_OFFSET_SECONDS = 9 * 60 * 60;
+const airCache = new Map();
+const placeCategoryCache = new Map();
+
+function timeToMinutes(value) {
+  if (!value) return null;
+  const [hours, minutes] = String(value).split(":").map(Number);
+  return Number.isFinite(hours) ? hours * 60 + (minutes || 0) : null;
+}
+
+function getDateTraits(schedule) {
+  const [year, month, day] = schedule.date.split("-").map(Number);
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  const mmdd = schedule.date.slice(5);
+  const season =
+    month >= 3 && month <= 5
+      ? "봄"
+      : month >= 6 && month <= 8
+        ? "여름"
+        : month >= 9 && month <= 11
+          ? "가을"
+          : "겨울";
+  const holiday = LUNAR_HOLIDAYS_2026[schedule.date] || FIXED_HOLIDAYS[mmdd] || null;
+
+  return {
+    weekday: `${WEEKDAYS[weekday]}요일`,
+    isWeekend: weekday === 0 || weekday === 6,
+    season,
+    holiday,
+  };
+}
+
+function getTimeTraits(schedule) {
+  const allDay = Boolean(schedule.isallday || !schedule.starttime);
+  const start = timeToMinutes(schedule.starttime);
+  const end = timeToMinutes(schedule.endtime);
+  return {
+    allDay,
+    starttime: allDay ? null : schedule.starttime?.slice(0, 5),
+    endtime: allDay ? null : schedule.endtime?.slice(0, 5) || null,
+    durationHours:
+      start != null && end != null && end > start
+        ? Math.round(((end - start) / 60) * 10) / 10
+        : null,
+    startsEarly: start != null && start < 10 * 60,
+    endsLate: end != null ? end >= 22 * 60 : start != null && start >= 20 * 60,
+  };
+}
+
+async function searchKakaoCategory(query, { lat, lng } = {}) {
+  const apiKey = process.env.KAKAO_REST_API_KEY;
+  if (!apiKey || !query) return null;
+
+  const url = new URL("https://dapi.kakao.com/v2/local/search/keyword.json");
+  url.searchParams.set("query", query);
+  url.searchParams.set("size", "1");
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    url.searchParams.set("x", String(lng));
+    url.searchParams.set("y", String(lat));
+    url.searchParams.set("radius", "500");
+  }
+
+  const cacheKey = url.toString();
+  if (placeCategoryCache.has(cacheKey)) return placeCategoryCache.get(cacheKey);
+
+  try {
+    const response = await fetch(url, {
+      headers: { Authorization: `KakaoAK ${apiKey}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    const category = payload?.documents?.[0]?.category_name || null;
+    placeCategoryCache.set(cacheKey, category);
+    return category;
+  } catch (error) {
+    console.error("카카오 장소 카테고리 조회 실패:", error.message);
+    return null;
+  }
+}
+
+// 저장된 값이 없으면 카카오에서 조회하고, 찾으면 일정에 저장해 다음부터 재사용한다.
+async function resolveLocationCategory(schedule) {
+  if (schedule.locationcategory) return schedule.locationcategory;
+  const name = schedule.location || schedule.locationaddress;
+  if (!name) return null;
+
+  const category = await searchKakaoCategory(name, {
+    lat: Number(schedule.locationlat),
+    lng: Number(schedule.locationlng),
+  });
+  if (category) {
+    const { error } = await getSupabase()
+      .from("confirmed_schedules")
+      .update({ locationcategory: category })
+      .eq("id", schedule.id);
+    if (error) console.error("장소 카테고리 저장 실패:", error.message);
+  }
+  return category;
+}
+
+async function getAdditionalPlaces(scheduleId) {
+  const { data, error } = await getSupabase()
+    .from("confirmed_locations")
+    .select("placename")
+    .eq("scheduleid", scheduleId)
+    .limit(3);
+  if (error) {
+    console.error("함께 가고 싶은 장소 조회 실패:", error.message);
+    return [];
+  }
+
+  return Promise.all(
+    (data || [])
+      .filter((place) => place.placename)
+      .map(async (place) => ({
+        name: place.placename,
+        category: await searchKakaoCategory(place.placename),
+      }))
+  );
+}
+
+async function getEventContext(scheduleId) {
+  const { data, error } = await getSupabase()
+    .from("prep_contexts")
+    .select("category, note")
+    .eq("scheduleid", scheduleId)
+    .maybeSingle();
+  if (error) {
+    console.error("약속 종류 조회 실패:", error.message);
+    return null;
+  }
+  if (!data || (!data.category && !data.note)) return null;
+  return {
+    category: data.category ? EVENT_CATEGORY_LABELS[data.category] || null : null,
+    note: data.note || null,
+  };
+}
+
+function getAirLevel(pm25) {
+  if (pm25 <= 15) return "좋음";
+  if (pm25 <= 35) return "보통";
+  if (pm25 <= 75) return "나쁨";
+  return "매우 나쁨";
+}
+
+async function getScheduleAir(schedule, origin) {
+  if (origin.type === "none" || !schedule.date) return null;
+  const apiKey =
+    process.env.OPENWEATHERMAP_API_KEY || process.env.OPENWEATHER_API_KEY;
+  if (!apiKey) return null;
+
+  const cacheKey = [
+    schedule.date,
+    schedule.starttime || "",
+    origin.lat,
+    origin.lng,
+  ].join(":");
+  const cached = airCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const url = new URL("https://api.openweathermap.org/data/2.5/air_pollution/forecast");
+  url.searchParams.set("lat", String(origin.lat));
+  url.searchParams.set("lon", String(origin.lng));
+  url.searchParams.set("appid", apiKey);
+
+  let value = null;
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (response.ok) {
+      const payload = await response.json();
+      const entries = (payload?.list || [])
+        .map((entry) => {
+          const local = new Date((entry.dt + KST_OFFSET_SECONDS) * 1000);
+          return {
+            date: local.toISOString().slice(0, 10),
+            minutes: local.getUTCHours() * 60 + local.getUTCMinutes(),
+            pm25: Number(entry.components?.pm2_5),
+            pm10: Number(entry.components?.pm10),
+          };
+        })
+        .filter((entry) => entry.date === schedule.date && Number.isFinite(entry.pm25));
+
+      if (entries.length > 0) {
+        const target = timeToMinutes(schedule.starttime);
+        const picked =
+          target == null
+            ? entries.reduce((worst, current) => (current.pm25 > worst.pm25 ? current : worst))
+            : entries.reduce((best, current) =>
+                Math.abs(current.minutes - target) < Math.abs(best.minutes - target)
+                  ? current
+                  : best
+              );
+        value = {
+          level: getAirLevel(picked.pm25),
+          pm25: Math.round(picked.pm25),
+          pm10: Number.isFinite(picked.pm10) ? Math.round(picked.pm10) : null,
+        };
+      }
+    }
+  } catch (error) {
+    console.error("대기질 예보 조회 실패:", error.message);
+  }
+
+  airCache.set(cacheKey, { value, expiresAt: Date.now() + WEATHER_CACHE_MS });
+  return value;
+}
+
+function compact(value) {
+  if (Array.isArray(value)) {
+    const items = value.map(compact).filter((item) => item !== undefined);
+    return items.length ? items : undefined;
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value)
+      .map(([key, entry]) => [key, compact(entry)])
+      .filter(([, entry]) => entry !== undefined);
+    return entries.length ? Object.fromEntries(entries) : undefined;
+  }
+  return value === null || value === "" || value === false ? undefined : value;
+}
+
 function validateAiResponse(value, participantCount) {
   if (!value || !Array.isArray(value.items)) {
     throw new Error("AI 응답에 items 배열이 없습니다.");
@@ -236,9 +595,10 @@ function validateAiResponse(value, participantCount) {
 
     return {
       name: item.name.trim().slice(0, 80),
-      emoji: typeof item.emoji === "string" ? item.emoji.slice(0, 16) : null,
+      emoji: null,
       kind: item.kind,
       reason: typeof item.reason === "string" ? item.reason.trim().slice(0, 200) : null,
+      basis: BASIS_TYPES.includes(item.basis) ? item.basis : null,
       neededCount:
         item.kind === "shared" && participantCount > 0
           ? Math.max(
@@ -254,32 +614,36 @@ function validateAiResponse(value, participantCount) {
     };
   });
 
-  const personalCount = normalized.filter((item) => item.kind === "personal").length;
-  const sharedCount = normalized.filter((item) => item.kind === "shared").length;
-  if (
-    personalCount < 3 ||
-    personalCount > 5 ||
-    sharedCount > 3 ||
-    (participantCount === 0 && sharedCount > 0)
-  ) {
-    throw new Error("AI 응답의 준비물 개수가 기준에 맞지 않습니다.");
+  // AI 추천은 각자 챙길 것만 사용한다. 같이 준비할 것이 섞여 오면 버리고, 개수가 넘치면 5개까지만 쓴다.
+  const personal = normalized
+    .filter((item) => item.kind === "personal")
+    .slice(0, 5)
+    .map((item) => ({ ...item, neededCount: 1 }));
+  if (personal.length === 0) {
+    throw new Error("AI 응답에 각자 챙길 준비물이 없습니다.");
   }
 
-  return normalized;
+  return personal;
 }
 
 async function requestAiItems(context) {
   const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
-  const prompt = {
+  const prompt = compact({
     title: context.schedule.title || "모임",
+    eventType: context.eventContext,
     date: context.schedule.date,
-    starttime: context.schedule.starttime,
-    endtime: context.schedule.endtime,
-    allDay: Boolean(context.schedule.isallday || !context.schedule.starttime),
-    location: context.schedule.location || context.schedule.locationaddress || null,
+    dateInfo: context.dateTraits,
+    time: context.timeTraits,
+    place: {
+      name: context.schedule.location || context.schedule.locationaddress || null,
+      category: context.locationCategory,
+    },
+    otherPlaces: context.additionalPlaces,
     weather: context.weather,
+    weatherLocation: context.weatherLocation,
+    airQuality: context.air,
     participantCount: context.participantCount,
-  };
+  });
 
   let lastParseError;
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -296,15 +660,14 @@ async function requestAiItems(context) {
           {
             role: "system",
             content:
-              "모임 준비물 추천 도우미입니다. 반드시 JSON 객체만 반환하세요. schema: {\"items\":[{\"name\":\"문자열\",\"emoji\":\"이모지\",\"kind\":\"personal|shared\",\"reason\":\"추천 이유\",\"neededCount\":1}]}. personal 준비물은 3~5개, shared 준비물은 0~3개만 추천하세요. 모임 이름과 날짜/시간/장소/날씨/참여 인원에 맞춰 실용적으로 추천하고, 개인적으로 챙길 항목은 개인용으로, 함께 사거나 한 명이 준비할 항목은 shared로 분류하세요. shared의 neededCount는 참여 인원을 넘기지 마세요. 개인 준비물의 neededCount는 1로 하세요.",
+              "모임 준비물 추천 도우미입니다. 반드시 JSON 객체만 반환하세요. schema: {\"items\":[{\"name\":\"문자열\",\"kind\":\"personal|shared\",\"reason\":\"추천 근거를 짧게\",\"basis\":\"weather|place|time|event|date|people|air\",\"neededCount\":1}]}. 각자 챙길 것(kind=personal)만 3~5개 추천하고, 같이 준비할 것(shared)은 절대 추천하지 마세요. 사용자 메시지(JSON)에는 약속 이름, 약속 종류(eventType), 날짜 특성(dateInfo), 시간(time), 장소와 장소 종류(place), 함께 가고 싶은 다른 장소(otherPlaces), 날씨(weather), 대기질(airQuality), 참여 인원이 들어 있고, 없는 항목은 생략됩니다. eventType이 있으면 가장 중요한 힌트로 삼고, 없으면 약속 이름에서 성격을 추론하세요. 장소 종류(예: 볼링장→양말, 고깃집→머리끈·탈취제, 공원·바다→돗자리·선크림, 술집→신분증, 공연장→티켓·신분증), 시간(밤늦게 끝나면 막차 확인·보조배터리, 하루종일이면 충전기·편한 신발), 날씨와 대기질(비→우산, 미세먼지 나쁨→마스크), 날짜(공휴일·시즌), 참여 인원을 반영해 약속에 특화된 항목을 추천하세요. 지갑·휴대폰처럼 너무 뻔한 것은 빼세요. reason은 근거를 15자 안팎으로 짧게 쓰고(예: \"볼링장 · 양말 필수\", \"밤 11시 종료 · 막차 확인\"), basis에는 그 근거의 종류를 하나 넣으세요. 이모지는 쓰지 마세요. 모든 항목의 kind는 \"personal\", neededCount는 1로 하세요.",
           },
           {
             role: "user",
             content: JSON.stringify(prompt),
           },
         ],
-        temperature: 0.6,
-        max_tokens: 1200,
+        max_completion_tokens: 4000,
       }),
       signal: AbortSignal.timeout(20000),
     });
@@ -414,12 +777,20 @@ async function saveRecommendations(schedule, recommendations, regenerate) {
       kind: item.kind,
       neededcount: item.neededCount,
       reason: item.reason,
+      basis: item.basis,
       source: "ai",
       createdby: null,
       createdbytype: null,
-      sortorder: Date.now() + index,
+      sortorder: Math.floor(Date.now() / 1000) + index,
     }));
-    const { error: insertError } = await client.from("prep_items").insert(rows);
+    let { error: insertError } = await client.from("prep_items").insert(rows);
+    if (insertError && /basis/.test(insertError.message || "")) {
+      // basis 컬럼 마이그레이션 전에도 추천은 동작하도록 근거 종류 없이 다시 저장
+      console.error("prep_items.basis 컬럼이 없어 근거 종류 없이 저장합니다.");
+      ({ error: insertError } = await client
+        .from("prep_items")
+        .insert(rows.map(({ basis, ...row }) => row)));
+    }
     if (insertError) {
       throw new Error(`AI 추천 준비물을 저장하지 못했습니다: ${insertError.message}`);
     }
@@ -446,8 +817,15 @@ router.get("/weather/:scheduleId", async (req, res) => {
 
   try {
     const schedule = await getSchedule(scheduleId);
-    const result = await getScheduleWeather(schedule);
-    return res.json(result);
+    const origin = await resolveWeatherOrigin(
+      schedule,
+      parseUserLocation({ lat: req.query.lat, lng: req.query.lng })
+    );
+    const [result, air] = await Promise.all([
+      getScheduleWeather(schedule, origin),
+      getScheduleAir(schedule, origin),
+    ]);
+    return res.json({ ...result, air, needsLocation: origin.type === "none" });
   } catch (error) {
     console.error("준비물 날씨 조회 실패:", error);
     return res
@@ -476,20 +854,43 @@ router.post("/recommend", async (req, res) => {
       });
     }
 
-    const [weatherResult, participantCount] = await Promise.all([
-      getScheduleWeather(schedule).catch((error) => {
+    const origin = await resolveWeatherOrigin(
+      schedule,
+      parseUserLocation(req.body?.userLocation)
+    );
+    const [
+      weatherResult,
+      participantCount,
+      air,
+      eventContext,
+      locationCategory,
+      additionalPlaces,
+    ] = await Promise.all([
+      getScheduleWeather(schedule, origin).catch((error) => {
         console.error("날씨 없이 AI 추천을 계속합니다:", error);
         return {
           weather: null,
-          weatherBasis: getWeatherBasis(schedule),
+          weatherBasis: weatherBasisOf(origin),
+          weatherSource: describeOrigin(origin),
           warning: "날씨 예보를 가져오지 못해 일정 정보만으로 추천했습니다.",
         };
       }),
       getAttendingCount(schedule),
+      getScheduleAir(schedule, origin),
+      getEventContext(schedule.id),
+      resolveLocationCategory(schedule),
+      getAdditionalPlaces(schedule.id),
     ]);
     const recommendations = await requestAiItems({
       schedule,
       weather: weatherResult.weather,
+      weatherLocation: origin.label,
+      air,
+      eventContext,
+      locationCategory,
+      additionalPlaces,
+      dateTraits: getDateTraits(schedule),
+      timeTraits: getTimeTraits(schedule),
       participantCount,
     });
     const items = await saveRecommendations(
@@ -500,7 +901,9 @@ router.post("/recommend", async (req, res) => {
 
     return res.json({
       weather: weatherResult.weather,
+      air,
       weatherBasis: weatherResult.weatherBasis,
+      weatherSource: weatherResult.weatherSource,
       ...(weatherResult.warning ? { weatherWarning: weatherResult.warning } : {}),
       items,
     });
