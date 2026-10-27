@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   FaBell,
   FaCalendarAlt,
+  FaCalendarDay,
   FaCog,
   FaComments,
   FaHome,
@@ -198,8 +199,9 @@ function BottomNav() {
 
   const roomNavItems = [
     { key: "schedule", label: "일정", icon: FaCalendarAlt },
-    { key: "location", label: "위치", icon: FaMapMarkerAlt },
     { key: "vote", label: "투표", icon: FaVoteYea },
+    { key: "location", label: "위치", icon: FaMapMarkerAlt },
+    { key: "calendar", label: "캘린더", icon: FaCalendarDay },
     { key: "chat", label: "채팅", icon: FaComments },
   ];
 

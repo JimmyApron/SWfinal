@@ -14,6 +14,7 @@ import ScheduleTab from "./ScheduleTab";
 import MapPage from "../../components/map/MapPage";
 import ChatTab from "../Chat/ChatTab";
 import VoteListPage from "../vote/VoteListPage";
+import RoomCalendarTab from "./RoomCalendarTab";
 import {
   getFriends,
   checkFriendStatus,
@@ -117,7 +118,7 @@ function RoomDetailPage() {
 
   useEffect(() => {
     const queryTab = searchParams.get("tab");
-    if (["schedule", "location", "vote", "chat"].includes(queryTab)) {
+    if (["schedule", "vote", "location", "calendar", "chat"].includes(queryTab)) {
       setTab(queryTab);
     }
   }, [searchParams]);
@@ -490,6 +491,7 @@ function RoomDetailPage() {
         {tab === "schedule" && <ScheduleTab roomId={roomId} ownerUserId={room.createdby} roomName={room.roomname} />}
         {tab === "location" && <MapPage roomId={roomId} />}
         {tab === "vote" && <VoteListPage roomid={roomId} />}
+        {tab === "calendar" && <RoomCalendarTab roomId={roomId} participants={members} />}
         {tab === "chat" && <ChatTab roomId={roomId} />}
       </div>
       {isSidebarOpen && (

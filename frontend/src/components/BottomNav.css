@@ -45,6 +45,16 @@
   font-family: inherit;
 }
 
+.bottom-nav-room .bottom-nav-item {
+  min-width: 0;
+  padding: 0 2px;
+  font-size: 10px;
+}
+
+.bottom-nav-room .bottom-nav-item svg {
+  font-size: 18px;
+}
+
 .bottom-nav-icon-wrap {
   position: relative;
   display: flex;

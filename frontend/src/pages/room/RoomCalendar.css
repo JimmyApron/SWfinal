@@ -1,0 +1,164 @@
+.room-calendar-page { min-height: 100%; padding: 22px 0 30px; color: #26253a; }
+.room-calendar-heading, .calendar-selected-heading, .room-calendar-month, .diary-collection-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.room-calendar-heading { margin: 0 0 18px; }
+.room-calendar-heading h1, .diary-collection-header h2 { margin: 3px 0 5px; font-size: 23px; }
+.room-calendar-heading p:last-child { margin: 0; color: #817f91; font-size: 13px; }
+.room-calendar-eyebrow, .diary-eyebrow { margin: 0; color: #7c79ff; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
+.calendar-collection-button, .calendar-lightning-button { border: 1px solid #dcdcf0; border-radius: 12px; background: #fff; color: #625fe8; font-weight: 700; padding: 10px 13px; white-space: nowrap; cursor: pointer; }
+.calendar-collection-button:disabled { opacity: .45; cursor: default; }
+.calendar-lightning-button { border-color: #7c79ff; background: #7c79ff; color: #fff; }
+.calendar-notice, .calendar-error { margin: 12px 0; padding: 12px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5; }
+.calendar-notice { background: #f0efff; color: #5e5bb4; }
+.calendar-error { display: flex; justify-content: space-between; gap: 10px; background: #fff1f0; color: #b42318; }
+.calendar-error button { border: 0; background: transparent; color: inherit; font-weight: 700; cursor: pointer; }
+.room-calendar-card, .calendar-selected-section { padding: 16px; border: 1px solid #e7e7ee; border-radius: 18px; background: #fff; box-shadow: 0 3px 14px rgba(32, 32, 65, .035); }
+.room-calendar-month { justify-content: center; gap: 22px; margin: 0 0 16px; }
+.room-calendar-month strong { min-width: 128px; text-align: center; font-size: 16px; }
+.room-calendar-month button, .diary-icon-button { width: 34px; height: 34px; border: 1px solid #ececf2; border-radius: 11px; background: #fff; color: #5c5a6c; font-size: 24px; line-height: 1; cursor: pointer; }
+.room-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.room-calendar-weekdays { margin-bottom: 5px; color: #9694a4; font-size: 11px; font-weight: 700; text-align: center; }
+.room-calendar-weekdays span { padding: 7px 0; }
+.room-calendar-days { row-gap: 3px; }
+.room-calendar-day { position: relative; display: flex; min-width: 0; min-height: 48px; flex-direction: column; align-items: center; gap: 4px; padding: 5px 2px 3px; border: 1px solid transparent; border-radius: 11px; background: transparent; color: #363549; font: inherit; font-size: 12px; cursor: pointer; }
+.room-calendar-day.has-cover { min-height: 58px; padding: 2px; }
+.room-calendar-day-cover { position: absolute; inset: 1px; width: calc(100% - 2px); height: calc(100% - 2px); border-radius: 9px; object-fit: cover; }
+.room-calendar-day-date { position: absolute; top: 3px; left: 4px; z-index: 1; min-width: 18px; border-radius: 8px; background: rgba(255,255,255,.93); color: #625fe8; font-size: 10px; font-weight: 800; line-height: 17px; }
+.room-calendar-day.outside { color: #c6c5ce; }
+.room-calendar-day.today > span:first-child { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 50%; background: #efefff; color: #6966ef; font-weight: 800; }
+.room-calendar-day.selected { border-color: #c7c5ff; background: #f7f6ff; }
+.room-calendar-day small { position: absolute; right: 2px; bottom: 1px; color: #7c79ff; font-size: 8px; }
+.room-calendar-markers { display: flex; min-height: 6px; align-items: center; gap: 3px; }
+.room-calendar-markers i, .room-calendar-legend i { display: block; width: 6px; height: 6px; border-radius: 50%; background: #7c79ff; }
+.room-calendar-markers i.past, .room-calendar-legend i.past { background: #b9b8c7; }
+.room-calendar-markers b, .room-calendar-legend b { color: #f0a52c; font-size: 10px; line-height: 1; }
+.room-calendar-legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; margin-top: 14px; color: #858393; font-size: 10px; }
+.room-calendar-legend span { display: flex; align-items: center; gap: 5px; }
+.calendar-loading { color: #8e8c9c; text-align: center; font-size: 12px; }
+.calendar-selected-section { position: relative; margin-top: 12px; animation: calendar-sheet-rise .24s ease-out both; }
+.calendar-sheet-handle { width: 38px; height: 4px; margin: -5px auto 13px; border-radius: 4px; background: #d8d7e0; }
+@keyframes calendar-sheet-rise { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.calendar-selected-heading { margin-bottom: 14px; }
+.calendar-selected-heading h2 { margin: 3px 0 0; font-size: 18px; }
+.calendar-meeting-badge { padding: 6px 10px; border-radius: 999px; background: #f0efff; color: #716ef0; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.calendar-empty-meeting { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 15px; border-radius: 13px; background: #f8f8fb; color: #858393; font-size: 13px; }
+.calendar-empty-meeting p { margin: 0; }
+.calendar-empty-meeting button { border: 0; background: transparent; color: #706df1; font-weight: 700; cursor: pointer; }
+.calendar-meeting-carousel { display: grid; grid-template-columns: 34px minmax(0, 1fr) 34px; align-items: center; gap: 8px; }
+.calendar-meeting-carousel.single { grid-template-columns: minmax(0, 1fr); }
+.calendar-meeting-arrow { width: 34px; height: 42px; border: 1px solid #e8e7f1; border-radius: 12px; background: #fff; color: #716ef0; font-size: 27px; line-height: 1; cursor: pointer; }
+.calendar-meeting-position { grid-column: 2; justify-self: center; margin-top: -2px; color: #858393; font-size: 11px; }
+.calendar-meeting-card { display: grid; min-width: 0; gap: 10px; padding: 0; border: 0; background: transparent; }
+.calendar-meeting-summary { display: block; width: 100%; min-width: 0; box-sizing: border-box; padding: 12px; border: 1px solid #e8e6ef; border-radius: 15px; background: #faf9fd; color: inherit; text-align: left; font: inherit; cursor: pointer; }
+.calendar-meeting-card.is-complete .calendar-meeting-summary { border: 2px solid #f4dc8b; box-shadow: 0 0 0 2px rgba(244, 220, 139, .18); }
+.calendar-meeting-summary-main { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.calendar-meeting-chevron { flex: 0 0 auto; color: #aaa8b8; font-size: 22px; }
+.calendar-meeting-info { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4px; }
+.calendar-meeting-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.calendar-meeting-info span, .calendar-meeting-info em { color: #8c8a99; font-size: 11px; font-style: normal; }
+.calendar-meeting-participants { display: flex; align-items: center; gap: 9px; margin-top: 11px; padding-top: 10px; border-top: 1px solid #eeedf3; }
+.calendar-participant-avatars { display: flex; align-items: center; padding-left: 2px; }
+.calendar-participant-avatar { display: grid; width: 27px; height: 27px; place-items: center; overflow: hidden; margin-left: -3px; border: 2px solid #faf9fd; border-radius: 50%; background: #d9d9e1; color: #fff; font-size: 10px; font-weight: 800; }
+.calendar-participant-avatar:nth-child(3n + 1) { background: #8a78f6; }
+.calendar-participant-avatar:nth-child(3n + 2) { background: #f0a54b; }
+.calendar-participant-avatar:nth-child(3n) { background: #58a9dc; }
+.calendar-participant-avatar.unwritten { background: #d9d9e1; color: #fff; }
+.calendar-participant-avatar.written:nth-child(3n + 1) { background: #8a78f6; }
+.calendar-participant-avatar.written:nth-child(3n + 2) { background: #f0a54b; }
+.calendar-participant-avatar.written:nth-child(3n) { background: #58a9dc; }
+.calendar-participant-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.calendar-participant-more { background: #777487 !important; }
+.calendar-record-count { color: #716ef0; font-size: 11px; font-weight: 700; }
+.calendar-record-complete-label { margin-left: auto; color: #7165c8; text-align: right; font-size: 11px; font-weight: 800; white-space: nowrap; }
+.calendar-record-cta { width: 100%; min-height: 48px; border: 0; border-radius: 12px; background: #8172ef; color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; }
+.calendar-record-cta:disabled { background: #e9e9ee; color: #aaaab5; cursor: default; }
+.calendar-record-complete { background: #efefff; color: #6663dc; }
+.calendar-record-hint { margin: -3px 0 0; color: #8d8a99; text-align: center; font-size: 11px; }
+.calendar-record-button, .calendar-record-exists { flex: 0 0 auto; padding: 8px 10px; border: 0; border-radius: 10px; background: #7c79ff; color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; }
+.calendar-record-exists { background: #efefff; color: #6663dc; }
+.diary-modal { position: fixed; inset: 0; z-index: 12000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(24, 23, 44, .42); }
+.diary-sheet { width: min(100%, 520px); max-height: min(90vh, 900px); overflow-y: auto; padding: 20px; border: 1px solid #e7e7ee; border-radius: 20px; background: #fff; box-shadow: 0 20px 70px rgba(20, 19, 50, .2); }
+.diary-sheet-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
+.diary-sheet-header h2 { margin: 3px 0 0; font-size: 22px; }
+.diary-icon-button { font-size: 22px; }
+.diary-meeting-card { display: flex; flex-direction: column; gap: 5px; margin-bottom: 18px; padding: 12px; border: 1px solid #ececf2; border-radius: 13px; background: #f8f8fb; }
+.diary-meeting-card strong { font-size: 14px; }
+.diary-meeting-card span { color: #898797; font-size: 12px; }
+.diary-field-label { display: block; margin: 14px 0 8px; color: #4d4b5c; font-size: 12px; font-weight: 800; }
+.diary-moods { display: flex; flex-wrap: wrap; gap: 7px; }
+.diary-moods button { width: 40px; height: 40px; border: 1px solid #ececf2; border-radius: 12px; background: #fff; font-size: 21px; cursor: pointer; }
+.diary-moods button.selected { border-color: #7c79ff; background: #f2f1ff; }
+.diary-field-heading { display: flex; justify-content: space-between; align-items: center; color: #8c8a99; font-size: 11px; }
+.diary-photos { display: flex; gap: 9px; overflow-x: auto; padding: 2px 0 5px; }
+.diary-photo { position: relative; width: 96px; height: 104px; flex: 0 0 96px; overflow: hidden; border-radius: 12px; background: #f2f2f6; }
+.diary-photo img { width: 100%; height: 100%; object-fit: cover; }
+.diary-photo-cover { position: absolute; top: 5px; left: 5px; padding: 4px 6px; border: 0; border-radius: 7px; background: rgba(255,255,255,.92); color: #625fe8; font-size: 9px; font-weight: 800; cursor: pointer; }
+.diary-photo-actions { position: absolute; right: 4px; bottom: 4px; left: 4px; display: flex; justify-content: space-between; }
+.diary-photo-actions button { width: 25px; height: 25px; border: 0; border-radius: 8px; background: rgba(255,255,255,.93); color: #464454; cursor: pointer; }
+.diary-photo-add { display: flex; width: 96px; height: 104px; flex: 0 0 96px; align-items: center; justify-content: center; flex-direction: column; gap: 4px; border: 1px dashed #cecced; border-radius: 12px; color: #7774ed; font-size: 22px; cursor: pointer; }
+.diary-photo-add span { font-size: 10px; }
+.diary-photo-add input { display: none; }
+.diary-textarea { display: block; width: 100%; min-height: 120px; box-sizing: border-box; resize: vertical; padding: 12px; border: 1px solid #e7e7ee; border-radius: 12px; outline-color: #8d8aff; font: inherit; font-size: 13px; line-height: 1.55; }
+.diary-character-count { margin-top: 5px; color: #9694a3; text-align: right; font-size: 10px; }
+.diary-select { width: 100%; box-sizing: border-box; padding: 11px 12px; border: 1px solid #e7e7ee; border-radius: 11px; background: #fff; color: #373648; font: inherit; font-size: 13px; }
+.diary-save-state { min-height: 18px; margin-top: 13px; color: #7774ed; font-size: 11px; }
+.diary-save-state.error, .diary-error { color: #c24135; }
+.diary-error { font-size: 12px; line-height: 1.4; }
+.diary-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.diary-secondary-button, .diary-delete-button, .diary-publish-button { min-height: 40px; padding: 0 14px; border: 1px solid #e4e3ee; border-radius: 11px; background: #fff; color: #555365; font-weight: 700; cursor: pointer; }
+.diary-publish-button { border-color: #7c79ff; background: #7c79ff; color: #fff; }
+.diary-delete-button { border-color: #f0d7d5; color: #b42318; }
+.diary-publish-button:disabled, .diary-secondary-button:disabled { opacity: .5; cursor: default; }
+.diary-collection-sheet { width: min(100%, 680px); }
+.diary-collection-close { float: right; border: 0; background: transparent; color: #7774ed; cursor: pointer; }
+.diary-collection-header { margin-bottom: 15px; }
+.diary-collection-header h2 { font-size: 21px; }
+.diary-collection-tabs { display: flex; gap: 7px; margin-bottom: 14px; }
+.diary-collection-tabs button { flex: 1; padding: 10px 8px; border: 1px solid #e8e8ef; border-radius: 11px; background: #fff; color: #777585; font-size: 12px; cursor: pointer; }
+.diary-collection-tabs button.selected { border-color: #c9c7ff; background: #f4f3ff; color: #6865e7; font-weight: 800; }
+.diary-collection-tabs span { margin-left: 4px; }
+.diary-list { display: grid; gap: 9px; }
+.diary-gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.diary-gallery button { overflow: hidden; padding: 0; border: 0; border-radius: 11px; background: #f2f2f6; cursor: pointer; }
+.diary-gallery img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
+.diary-list-card { display: flex; min-width: 0; align-items: center; gap: 11px; padding: 10px; border: 1px solid #ececf2; border-radius: 13px; background: #fff; text-align: left; cursor: pointer; }
+.diary-list-cover { width: 62px; height: 62px; flex: 0 0 62px; border-radius: 10px; object-fit: cover; }
+.diary-list-copy { display: flex; min-width: 0; flex-direction: column; gap: 5px; }
+.diary-list-copy strong, .diary-list-copy > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diary-list-copy strong { color: #343346; font-size: 13px; }
+.diary-list-copy > span:last-child { color: #858393; font-size: 11px; }
+.diary-list-meta { color: #9593a2; font-size: 10px; }
+.diary-empty { display: flex; align-items: center; flex-direction: column; padding: 42px 10px; color: #858393; text-align: center; }
+.diary-empty > span { margin-bottom: 10px; font-size: 30px; }
+.diary-empty strong { color: #484657; font-size: 14px; }
+.diary-empty p { margin: 7px 0 0; font-size: 12px; }
+.diary-detail-sheet { width: min(100%, 560px); }
+.diary-detail-mood { margin: 12px 0; color: #777585; font-size: 12px; }
+.diary-detail-mood span { margin-left: 8px; font-size: 22px; }
+.diary-detail-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 7px; margin: 13px 0; }
+.diary-detail-photos img { width: 100%; aspect-ratio: 1; border-radius: 12px; object-fit: cover; }
+.diary-detail-body { white-space: pre-wrap; color: #454354; font-size: 14px; line-height: 1.7; }
+.diary-reactions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.diary-reactions button { padding: 7px 10px; border: 1px solid #e7e7ee; border-radius: 20px; background: #fff; cursor: pointer; }
+.diary-reactions button.selected { border-color: #bdbbff; background: #f2f1ff; }
+.lightning-sheet { display: flex; flex-direction: column; gap: 6px; }
+.lightning-time-row { display: flex; gap: 10px; margin: 9px 0; }
+.lightning-time-row label { flex: 1; color: #656374; font-size: 11px; }
+.lightning-time-row input { display: block; width: 100%; box-sizing: border-box; margin-top: 6px; padding: 9px; border: 1px solid #e7e7ee; border-radius: 10px; }
+@media (max-width: 520px) {
+  .room-calendar-page { padding: 16px 0 24px; }
+  .room-calendar-heading h1 { font-size: 20px; }
+  .calendar-collection-button { padding: 9px 10px; font-size: 11px; }
+  .room-calendar-card, .calendar-selected-section { padding: 12px 9px; border-radius: 15px; }
+  .room-calendar-day { min-height: 45px; font-size: 11px; }
+  .calendar-selected-heading { align-items: flex-start; }
+  .calendar-lightning-button { padding: 9px 10px; font-size: 11px; }
+  .calendar-meeting-card { gap: 9px; }
+  .calendar-meeting-summary { padding: 11px; }
+  .calendar-selected-heading { flex-wrap: wrap; }
+  .calendar-meeting-badge { margin-left: auto; }
+  .calendar-meeting-carousel { grid-template-columns: 28px minmax(0, 1fr) 28px; gap: 5px; }
+  .calendar-meeting-arrow { width: 28px; height: 38px; }
+  .calendar-record-button, .calendar-record-exists { padding: 8px 7px; font-size: 10px; }
+  .diary-modal { align-items: flex-end; padding: 0; }
+  .diary-sheet { width: 100%; max-height: 92vh; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); border-radius: 20px 20px 0 0; }
+}
