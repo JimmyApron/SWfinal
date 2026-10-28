@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { logoutApi, getCurrentUserApi } from '../../api/authApi'
 import { supabase } from '../../lib/supabaseClient'
 import { useTheme } from '../../context/ThemeContext'
-import { FaChevronLeft, FaMoon, FaBell, FaUser, FaSignOutAlt, FaChevronRight } from 'react-icons/fa'
+import { FaChevronLeft, FaMoon, FaBell, FaUser, FaSignOutAlt, FaChevronRight, FaCalendarAlt } from 'react-icons/fa'
 import { FiUser } from 'react-icons/fi'
 import './SettingsPage.css'
 
@@ -138,6 +138,14 @@ function SettingsPage() {
           <div className="row-info">
             <div className="icon-box"><FaUser /></div>
             <span className="row-label">내 정보 수정</span>
+          </div>
+          <FaChevronRight color="#9ca3af" />
+        </button>
+
+        <button type="button" className="menu-card" onClick={() => navigate('/settings/timetable')}>
+          <div className="row-info">
+            <div className="icon-box"><FaCalendarAlt /></div>
+            <span className="row-label">고정 시간표</span>
           </div>
           <FaChevronRight color="#9ca3af" />
         </button>

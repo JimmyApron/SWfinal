@@ -1,0 +1,110 @@
+.fixed-tt-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--secondary-text);
+  margin: 0 0 14px;
+}
+
+.fixed-tt-upload {
+  display: block;
+  text-align: center;
+  padding: 12px;
+  margin-bottom: 14px;
+  border: 1px dashed #7c5cff;
+  border-radius: 12px;
+  color: #7c5cff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.fixed-tt-upload.is-disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.fixed-tt-grid {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--card-bg);
+  max-height: 60dvh;
+  overflow-y: auto;
+  touch-action: none; /* 드래그 중 화면이 스크롤되지 않게 */
+  user-select: none;
+}
+
+.fixed-tt-row {
+  display: grid;
+  grid-template-columns: 44px repeat(7, 1fr);
+}
+
+.fixed-tt-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.fixed-tt-day {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 0;
+}
+
+.fixed-tt-time {
+  font-size: 10px;
+  color: var(--secondary-text);
+  text-align: right;
+  padding-right: 6px;
+  transform: translateY(-6px);
+}
+
+.fixed-tt-head .fixed-tt-time {
+  transform: none;
+}
+
+.fixed-tt-cell {
+  height: 22px;
+  border-left: 1px solid var(--border-color);
+  border-top: 1px dashed var(--border-color);
+  cursor: pointer;
+}
+
+.fixed-tt-cell.is-busy {
+  background: color-mix(in srgb, var(--accent-color) 70%, var(--card-bg));
+}
+
+.fixed-tt-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.fixed-tt-reset,
+.fixed-tt-save {
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.fixed-tt-reset {
+  flex: 1;
+  background: transparent;
+  color: var(--secondary-text);
+  border: 1px solid var(--border-color);
+}
+
+.fixed-tt-save {
+  flex: 2;
+  background: #7c5cff;
+  color: #fff;
+  border: none;
+}
+
+.fixed-tt-save:disabled {
+  opacity: 0.6;
+}
