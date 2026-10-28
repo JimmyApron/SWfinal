@@ -442,7 +442,7 @@ function RoomDetailPage() {
         height: isFixedHeightTab ? "100%" : undefined,
         paddingBottom: isFixedHeightTab ? 0 : "90px",
         boxSizing: "border-box",
-        backgroundColor: "#F7F7FA",
+        backgroundColor: tab === "calendar" ? "#fff" : "#F7F7FA",
         overflow: isFixedHeightTab ? "hidden" : undefined,
         display: isFixedHeightTab ? "flex" : undefined,
         flexDirection: isFixedHeightTab ? "column" : undefined,
@@ -476,7 +476,7 @@ function RoomDetailPage() {
               : undefined
         }
         style={{
-          padding: tab === "chat" || isLocationTab ? "0" : "0 16px",
+          padding: tab === "chat" || isLocationTab || tab === "calendar" ? "0" : "0 16px",
           ...(isFixedHeightTab
             ? {
                 flex: 1,
@@ -491,7 +491,7 @@ function RoomDetailPage() {
         {tab === "schedule" && <ScheduleTab roomId={roomId} ownerUserId={room.createdby} roomName={room.roomname} />}
         {tab === "location" && <MapPage roomId={roomId} />}
         {tab === "vote" && <VoteListPage roomid={roomId} />}
-        {tab === "calendar" && <RoomCalendarTab roomId={roomId} participants={members} />}
+        {tab === "calendar" && <RoomCalendarTab roomId={roomId} participants={members} settingsOpen={isSidebarOpen} />}
         {tab === "chat" && <ChatTab roomId={roomId} />}
       </div>
       {isSidebarOpen && (

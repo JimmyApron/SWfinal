@@ -43,7 +43,16 @@ export async function getRoomDiaries(roomId, meetingIds = []) {
     .from("meeting_diaries")
     .select("id, meeting_id, author_identity_id, status, visibility, mood_emoji, body, version, published_at, updated_at")
     .in("meeting_id", meetingIds)
-    .order("published_at", { ascending: false });
+    .order("published_at", { ascending: true, nullsFirst: false })
+    .order("id", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getMeetingDiaryDetails(meetingId) {
+  const { data, error } = await supabase.rpc("get_meeting_diary_details", {
+    p_meeting_id: meetingId,
+  });
   if (error) throw error;
   return data || [];
 }
@@ -76,7 +85,7 @@ export async function getMyMeetingDiary(meetingId) {
   return data;
 }
 
-export async function getDiaryPhotos(diaryId) {
+export async function getDiaryPhotos(diaryId, { thumbnail = false } = {}) {
   const { data, error } = await supabase
     .from("diary_photos")
     .select("id, storage_path, sort_order, is_cover")
@@ -84,27 +93,36 @@ export async function getDiaryPhotos(diaryId) {
     .order("sort_order");
   if (error) throw error;
   const photos = await Promise.all((data || []).map(async (photo) => {
-    const { data: signed, error: signedError } = await supabase.storage
+    let request = supabase.storage
       .from(BUCKET)
-      .createSignedUrl(photo.storage_path, 60 * 60);
+      .createSignedUrl(photo.storage_path, 60 * 60, thumbnail
+        ? { transform: { width: 480, height: 480, resize: "cover" } }
+        : undefined);
+    const { data: signed, error: signedError } = await request;
     if (signedError) throw signedError;
     return { ...photo, url: signed.signedUrl, file: null };
   }));
   return photos;
 }
 
-export async function getDiaryCoverPhotos(diaryIds) {
+export async function getCalendarDiaryThumbnails(diaryIds) {
   if (diaryIds.length === 0) return {};
   const { data, error } = await supabase
     .from("diary_photos")
-    .select("diary_id, storage_path")
+    .select("diary_id, storage_path, sort_order")
     .in("diary_id", diaryIds)
-    .eq("is_cover", true);
+    .order("sort_order", { ascending: true });
   if (error) throw error;
-  const entries = await Promise.all((data || []).map(async (photo) => {
+  const firstPhotos = new Map();
+  (data || []).forEach((photo) => {
+    if (!firstPhotos.has(photo.diary_id)) firstPhotos.set(photo.diary_id, photo);
+  });
+  const entries = await Promise.all([...firstPhotos.values()].map(async (photo) => {
     const { data: signed, error: signedError } = await supabase.storage
       .from(BUCKET)
-      .createSignedUrl(photo.storage_path, 60 * 60);
+      .createSignedUrl(photo.storage_path, 60 * 60, {
+        transform: { width: 120, height: 120, resize: "cover" },
+      });
     if (signedError) return null;
     return [photo.diary_id, signed.signedUrl];
   }));
@@ -160,7 +178,7 @@ export async function uploadDiaryPhotos({ roomId, meetingId, diaryId, photos, ex
   }
 }
 
-export async function createLightningMeeting({ roomId, date, title, startTime, endTime, location, address }) {
+export async function createLightningMeeting({ roomId, date, title, startTime, endTime, location, address, participantUserIds = [] }) {
   const { data, error } = await supabase.rpc("create_room_lightning_meeting", {
     p_room_id: String(roomId),
     p_meeting_date: date,
@@ -169,7 +187,7 @@ export async function createLightningMeeting({ roomId, date, title, startTime, e
     p_end_time: endTime || null,
     p_location: location || null,
     p_location_address: address || null,
-    p_participant_actor_ids: [],
+    p_participant_actor_ids: participantUserIds,
   });
   if (error) throw error;
   return data;

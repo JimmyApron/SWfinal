@@ -1,0 +1,63 @@
+.meeting-diary-page { min-height: 100vh; min-height: 100dvh; padding-bottom: max(28px, env(safe-area-inset-bottom)); background: #fff; color: #20202a; }
+.meeting-diary-hero { min-height: 136px; padding: max(12px, env(safe-area-inset-top)) max(20px, calc((100vw - 560px) / 2)) 18px; background: #f0edff; text-align: center; box-sizing: border-box; }
+.meeting-diary-topbar { display: grid; height: 38px; grid-template-columns: 40px 1fr 40px; align-items: center; }
+.meeting-diary-topbar strong { font-size: 15px; }
+.meeting-diary-back, .meeting-diary-menu { display: inline-flex; width: 38px; height: 38px; align-items: center; justify-content: center; border: 0; background: transparent; color: #292835; font-size: 20px; cursor: pointer; }
+.meeting-diary-menu:disabled { opacity: .4; }
+.meeting-diary-hero h1 { margin: 10px 0 4px; font-size: 22px; line-height: 1.3; }
+.meeting-diary-hero p { margin: 0; color: #89869a; font-size: 11px; }
+.meeting-diary-members, .meeting-diary-record { max-width: 520px; margin: 0 auto; padding: 14px 20px; box-sizing: border-box; }
+.meeting-diary-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.meeting-diary-section-heading strong { font-size: 14px; }
+.meeting-diary-section-heading span { color: #8a8993; font-size: 11px; }
+.meeting-diary-member-list { display: grid; grid-template-columns: repeat(var(--member-count), minmax(64px, 1fr)); gap: 13px; overflow-x: auto; padding: 12px 2px 13px; scrollbar-width: none; }
+.meeting-diary-member-list::-webkit-scrollbar { display: none; }
+.meeting-diary-member { display: flex; min-width: 0; align-items: center; flex-direction: column; gap: 3px; padding: 0; border: 0; background: transparent; color: #353440; cursor: pointer; }
+.meeting-diary-member:disabled { cursor: default; }
+.meeting-diary-avatar { display: flex; width: 48px; height: 48px; overflow: hidden; align-items: center; justify-content: center; border: 2px solid transparent; border-radius: 50%; background: #cfd1d8; color: white; font-size: 19px; font-weight: 700; }
+.meeting-diary-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.meeting-diary-member.selected .meeting-diary-avatar { border-color: #7c79ff; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #7c79ff; background: #7c79ff; }
+.meeting-diary-member.written:not(.selected) .meeting-diary-avatar { background: #8a83e8; }
+.meeting-diary-member-caption { display: inline-flex; align-items: center; gap: 3px; }
+.meeting-diary-member strong { max-width: 64px; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.meeting-diary-member small { min-height: 12px; color: #aaa9b0; font-size: 9px; }
+.meeting-diary-record { border-top: 1px solid #eeeef2; padding-top: 13px; }
+.meeting-diary-record-actions { display: flex; min-height: 31px; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.meeting-diary-record-actions > div { display: flex; gap: 7px; }
+.meeting-diary-visibility, .meeting-diary-record-actions button { padding: 6px 11px; border: 1px solid #e8e7ed; border-radius: 18px; background: #fff; color: #4b4a56; font-size: 11px; font-weight: 700; }
+.meeting-diary-record-actions button { cursor: pointer; }
+.meeting-diary-record-actions button.delete { border-color: #eccaca; color: #ba6868; }
+.meeting-diary-record-actions button:disabled { opacity: .5; }
+.meeting-diary-title-row { display: flex; align-items: center; gap: 7px; }
+.meeting-diary-record h2 { margin: 4px 0 2px; font-size: 18px; }
+.meeting-diary-record time { color: #92919b; font-size: 11px; }
+.meeting-diary-photo-frame { position: relative; width: 100%; overflow: hidden; margin-top: 12px; border-radius: 14px; background: #f3f2f7; aspect-ratio: 1.52; touch-action: pan-y; }
+.meeting-diary-photo-frame { cursor: zoom-in; }
+.meeting-diary-photo-frame img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.meeting-diary-photo-count { position: absolute; bottom: 9px; left: 10px; padding: 4px 7px; border-radius: 8px; background: rgba(20,20,24,.68); color: #fff; font-size: 10px; }
+.meeting-diary-dots { display: flex; justify-content: center; gap: 5px; padding: 7px 0; }
+.meeting-diary-dots button { width: 6px; height: 6px; padding: 0; border: 0; border-radius: 8px; background: #dddce4; }
+.meeting-diary-dots button.active { width: 15px; background: #7c79ff; }
+.meeting-diary-mood { color: #7b7986; font-size: 19px; line-height: 1; }
+.meeting-diary-body { margin: 12px 0; color: #454450; font-size: 13px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.meeting-diary-reactions { display: flex; min-height: 36px; align-items: center; flex-wrap: wrap; gap: 7px; color: #96949e; font-size: 11px; }
+.meeting-diary-reaction, .meeting-diary-reaction-count { padding: 5px 8px; border: 1px solid #e9e8ee; border-radius: 17px; background: #fff; color: inherit; font: inherit; }
+.meeting-diary-reaction { cursor: pointer; }
+.meeting-diary-reaction.selected { border-color: #7c79ff; background: #f1f0ff; color: #625fe8; }
+.meeting-diary-reaction:disabled { cursor: default; opacity: .65; }
+.meeting-diary-add-reaction { padding: 6px 10px; border: 1px solid #e7e6ed; border-radius: 19px; background: #fff; font-size: 14px; cursor: pointer; }
+.meeting-diary-emoji-picker { display: flex; gap: 7px; padding: 6px 0; }
+.meeting-diary-emoji-picker button { width: 36px; height: 36px; border: 1px solid #ecebf1; border-radius: 50%; background: #fff; font-size: 19px; cursor: pointer; }
+.meeting-diary-pager { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; margin-top: 16px; color: #8a8993; font-size: 11px; }
+.meeting-diary-pager button { display: inline-flex; width: 112px; box-sizing: border-box; align-items: center; justify-content: center; gap: 3px; min-height: 34px; padding: 0 10px; border: 1px solid #eeedf2; border-radius: 18px; background: #fff; color: #666571; font-size: 11px; cursor: pointer; }
+.meeting-diary-pager button:first-child { justify-self: start; }
+.meeting-diary-pager button:last-child { justify-self: end; }
+.meeting-diary-pager button:disabled { color: #c7c6ce; cursor: default; }
+.meeting-diary-empty, .meeting-diary-state { padding: 38px 8px; color: #85838e; text-align: center; font-size: 13px; }
+.meeting-diary-empty strong { color: #484653; }
+.meeting-diary-empty p { margin: 6px 0; font-size: 12px; }
+.meeting-diary-create { display: block; width: min(100%, 320px); min-height: 48px; margin: 22px auto 0; border: 0; border-radius: 14px; background: linear-gradient(135deg, #8a81f7, #706bea); color: #fff; box-shadow: 0 7px 18px rgba(112, 107, 234, .22); font: inherit; font-size: 14px; font-weight: 800; cursor: pointer; transition: transform .16s ease, box-shadow .16s ease; }
+.meeting-diary-create:hover { transform: translateY(-1px); box-shadow: 0 9px 21px rgba(112, 107, 234, .3); }
+.meeting-diary-error { color: #bd4037; font-size: 12px; }
+@media (min-width: 700px) { .meeting-diary-page { border-right: 1px solid #f0eff4; border-left: 1px solid #f0eff4; } }
+@media (max-width: 520px) { .meeting-diary-hero { min-height: 136px; padding-right: 18px; padding-left: 18px; } .meeting-diary-members, .meeting-diary-record { padding-right: 18px; padding-left: 18px; } .meeting-diary-member-list { gap: 12px; } }

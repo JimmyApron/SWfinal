@@ -19,6 +19,9 @@ import ConfirmedScheduleDetailPage from "./pages/home/ConfirmedScheduleDetailPag
 import RoomCreatePage from "./pages/room/RoomCreatePage";
 import RoomInvitePage from "./pages/room/RoomInvitePage";
 import RoomDetailPage from "./pages/room/RoomDetailPage";
+import MeetingDiaryDetailPage from "./pages/room/MeetingDiaryDetailPage";
+import DiaryCollection from "./pages/room/DiaryCollection";
+import MeetingDiaryEditorPage from "./pages/room/MeetingDiaryEditorPage";
 import ScheduleTab from "./pages/room/ScheduleTab";
 import AvailableResultPage from "./pages/room/AvailableResultPage";
 
@@ -248,7 +251,8 @@ function isBeforePopupResumeCutoff(notif) {
 
 function Layout({ children }) {
   const location = useLocation();
-  const showNav = !AUTH_PATHS.includes(location.pathname);
+  const isMeetingDiaryPage = /^\/rooms\/[^/]+\/(?:diaries|meetings\/[^/]+\/diary(?:\/edit)?)$/.test(location.pathname);
+  const showNav = !AUTH_PATHS.includes(location.pathname) && !isMeetingDiaryPage;
   const isRoomDetailPage = /^\/rooms\/[^/]+$/.test(location.pathname);
   const roomTab = new URLSearchParams(location.search).get("tab") || "schedule";
   const isRoomLocationTab =
@@ -629,6 +633,9 @@ function App() {
               <Route path="/rooms/create" element={<RoomCreatePage />} />
               <Route path="/rooms/invite" element={<RoomInvitePage />} />
               <Route path="/rooms/:roomId" element={<RoomDetailPage />} />
+              <Route path="/rooms/:roomId/diaries" element={<DiaryCollection />} />
+              <Route path="/rooms/:roomId/meetings/:meetingId/diary" element={<MeetingDiaryDetailPage />} />
+              <Route path="/rooms/:roomId/meetings/:meetingId/diary/edit" element={<MeetingDiaryEditorPage />} />
               <Route path="/rooms/:roomid/schedule" element={<ScheduleTab />} />
               <Route path="/rooms/:roomid/location" element={<LocationTab />} />
               <Route path="/rooms/:roomid/votes" element={<VoteListPage />} />
