@@ -1,4 +1,7 @@
 import { supabase } from "../lib/supabaseClient";
+import { createScheduleWithCreator } from "./scheduleCreationApi";
+import { assertCourseChangesAllowed } from "./courseFinalizationApi";
+import { submitCourseVote } from "./courseConfirmationApi";
 import { createRoomNotifications } from "./notificationApi";
 import { updateRoomLocationTransportModes } from "./mapApi";
 
@@ -6,6 +9,13 @@ function hasValue(value) {
   if (value === null || value === undefined) return false;
   if (typeof value === "string") return value.trim() !== "";
   return value !== "";
+}
+
+async function assertVoteEditable(voteId) {
+  const { data, error } = await supabase.from("votes").select("votetype, scheduleid")
+    .eq("id", Number(voteId)).single();
+  if (error) throw error;
+  if (data.votetype === "course") await assertCourseChangesAllowed(data.scheduleid);
 }
 
 function normalizeCoordinate(primaryValue, fallbackValue) {
@@ -36,7 +46,7 @@ function isLocationVoteType(votetype) {
 function normalizeVoteOption(option) {
   const optiontype = option.optiontype || "text";
 
-  return {
+  const normalized = {
     optiontype,
 
     // 일반 텍스트 / 장소명 공통 표시용
@@ -56,6 +66,48 @@ function normalizeVoteOption(option) {
     kakaomapurl: option.kakaomapurl || option.kakaoMapUrl || null,
     travelresults: option.travelresults || option.travelResults || null,
   };
+
+  if (optiontype === "course") {
+    normalized.optiontext = option.optiontext || option.course_name || option.name || "추천 코스";
+    normalized.optiondate = null;
+    normalized.starttime = null;
+    normalized.endtime = null;
+    normalized.availablecount = 0;
+    if (option.course_summary) normalized.optiontext = `${normalized.optiontext} · ${option.course_summary}`;
+  }
+
+  return normalized;
+}
+
+export function buildCourseVoteLinkRows({ voteId, voteOptions = [], courseIds = [] }) {
+  const safeVoteId = Number(voteId);
+  if (!safeVoteId || !Array.isArray(voteOptions)) {
+    return [];
+  }
+
+  const courseOptions = voteOptions.filter((option) => option?.optiontype === "course");
+  const resolvedCourseIds = Array.isArray(courseIds) && courseIds.length > 0
+    ? courseIds
+    : courseOptions.map((option) => Number(option?.courseid ?? option?.course_id ?? option?.courseId ?? option?.course?.id ?? option?.id ?? null)).filter((id) => Number.isFinite(id));
+
+  return courseOptions
+    .map((option, index) => {
+      const optionId = Number(option?.id ?? option?.vote_option_id ?? option?.voteOptionId ?? null);
+      const courseId = Number(
+        option?.courseid ?? option?.course_id ?? option?.courseId ?? option?.course?.id ?? resolvedCourseIds[index] ?? null
+      );
+
+      if (!Number.isFinite(optionId) || !Number.isFinite(courseId)) {
+        return null;
+      }
+
+      return {
+        vote_id: safeVoteId,
+        vote_option_id: optionId,
+        course_id: courseId,
+      };
+    })
+    .filter(Boolean);
 }
 
 /**
@@ -80,54 +132,120 @@ export async function createVote({
   if (!roomid) {
     throw new Error("roomid가 없습니다. 투표를 생성할 방 정보가 필요합니다.");
   }
+  if (votetype === "course") await assertCourseChangesAllowed(scheduleid);
 
   const isUrgent = endtimeenabled && endtime &&
     (new Date(endtime).getTime() - new Date().getTime()) < 30 * 60 * 1000;
 
-  const { data: vote, error: voteError } = await supabase
-    .from("votes")
-    .insert([
-      {
-        roomid: Number(roomid),
-        title,
-        createdby: userid,
-        userid,
-        nickname,
-        ismultiple,
-        isanonymous,
-        allowaddoption,
-        endtime: endtimeenabled ? endtime : null,
-        endtimeenabled,
-        reminderenabled,
-        is_reminder_sent: isUrgent && reminderenabled,
-        votetype: votetype || "general",
-        locationkind: locationkind || null,
-        scheduleid: scheduleid ? Number(scheduleid) : null,
-      },
-    ])
-    .select()
-    .single();
+  let createdVote = null;
+  let createdOptionIds = [];
+  let createdCourseLinks = [];
 
-  if (voteError) {
-    console.error("votes insert error:", voteError);
-    throw voteError;
+  try {
+    const { data: vote, error: voteError } = await supabase
+      .from("votes")
+      .insert([
+        {
+          roomid: Number(roomid),
+          title,
+          createdby: userid,
+          userid,
+          nickname,
+          ismultiple,
+          isanonymous,
+          allowaddoption,
+          endtime: endtimeenabled ? endtime : null,
+          endtimeenabled,
+          reminderenabled,
+          is_reminder_sent: isUrgent && reminderenabled,
+          votetype: votetype || "general",
+          locationkind: locationkind || null,
+          scheduleid: scheduleid ? Number(scheduleid) : null,
+        },
+      ])
+      .select()
+      .single();
+
+    if (voteError) {
+      console.error("votes insert error:", voteError);
+      throw voteError;
+    }
+
+    createdVote = vote;
+
+    const optionRows = options.map((option) => ({
+      voteid: vote.id,
+      ...normalizeVoteOption(option),
+    }));
+
+    const { data: insertedOptions, error: optionError } = await supabase
+      .from("voteoptions")
+      .insert(optionRows)
+      .select();
+
+    if (optionError) {
+      console.error("voteoptions insert error:", optionError);
+      throw optionError;
+    }
+
+    createdOptionIds = (insertedOptions || []).map((option) => option.id).filter(Boolean);
+
+    if ((votetype || "general") === "course") {
+      const courseOptions = options.filter((option) => option.optiontype === "course");
+      const insertedCourseOptions = (insertedOptions || []).filter((option) => option.optiontype === "course");
+
+      const courseLinks = courseOptions
+        .map((option, index) => {
+          const optionId = Number(insertedCourseOptions[index]?.id ?? null);
+          const courseId = Number(option.courseid ?? option.id ?? option.course_id ?? option.courseId ?? option.course?.id ?? null);
+
+          if (!Number.isFinite(optionId) || !Number.isFinite(courseId)) {
+            return null;
+          }
+
+          return {
+            vote_id: vote.id,
+            vote_option_id: optionId,
+            course_id: courseId,
+          };
+        })
+        .filter(Boolean);
+
+      if (courseLinks.length > 0) {
+        const dedupedCourseLinks = Array.from(
+          new Map(courseLinks.map((link) => [`${link.vote_option_id}:${link.course_id}`, link])).values()
+        );
+
+        const { error: linkError } = await supabase
+          .from("vote_course_links")
+          .insert(dedupedCourseLinks);
+
+        if (linkError) {
+          console.error("vote_course_links insert error:", linkError);
+          throw linkError;
+        }
+
+        createdCourseLinks = dedupedCourseLinks;
+      }
+    }
+
+    return vote;
+  } catch (error) {
+    if (createdVote?.id) {
+      try {
+        if (createdOptionIds.length > 0) {
+          await supabase.from("voteoptions").delete().in("id", createdOptionIds);
+        }
+        if (createdCourseLinks.length > 0) {
+          await supabase.from("vote_course_links").delete().in("vote_id", [createdVote.id]);
+        }
+        await supabase.from("votes").delete().eq("id", createdVote.id);
+      } catch (cleanupError) {
+        console.error("투표 생성 롤백 실패:", cleanupError);
+      }
+    }
+    throw error;
   }
-
-  const optionRows = options.map((option) => ({
-    voteid: vote.id,
-    ...normalizeVoteOption(option),
-  }));
-
-  const { error: optionError } = await supabase
-    .from("voteoptions")
-    .insert(optionRows);
-
-  if (optionError) {
-    console.error("voteoptions insert error:", optionError);
-    throw optionError;
-  }
-
-  return vote;
 }
 
 /**
@@ -175,7 +293,9 @@ export async function getVoteDetail(voteid) {
       *,
       confirmed_schedules:scheduleid(title, date, location),
       voteoptions!vote_options_voteid_fkey(*),
-      voteresponses(optionid, userid, nickname)
+      voteresponses(optionid, userid, nickname),
+      vote_course_links(*),
+      course_links:vote_course_links(course_id)
     `)
     .eq("id", Number(voteid))
     .single();
@@ -219,22 +339,96 @@ export async function removeVoteConfirmedAdditionalLocation(locationId) {
  * 기존에 같은 사용자가 투표한 기록은 지우고 새로 저장함
  */
 export async function submitVote(voteid, optionids, userid, nickname) {
-  await supabase
-    .from("voteresponses")
-    .delete()
-    .eq("voteid", Number(voteid))
-    .eq("userid", userid);
+  const safeVoteId = Number(voteid);
+  const safeUserId = userid;
+  const uniqueOptionIds = [...new Set((optionids || []).map((id) => Number(id)).filter((id) => Number.isFinite(id)))];
 
-  const rows = optionids.map((optionid) => ({
-    voteid: Number(voteid),
-    optionid,
-    userid,
-    nickname,
-  }));
+  if (!safeVoteId || !safeUserId) {
+    throw new Error("투표 또는 사용자 정보가 올바르지 않습니다.");
+  }
 
-  const { error } = await supabase.from("voteresponses").insert(rows);
+  if (uniqueOptionIds.length === 0) {
+    throw new Error("선택한 투표 항목이 없습니다.");
+  }
 
-  if (error) {
+  const { data: voteInfo, error: voteInfoError } = await supabase.from("votes")
+    .select("id, roomid, votetype").eq("id", safeVoteId).single();
+  if (voteInfoError) throw voteInfoError;
+  if (voteInfo.votetype === "course") {
+    return submitCourseVote(voteInfo, uniqueOptionIds, safeUserId, nickname);
+  }
+
+  let previousResponses = [];
+  let insertedRows = [];
+
+  try {
+    const { data: existingRows, error: existingError } = await supabase
+      .from("voteresponses")
+      .select("id, voteid, optionid, userid, nickname")
+      .eq("voteid", safeVoteId)
+      .eq("userid", safeUserId);
+
+    if (existingError) {
+      throw existingError;
+    }
+
+    previousResponses = existingRows || [];
+
+    const sameSelection = previousResponses.length === uniqueOptionIds.length &&
+      previousResponses.every((row) => uniqueOptionIds.includes(Number(row.optionid))) &&
+      uniqueOptionIds.every((optionId) => previousResponses.some((row) => Number(row.optionid) === optionId));
+
+    if (sameSelection) {
+      return previousResponses;
+    }
+
+    const { error: deleteError } = await supabase
+      .from("voteresponses")
+      .delete()
+      .eq("voteid", safeVoteId)
+      .eq("userid", safeUserId);
+
+    if (deleteError) {
+      throw deleteError;
+    }
+
+    const rows = uniqueOptionIds.map((optionid) => ({
+      voteid: safeVoteId,
+      optionid,
+      userid: safeUserId,
+      nickname,
+    }));
+
+    insertedRows = rows;
+
+    const { error } = await supabase.from("voteresponses").insert(rows);
+
+    if (error) {
+      throw error;
+    }
+
+    return rows;
+  } catch (error) {
+    if (insertedRows.length > 0) {
+      try {
+        await supabase
+          .from("voteresponses")
+          .delete()
+          .in("voteid", [safeVoteId])
+          .eq("userid", safeUserId);
+      } catch (rollbackError) {
+        console.error("부분 저장 롤백 실패:", rollbackError);
+      }
+    }
+
+    if (previousResponses.length > 0) {
+      try {
+        const restoreRows = previousResponses.map(({ id, created_at, ...rest }) => rest);
+        await supabase.from("voteresponses").insert(restoreRows);
+      } catch (restoreError) {
+        console.error("투표 응답 복구 실패:", restoreError);
+      }
+    }
     console.error("투표 저장 실패:", error);
     throw error;
   }
@@ -260,6 +454,7 @@ export async function closeVote(voteid) {
  * 투표 삭제
  */
 export async function deleteVote(voteid) {
+  await assertVoteEditable(voteid);
   const { error } = await supabase
     .from("votes")
     .delete()
@@ -330,7 +525,7 @@ export async function confirmVote(
         throw error;
       }
     } else {
-      const { data: insertedSchedule, error } = await supabase.from("confirmed_schedules").insert([
+      const { data: insertedSchedule, error } = await createScheduleWithCreator(
         {
           roomid: Number(roomid),
           voteid: Number(voteid),
@@ -342,7 +537,7 @@ export async function confirmVote(
           location: null,
           locationaddress: null,
         },
-      ]).select("id").single();
+      );
 
       if (error) {
         console.error("일정 확정 저장 실패:", error);
@@ -520,6 +715,7 @@ export async function confirmVote(
  * - 중간 장소 투표: 객체로 좌표/주소/URL까지 추가 가능
  */
 export async function addVoteOption(voteid, option) {
+  await assertVoteEditable(voteid);
   const optionData =
     typeof option === "string"
       ? {
@@ -568,6 +764,7 @@ export async function updateVote(
     allowaddoption,
   }
 ) {
+  await assertVoteEditable(voteid);
   const updateData = {
     title,
     endtime: endtimeenabled ? endtime : null,
@@ -603,6 +800,10 @@ export async function updateVote(
  * 중간 장소 투표 항목 수정
  */
 export async function updateVoteOption(optionid, option) {
+  const { data: existingOption, error: optionError } = await supabase.from("voteoptions")
+    .select("voteid").eq("id", Number(optionid)).single();
+  if (optionError) throw optionError;
+  await assertVoteEditable(existingOption.voteid);
   const { data, error } = await supabase
     .from("voteoptions")
     .update(normalizeVoteOption(option))

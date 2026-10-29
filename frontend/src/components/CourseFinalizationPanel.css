@@ -1,0 +1,25 @@
+.course-vote-results { color: #17172b; background: white; padding: 4px 0 16px; }
+.course-vote-badge { background: #f4f4f5; border-radius: 20px; padding: 5px 13px; font-size: 13px; }
+.course-vote-help { color: #77758a; font-size: 12px; line-height: 1.6; }
+.course-vote-candidate { margin: 24px 0; }
+.course-vote-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 9px; flex-wrap: wrap; }
+.course-vote-name { display: flex; align-items: center; gap: 8px; flex: 1 1 160px; min-width: 0; }
+.course-vote-name strong { display: block; font-size: 16px; overflow-wrap: anywhere; }
+.course-vote-name small { display: block; margin-top: 5px; color: #77758a; font-size: 12px; overflow-wrap: anywhere; }
+.course-vote-name input { accent-color: #7b61ff; }
+.course-vote-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.course-vote-actions button { border: 1px solid #e3e3eb; background: white; padding: 7px 10px; border-radius: 12px; cursor: pointer; font-size: 12px; }
+.course-vote-actions .course-vote-confirm { color: #7b61ff; border-color: #7b61ff; border-radius: 20px; }
+.course-vote-actions .course-vote-confirmed { color: white; background: #7b61ff; border-color: #7b61ff; border-radius: 20px; }
+.course-vote-actions button:disabled { cursor: default; opacity: .5; }
+.course-vote-actions .course-vote-confirmed:disabled { opacity: 1; }
+.course-vote-count { color: #7b61ff; font-weight: 700; font-size: 15px; white-space: nowrap; }
+.course-vote-bar { height: 10px; background: #eee; border-radius: 10px; overflow: hidden; }
+.course-vote-bar > div { height: 100%; background: #8474ff; border-radius: inherit; transition: width .3s; }
+.course-vote-revote, .course-vote-submit { width: 100%; border: 1px solid #7b61ff; border-radius: 11px; padding: 14px; background: white; color: #7b61ff; cursor: pointer; }
+.course-vote-submit { color: white; background: #7b61ff; }
+.course-vote-submit:disabled { opacity: .5; }
+.course-vote-final { padding: 14px; border-radius: 12px; background: #f3f0ff; }
+.course-vote-refresh { border: 0; background: transparent; color: #7b61ff; margin-top: 14px; cursor: pointer; }
+.course-vote-detail { margin-top: 12px; font-size: 13px; }
+@media (max-width: 390px) { .course-vote-actions { width: 100%; justify-content: flex-end; } }

@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FaRegComment, FaMapMarkerAlt, FaChevronRight, FaChevronDown, FaRegClock } from "react-icons/fa";
 import { supabase } from "../../lib/supabaseClient";
+import CourseFinalizationPanel from "../../components/CourseFinalizationPanel";
 import {
   getVoteDetail,
   getVoteConfirmedAdditionalLocations,
@@ -32,10 +33,16 @@ import LocationPicker from "../../components/map/LocationPicker";
 import { createRoomNotifications } from "../../api/notificationApi";
 
 function VoteDetailPage() {
+  // 개인별 투표 여부와 명단은 투표 상세에서 표시하지 않는다.
+  const showVoterIdentities = false;
   const { roomid, voteid } = useParams();
   const navigate = useNavigate();
 
   const [vote, setVote] = useState(null);
+  const [courseBusy, setCourseBusy] = useState(false);
+  const [courseFinalized, setCourseFinalized] = useState(false);
+  const courseActionLock = useRef(false);
+
   const [currentUser, setCurrentUser] = useState(null);
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [newOptionText, setNewOptionText] = useState("");
@@ -173,7 +180,53 @@ function VoteDetailPage() {
       const additionalLocations =
         await getVoteConfirmedAdditionalLocations(Number(voteid));
 
-      setVote(data);
+      const courseLinks = data?.vote_course_links || [];
+      const courseIds = Array.from(new Set((courseLinks || []).map((link) => link.course_id).filter(Boolean)));
+
+      let courseSummaryMap = {};
+      if (courseIds.length > 0) {
+        const { data: coursesData } = await supabase
+          .from("courses")
+          .select("id, course_name, estimated_total_duration_min, estimated_travel_time_min, estimated_cost_per_person")
+          .in("id", courseIds);
+
+        const { data: courseStopsData } = await supabase
+          .from("course_stops")
+          .select("id, course_id, stop_order, latitude, longitude, place_name, place_address, visit_start_time, visit_end_time, travel_time_from_prev_min, estimated_cost")
+          .in("course_id", courseIds);
+
+        const courseStopsMap = {};
+        (courseStopsData || []).forEach((stop) => {
+          if (!courseStopsMap[stop.course_id]) courseStopsMap[stop.course_id] = [];
+          courseStopsMap[stop.course_id].push(stop);
+        });
+
+        courseSummaryMap = (coursesData || []).reduce((acc, course) => {
+          acc[course.id] = {
+            id: course.id,
+            course_name: course.course_name,
+            total_duration_min: course.estimated_total_duration_min,
+            travel_time_min: course.estimated_travel_time_min,
+            estimated_cost: course.estimated_cost_per_person,
+            stops: courseStopsMap[course.id] || [],
+          };
+          return acc;
+        }, {});
+      }
+
+      const optionsWithCourseMeta = (data.voteoptions || []).map((option) => {
+        if (option.optiontype !== "course") return option;
+
+        const link = courseLinks.find((item) => String(item.vote_option_id) === String(option.id));
+        const matchingCourse = link ? courseSummaryMap[link.course_id] : null;
+
+        return {
+          ...option,
+          courseMeta: matchingCourse || null,
+        };
+      });
+
+      setVote({ ...data, voteoptions: optionsWithCourseMeta });
       setConfirmedAdditionalLocations(additionalLocations);
 
       // 응답자 전원의 프로필 닉네임을 profiles 테이블에서 조회 (이메일 저장 문제 방지)
@@ -313,9 +366,10 @@ function VoteDetailPage() {
 
   const isClosed =
     vote.isclosed ||
+    (vote.votetype === "course" && courseFinalized) ||
     (vote.endtimeenabled && vote.endtime && new Date(vote.endtime).getTime() <= currentTime);
 
-  const showVotingUI = !isClosed && (!hasVoted || isForceVoting);
+  const showVotingUI = !isClosed && !(vote.votetype === "course" && courseFinalized) && (!hasVoted || isForceVoting);
 
   const getOptionCount = (optionId) =>
     responses.filter((r) => r.optionid === optionId).length;
@@ -337,7 +391,7 @@ function VoteDetailPage() {
   );
 
   const handleSelectOption = (optionid) => {
-    if (!vote.ismultiple) {
+    if (vote.votetype === "course" || !vote.ismultiple) {
       setSelectedOptions([optionid]);
       return;
     }
@@ -682,6 +736,7 @@ function VoteDetailPage() {
   };
 
   const handleSubmitVote = async () => {
+    if (courseActionLock.current) return;
     if (!currentUser) {
       alert("로그인이 필요합니다.");
       return;
@@ -692,6 +747,8 @@ function VoteDetailPage() {
       return;
     }
 
+    setCourseBusy(true);
+    courseActionLock.current = true;
     try {
       const nickname =
         currentUser.nickname ||
@@ -707,6 +764,10 @@ function VoteDetailPage() {
     } catch (error) {
       console.error("투표 실패:", error);
       alert("투표 실패: " + (error.message || JSON.stringify(error)));
+      if (vote.votetype === "course") await loadVote();
+    } finally {
+      setCourseBusy(false);
+      courseActionLock.current = false;
     }
   };
 
@@ -2904,7 +2965,11 @@ function VoteDetailPage() {
               )}
             </div>
 
-            {showVotingUI ? (
+            {vote.votetype === "course" ? (
+              <CourseFinalizationPanel key={vote.id} vote={vote} roomId={roomid} onFinalized={setCourseFinalized}
+                isVoting={showVotingUI} selectedOptions={selectedOptions} onSelect={handleSelectOption}
+                onSubmit={handleSubmitVote} onReVote={handleReVote} voteBusy={courseBusy} isClosed={isClosed} />
+            ) : showVotingUI ? (
               <>
                 {vote.voteoptions?.map((option) => (
                   <div key={option.id}>
@@ -3231,6 +3296,7 @@ function VoteDetailPage() {
                         >
                           <div style={{ flex: 1 }}>
                             {renderOptionContent(option)}
+
                           </div>
 
                           {isPlaceOption(option) && (
@@ -3394,7 +3460,7 @@ function VoteDetailPage() {
 
                           <span
                             onClick={() => {
-                              if (!vote.isanonymous) {
+                              if (showVoterIdentities && !vote.isanonymous) {
                                 setShowVotersForOption(
                                   isShowingVoters ? null : option.id
                                 );
@@ -3403,7 +3469,7 @@ function VoteDetailPage() {
                             style={{
                               color: "#7c79ff",
                               fontWeight: "bold",
-                              cursor: vote.isanonymous ? "default" : "pointer",
+                              cursor: showVoterIdentities && !vote.isanonymous ? "pointer" : "default",
                             }}
                           >
                             {count}명 ({percent}%)
@@ -3436,7 +3502,7 @@ function VoteDetailPage() {
                         />
                       </div>
 
-                      {!vote.isanonymous && isShowingVoters && (
+                      {showVoterIdentities && !vote.isanonymous && isShowingVoters && (
                         <div
                           style={{
                             marginTop: "8px",
@@ -3521,13 +3587,13 @@ function VoteDetailPage() {
                 >
                   <div
                     onClick={() =>
-                      !vote.isanonymous && setShowParticipants(!showParticipants)
+                      showVoterIdentities && !vote.isanonymous && setShowParticipants(!showParticipants)
                     }
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      cursor: vote.isanonymous ? "default" : "pointer",
+                      cursor: showVoterIdentities && !vote.isanonymous ? "pointer" : "default",
                     }}
                   >
                     <span style={{ fontSize: "15px", fontWeight: "bold" }}>
@@ -3539,7 +3605,7 @@ function VoteDetailPage() {
                     </span>
                   </div>
 
-                  {!vote.isanonymous && showParticipants && (
+                  {showVoterIdentities && !vote.isanonymous && showParticipants && (
                     <div
                       style={{
                         marginTop: "10px",
@@ -4141,6 +4207,25 @@ function renderOptionContent(option) {
         {option.optiondate} / {option.starttime}
         {option.endtime ? ` ~ ${option.endtime}` : ""}
       </span>
+    );
+  }
+
+  if (option.optiontype === "course") {
+    const courseMeta = option.courseMeta || {};
+    const courseName = option.optiontext || courseMeta.course_name || "추천 코스";
+    const stopCount = courseMeta.stops?.length || option.stop_count || 0;
+    const travelTime = courseMeta.travel_time_min ?? option.travel_time_min;
+    const estimatedCost = courseMeta.estimated_cost ?? option.estimated_cost;
+
+    return (
+      <div>
+        <strong>{courseName}</strong>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "6px", fontSize: "12px", color: "var(--secondary-text)" }}>
+          {stopCount > 0 && <span>{stopCount}개 장소</span>}
+          {travelTime != null && <span>이동 {travelTime}분</span>}
+          {estimatedCost != null && <span>예상 비용 {Number(estimatedCost).toLocaleString()}원</span>}
+        </div>
+      </div>
     );
   }
 

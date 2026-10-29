@@ -11,6 +11,9 @@ import {
   FiX,
 } from "react-icons/fi";
 import { supabase } from "../../lib/supabaseClient";
+import CourseShareMessage from "../../components/CourseShareMessage";
+import { createRoomMessage } from "../../api/chatMessageApi";
+import { parseCourseShare } from "../../utils/courseRoadmapUtils";
 import { createRoomNotifications } from "../../api/notificationApi";
 import { formatWon, getExpenseAccount, getExpenseSummaries } from "../../api/settlementApi";
 import "./ChatTab.css";
@@ -1486,7 +1489,7 @@ function ChatTab({ roomId }) {
       imageurl: imageUrl || null,
     };
 
-    const { error } = await supabase.from("room_messages").insert([newMessage]);
+    const { error } = await createRoomMessage(newMessage);
 
     if (error) {
       console.error("메시지 전송 실패:", error);
@@ -1875,6 +1878,9 @@ function ChatTab({ roomId }) {
                           />
                         ) : (
                           (() => {
+                            if (parseCourseShare(message.content)) {
+                              return <CourseShareMessage content={message.content} roomId={roomId} />;
+                            }
                             try {
                               const meta = JSON.parse(message.content);
 

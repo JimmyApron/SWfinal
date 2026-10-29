@@ -20,6 +20,7 @@ import {
 import { getRouteTime } from "../../api/routeTimeApi";
 import { decodePolyline } from "../../utils/decodePolyline";
 import KakaoMapView from "../../components/map/KakaoMapView";
+import FinalizedCoursePreview from "../../components/FinalizedCoursePreview";
 import LocationPicker from "../../components/map/LocationPicker";
 import PrepSummaryCard from "../../components/PrepSummaryCard";
 import { getTodayStr } from "../../utils/scheduleUtils";
@@ -1381,6 +1382,32 @@ function ConfirmedScheduleDetailPage() {
           </div>
         )}
 
+        <button
+          type="button"
+          onClick={() => navigate(`/rooms/${schedule.roomid}/course-recommendation`, {
+            state: {
+              schedule,
+              roomId: schedule.roomid,
+            },
+          })}
+          style={{
+            width: "100%",
+            border: "none",
+            borderRadius: "12px",
+            background: "linear-gradient(135deg, #7B61FF 0%, #9B85FF 100%)",
+            color: "#fff",
+            padding: "12px 16px",
+            fontSize: "15px",
+            fontWeight: 700,
+            cursor: "pointer",
+            marginBottom: "12px",
+            boxShadow: "0 8px 18px rgba(123, 97, 255, 0.2)",
+          }}
+        >
+          코스 추천하기
+        </button>
+
+        <FinalizedCoursePreview roomId={schedule.roomid} scheduleId={schedule.id} />
         {middlePlaceSection}
 
         <PrepSummaryCard

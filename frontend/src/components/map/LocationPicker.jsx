@@ -19,6 +19,7 @@ function LocationPicker({
   showMap = true,
   mapHeight = "250px",
   placeholder = "장소 검색 (예: 홍대입구역)",
+  includeAddressSearch = false,
 }) {
   const mapRef = useRef(null);
   const mapObjectRef = useRef(null);
@@ -155,6 +156,7 @@ function LocationPicker({
 
   const handleSearch = () => {
     if (!keyword.trim()) return;
+    if (!isReady) { alert("지도를 불러온 뒤 다시 검색해 주세요."); return; }
 
     setSearching(true);
     setResults([]);
@@ -178,6 +180,17 @@ function LocationPicker({
       }
 
       if (status === window.kakao.maps.services.Status.ZERO_RESULT) {
+        if (includeAddressSearch && window.kakao.maps.services.Geocoder) {
+          setSearching(true);
+          new window.kakao.maps.services.Geocoder().addressSearch(keyword.trim(), (addresses, addressStatus) => {
+            setSearching(false);
+            setResults(addressStatus === window.kakao.maps.services.Status.OK ? addresses.map((address, index) => ({
+              id: `address-${index}`, name: address.address_name, address: address.address_name,
+              lat: Number(address.y), lng: Number(address.x), kakaoMapUrl: "",
+            })) : []);
+          });
+          return;
+        }
         setResults([]);
         return;
       }
@@ -220,7 +233,7 @@ function LocationPicker({
           className="location-picker-search-button"
           type="button"
           onClick={handleSearch}
-          disabled={searching}
+          disabled={searching || !isReady}
           style={{
             padding: "10px 16px",
             backgroundColor: "#7c79ff",
