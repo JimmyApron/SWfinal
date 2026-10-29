@@ -13,10 +13,11 @@ export default function RecommendationAreaPicker({ center, radius, onChange, onR
   const selected = validRecommendationCenter(center) ? center : null;
   return <section aria-label="추천 구역 선택" style={{ background: '#fff', border: '1px solid #EEE7FF', borderRadius: 18, padding: 16, marginBottom: 14 }}>
     <h3 style={{ marginTop: 0 }}>어느 구역에서 만날까요?</h3>
-    <p style={{ color: '#646478', fontSize: 13 }}>장소·지역을 검색해 선택하거나 지도를 눌러 추천 중심점을 정해 주세요.</p>
+    <p style={{ color: '#646478', fontSize: 13 }}>장소·지역을 검색하거나 지도를 눌러 중심점을 정한 뒤, 핀을 끌어서 옮길 수 있어요.</p>
     <LocationPicker onSelect={select} showMap={false} includeAddressSearch placeholder="장소·지역 검색 (예: 홍대입구역)" />
     <div style={{ margin: '12px 0', borderRadius: 12, overflow: 'hidden' }}>
       <KakaoMapView preferredCenter={selected} pickedPlace={selected} onMapClick={click}
+        onPickedPlaceDragEnd={click}
         searchArea={selected ? { lat: selected.lat, lng: selected.lng, radius } : null} height="300px" />
     </div>
     <p role="status">{selected ? `추천 중심: ${selected.name}` : '아직 추천 중심점을 선택하지 않았습니다.'}</p>

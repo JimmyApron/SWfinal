@@ -5,7 +5,9 @@ import KakaoMapView from "./KakaoMapView";
 let overlays;
 let polylines;
 let map;
+let markers;
 beforeEach(() => {
+  markers = [];
   overlays = [];
   polylines = [];
   map = { setBounds: jest.fn(), setCenter: jest.fn(), setLevel: jest.fn(), relayout: jest.fn() };
@@ -16,7 +18,7 @@ beforeEach(() => {
     Map: function () { return map; },
     LatLng: function (lat, lng) { this.getLat = () => lat; this.getLng = () => lng; },
     LatLngBounds: function () { this.extend = jest.fn(); },
-    Marker: function (config) { this.getPosition = () => config.position; this.setOpacity = jest.fn(); this.setMap = jest.fn(); },
+    Marker: function (config) { markers.push({ config, marker: this }); this.getPosition = () => config.position; this.setOpacity = jest.fn(); this.setMap = jest.fn(); },
     MarkerImage: function () {}, Size: function () {}, Point: function () {},
     CustomOverlay: function (config) {
       overlays.push(config);
@@ -30,6 +32,21 @@ beforeEach(() => {
 });
 afterEach(() => { overlays.forEach((overlay) => overlay.content.remove()); delete window.kakao; jest.restoreAllMocks(); });
 const places = [{ id: "a", name: "첫 장소", lat: 37, lng: 127, orderNumber: 1 }, { id: "b", name: "셋째 장소", lat: 37.1, lng: 127.1, orderNumber: 3 }];
+
+test('추천 중심 핀 드래그 좌표 전달 및 리스너 정리, 기본 핀은 이동 불가', async () => {
+  const pickedPlace = { lat: 37, lng: 127, name: '중심' };
+  const onDrag = jest.fn();
+  const view = render(<KakaoMapView pickedPlace={pickedPlace} onPickedPlaceDragEnd={onDrag} />);
+  await waitFor(() => expect(markers.some(({ config }) => config.draggable)).toBe(true));
+  const entry = markers.find(({ config }) => config.draggable);
+  const listener = window.kakao.maps.event.addListener.mock.calls.find(([target, event]) => target === entry.marker && event === 'dragend')[2];
+  entry.marker.getPosition = () => new window.kakao.maps.LatLng(36, 128);
+  listener();
+  expect(onDrag).toHaveBeenCalledWith({ lat: 36, lng: 128 });
+  view.rerender(<KakaoMapView pickedPlace={pickedPlace} />);
+  expect(window.kakao.maps.event.removeListener).toHaveBeenCalledWith(entry.marker, 'dragend', listener);
+  expect(markers[markers.length - 1].config.draggable).toBe(false);
+});
 
 test("실제 지도 컴포넌트의 번호 마커·직선 Polyline·전체 범위 설정", async () => {
   render(<KakaoMapView places={places} routePath={places} numberedPlaces />);

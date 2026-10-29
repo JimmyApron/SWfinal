@@ -15,6 +15,7 @@ function KakaoMapView({
   memberLocationLabels = {},
   onMapClick,
   pickedPlace,
+  onPickedPlaceDragEnd,
   onSetMeetingPlace,
   className = '',
   height = '500px',
@@ -457,7 +458,17 @@ function KakaoMapView({
       position,
       map: mapObjectRef.current,
       title: pickedPlace.name || '선택한 장소',
+      draggable: Boolean(onPickedPlaceDragEnd),
     })
+
+    const marker = pickedMarkerRef.current
+    const handleDragEnd = () => {
+      const point = marker.getPosition()
+      onPickedPlaceDragEnd?.({ lat: point.getLat(), lng: point.getLng() })
+    }
+    if (onPickedPlaceDragEnd) {
+      window.kakao.maps.event.addListener(marker, 'dragend', handleDragEnd)
+    }
 
     const infoWindow = new window.kakao.maps.InfoWindow({
       content: `
@@ -475,7 +486,15 @@ function KakaoMapView({
 
     mapObjectRef.current.setCenter(position)
     mapObjectRef.current.relayout()
-  }, [pickedPlace, isMapReady, toggleInfoWindow])
+    return () => {
+      if (onPickedPlaceDragEnd) {
+        window.kakao.maps.event.removeListener(marker, 'dragend', handleDragEnd)
+      }
+      infoWindow.close()
+      marker.setMap(null)
+      if (pickedMarkerRef.current === marker) pickedMarkerRef.current = null
+    }
+  }, [pickedPlace, isMapReady, toggleInfoWindow, onPickedPlaceDragEnd])
 
   // 내 브라우저 현재 위치 마커
   useEffect(() => {

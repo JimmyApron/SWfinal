@@ -19,6 +19,29 @@ const setup = (extra = {}) => {
   useLocation.mockReturnValue({ search: '', state: { schedule: { id: 177, roomid: 40, title: '일정', ...extra } } });
   return render(<CourseRecommendationConditionPage />);
 };
+test('이동 버튼과 예산 슬라이더 값을 저장·전달하고 기존 평점과 우선순위를 유지', async () => {
+  setup({ locationlat: 37, locationlng: 127 });
+  fireEvent.click(screen.getByRole('button', { name: '도보' }));
+  expect(screen.getByRole('button', { name: '도보' })).toHaveAttribute('aria-pressed', 'true');
+  fireEvent.change(screen.getByRole('slider', { name: '장소 사이 최대 이동 시간' }), { target: { value: '20' } });
+  expect(screen.getByRole('slider', { name: '1인당 최대 예산' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox', { name: '예산 제한 없음' }));
+  fireEvent.change(screen.getByRole('slider', { name: '1인당 최대 예산' }), { target: { value: '25000' } });
+  expect(screen.getByText('1인당 최대 25,000원')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /추천받기/ }));
+  await waitFor(() => expect(generateRecommendationResult).toHaveBeenCalledWith(expect.objectContaining({
+    condition: expect.objectContaining({ travelMode: 'walking', maxTravelMinutes: 20, budget: 25000, minRating: 3.5, priority: 'travel' }),
+  })));
+  expect(JSON.parse(localStorage.getItem('course_recommendation_condition_40_177')).budget).toBe(25000);
+});
+test('예산 제한을 다시 해제하면 빈 값으로 전달', async () => {
+  setup({ locationlat: 37, locationlng: 127 });
+  const unlimited = screen.getByRole('checkbox', { name: '예산 제한 없음' });
+  fireEvent.click(unlimited);
+  fireEvent.click(unlimited);
+  fireEvent.click(screen.getByRole('button', { name: /추천받기/ }));
+  await waitFor(() => expect(generateRecommendationResult).toHaveBeenCalledWith(expect.objectContaining({ condition: expect.objectContaining({ budget: '' }) })));
+});
 test('확정 장소 좌표를 기본 중심으로 설정하고 추천 요청에 포함', async () => {
   setup({ locationlat: 37, locationlng: 127, location: '확정 장소' });
   expect(screen.getByText('중심 37')).toBeInTheDocument();

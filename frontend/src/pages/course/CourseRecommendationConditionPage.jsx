@@ -278,14 +278,15 @@ function CourseRecommendationConditionPage() {
         <RecommendationAreaPicker center={form.searchCenter} radius={form.searchRadiusMeters} onChange={selectArea} onRadiusChange={selectRadius} />
 
         <section style={cardStyle}>
-          <div style={sectionTitleStyle}>이동 방식</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+          <div style={sectionTitleStyle}>어느 정도 거리까지 괜찮으세요?</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" }}>
             {TRAVEL_OPTIONS.map((option) => {
               const selected = form.travelMode === option.value;
               return (
                 <button
                   key={option.value}
                   type="button"
+                  aria-pressed={selected}
                   onClick={() => setForm((prev) => ({ ...prev, travelMode: option.value }))}
                   style={{
                     ...chipStyle,
@@ -301,39 +302,57 @@ function CourseRecommendationConditionPage() {
           </div>
 
           <label style={{ display: "block", marginTop: "14px" }}>
-            <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "6px" }}>허용 이동 시간(분)</div>
+            <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "6px" }}>장소 사이 이동 시간 · 최대 {form.maxTravelMinutes || 45}분</div>
             <input
-              type="number"
+              aria-label="장소 사이 최대 이동 시간"
+              type="range"
               min="1"
-              value={form.maxTravelMinutes}
+              max={Math.max(120, Number(form.maxTravelMinutes) || 45)}
+              step="1"
+              value={form.maxTravelMinutes || 45}
               onChange={(event) => {
-                const nextValue = event.target.value;
+                const nextValue = Number(event.target.value);
                 setForm((prev) => ({ ...prev, maxTravelMinutes: nextValue }));
                 setValidationError("");
               }}
-              style={inputStyle}
+              style={sliderStyle}
             />
           </label>
+          <div style={rangeLabelsStyle}><span>1분</span><span>{Math.max(120, Number(form.maxTravelMinutes) || 45)}분</span></div>
+          <p style={hintStyle}>선택한 수단으로 장소 사이를 이동하는 예상 시간입니다. 추천 구역은 위 지도에서 정해 주세요.</p>
         </section>
 
         <section style={cardStyle}>
-          <div style={sectionTitleStyle}>예상 예산</div>
-          <label style={{ display: "block" }}>
-            <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "6px" }}>1인당 예상 예산 (원)</div>
-            <input
-              type="number"
-              min="0"
-              step="1000"
-              value={form.budget}
+          <div style={sectionTitleStyle}>1인당 얼마 정도가 괜찮으세요?</div>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px", fontSize: "13px" }}>
+            <input type="checkbox" checked={form.budget === ""}
               onChange={(event) => {
-                const nextValue = event.target.value;
+                setForm((prev) => ({ ...prev, budget: event.target.checked ? "" : 30000 }));
+                setValidationError("");
+              }} style={{ accentColor: "#7B61FF" }} />예산 제한 없음
+          </label>
+          <label style={{ display: "block" }}>
+            <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "6px", color: "#7B61FF" }}>
+              {form.budget === "" ? "금액을 제한하지 않아요" : `1인당 최대 ${Number(form.budget).toLocaleString("ko-KR")}원`}
+            </div>
+            <input
+              aria-label="1인당 최대 예산"
+              type="range"
+              min="0"
+              max={Math.max(100000, Number(form.budget) || 0)}
+              step="1000"
+              value={form.budget === "" ? 30000 : form.budget}
+              disabled={form.budget === ""}
+              onChange={(event) => {
+                const nextValue = Number(event.target.value);
                 setForm((prev) => ({ ...prev, budget: nextValue }));
                 setValidationError("");
               }}
-              placeholder="예: 25000"
-              style={inputStyle}
+              style={sliderStyle}
             />
           </label>
+          <div style={rangeLabelsStyle}><span>0원</span><span>{Math.max(100000, Number(form.budget) || 0).toLocaleString("ko-KR")}원</span></div>
+          <p style={hintStyle}>하루 코스 전체의 1인당 예산 상한입니다. 비용 정보가 없는 장소는 예산 충족 여부를 확인할 수 없습니다.</p>
         </section>
 
         <section style={cardStyle}>
@@ -454,6 +473,10 @@ function CourseRecommendationConditionPage() {
     </div>
   );
 }
+
+const sliderStyle = { width: "100%", margin: "8px 0", accentColor: "#7B61FF", cursor: "pointer" };
+const rangeLabelsStyle = { display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#77758A" };
+const hintStyle = { fontSize: "12px", lineHeight: 1.6, color: "#66657A", marginBottom: 0 };
 
 const cardStyle = {
   background: "#fff",
