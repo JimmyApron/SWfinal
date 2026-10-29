@@ -36,7 +36,7 @@ export async function getCurrentRoomParticipantInfo(roomId) {
     error: userError,
   } = await supabase.auth.getUser();
 
-  if (userError) {
+  if (userError && userError.name !== "AuthSessionMissingError") {
     throw new Error("로그인 정보를 확인하지 못했습니다.");
   }
 
@@ -60,6 +60,7 @@ export async function getCurrentRoomParticipantInfo(roomId) {
         memberId: member.id,
       };
     }
+    throw new Error("현재 로그인한 회원은 이 모임의 참여자가 아닙니다.");
   }
 
   const guestId = getStoredGuestId();
@@ -170,6 +171,36 @@ export async function createCourseWithStops(coursePayload = {}) {
     throw new Error("방문 장소를 최소 1개 이상 입력해 주세요.");
   }
 
+  const { data: existingCourse, error: existingCourseError } = await supabase
+    .from("courses")
+    .select("id")
+    .eq("room_id", roomId)
+    .eq("schedule_id", scheduleId)
+    .eq("course_name", courseName)
+    .maybeSingle();
+
+  if (existingCourseError) {
+    throw new Error("기존 코스 조회 중 오류가 발생했습니다.");
+  }
+
+  if (existingCourse?.id) {
+    const { data: existingStops, error: existingStopError } = await supabase
+      .from("course_stops")
+      .select("*")
+      .eq("course_id", existingCourse.id)
+      .order("stop_order", { ascending: true });
+
+    if (existingStopError) {
+      throw new Error("기존 코스 장소를 불러오지 못했습니다.");
+    }
+
+    return {
+      ...existingCourse,
+      stops: existingStops || [],
+      isDuplicate: true,
+    };
+  }
+
   const normalizedStops = stops.map((stop, index) => normalizeCourseStop(stop, index));
   const insertCoursePayload = {
     schedule_id: scheduleId,
@@ -243,6 +274,7 @@ export async function createCourseWithStops(coursePayload = {}) {
     return {
       ...courseData,
       stops: stopRows,
+      isDuplicate: false,
     };
   } catch (error) {
     if (createdCourse?.id) {

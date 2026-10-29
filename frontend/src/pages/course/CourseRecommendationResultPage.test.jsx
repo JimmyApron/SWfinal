@@ -1,0 +1,19 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+import CourseRecommendationResultPage from './CourseRecommendationResultPage';
+import { useLocation, useNavigate } from 'react-router-dom';
+jest.mock('react-router-dom', () => ({ useLocation: jest.fn(), useNavigate: jest.fn(), useParams: () => ({ roomid: '1' }) }));
+jest.mock('../../lib/supabaseClient', () => ({ supabase: {} }));
+test('state의 중복 조합 제거 후 실제 표시 개수와 투표 전달 일치, 누락 비용 안내', () => {
+  const navigate = jest.fn();
+  useNavigate.mockReturnValue(navigate);
+  const course = { id: 'c1', name: '코스 하나', stops: [{ id: 'p1', placeName: '카페', category: '카페' }], estimatedCostPerPerson: null };
+  useLocation.mockReturnValue({ search: '', state: { schedule: { id: 2, roomid: 1, title: '일정' },
+    recommendation: { courses: [course, { ...course, id: 'duplicate', name: '이름만 다름' }], warning: '비용 확인 불가' } } });
+  render(<CourseRecommendationResultPage />);
+  expect(screen.getByText('추천 코스 1개')).toBeInTheDocument();
+  expect(screen.queryByText('이름만 다름')).not.toBeInTheDocument();
+  expect(screen.getByText('비용 정보 없음')).toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent('비용 확인 불가');
+  fireEvent.click(screen.getByRole('button', { name: '선택한 코스로 투표 만들기' }));
+  expect(navigate).toHaveBeenCalledWith('/rooms/1/vote-create', expect.objectContaining({ state: expect.objectContaining({ selectedCourses: [course], scheduleId: 2 }) }));
+});

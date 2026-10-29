@@ -22,6 +22,9 @@ function KakaoMapView({
   centerRequest = 0,
   centerLevel = 4,
   preferredCenter,
+  numberedPlaces = false,
+  onPlaceSelect,
+  searchArea,
 }) {
   const mapRef = useRef(null)
   const mapObjectRef = useRef(null)
@@ -44,6 +47,16 @@ function KakaoMapView({
   const handledCenterRequestRef = useRef(0)
 
   const [isMapReady, setIsMapReady] = useState(false)
+  const [mapInstance, setMapInstance] = useState(null)
+  useEffect(() => {
+    if (!isMapReady || !mapObjectRef.current || !searchArea || !window.kakao.maps.Circle) return
+    const circle = new window.kakao.maps.Circle({ center: new window.kakao.maps.LatLng(Number(searchArea.lat), Number(searchArea.lng)),
+      radius: Number(searchArea.radius), strokeWeight: 2, strokeColor: '#7B61FF', strokeOpacity: 0.8,
+      fillColor: '#7B61FF', fillOpacity: 0.12 })
+    circle.setMap(mapObjectRef.current)
+    if (circle.getBounds) mapObjectRef.current.setBounds(circle.getBounds())
+    return () => circle.setMap(null)
+  }, [isMapReady, mapInstance, searchArea])
   const [mapError, setMapError] = useState('')
   const placeViewportKey = places
     .map((place) => `${place.id || place.name}-${place.lat}-${place.lng}`)
@@ -288,6 +301,7 @@ function KakaoMapView({
       }
 
       mapObjectRef.current = new window.kakao.maps.Map(container, options)
+      setMapInstance(mapObjectRef.current)
 
       setTimeout(() => {
         if (mapObjectRef.current) {
@@ -731,7 +745,7 @@ function KakaoMapView({
       })
       anchorMarker.setOpacity?.(0)
 
-      const markerContent = createPlaceMarkerContent({
+      const markerContent = numberedPlaces ? createNumberedMarker(place, selectedPlace?.id === place.id) : createPlaceMarkerContent({
         label: place.name || '장소',
         variant: 'nearby',
       })
@@ -748,10 +762,12 @@ function KakaoMapView({
         event.preventDefault()
         event.stopPropagation()
         openPlaceInfoWindow(place, anchorMarker)
+        onPlaceSelect?.(place)
       })
 
       window.kakao.maps.event.addListener(anchorMarker, 'click', () => {
         openPlaceInfoWindow(place, anchorMarker)
+        onPlaceSelect?.(place)
       })
 
       placeMarkerRefs.current.push({ overlay, anchor: anchorMarker, position, place })
@@ -785,6 +801,9 @@ function KakaoMapView({
     mapObjectRef.current.relayout()
   }, [
     places,
+    numberedPlaces,
+    onPlaceSelect,
+    selectedPlace?.id,
     memberRoutePaths.length,
     isMapReady,
     openPlaceInfoWindow,
@@ -878,6 +897,14 @@ function KakaoMapView({
       Number(selectedPlace.lng)
     )
 
+    if (numberedPlaces) {
+      const matched = placeMarkerRefs.current.find((marker) => marker.place.id === selectedPlace.id)
+      mapObjectRef.current.setCenter(selectedLocation)
+      closeActiveInfoWindow()
+      if (matched) openPlaceInfoWindow(selectedPlace, matched.anchor)
+      return
+    }
+
     if (isSameMapPlace(selectedPlace, confirmedMeetingPlace)) {
       mapObjectRef.current.relayout()
       mapObjectRef.current.setCenter(selectedLocation)
@@ -942,6 +969,7 @@ function KakaoMapView({
     openPlaceInfoWindow(selectedPlace, activeMarker)
   }, [
     selectedPlace,
+    numberedPlaces,
     confirmedMeetingPlaceViewportKey,
     isMapReady,
     closeActiveInfoWindow,
@@ -976,7 +1004,7 @@ function KakaoMapView({
     routePolylineRef.current = new window.kakao.maps.Polyline({
       path: linePath,
       strokeWeight: 5,
-      strokeColor: '#FF0000',
+      strokeColor: numberedPlaces ? '#7B61FF' : '#FF0000',
       strokeOpacity: 0.8,
       strokeStyle: 'solid',
     })
@@ -994,7 +1022,7 @@ function KakaoMapView({
       autoFitPendingRef.current = false
     }
     mapObjectRef.current.relayout()
-  }, [routePath, isMapReady])
+  }, [routePath, isMapReady, numberedPlaces])
 
   // 멤버별 경로선 표시
   useEffect(() => {
@@ -1206,6 +1234,16 @@ function KakaoMapView({
       />
     </div>
   )
+}
+
+function createNumberedMarker(place, selected) {
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.textContent = String(place.orderNumber)
+  button.title = `${place.orderNumber}. ${place.name}`
+  button.setAttribute('aria-label', button.title)
+  Object.assign(button.style, { width: '36px', height: '36px', borderRadius: '50%', border: selected ? '3px solid #17172B' : '2px solid white', background: selected ? '#5435DB' : '#7B61FF', color: 'white', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 2px 8px #0003' })
+  return button
 }
 
 function getMemberNickname(memberLocation) {

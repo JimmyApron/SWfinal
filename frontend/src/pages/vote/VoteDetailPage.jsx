@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FaRegComment, FaMapMarkerAlt, FaChevronRight, FaChevronDown, FaRegClock } from "react-icons/fa";
 import { supabase } from "../../lib/supabaseClient";
+import { getMyCourseConfirmation, confirmMyVotedCourse } from "../../api/courseConfirmationApi";
+import CourseFinalizationPanel from "../../components/CourseFinalizationPanel";
 import {
   getVoteDetail,
   getVoteConfirmedAdditionalLocations,
@@ -36,6 +38,39 @@ function VoteDetailPage() {
   const navigate = useNavigate();
 
   const [vote, setVote] = useState(null);
+  const [courseConfirmation, setCourseConfirmation] = useState(null);
+  const [confirmationError, setConfirmationError] = useState("");
+  const [courseBusy, setCourseBusy] = useState(false);
+  const [courseFinalized, setCourseFinalized] = useState(false);
+  const courseActionLock = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCourseConfirmation(null);
+    setConfirmationError("");
+    if (vote?.votetype === "course") {
+      getMyCourseConfirmation(voteid, roomid).then((state) => {
+        if (!cancelled) setCourseConfirmation(state);
+      }).catch((error) => { if (!cancelled) setConfirmationError(error.message); });
+    }
+    return () => { cancelled = true; };
+  }, [vote, voteid, roomid]);
+
+  useEffect(() => {
+    if (vote?.votetype !== "course" || !vote.scheduleid) return;
+    const channel = supabase.channel(`course-confirmation-${voteid}`)
+      .on("postgres_changes", {
+        event: "*", schema: "public", table: "course_member_confirmations",
+        filter: `schedule_id=eq.${vote.scheduleid}`,
+      }, () => loadVote()).subscribe();
+    const refresh = () => loadVote();
+    window.addEventListener("focus", refresh);
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener("focus", refresh);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vote?.votetype, vote?.scheduleid, voteid]);
   const [currentUser, setCurrentUser] = useState(null);
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [newOptionText, setNewOptionText] = useState("");
@@ -173,7 +208,53 @@ function VoteDetailPage() {
       const additionalLocations =
         await getVoteConfirmedAdditionalLocations(Number(voteid));
 
-      setVote(data);
+      const courseLinks = data?.vote_course_links || [];
+      const courseIds = Array.from(new Set((courseLinks || []).map((link) => link.course_id).filter(Boolean)));
+
+      let courseSummaryMap = {};
+      if (courseIds.length > 0) {
+        const { data: coursesData } = await supabase
+          .from("courses")
+          .select("id, course_name, estimated_total_duration_min, estimated_travel_time_min, estimated_cost_per_person")
+          .in("id", courseIds);
+
+        const { data: courseStopsData } = await supabase
+          .from("course_stops")
+          .select("course_id, place_name, place_address, visit_start_time, visit_end_time, travel_time_from_prev_min, estimated_cost")
+          .in("course_id", courseIds);
+
+        const courseStopsMap = {};
+        (courseStopsData || []).forEach((stop) => {
+          if (!courseStopsMap[stop.course_id]) courseStopsMap[stop.course_id] = [];
+          courseStopsMap[stop.course_id].push(stop);
+        });
+
+        courseSummaryMap = (coursesData || []).reduce((acc, course) => {
+          acc[course.id] = {
+            id: course.id,
+            course_name: course.course_name,
+            total_duration_min: course.estimated_total_duration_min,
+            travel_time_min: course.estimated_travel_time_min,
+            estimated_cost: course.estimated_cost_per_person,
+            stops: courseStopsMap[course.id] || [],
+          };
+          return acc;
+        }, {});
+      }
+
+      const optionsWithCourseMeta = (data.voteoptions || []).map((option) => {
+        if (option.optiontype !== "course") return option;
+
+        const link = courseLinks.find((item) => String(item.vote_option_id) === String(option.id));
+        const matchingCourse = link ? courseSummaryMap[link.course_id] : null;
+
+        return {
+          ...option,
+          courseMeta: matchingCourse || null,
+        };
+      });
+
+      setVote({ ...data, voteoptions: optionsWithCourseMeta });
       setConfirmedAdditionalLocations(additionalLocations);
 
       // 응답자 전원의 프로필 닉네임을 profiles 테이블에서 조회 (이메일 저장 문제 방지)
@@ -313,9 +394,10 @@ function VoteDetailPage() {
 
   const isClosed =
     vote.isclosed ||
+    (vote.votetype === "course" && courseFinalized) ||
     (vote.endtimeenabled && vote.endtime && new Date(vote.endtime).getTime() <= currentTime);
 
-  const showVotingUI = !isClosed && (!hasVoted || isForceVoting);
+  const showVotingUI = !isClosed && !(vote.votetype === "course" && courseFinalized) && (!hasVoted || isForceVoting);
 
   const getOptionCount = (optionId) =>
     responses.filter((r) => r.optionid === optionId).length;
@@ -682,6 +764,7 @@ function VoteDetailPage() {
   };
 
   const handleSubmitVote = async () => {
+    if (courseActionLock.current) return;
     if (!currentUser) {
       alert("로그인이 필요합니다.");
       return;
@@ -692,6 +775,8 @@ function VoteDetailPage() {
       return;
     }
 
+    setCourseBusy(true);
+    courseActionLock.current = true;
     try {
       const nickname =
         currentUser.nickname ||
@@ -707,6 +792,10 @@ function VoteDetailPage() {
     } catch (error) {
       console.error("투표 실패:", error);
       alert("투표 실패: " + (error.message || JSON.stringify(error)));
+      if (vote.votetype === "course") await loadVote();
+    } finally {
+      setCourseBusy(false);
+      courseActionLock.current = false;
     }
   };
 
@@ -2904,6 +2993,14 @@ function VoteDetailPage() {
               )}
             </div>
 
+            {vote.votetype === "course" && <CourseFinalizationPanel key={vote.id} vote={vote} roomId={roomid} onFinalized={setCourseFinalized} />}
+            {vote.votetype === "course" && !courseFinalized && (
+              <div aria-live="polite" style={{ background: "#F3F0FF", padding: "14px", borderRadius: "14px", marginBottom: "16px", color: "#7B61FF" }}>
+                {confirmationError || (!courseConfirmation ? "개인 확정 상태 확인 중..." :
+                  courseConfirmation.course ? "투표와 개인 확정은 별개입니다. 본인이 투표한 코스를 아래에서 확정해 주세요." :
+                    "먼저 코스를 선택해 투표해 주세요.")}
+              </div>
+            )}
             {showVotingUI ? (
               <>
                 {vote.voteoptions?.map((option) => (
@@ -3231,6 +3328,31 @@ function VoteDetailPage() {
                         >
                           <div style={{ flex: 1 }}>
                             {renderOptionContent(option)}
+                            {vote.votetype === "course" && courseConfirmation &&
+                              String(courseConfirmation.optionId) === String(option.id) && (
+                              <div style={{ padding: "12px", marginTop: "8px", borderRadius: "12px", border: "1px solid #7B61FF", background: "#F3F0FF" }}>
+                                <strong>{courseConfirmation.isConfirmed ? "확정 완료" : "내가 투표한 코스"}</strong>
+                                {!courseFinalized && !courseConfirmation.isConfirmed && (
+                                  <button type="button" disabled={courseBusy}
+                                    style={{ display: "block", marginTop: "8px", padding: "10px 14px", border: 0, borderRadius: "12px", background: "#7B61FF", color: "white" }}
+                                    onClick={async () => {
+                                      if (courseActionLock.current) return;
+                                      courseActionLock.current = true;
+                                      setCourseBusy(true);
+                                      setConfirmationError("");
+                                      try {
+                                        const saved = await confirmMyVotedCourse(voteid, roomid, courseConfirmation.course.id);
+                                        setCourseConfirmation(saved);
+                                      } catch (error) {
+                                        setCourseConfirmation(null);
+                                        setConfirmationError(error.message || "개인 확정에 실패했습니다.");
+                                      } finally { setCourseBusy(false); courseActionLock.current = false; }
+                                    }}>
+                                    {courseBusy ? "저장 중..." : "이 코스로 확정하기"}
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           {isPlaceOption(option) && (
@@ -4141,6 +4263,25 @@ function renderOptionContent(option) {
         {option.optiondate} / {option.starttime}
         {option.endtime ? ` ~ ${option.endtime}` : ""}
       </span>
+    );
+  }
+
+  if (option.optiontype === "course") {
+    const courseMeta = option.courseMeta || {};
+    const courseName = option.optiontext || courseMeta.course_name || "추천 코스";
+    const stopCount = courseMeta.stops?.length || option.stop_count || 0;
+    const travelTime = courseMeta.travel_time_min ?? option.travel_time_min;
+    const estimatedCost = courseMeta.estimated_cost ?? option.estimated_cost;
+
+    return (
+      <div>
+        <strong>{courseName}</strong>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "6px", fontSize: "12px", color: "var(--secondary-text)" }}>
+          {stopCount > 0 && <span>{stopCount}개 장소</span>}
+          {travelTime != null && <span>이동 {travelTime}분</span>}
+          {estimatedCost != null && <span>예상 비용 {Number(estimatedCost).toLocaleString()}원</span>}
+        </div>
+      </div>
     );
   }
 

@@ -1,24 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { generateRecommendationResult } from "../../api/courseRecommendationApi";
-
-const MEAL_OPTIONS = [
-  { value: "korean", label: "한식" },
-  { value: "western", label: "양식" },
-  { value: "japanese", label: "일식" },
-  { value: "chinese", label: "중식" },
-  { value: "snack", label: "분식" },
-  { value: "any", label: "상관없음" },
-];
-
-const ACTIVITY_OPTIONS = [
-  { value: "experience", label: "놀거리 / 체험" },
-  { value: "culture", label: "문화 / 전시" },
-  { value: "cafe", label: "카페 / 디저트" },
-  { value: "walk", label: "산책 / 야외 활동" },
-  { value: "bar", label: "술집 / 주점" },
-];
+import RecommendationAreaPicker from "../../components/RecommendationAreaPicker";
+import CourseActivityPreferences from "../../components/CourseActivityPreferences";
+import { mealTimeError } from "../../utils/mealTimeUtils";
+import { scheduleRecommendationCenter, validRecommendationCenter, validRecommendationRadius } from "../../utils/recommendationAreaUtils";
 
 const TRAVEL_OPTIONS = [
   { value: "walking", label: "도보" },
@@ -87,6 +74,8 @@ function getDefaultForm(schedule) {
     preferredRegion: regionFallback,
     regionDetail: regionFallback,
     notes: "",
+    searchCenter: scheduleRecommendationCenter(schedule),
+    searchRadiusMeters: 1500,
   };
 }
 
@@ -130,6 +119,15 @@ function CourseRecommendationConditionPage() {
     return { ...base, ...(saved || {}) };
   });
   const [validationError, setValidationError] = useState("");
+  const selectArea = useCallback((center) => {
+    setForm((previous) => ({ ...previous, searchCenter: center, preferredRegion: center.name, regionDetail: center.address }));
+    setValidationError("");
+  }, []);
+  const selectRadius = useCallback((radius) => setForm((previous) => ({ ...previous, searchRadiusMeters: radius })), []);
+  useEffect(() => {
+    const center = scheduleRecommendationCenter(resolvedSchedule);
+    if (center) setForm((previous) => validRecommendationCenter(previous.searchCenter) ? previous : { ...previous, searchCenter: center });
+  }, [resolvedSchedule]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -137,31 +135,15 @@ function CourseRecommendationConditionPage() {
     window.localStorage.setItem(storedKey, JSON.stringify(form));
   }, [form, storedKey]);
 
-  const updateMealPreference = (meal, value) => {
-    setForm((prev) => ({
-      ...prev,
-      mealPreferences: {
-        ...prev.mealPreferences,
-        [meal]: value,
-      },
-    }));
-    setValidationError("");
-  };
-
-  const toggleActivity = (value) => {
-    setForm((prev) => {
-      const exists = prev.activities.includes(value);
-      return {
-        ...prev,
-        activities: exists
-          ? prev.activities.filter((item) => item !== value)
-          : [...prev.activities, value],
-      };
-    });
-    setValidationError("");
-  };
-
   const validateForm = () => {
+    for (const key of ['breakfast', 'lunch', 'dinner']) {
+      if (form.mealPreferences[key]) {
+        const error = mealTimeError(key, resolvedSchedule || scheduleFromState);
+        if (error) return error;
+      }
+    }
+    if (!validRecommendationCenter(form.searchCenter)) return "지도에서 추천 중심점을 선택해 주세요.";
+    if (!validRecommendationRadius(form.searchRadiusMeters)) return "추천 반경은 500m~5km 사이로 선택해 주세요.";
     const budgetValue = Number(form.budget);
     const maxTravelMinutesValue = Number(form.maxTravelMinutes);
     const minRatingValue = Number(form.minRating);
@@ -292,64 +274,8 @@ function CourseRecommendationConditionPage() {
           </div>
         </div>
 
-        <section style={cardStyle}>
-          <div style={sectionTitleStyle}>식사 선택</div>
-          <div style={{ display: "grid", gap: "12px" }}>
-            {[
-              { key: "breakfast", label: "아침" },
-              { key: "lunch", label: "점심" },
-              { key: "dinner", label: "저녁" },
-            ].map((meal) => (
-              <div key={meal.key} style={{ display: "grid", gap: "8px" }}>
-                <div style={{ fontSize: "13px", fontWeight: 600, color: "#17172B" }}>{meal.label}</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                  {MEAL_OPTIONS.map((option) => {
-                    const selected = form.mealPreferences[meal.key] === option.value;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => updateMealPreference(meal.key, option.value)}
-                        style={{
-                          ...chipStyle,
-                          background: selected ? "#7B61FF" : "#F3F0FF",
-                          color: selected ? "#fff" : "#17172B",
-                          borderColor: selected ? "#7B61FF" : "#E7E0FF",
-                        }}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section style={cardStyle}>
-          <div style={sectionTitleStyle}>활동 선택</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-            {ACTIVITY_OPTIONS.map((option) => {
-              const selected = form.activities.includes(option.value);
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => toggleActivity(option.value)}
-                  style={{
-                    ...chipStyle,
-                    background: selected ? "#7B61FF" : "#F3F0FF",
-                    color: selected ? "#fff" : "#17172B",
-                    borderColor: selected ? "#7B61FF" : "#E7E0FF",
-                  }}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-        </section>
+        <CourseActivityPreferences form={form} schedule={resolvedSchedule || scheduleFromState} onChange={setForm} onError={setValidationError} error={validationError.includes('시간대') ? validationError : ''} />
+        <RecommendationAreaPicker center={form.searchCenter} radius={form.searchRadiusMeters} onChange={selectArea} onRadiusChange={selectRadius} />
 
         <section style={cardStyle}>
           <div style={sectionTitleStyle}>이동 방식</div>
@@ -465,7 +391,8 @@ function CourseRecommendationConditionPage() {
         </section>
 
         <section style={cardStyle}>
-          <div style={sectionTitleStyle}>선호 지역</div>
+          <div style={sectionTitleStyle}>지역 메모 (선택)</div>
+          <p style={{ fontSize: '12px', color: '#646478' }}>실제 추천 범위는 위 지도에서 선택한 중심점과 반경을 기준으로 합니다.</p>
           <label style={{ display: "block" }}>
             <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "6px" }}>지역 이름</div>
             <input
@@ -517,7 +444,7 @@ function CourseRecommendationConditionPage() {
 
         <div style={{ display: "grid", gap: "10px", marginTop: "6px" }}>
           <button type="button" onClick={handleSaveAndReturn} style={primaryButtonStyle}>
-            조건 저장하고 돌아가기
+            이 구역에서 코스 추천받기
           </button>
           <button type="button" onClick={goBack} style={secondaryButtonStyle}>
             취소

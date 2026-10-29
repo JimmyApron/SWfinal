@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
-import { loadRecommendationResultFromStorage, saveRecommendationResultToStorage } from "../../api/courseRecommendationApi";
+import { deduplicateRecommendationResult, loadRecommendationResultFromStorage, saveRecommendationResultToStorage } from "../../api/courseRecommendationApi";
 
 const PAGE_STYLES = {
   page: {
@@ -78,7 +78,7 @@ function CourseRecommendationResultPage() {
   const stateRoomId = Number(roomid || location.state?.roomId || location.state?.schedule?.roomid || queryParams.get("roomId"));
 
   const [schedule, setSchedule] = useState(location.state?.schedule || null);
-  const [recommendation, setRecommendation] = useState(location.state?.recommendation || null);
+  const [recommendation, setRecommendation] = useState(() => deduplicateRecommendationResult(location.state?.recommendation));
   const [loading, setLoading] = useState(!recommendation);
   const [error, setError] = useState("");
   const [selectedCourseIds, setSelectedCourseIds] = useState([]);
@@ -144,6 +144,29 @@ function CourseRecommendationResultPage() {
   };
 
   const selectedCount = selectedCourseIds.length;
+  const selectedCourses = useMemo(
+    () => (recommendation?.courses || []).filter((course) => selectedCourseIds.includes(course.id)),
+    [recommendation, selectedCourseIds]
+  );
+
+  const handleCreateCourseVote = () => {
+    if (!selectedCourses.length || !stateRoomId || !stateScheduleId) {
+      return;
+    }
+
+    navigate(`/rooms/${stateRoomId}/vote-create`, {
+      state: {
+        voteType: "course",
+        votePurpose: "course",
+        title: `${schedule?.title || "추천 코스"} 투표`,
+        selectedCourses,
+        scheduleId: stateScheduleId,
+        fromScheduleId: stateScheduleId,
+        scheduleTitle: schedule?.title || "",
+        returnTab: "vote",
+      },
+    });
+  };
 
   const goBack = () => {
     if (stateRoomId) {
@@ -195,6 +218,7 @@ function CourseRecommendationResultPage() {
           </div>
         ) : (
           <>
+            {recommendation?.warning && <div role="status" style={PAGE_STYLES.card}>{recommendation.warning}</div>}
             <div style={{ ...PAGE_STYLES.card, padding: "12px 14px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
                 <span style={PAGE_STYLES.chip}>추천 코스 {courseList.length}개</span>
@@ -236,7 +260,7 @@ function CourseRecommendationResultPage() {
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" }}>
                       <span style={PAGE_STYLES.chip}>{course.summary}</span>
                       <span style={PAGE_STYLES.chip}>{course.totalDurationMin || 0}분</span>
-                      <span style={PAGE_STYLES.chip}>예산 {Number(course.estimatedCostPerPerson || 0).toLocaleString()}원</span>
+                      <span style={PAGE_STYLES.chip}>{course.estimatedCostPerPerson == null ? "비용 정보 없음" : `예산 ${Number(course.estimatedCostPerPerson).toLocaleString()}원`}</span>
                     </div>
 
                     <div style={{ marginTop: "12px", display: "grid", gap: "8px" }}>
@@ -289,7 +313,12 @@ function CourseRecommendationResultPage() {
         )}
 
         <div style={{ marginTop: "16px", display: "grid", gap: "10px" }}>
-          <button type="button" style={PAGE_STYLES.primaryButton} disabled={selectedCount === 0}>
+          <button
+            type="button"
+            style={{ ...PAGE_STYLES.primaryButton, opacity: selectedCount === 0 ? 0.5 : 1 }}
+            disabled={selectedCount === 0}
+            onClick={handleCreateCourseVote}
+          >
             선택한 코스로 투표 만들기
           </button>
           <button type="button" onClick={goBack} style={PAGE_STYLES.secondaryButton}>

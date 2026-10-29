@@ -14,6 +14,7 @@ import {
 } from "../../api/scheduleApi";
 import { updateRoomLastActivity } from "../../api/roomApi";
 import { supabase } from "../../lib/supabaseClient";
+import { createScheduleWithCreator } from "../../api/scheduleCreationApi";
 import { createNotification, createRoomNotifications } from "../../api/notificationApi";
 import ConfirmedScheduleCard from "../../components/ConfirmedScheduleCard";
 import { FiCalendar, FiClock, FiPlus, FiChevronLeft, FiChevronRight, FiEdit2, FiTrash2, FiMoreVertical } from "react-icons/fi";
@@ -470,16 +471,16 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     if (!confirmedIsAllDay && (!confirmedStartTime || !confirmedEndTime)) { alert("시작 시간과 종료 시간을 선택하세요."); return; }
     if (!confirmedIsAllDay && confirmedStartTime >= confirmedEndTime) { alert("시작 시간은 종료 시간보다 빨라야 합니다."); return; }
 
-    const { data: confirmedSchedule, error } = await supabase.from("confirmed_schedules").insert([{
+    const { data: confirmedSchedule, error } = await createScheduleWithCreator({
       roomid: Number(roomId),
       title: confirmedTitle || null,
       date: confirmedDate,
       starttime: confirmedIsAllDay ? null : confirmedStartTime,
       endtime: confirmedIsAllDay ? null : confirmedEndTime,
       isallday: confirmedIsAllDay,
-    }]).select("id").single();
+    });
 
-    if (error) { alert("확정 일정 추가 실패"); return; }
+    if (error) { alert(error.message || "확정 일정 추가 실패"); return; }
 
     // 📢 확정 일정 추가 알림 전송
     try {

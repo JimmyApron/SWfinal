@@ -20,6 +20,7 @@ import {
 import { getRouteTime } from "../../api/routeTimeApi";
 import { decodePolyline } from "../../utils/decodePolyline";
 import KakaoMapView from "../../components/map/KakaoMapView";
+import FinalizedCoursePreview from "../../components/FinalizedCoursePreview";
 import LocationPicker from "../../components/map/LocationPicker";
 import { getTodayStr } from "../../utils/scheduleUtils";
 
@@ -1269,6 +1270,7 @@ function ConfirmedScheduleDetailPage() {
           코스 추천하기
         </button>
 
+        <FinalizedCoursePreview roomId={schedule.roomid} scheduleId={schedule.id} />
         {middlePlaceSection}
 
         <div style={{ marginBottom: "16px" }} />

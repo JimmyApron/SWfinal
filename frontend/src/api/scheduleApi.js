@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabaseClient";
+import { createScheduleWithCreator } from "./scheduleCreationApi";
 import { createRoomNotifications } from "./notificationApi";
 import { updateRoomLastActivity } from "./roomApi";
 
@@ -172,7 +173,7 @@ export async function createConfirmedScheduleForRoom(roomId, schedule) {
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData.user?.id;
 
-  const { data: confirmedSchedule, error } = await supabase.from("confirmed_schedules").insert([
+  const { data: confirmedSchedule, error } = await createScheduleWithCreator(
     {
       roomid: Number(roomId),
       title: schedule.title?.trim() || null,
@@ -183,11 +184,11 @@ export async function createConfirmedScheduleForRoom(roomId, schedule) {
       location: schedule.location || null,
       locationaddress: schedule.locationaddress || null,
     },
-  ]).select("id").single();
+  );
 
   if (error) {
     console.error("확정 일정 저장 실패:", error);
-    throw new Error("확정 일정 저장 실패");
+    throw error;
   }
 
   // 알림 생성
@@ -215,22 +216,18 @@ export async function createDraftConfirmedSchedule(roomId, title) {
     throw new Error("일정 이름을 입력해 주세요.");
   }
 
-  const { data, error } = await supabase
-    .from("confirmed_schedules")
-    .insert([{
+  const { data, error } = await createScheduleWithCreator({
       roomid: Number(roomId),
       title: trimmedTitle,
       date: null,
       starttime: null,
       endtime: null,
       isallday: false,
-    }])
-    .select("*")
-    .single();
+    });
 
   if (error) {
     console.error("준비 중 일정 생성 실패:", error);
-    throw new Error("일정을 만들지 못했습니다.");
+    throw error;
   }
 
   try {
@@ -451,9 +448,7 @@ export async function createLocationOnlyConfirmedSchedule(
   title = null,
   locationKind = null
 ) {
-  const { data, error } = await supabase
-    .from("confirmed_schedules")
-    .insert([{
+  const { data, error } = await createScheduleWithCreator({
       roomid: Number(location.roomid),
       title: title?.trim() || null,
       date: null,
@@ -464,11 +459,9 @@ export async function createLocationOnlyConfirmedSchedule(
       locationaddress: isMiddlePlace ? location.placeaddress || null : null,
       locationlat: isMiddlePlace ? location.placelat ?? null : null,
       locationlng: isMiddlePlace ? location.placelng ?? null : null,
-    }])
-    .select("*")
-    .single();
+    });
 
-  if (error) throw new Error("날짜 없는 일정 생성 실패");
+  if (error) throw error;
 
   await applyConfirmedLocationToSchedule(
     data.id,

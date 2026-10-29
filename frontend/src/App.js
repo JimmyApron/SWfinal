@@ -17,6 +17,7 @@ import HomePage from "./pages/home/HomePage";
 import ConfirmedScheduleDetailPage from "./pages/home/ConfirmedScheduleDetailPage";
 import CourseRecommendationConditionPage from "./pages/course/CourseRecommendationConditionPage";
 import CourseRecommendationResultPage from "./pages/course/CourseRecommendationResultPage";
+import FinalizedCourseRoadmapPage from "./pages/course/FinalizedCourseRoadmapPage";
 
 import RoomCreatePage from "./pages/room/RoomCreatePage";
 import RoomInvitePage from "./pages/room/RoomInvitePage";
@@ -639,6 +640,7 @@ function App() {
               <Route path="/rooms/:roomid/vote-create" element={<VoteCreatePage />} />
               <Route path="/rooms/:roomid/votes/:voteid" element={<VoteDetailPage />} />
               <Route path="/rooms/:roomid/confirmed-schedule" element={<ConfirmedScheduleDetailPage />} />
+              <Route path="/rooms/:roomid/schedules/:scheduleid/final-course" element={<FinalizedCourseRoadmapPage />} />
               <Route path="/rooms/:roomid/course-recommendation" element={<CourseRecommendationConditionPage />} />
               <Route path="/rooms/:roomid/course-recommendation-result" element={<CourseRecommendationResultPage />} />
               <Route path="/confirmed-schedule" element={<ConfirmedScheduleDetailPage />} />

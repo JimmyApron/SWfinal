@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FaListUl, FaCalendarAlt, FaMapMarkerAlt, FaRegClock, FaChevronRight, FaChevronDown } from "react-icons/fa";
 import { supabase } from "../../lib/supabaseClient";
@@ -6,12 +6,15 @@ import { createVote } from "../../api/voteApi";
 import { sendVoteNotification } from "../notification/VoteNotification";
 import LocationPicker from "../../components/map/LocationPicker";
 import { getMemberAvailabilities, getScheduleCandidates } from "../../api/scheduleApi";
+import { createCourseWithStops } from "../../api/courseApi";
 import { getTopAvailableTimes, sortAvailableTimes, getTopConsecutiveDays } from "../../utils/scheduleUtils";
+import { buildCourseVoteDbRows, getCourseVoteDefaults, normalizeCourseVoteSelection, isCourseVoteType } from "../../utils/courseVoteUtils";
 
 const VOTE_TYPE_OPTIONS = [
   { value: "general", label: "일반 투표", icon: FaListUl, description: "메뉴/준비물 등 자유 선택" },
   { value: "schedule", label: "일정 확정", icon: FaCalendarAlt, description: "일정 후보 선택" },
   { value: "location", label: "장소 확정", icon: FaMapMarkerAlt, description: "장소 후보 선택" },
+  { value: "course", label: "코스 투표", icon: FaListUl, description: "추천 코스 후보 선택" },
 ];
 
 function VoteCreatePage() {
@@ -21,12 +24,13 @@ function VoteCreatePage() {
 
   const selectedSchedules = location.state?.selectedSchedules || [];
   const selectedPlaces = location.state?.selectedPlaces || [];
-  const initialVoteType = location.state?.voteType || "text";
+  const selectedCourses = useMemo(() => location.state?.selectedCourses || [], [location.state?.selectedCourses]);
+  const initialVoteType = location.state?.voteType || (selectedCourses.length > 0 ? "course" : "text");
 
   const initialVotePurpose =
     location.state?.votePurpose ||
     location.state?.votetype ||
-    (location.state?.voteType === "date" ? "schedule" : "general");
+    (selectedCourses.length > 0 ? "course" : (location.state?.voteType === "date" ? "schedule" : "general"));
 
   const returnTab = location.state?.returnTab || 'vote';
   const locationKind = location.state?.locationKind || null;
@@ -99,6 +103,10 @@ function VoteCreatePage() {
   const [title, setTitle] = useState(location.state?.title || "");
 
   const [options, setOptions] = useState(() => {
+    if (selectedCourses.length > 0) {
+      return normalizeCourseVoteSelection(selectedCourses);
+    }
+
     if (selectedPlaces.length > 0) {
       return selectedPlaces.map((place) => ({
         optiontype: "place",
@@ -139,6 +147,22 @@ function VoteCreatePage() {
 
   const [votetype, setVotetype] = useState(initialVotePurpose);
 
+  useEffect(() => {
+    if (votetype === "course") {
+      setIsmultiple(false);
+      setIsanonymous(false);
+      setAllowaddoption(false);
+      setOptions((prev) => {
+        if (prev.length > 0 && prev.every((option) => option.optiontype === "course")) {
+          return prev;
+        }
+        return selectedCourses.length > 0 ? normalizeCourseVoteSelection(selectedCourses) : [
+          { ...makeEmptyOption("course"), optiontype: "course", optiontext: "추천 코스 1" },
+        ];
+      });
+    }
+  }, [selectedCourses, votetype]);
+
   const [ismultiple, setIsmultiple] = useState(false);
   const [isanonymous, setIsanonymous] = useState(false);
   const [allowaddoption, setAllowaddoption] = useState(false);
@@ -149,6 +173,15 @@ function VoteCreatePage() {
 
   const handleVotetypeChange = (newType) => {
     setVotetype(newType);
+
+    if (newType === "course") {
+      setOptions(
+        selectedCourses.length > 0
+          ? normalizeCourseVoteSelection(selectedCourses)
+          : [{ ...makeEmptyOption("course"), optiontype: "course", optiontext: "추천 코스 1" }]
+      );
+      return;
+    }
 
     if (newType === "schedule") {
       setOptions((prev) =>
@@ -311,13 +344,66 @@ function VoteCreatePage() {
       return;
     }
 
+    let preparedOptions = options;
+
+    if (votetype === "course") {
+      try {
+        const resolvedScheduleId = Number(scheduleId || fromScheduleId || null);
+        if (!resolvedScheduleId) {
+          alert("추천 코스 투표는 연결된 일정이 필요합니다.");
+          return;
+        }
+
+        const persistedCourses = await Promise.all(
+          (selectedCourses.length > 0 ? selectedCourses : options.map((option) => ({ ...option, id: option.courseid }))).map(async (course) => {
+            const normalized = {
+              id: course?.id ?? course?.course_id ?? course?.courseId,
+              name: course?.name ?? course?.course_name ?? course?.courseName ?? course?.optiontext,
+              summary: course?.summary ?? course?.course_summary ?? "",
+              totalDurationMin: course?.totalDurationMin ?? course?.total_duration_min ?? course?.totalDuration ?? 0,
+              estimatedTravelTimeMin: course?.estimatedTravelTimeMin ?? course?.estimated_travel_time_min ?? 0,
+              estimatedCostPerPerson: course?.estimatedCostPerPerson ?? course?.estimated_cost_per_person ?? 0,
+              stops: Array.isArray(course?.stops) ? course.stops : [],
+            };
+
+            const savedCourse = await createCourseWithStops({
+              roomId: Number(roomid),
+              scheduleId: resolvedScheduleId,
+              courseName: normalized.name,
+              recommendationCondition: normalized.summary,
+              estimatedTotalDurationMin: normalized.totalDurationMin,
+              estimatedTravelTimeMin: normalized.estimatedTravelTimeMin,
+              estimatedCostPerPerson: normalized.estimatedCostPerPerson,
+              stops: buildCourseVoteDbRows(normalized).stops,
+            });
+
+            return {
+              ...normalized,
+              id: savedCourse.id,
+              course_id: savedCourse.id,
+              courseId: savedCourse.id,
+              courseid: savedCourse.id,
+              stops: savedCourse.stops || normalized.stops,
+            };
+          })
+        );
+
+        preparedOptions = normalizeCourseVoteSelection(persistedCourses);
+        setOptions(preparedOptions);
+      } catch (error) {
+        console.error("추천 코스 저장 실패:", error);
+        alert(error.message || "추천 코스 저장에 실패했습니다.");
+        return;
+      }
+    }
+
     if (isLocationVoteType(votetype)) {
       if (locationKind && !scheduleId) {
         alert("장소 투표를 저장할 대상 일정이 없습니다.");
         return;
       }
 
-      const invalidPlaceOption = options.some((option) => {
+      const invalidPlaceOption = preparedOptions.some((option) => {
         if (option.optiontype !== "place") return false;
 
         return (
@@ -333,9 +419,13 @@ function VoteCreatePage() {
       }
     }
 
-    const validOptions = options.filter((option) => {
+    const validOptions = preparedOptions.filter((option) => {
       if (option.optiontype === "text") {
         return String(option.optiontext || "").trim() !== "";
+      }
+
+      if (option.optiontype === "course") {
+        return String(option.optiontext || option.course_name || "").trim() !== "" || Boolean(option.courseid || option.id);
       }
 
       if (option.optiontype === "place") {
@@ -361,21 +451,24 @@ function VoteCreatePage() {
     let createdVoteId = null;
 
     try {
+      const courseDefaults = getCourseVoteDefaults();
       const result = await createVote({
         roomid: Number(roomid),
-        title,
+        title: title.trim() || `${roomName || "모임"} 추천 코스 투표`,
         userid: currentUser.id,
         nickname,
         options: validOptions,
-        ismultiple,
-        isanonymous,
-        allowaddoption,
+        ismultiple: votetype === "course" ? courseDefaults.ismultiple : ismultiple,
+        isanonymous: votetype === "course" ? courseDefaults.isanonymous : isanonymous,
+        allowaddoption: votetype === "course" ? courseDefaults.allowaddoption : allowaddoption,
         endtime: endtimeenabled && endtime ? endtime : null,
         endtimeenabled,
         reminderenabled,
         votetype,
         locationkind: votetype === 'location' ? locationKind : null,
-        scheduleid: isLocationVoteType(votetype) ? scheduleId : (fromScheduleId || null),
+        scheduleid: isLocationVoteType(votetype)
+          ? scheduleId
+          : (votetype === "course" ? (scheduleId || fromScheduleId || null) : (fromScheduleId || null)),
       });
 
       createdVoteId = result?.id || result?.data?.id || null;
@@ -804,6 +897,22 @@ function VoteCreatePage() {
           </p>
         )}
 
+        {selectedCourses.length > 0 && isCourseVoteType(votetype) && (
+          <p
+            style={{
+              padding: "10px",
+              border: "1px solid #d8d8ff",
+              borderRadius: "8px",
+              backgroundColor: "#f8f8ff",
+              fontSize: "14px",
+              color: "#555",
+              marginBottom: "16px",
+            }}
+          >
+            추천 코스 {selectedCourses.length}개가 자동으로 투표 후보로 설정되었습니다.
+          </p>
+        )}
+
         {options.map((option, index) => (
           <div key={index} style={{ marginBottom: "10px" }}>
               {option.optiontype === "text" && (
@@ -1138,29 +1247,32 @@ function VoteCreatePage() {
           </button>
         )}
 
-        <label style={labelStyle}>
+        <label style={{ ...labelStyle, opacity: votetype === "course" ? 0.4 : 1 }}>
           <input
             type="checkbox"
             checked={ismultiple}
             onChange={(e) => setIsmultiple(e.target.checked)}
+            disabled={votetype === "course"}
           />
           복수 선택
         </label>
 
-        <label style={labelStyle}>
+        <label style={{ ...labelStyle, opacity: votetype === "course" ? 0.4 : 1 }}>
           <input
             type="checkbox"
             checked={isanonymous}
             onChange={(e) => setIsanonymous(e.target.checked)}
+            disabled={votetype === "course"}
           />
           익명 투표
         </label>
 
-        <label style={{ ...labelStyle, marginBottom: "16px" }}>
+        <label style={{ ...labelStyle, marginBottom: "16px", opacity: votetype === "course" ? 0.4 : 1 }}>
           <input
             type="checkbox"
             checked={allowaddoption}
             onChange={(e) => setAllowaddoption(e.target.checked)}
+            disabled={votetype === "course"}
           />
           선택항목 추가 허용
         </label>
