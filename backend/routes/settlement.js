@@ -3,6 +3,7 @@ const express = require("express");
 const multer = require("multer");
 const sharp = require("sharp");
 const { createClient } = require("@supabase/supabase-js");
+const { getReminderTargets, getShareProgress, isSettlementSchemaError, isShareConfirmed, isShareSent } = require("./settlementRules");
 
 const router = express.Router();
 
@@ -15,6 +16,21 @@ class HttpError extends Error {
     super(message);
     this.status = status;
   }
+}
+
+function throwIfSettlementMigrationMissing(error) {
+  if (isSettlementSchemaError(error)) {
+    throw new HttpError(503, "정산 DB 업데이트가 아직 적용되지 않았어요. 데이터베이스 마이그레이션 적용 후 다시 시도해 주세요.");
+  }
+}
+
+async function requireSettlementSnapshotColumns(client) {
+  const { error } = await client.from("expense_shares")
+    .select("sentamount, confirmedamount, reconfirmrequired")
+    .limit(0);
+  if (!error) return;
+  throwIfSettlementMigrationMissing(error);
+  throw new Error(error.message);
 }
 
 function getAdmin() {
@@ -454,11 +470,7 @@ async function recognizeReceipt(jpeg) {
 // ---------------------------------------------------------------------------
 // 결제자를 뺀 참여자들의 송금 진행 현황
 function shareProgress(shares) {
-  return {
-    total: shares.length,
-    settled: shares.filter((share) => share.sentat || share.confirmedat).length,
-    confirmed: shares.filter((share) => share.confirmedat).length,
-  };
+  return getShareProgress(shares);
 }
 
 async function buildExpenseDetail(expense, viewer) {
@@ -483,6 +495,9 @@ async function buildExpenseDetail(expense, viewer) {
     amount: share.amount,
     sentat: share.sentat,
     confirmedat: share.confirmedat,
+    isSent: isShareSent(share),
+    isConfirmed: isShareConfirmed(share),
+    reconfirmRequired: Boolean(share.reconfirmrequired),
     isMe: `${share.membertype}:${share.memberid}` === viewerKey,
     isPayer: `${share.membertype}:${share.memberid}` === payerKey,
   }));
@@ -686,7 +701,7 @@ async function getSenderProfile(roomId, viewer) {
 
 // rows: [{ receiverId, receiverType, type, title, message, link }]
 async function sendNotifications(roomId, senderId, rows) {
-  if (rows.length === 0) return;
+  if (rows.length === 0) return 0;
   const client = getAdmin();
 
   const { data: room } = await client.from("rooms").select("roomname").eq("id", roomId).maybeSingle();
@@ -707,9 +722,14 @@ async function sendNotifications(roomId, senderId, rows) {
     ...(memberSettings || []).filter((row) => row.schedulenotifenabled === false).map((row) => String(row.userid)),
     ...(guestSettings || []).filter((row) => row.schedulenotifenabled === false).map((row) => String(row.id)),
   ]);
+  const active = new Set([
+    ...(memberSettings || []).map((row) => String(row.userid)),
+    ...(guestSettings || []).map((row) => String(row.id)),
+  ]);
 
-  const { error } = await client.from("notifications").insert(
-    rows.map((row) => ({
+  const activeRows = rows.filter((row) => active.has(String(row.receiverId)));
+  const notifications = activeRows.map((row) => {
+    const notification = {
       roomid: roomId,
       receiverid: String(row.receiverId),
       senderid: senderId ? String(senderId) : null,
@@ -719,9 +739,20 @@ async function sendNotifications(roomId, senderId, rows) {
       link: row.link,
       isread: false,
       issilent: silent.has(String(row.receiverId)),
-    }))
-  );
+    };
+    if (row.idempotencyKey) notification.idempotency_key = row.idempotencyKey;
+    return notification;
+  });
+  if (notifications.length === 0) return 0;
+  let { error } = await client.from("notifications").insert(notifications);
+  if (error && notifications.some((row) => row.idempotency_key)
+    && (/PGRST204|42703/i.test(error.code || "")
+      || /could not find the 'idempotency_key' column|column .*idempotency_key.* does not exist/i.test(error.message || ""))) {
+    const compatibleRows = notifications.map(({ idempotency_key, ...row }) => row);
+    ({ error } = await client.from("notifications").insert(compatibleRows));
+  }
   if (error) throw new Error(error.message);
+  return notifications.length;
 }
 
 // 등록한 지출을 방 채팅에 카드로 올리고, 관련된 사람에게 알림을 보낸다. (실패해도 등록은 유지)
@@ -750,7 +781,7 @@ async function shareExpenses(schedule, viewer, details) {
   details.forEach((detail) => {
     const payerKey = `${detail.expense.payer.type}:${detail.expense.payer.id}`;
     detail.shares.forEach((share) => {
-      if (`${share.membertype}:${share.memberid}` === payerKey) return;
+      if (`${share.membertype}:${share.memberid}` === payerKey || Number(share.amount) <= 0) return;
       touch(share.membertype, share.memberid).owe += share.amount;
       touch(detail.expense.payer.type, detail.expense.payer.id).receive += share.amount;
     });
@@ -853,7 +884,7 @@ router.get(
       const own = (shares || []).filter((share) => share.expenseid === expense.id);
       const others = own.filter((share) => `${share.membertype}:${share.memberid}` !== payerKey);
       const mine = own.find((share) => `${share.membertype}:${share.memberid}` === viewerKey);
-      const settled = (share) => Boolean(share.sentat || share.confirmedat);
+      const settled = isShareConfirmed;
 
       totalAmount += expense.amount;
       // 남은 정산액: 아직 보냈어요/받았어요 처리가 안 된 금액만 합친다.
@@ -921,8 +952,8 @@ router.get(
       const own = (shares || []).filter((share) => share.expenseid === id);
       const others = own.filter((share) => `${share.membertype}:${share.memberid}` !== payerKey);
       const mine = own.find((share) => `${share.membertype}:${share.memberid}` === viewerKey);
-      const settled = (share) => Boolean(share.sentat || share.confirmedat);
-      const unsent = others.filter((share) => !settled(share));
+      const settled = isShareConfirmed;
+      const unsent = others.filter((share) => share.amount > 0 && !settled(share));
 
       return {
         id,
@@ -981,26 +1012,34 @@ router.post(
       .eq("memberid", viewer.id)
       .maybeSingle();
     if (!share) throw new HttpError(403, "이 정산의 참여자만 처리할 수 있어요.");
-    if (!sent && share.confirmedat) {
-      throw new HttpError(409, "결제자가 이미 받았다고 확인해서 취소할 수 없어요.");
+    const { data: transition, error } = await client.rpc("transition_expense_share", {
+      p_expenseid: expense.id,
+      p_memberid: share.memberid,
+      p_membertype: share.membertype,
+      p_actorid: viewer.id,
+      p_actortype: viewer.type,
+      p_action: "sent",
+      p_value: sent,
+    });
+    if (error) {
+      throwIfSettlementMigrationMissing(error);
+      if (/confirmed transfer cannot be undone/.test(error.message)) throw new HttpError(409, "결제자가 이미 받았다고 확인해서 취소할 수 없어요.");
+      if (/not found/.test(error.message)) throw new HttpError(410, "정산이 삭제되었거나 참여자를 찾을 수 없어요.");
+      throw new Error(error.message);
     }
 
-    const { error } = await client
-      .from("expense_shares")
-      .update({ sentat: sent ? new Date().toISOString() : null })
-      .eq("id", share.id);
-    if (error) throw new Error(error.message);
-
-    if (sent && !share.sentat) {
+    if (transition?.changed) {
       try {
         const sender = await getSenderProfile(expense.roomid, viewer);
         await sendNotifications(expense.roomid, viewer.id, [
           {
             receiverId: expense.payerid,
             receiverType: expense.payertype,
-            type: "settlement_sent",
-            title: "정산 금액을 보냈어요",
-            message: `${sender.nickname}님이 "${expense.title}" ${share.amount.toLocaleString("ko-KR")}원을 보냈다고 알려왔어요. 확인해 주세요.`,
+            type: sent ? "settlement_sent" : "settlement_sent_undone",
+            title: sent ? "정산 금액을 보냈어요" : "송금 완료 표시를 취소했어요",
+            message: sent
+              ? `${sender.nickname}님이 "${expense.title}" ${share.amount.toLocaleString("ko-KR")}원을 보냈다고 알려왔어요. 확인해 주세요.`
+              : `${sender.nickname}님이 "${expense.title}" 송금 완료 표시를 취소했어요.`,
             link: `/schedules/${expense.scheduleid}/settlement/${expense.id}`,
           },
         ]);
@@ -1036,22 +1075,34 @@ router.post(
     }
 
     const confirmed = req.body?.confirmed !== false;
-    const { error } = await client
-      .from("expense_shares")
-      .update({ confirmedat: confirmed ? new Date().toISOString() : null })
-      .eq("id", share.id);
-    if (error) throw new Error(error.message);
+    const { data: transition, error } = await client.rpc("transition_expense_share", {
+      p_expenseid: expense.id,
+      p_memberid: share.memberid,
+      p_membertype: share.membertype,
+      p_actorid: viewer.id,
+      p_actortype: viewer.type,
+      p_action: "confirm",
+      p_value: confirmed,
+    });
+    if (error) {
+      throwIfSettlementMigrationMissing(error);
+      if (/not marked as sent/.test(error.message)) throw new HttpError(409, "송금 표시가 된 금액만 확인할 수 있어요.");
+      if (/not found/.test(error.message)) throw new HttpError(410, "정산이 삭제되었거나 참여자를 찾을 수 없어요.");
+      throw new Error(error.message);
+    }
 
-    if (confirmed && !share.confirmedat) {
+    if (transition?.changed) {
       try {
         const payer = await getSenderProfile(expense.roomid, viewer);
         await sendNotifications(expense.roomid, viewer.id, [
           {
             receiverId: share.memberid,
             receiverType: share.membertype,
-            type: "settlement_received",
-            title: "정산 금액을 확인했어요",
-            message: `${payer.nickname}님이 "${expense.title}" ${share.amount.toLocaleString("ko-KR")}원을 받았다고 확인했어요.`,
+            type: confirmed ? "settlement_received" : "settlement_received_undone",
+            title: confirmed ? "정산 금액을 확인했어요" : "받음 확인을 취소했어요",
+            message: confirmed
+              ? `${payer.nickname}님이 "${expense.title}" ${share.amount.toLocaleString("ko-KR")}원을 받았다고 확인했어요.`
+              : `${payer.nickname}님이 "${expense.title}" 받음 확인을 취소했어요.`,
             link: `/schedules/${expense.scheduleid}/settlement/${expense.id}`,
           },
         ]);
@@ -1060,11 +1111,30 @@ router.post(
       }
     }
 
+    if (transition?.became_complete) {
+      try {
+        const currentShares = await client.from("expense_shares").select("memberid, membertype, amount").eq("expenseid", expense.id);
+        const targets = new Map((currentShares.data || []).filter((row) => row.amount > 0).map((row) => [`${row.membertype}:${row.memberid}`, { id: row.memberid, type: row.membertype }]));
+        targets.set(`${expense.payertype}:${expense.payerid}`, { id: expense.payerid, type: expense.payertype });
+        const actorKey = `${viewer.type}:${viewer.id}`;
+        const others = [...targets.entries()].filter(([key]) => key !== actorKey).map(([, person]) => person);
+        await sendNotifications(expense.roomid, viewer.id, others.map((person) => ({
+          receiverId: person.id,
+          receiverType: person.type,
+          type: "settlement_completed",
+          title: "정산이 모두 완료됐어요",
+          message: `"${expense.title}" 정산에 참여한 모든 금액을 확인했어요.`,
+          link: `/schedules/${expense.scheduleid}/settlement/${expense.id}`,
+          idempotencyKey: `settlement_completed:${expense.id}:${Date.now()}:${person.type}:${person.id}`,
+        })));
+      } catch (notifyError) {
+        console.error("정산 완료 알림 실패:", notifyError.message);
+      }
+    }
+
     res.json(await buildExpenseDetail(expense, viewer));
   })
 );
-
-const REMINDER_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
 // 아직 안 보낸 참여자에게 다시 알린다. (결제자 또는 등록한 사람만, 같은 사람에게는 6시간에 한 번)
 router.post(
@@ -1079,28 +1149,24 @@ router.post(
     }
 
     const client = getAdmin();
-    const { data: shares } = await client.from("expense_shares").select("*").eq("expenseid", expense.id);
+    const { data: shares, error: shareError } = await client.from("expense_shares").select("*").eq("expenseid", expense.id);
+    if (shareError) throw new Error(shareError.message);
     // 결제자와 알림을 누르는 본인은 대상에서 뺀다.
-    const pending = (shares || []).filter(
-      (share) =>
-        `${share.membertype}:${share.memberid}` !== payerKey &&
-        `${share.membertype}:${share.memberid}` !== viewerKey &&
-        !share.sentat &&
-        !share.confirmedat
-    );
+    const pending = getReminderTargets(shares || [], payerKey, viewerKey);
     if (pending.length === 0) throw new HttpError(400, "아직 보내지 않은 사람이 없어요.");
 
     const link = `/schedules/${expense.scheduleid}/settlement/${expense.id}`;
-    const since = new Date(Date.now() - REMINDER_COOLDOWN_MS).toISOString();
-    const { data: recent } = await client
-      .from("notifications")
-      .select("receiverid")
-      .eq("type", "settlement_reminder")
-      .eq("link", link)
-      .gte("createdat", since)
-      .in("receiverid", pending.map((share) => share.memberid));
-    const recentlyReminded = new Set((recent || []).map((row) => String(row.receiverid)));
-    const targets = pending.filter((share) => !recentlyReminded.has(String(share.memberid)));
+    const { data: claimed, error: claimError } = await client.rpc("claim_settlement_reminders", {
+      p_expenseid: expense.id,
+      p_targets: pending.map((share) => ({ memberid: share.memberid, membertype: share.membertype })),
+    });
+    if (claimError) {
+      throwIfSettlementMigrationMissing(claimError);
+      if (/not found/.test(claimError.message)) throw new HttpError(410, "정산이 삭제되었어요.");
+      throw new Error(claimError.message);
+    }
+    const claimedKeys = new Set((claimed || []).map((person) => `${person.membertype}:${person.memberid}`));
+    const targets = pending.filter((share) => claimedKeys.has(`${share.membertype}:${share.memberid}`));
     if (targets.length === 0) {
       throw new HttpError(429, "방금 알림을 보냈어요. 잠시 후에 다시 보낼 수 있어요.");
     }
@@ -1109,20 +1175,31 @@ router.post(
       id: expense.payerid,
       type: expense.payertype,
     });
-    await sendNotifications(
-      expense.roomid,
-      viewer.id,
-      targets.map((share) => ({
-        receiverId: share.memberid,
-        receiverType: share.membertype,
-        type: "settlement_reminder",
-        title: "정산 금액을 보내 주세요",
-        message: `${payer.nickname}님에게 "${expense.title}" ${share.amount.toLocaleString("ko-KR")}원을 보내야 해요.`,
-        link,
-      }))
-    );
+    let notified = 0;
+    try {
+      notified = await sendNotifications(
+        expense.roomid,
+        viewer.id,
+        targets.map((share) => ({
+          receiverId: share.memberid,
+          receiverType: share.membertype,
+          type: "settlement_reminder",
+          title: "정산 금액을 보내 주세요",
+          message: `${payer.nickname}님에게 "${expense.title}" ${share.amount.toLocaleString("ko-KR")}원을 보내야 해요.`,
+          link,
+        }))
+      );
+    } catch (notifyError) {
+      console.error("정산 재알림 기록 실패:", notifyError.message);
+      const { error: releaseError } = await client.rpc("release_settlement_reminders", {
+        p_expenseid: expense.id,
+        p_targets: targets.map((share) => ({ memberid: share.memberid, membertype: share.membertype })),
+      });
+      if (releaseError) console.error("정산 재알림 선점 해제 실패:", releaseError.message);
+      throw new HttpError(503, "알림을 기록하지 못했어요. 잠시 후 다시 시도해 주세요.");
+    }
 
-    res.json({ notified: targets.length, skipped: pending.length - targets.length });
+    res.json({ notified: notified || 0, skipped: pending.length - (notified || 0) });
   })
 );
 
@@ -1179,28 +1256,55 @@ router.put(
     // 증빙 이미지는 수정으로 지워지지 않게 키 자체를 뺀다.
     delete payload.receiptpath;
 
-    const { error } = await getAdmin().rpc("update_expense", { p_expenseid: expense.id, payload });
+    const client = getAdmin();
+    await requireSettlementSnapshotColumns(client);
+    const { data: beforeShares, error: beforeShareError } = await client
+      .from("expense_shares").select("memberid, membertype, amount").eq("expenseid", expense.id);
+    if (beforeShareError) throw new Error(beforeShareError.message);
+    const before = { ...expense, shares: beforeShares || [] };
+    const { error } = await client.rpc("update_expense", { p_expenseid: expense.id, payload });
     if (error) throw translateRpcError(error);
 
     const updated = await loadExpense(expense.id);
     const detail = await buildExpenseDetail(updated, viewer);
 
+    const afterShares = detail.shares.map((share) => ({ memberid: share.memberid, membertype: share.membertype, amount: share.amount }));
+    const changedAmounts = new Map((before.shares || []).map((share) => [`${share.membertype}:${share.memberid}`, share.amount]));
+    const splitChanged = before.splitmode !== updated.splitmode
+      || afterShares.some((share) => changedAmounts.get(`${share.membertype}:${share.memberid}`) !== share.amount)
+      || (before.shares || []).some((share) => !afterShares.some((next) => next.membertype === share.membertype && next.memberid === share.memberid));
+    const payerChanged = before.payerid !== updated.payerid || before.payertype !== updated.payertype;
+    const accountChanged = before.bankname !== updated.bankname || before.accountnumber !== updated.accountnumber;
+    const amountChanged = before.amount !== updated.amount;
+    const notifyForChange = splitChanged || payerChanged || accountChanged || amountChanged;
     try {
+      if (!notifyForChange) {
+        res.json(detail);
+        return;
+      }
       const editor = await getSenderProfile(expense.roomid, viewer);
-      await sendNotifications(
-        expense.roomid,
-        viewer.id,
-        affectedPeople(updated, detail.shares.map((share) => ({ membertype: share.membertype, memberid: share.memberid })), viewer).map(
-          (person) => ({
+      const recipients = new Map();
+      [...(before.shares || []), ...afterShares].forEach((share) => {
+        recipients.set(`${share.membertype}:${share.memberid}`, { id: share.memberid, type: share.membertype });
+      });
+      recipients.set(`${before.payertype}:${before.payerid}`, { id: before.payerid, type: before.payertype });
+      recipients.set(`${updated.payertype}:${updated.payerid}`, { id: updated.payerid, type: updated.payertype });
+      const actorKey = `${viewer.type}:${viewer.id}`;
+      const message = amountChanged || splitChanged
+        ? `${editor.nickname}님이 "${updated.title}" 정산 금액 또는 분담을 변경했어요. 송금과 확인 상태를 다시 확인해 주세요.`
+        : payerChanged
+          ? `${editor.nickname}님이 "${updated.title}" 결제자를 변경했어요. 정산 정보를 확인해 주세요.`
+          : `${editor.nickname}님이 "${updated.title}" 계좌 정보를 변경했어요. 송금 전에 확인해 주세요.`;
+      await sendNotifications(expense.roomid, viewer.id, [...recipients.entries()]
+        .filter(([key]) => key !== actorKey)
+        .map(([, person]) => ({
             receiverId: person.id,
             receiverType: person.type,
             type: "settlement_updated",
             title: "정산이 수정됐어요",
-            message: `${editor.nickname}님이 "${updated.title}" 정산을 수정했어요. 금액을 다시 확인해 주세요.`,
+            message,
             link: `/schedules/${expense.scheduleid}/settlement/${expense.id}`,
-          })
-        )
-      );
+          })));
     } catch (notifyError) {
       console.error("수정 알림 실패:", notifyError.message);
     }
@@ -1209,7 +1313,7 @@ router.put(
   })
 );
 
-// 지출 삭제: 목록에서 숨기고(복구용 기록은 남김) 증빙 이미지는 지운다. 채팅 카드는 "삭제된 정산"으로 보인다.
+// 지출 삭제: 금전·증빙 기록은 보존하고 목록에서만 숨긴다.
 router.delete(
   "/expenses/:expenseId",
   handle(async (req, res) => {
@@ -1218,18 +1322,12 @@ router.delete(
     assertCanManage(expense, viewer);
 
     const client = getAdmin();
-    const { data: shares } = await client.from("expense_shares").select("membertype, memberid").eq("expenseid", expense.id);
+    const { data: shares, error: shareError } = await client.from("expense_shares").select("membertype, memberid").eq("expenseid", expense.id);
+    if (shareError) throw new Error(shareError.message);
 
-    const { error } = await client
-      .from("expenses")
-      .update({ isdeleted: true, receiptpath: null, updatedat: new Date().toISOString() })
-      .eq("id", expense.id);
+    const { error } = await client.rpc("soft_delete_expense", { p_expenseid: expense.id });
+    throwIfSettlementMigrationMissing(error);
     if (error) throw new Error(error.message);
-
-    if (expense.receiptpath) {
-      const { error: removeError } = await client.storage.from("receipts").remove([expense.receiptpath]);
-      if (removeError) console.error("증빙 이미지 삭제 실패:", removeError.message);
-    }
 
     try {
       const editor = await getSenderProfile(expense.roomid, viewer);
@@ -1241,7 +1339,7 @@ router.delete(
           receiverType: person.type,
           type: "settlement_deleted",
           title: "정산이 삭제됐어요",
-          message: `${editor.nickname}님이 "${expense.title}" 정산을 삭제했어요.`,
+          message: `${editor.nickname}님이 "${expense.title}" 정산 기록을 목록에서 삭제했어요. 송금·환불 여부는 별도로 확인해 주세요.`,
           link: `/schedules/${expense.scheduleid}/settlement`,
         }))
       );

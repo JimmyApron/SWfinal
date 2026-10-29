@@ -5,6 +5,7 @@ import {
   PREP_EVENT_CATEGORIES,
   addPrepItem,
   addPrepSeat,
+  cancelPrepRequest,
   claimPrepItem,
   deletePrepItem,
   getPrepContext,
@@ -29,6 +30,16 @@ const QUICK_NOTES = ["1개 가져갈게요", "집에 있어요", "사갈게요",
 
 function getIdentityKey(participant) {
   return `${participant.type}:${participant.id}`;
+}
+
+async function createPrepNotification(payload) {
+  try {
+    await createNotification(payload);
+  } catch (error) {
+    // Checklist state is already committed; do not turn an inbox outage into
+    // a failed action that encourages the user to submit the same change again.
+    console.error("준비물 알림 생성 실패:", error);
+  }
 }
 
 function isSchedulePast(schedule) {
@@ -448,25 +459,34 @@ function PrepChecklistPage() {
   const handleCancelAssignment = (assignment) => {
     if (isReadOnly) return;
     const leave = async () => {
-      await removePrepAssignment(assignment.id, identityForActions);
-      if (assignment.status === "assigned") {
+      const removed = await removePrepAssignment(assignment.id, identityForActions);
+      if (removed.status === "assigned") {
         const item = items.find((candidate) => candidate.id === assignment.itemid);
-        const others = activeAttendees.filter(
-          (person) => getIdentityKey(person) !== getIdentityKey(identityForActions)
+        const remaining = assignments.filter(
+          (candidate) => candidate.itemid === removed.itemid && candidate.id !== removed.id
         );
-        await Promise.all(
-          others.map((person) =>
-            createNotification({
+        const confirmedRemaining = remaining.filter((candidate) => candidate.status === "assigned").length;
+        if (item && confirmedRemaining < item.neededcount) {
+          const alreadyInvolved = new Set(
+            remaining
+              .filter((candidate) => ["assigned", "requested"].includes(candidate.status))
+              .map((candidate) => `${candidate.membertype}:${candidate.memberid}`)
+          );
+          const others = activeAttendees.filter(
+            (person) => getIdentityKey(person) !== getIdentityKey(identityForActions) && !alreadyInvolved.has(getIdentityKey(person))
+          );
+          await Promise.all(others.map((person) =>
+            createPrepNotification({
               roomId: schedule.roomid,
               receiverId: person.id,
               senderId: identityForActions.id,
               type: "prep_assignment_vacated",
-              title: "준비물 담당 자리가 생겼어요",
-              message: `"${item?.name || "준비물"}" 담당 자리가 비었습니다.`,
-              link: `/schedules/${schedule.id}/prep?vacatedAssignmentId=${assignment.id}`,
+              title: "준비물 담당 인원이 부족해요",
+              message: `"${item.name}" 담당 인원이 ${item.neededcount - confirmedRemaining}명 부족해요.`,
+              link: `/schedules/${schedule.id}/prep?vacatedAssignmentId=${removed.id}`,
             })
-          )
-        );
+          ));
+        }
       }
     };
     runAction(leave, "담당을 취소했습니다.");
@@ -484,7 +504,7 @@ function PrepChecklistPage() {
       const requester = activeAttendees.find(
         (person) => getIdentityKey(person) === getIdentityKey(identityForActions)
       );
-      await createNotification({
+      await createPrepNotification({
         roomId: schedule.roomid,
         receiverId: requestTarget.id,
         senderId: identityForActions.id,
@@ -510,7 +530,7 @@ function PrepChecklistPage() {
           candidate.type === result.requestedbytype
       );
       if (person) {
-        await createNotification({
+        await createPrepNotification({
           roomId: schedule.roomid,
           receiverId: person.id,
           senderId: identityForActions.id,
@@ -524,9 +544,31 @@ function PrepChecklistPage() {
     runAction(decide, accepted ? "부탁을 수락했습니다." : "부탁을 거절했습니다.");
   };
 
+  const handleRequestCancel = (assignment) => {
+    if (isReadOnly || !identityForActions) return;
+    const cancel = async () => {
+      const cancelled = await cancelPrepRequest(assignment.id, identityForActions);
+      const recipient = activeAttendees.find(
+        (person) => person.id === String(cancelled.memberid) && person.type === cancelled.membertype
+      );
+      if (recipient) {
+        await createPrepNotification({
+            roomId: schedule.roomid,
+            receiverId: recipient.id,
+            senderId: identityForActions.id,
+            type: "prep_assignment_response",
+            title: "준비물 부탁이 취소됐어요",
+            message: `"${detailItem?.name || "준비물"}" 준비 부탁이 취소됐어요.`,
+            link: `/schedules/${schedule.id}/prep?cancelledAssignmentId=${assignment.id}`,
+        });
+      }
+    };
+    runAction(cancel, "부탁을 취소했습니다.");
+  };
+
   const handleAddItem = async (event) => {
     event.preventDefault();
-    if (!form.name.trim() || !addingKind || isReadOnly) return;
+    if (!form.name.trim() || !addingKind || isReadOnly || !identityForActions) return;
     const count = Math.max(1, Math.min(Number(form.neededCount) || 1, activeAttendees.length || 1));
     const create = async () => {
       const item = await addPrepItem({
@@ -540,6 +582,21 @@ function PrepChecklistPage() {
       });
       if (addingKind === "shared" && form.selfAssign) {
         await claimPrepItem(item.id, identityForActions);
+      }
+      const openToRecruit = count - (addingKind === "shared" && form.selfAssign ? 1 : 0);
+      if (addingKind === "shared" && items.length > 0 && openToRecruit > 0) {
+        const recipients = activeAttendees.filter(
+          (person) => getIdentityKey(person) !== getIdentityKey(identityForActions)
+        );
+        await Promise.all(recipients.map((person) => createPrepNotification({
+          roomId: schedule.roomid,
+          receiverId: person.id,
+          senderId: identityForActions.id,
+          type: "prep_assignment_vacated",
+          title: "함께 준비할 항목이 추가됐어요",
+          message: `"${form.name.trim()}" 준비 담당 ${openToRecruit}명이 필요해요.`,
+          link: `/schedules/${schedule.id}/prep`,
+        })));
       }
     };
     await runAction(create, "준비물을 추가했습니다.");
@@ -558,22 +615,71 @@ function PrepChecklistPage() {
   const saveEdit = async (event) => {
     event.preventDefault();
     if (!editingItem || !editForm.name.trim()) return;
-    await runAction(
-      () => updatePrepItem(editingItem.id, editForm),
-      "준비물을 수정했습니다."
-    );
+    await runAction(async () => {
+      await updatePrepItem(editingItem.id, editForm);
+      if (editingItem.name.trim() !== editForm.name.trim()) {
+        const recipients = assignments
+          .filter((assignment) => assignment.itemid === editingItem.id && ["assigned", "requested"].includes(assignment.status))
+          .filter((assignment) => !(assignment.memberid === identityForActions.id && assignment.membertype === identityForActions.type));
+        await Promise.all(recipients.map((assignment) => createPrepNotification({
+          roomId: schedule.roomid,
+          receiverId: assignment.memberid,
+          senderId: identityForActions.id,
+          type: "prep_assignment_response",
+          title: "담당 준비물 내용이 바뀌었어요",
+          message: `"${editingItem.name}"이(가) "${editForm.name.trim()}"(으)로 수정됐어요.`,
+          link: `/schedules/${schedule.id}/prep`,
+        })));
+      }
+    }, "준비물을 수정했습니다.");
     setEditingItem(null);
   };
 
   const confirmDelete = async (item) => {
     if (!window.confirm(`"${item.name}" 준비물을 삭제할까요?`)) return;
-    await runAction(() => deletePrepItem(item.id), "준비물을 삭제했습니다.");
+    await runAction(async () => {
+      const recipients = new Map(
+        assignments
+          .filter((assignment) => assignment.itemid === item.id && ["assigned", "requested"].includes(assignment.status))
+          .filter((assignment) => !(assignment.memberid === identityForActions.id && assignment.membertype === identityForActions.type))
+          .map((assignment) => [`${assignment.membertype}:${assignment.memberid}`, assignment])
+      );
+      await deletePrepItem(item.id);
+      await Promise.all(Array.from(recipients.values()).map((assignment) => createPrepNotification({
+        roomId: schedule.roomid,
+        receiverId: assignment.memberid,
+        senderId: identityForActions.id,
+        type: "prep_assignment_response",
+        title: "담당 준비물이 삭제됐어요",
+        message: `담당 중이던 "${item.name}" 준비물이 삭제됐어요.`,
+        link: `/schedules/${schedule.id}/prep`,
+      })));
+    }, "준비물을 삭제했습니다.");
     setDetailItemId(null);
   };
 
   const handleAddSeat = (item) => {
     if (isReadOnly || item.neededcount >= activeAttendees.length) return;
-    runAction(() => addPrepSeat(item.id, item.neededcount), "담당 자리를 추가했습니다.");
+    runAction(async () => {
+      await addPrepSeat(item.id, item.neededcount);
+      const involved = new Set(
+        assignments
+          .filter((assignment) => assignment.itemid === item.id && ["assigned", "requested"].includes(assignment.status))
+          .map((assignment) => `${assignment.membertype}:${assignment.memberid}`)
+      );
+      const recipients = activeAttendees.filter(
+        (person) => getIdentityKey(person) !== getIdentityKey(identityForActions) && !involved.has(getIdentityKey(person))
+      );
+      await Promise.all(recipients.map((person) => createPrepNotification({
+        roomId: schedule.roomid,
+        receiverId: person.id,
+        senderId: identityForActions.id,
+        type: "prep_assignment_vacated",
+        title: "준비물 담당 인원이 늘었어요",
+        message: `"${item.name}" 준비에 새로운 담당 ${item.neededcount + 1}번째 자리가 필요해요.`,
+        link: `/schedules/${schedule.id}/prep`,
+      })));
+    }, "담당 자리를 추가했습니다.");
   };
 
   const openContextSheet = (mode) => {
@@ -629,7 +735,7 @@ function PrepChecklistPage() {
           return null;
         });
       }
-      const result = await recommendPrepItems(schedule.id, regenerate, userLocation);
+      const result = await recommendPrepItems(schedule.id, regenerate, userLocation, identityForActions);
       setWeather(result.weather || null);
       setWeatherBasis(result.weatherBasis || "none");
       setWeatherSource(result.weatherSource || null);
@@ -780,6 +886,8 @@ function PrepChecklistPage() {
               (assignment) => assignment.memberid === identity?.id && assignment.membertype === identity?.type
             );
             const openSeats = Math.max(0, item.neededcount - occupied.length);
+            const confirmedCount = occupied.filter((assignment) => assignment.status === "assigned").length;
+            const pendingCount = occupied.filter((assignment) => assignment.status === "requested").length;
             const people = occupied.map((assignment) => ({
               assignment,
               participant: memberByKey.get(`${assignment.membertype}:${assignment.memberid}`) || { id: String(assignment.memberid), type: assignment.membertype, nickname: "참여자" },
@@ -789,7 +897,7 @@ function PrepChecklistPage() {
                 <button type="button" className="prep-shared-main" onClick={() => setDetailItemId(item.id)}>
                   <span className="prep-shared-heading">
                     <strong>{item.name}</strong>
-                    <span className={occupied.length === item.neededcount ? "prep-count full" : "prep-count"}>{occupied.length}/{item.neededcount}명</span>
+                    <span className={confirmedCount >= item.neededcount ? "prep-count full" : "prep-count"}>{confirmedCount}/{item.neededcount}명 담당</span>
                   </span>
                   {item.memo && <small>{item.memo}</small>}
                   {item.reason && <small>{item.basis && PREP_BASIS_ICONS[item.basis] ? `${PREP_BASIS_ICONS[item.basis]} ` : ""}{item.reason}</small>}
@@ -803,11 +911,7 @@ function PrepChecklistPage() {
                     {Array.from({ length: openSeats }).map((_, index) => <span className="prep-empty-seat" key={`empty-${index}`}>＋</span>)}
                   </span>
                 </button>
-                {!assignments.some(
-                  (assignment) =>
-                    assignment.itemid === item.id &&
-                    assignment.status === "assigned"
-                ) && <p className="prep-unassigned">⚠ 아직 담당자가 없어요 · 전날 알림</p>}
+                {confirmedCount < item.neededcount && <p className="prep-unassigned">⚠ {confirmedCount === 0 ? "아직 담당자가 없어요" : `담당 ${item.neededcount - confirmedCount}명 부족`}{pendingCount > 0 ? ` · 부탁 ${pendingCount}명 응답 대기` : ""} · 전날 알림</p>}
                 <div className="prep-shared-actions">
                   {mine?.status === "assigned" ? (
                     <button type="button" disabled={isReadOnly || busy} className="prep-outline compact" onClick={() => handleCancelAssignment(mine)}>맡음 · 취소</button>
@@ -815,7 +919,7 @@ function PrepChecklistPage() {
                     <button type="button" disabled={isReadOnly || busy} className="prep-outline compact" onClick={() => handleRequestDecision(mine, true)}>부탁 수락</button>
                   ) : openSeats > 0 ? (
                     <button type="button" disabled={isReadOnly || busy} className="prep-primary compact" onClick={() => handleClaim(item)}>내가 할게요</button>
-                  ) : <span className="prep-full-label">✓ 다 정해졌어요</span>}
+                  ) : pendingCount > 0 && confirmedCount < item.neededcount ? <span className="prep-full-label">부탁 응답 대기</span> : <span className="prep-full-label">✓ 다 정해졌어요</span>}
                 </div>
               </article>
             );
@@ -878,7 +982,7 @@ function PrepChecklistPage() {
               <h2>{detailItem.name}</h2>
               <div><button type="button" disabled={isReadOnly} onClick={() => openEdit(detailItem)}>항목 수정</button><button type="button" disabled={isReadOnly} onClick={() => confirmDelete(detailItem)}>삭제</button></div>
             </div>
-            <p className="prep-sheet-description">{detailItem.memo || "메모 없음"} · 필요 {detailItem.neededcount}명 중 {itemAssignments.filter((a) => ["assigned", "requested"].includes(a.status)).length}명 담당</p>
+            <p className="prep-sheet-description">{detailItem.memo || "메모 없음"} · 필요 {detailItem.neededcount}명 중 {itemAssignments.filter((a) => a.status === "assigned").length}명 담당 · 부탁 {itemAssignments.filter((a) => a.status === "requested").length}명 대기</p>
             {detailPeople.map((entry) => (
               <div className="prep-detail-person" key={entry.id}>
                 <Avatar participant={entry.participant} done={entry.status === "assigned" && entry.isdone} />
@@ -893,6 +997,11 @@ function PrepChecklistPage() {
                   <div className="prep-inline-actions">
                     <button type="button" disabled={busy || isReadOnly} onClick={() => handleRequestDecision(entry, true)}>수락</button>
                     <button type="button" disabled={busy || isReadOnly} onClick={() => handleRequestDecision(entry, false)}>거절</button>
+                  </div>
+                )}
+                {entry.status === "requested" && entry.requestedby === identity?.id && entry.requestedbytype === identity?.type && (
+                  <div className="prep-inline-actions">
+                    <button type="button" disabled={busy || isReadOnly} onClick={() => handleRequestCancel(entry)}>부탁 취소</button>
                   </div>
                 )}
               </div>

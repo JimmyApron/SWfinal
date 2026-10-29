@@ -1,6 +1,11 @@
 require("dotenv").config();
 
 const { createClient } = require("@supabase/supabase-js");
+const {
+  getPrepReminderIdempotencyKey,
+  getSharedShortages,
+  isWithinPrepReminderRecoveryWindow,
+} = require("./prepReminderRules");
 
 let supabase;
 
@@ -92,12 +97,12 @@ async function getIncompleteItems(schedule, participant) {
   const client = getSupabase();
   const { data: items, error: itemsError } = await client
     .from("prep_items")
-    .select("id, name, kind")
+    .select("id, name, kind, neededcount")
     .eq("scheduleid", schedule.id);
   if (itemsError) {
     throw new Error(`준비물 목록을 조회하지 못했습니다: ${itemsError.message}`);
   }
-  if (!items?.length) return { personal: [], assigned: [], unassigned: [] };
+  if (!items?.length) return { personal: [], assigned: [], shortages: [] };
 
   const personalItems = items.filter((item) => item.kind === "personal");
   const sharedItems = items.filter((item) => item.kind === "shared");
@@ -154,17 +159,12 @@ async function getIncompleteItems(schedule, participant) {
       sharedItems.find((item) => item.id === assignment.itemid)
     )
     .filter(Boolean);
-  const occupiedSharedIds = new Set(
-    (assignments || []).map((assignment) => assignment.itemid)
-  );
-  const unassignedShared = sharedItems.filter(
-    (item) => !occupiedSharedIds.has(item.id)
-  );
+  const shortages = getSharedShortages(sharedItems, assignments || []);
 
   return {
     personal: incompletePersonal,
     assigned: mineIncomplete,
-    unassigned: unassignedShared,
+    shortages,
   };
 }
 
@@ -182,7 +182,7 @@ async function sendScheduleReminders(schedule, reminderDate) {
         .maybeSingle(),
       client
         .from("prep_items")
-        .select("id, name, kind")
+        .select("id, name, kind, neededcount")
         .eq("scheduleid", schedule.id),
     ]);
 
@@ -194,7 +194,6 @@ async function sendScheduleReminders(schedule, reminderDate) {
   }
   if (!roomItems?.length) return;
 
-  const { start, end } = getKstDateBounds(reminderDate);
   const link = `/schedules/${schedule.id}/prep`;
   const notificationRows = [];
 
@@ -204,33 +203,19 @@ async function sendScheduleReminders(schedule, reminderDate) {
       ...getItemNames(incomplete.personal),
       ...getItemNames(incomplete.assigned),
     ];
-    const noAssignee = getItemNames(incomplete.unassigned);
+    const shortageNames = incomplete.shortages.map(
+      (item) => `${item.name} (${item.confirmedCount}/${item.neededcount}명, ${item.shortageCount}명 부족)`
+    );
 
-    if (personalAndAssigned.length === 0 && noAssignee.length === 0) continue;
+    if (personalAndAssigned.length === 0 && shortageNames.length === 0) continue;
 
     const sections = [];
     if (personalAndAssigned.length) {
       sections.push(`내가 아직 안 챙긴 것: ${personalAndAssigned.join(", ")}`);
     }
-    if (noAssignee.length) {
-      sections.push(`담당자 없는 항목: ${noAssignee.join(", ")}`);
+    if (shortageNames.length) {
+      sections.push(`담당 인원이 부족한 항목: ${shortageNames.join(", ")}`);
     }
-
-    const { data: existing, error: duplicateError } = await client
-      .from("notifications")
-      .select("id")
-      .eq("receiverid", participant.id)
-      .eq("roomid", schedule.roomid)
-      .eq("type", "prep_reminder")
-      .eq("link", link)
-      .gte("createdat", start)
-      .lt("createdat", end)
-      .limit(1);
-
-    if (duplicateError) {
-      throw new Error(`전날 알림 중복 여부를 확인하지 못했습니다: ${duplicateError.message}`);
-    }
-    if (existing?.length) continue;
 
     notificationRows.push({
       roomid: schedule.roomid,
@@ -242,6 +227,11 @@ async function sendScheduleReminders(schedule, reminderDate) {
       link,
       isread: false,
       issilent: !participant.notificationEnabled,
+      idempotency_key: getPrepReminderIdempotencyKey(
+        schedule.id,
+        participant,
+        schedule.date
+      ),
     });
   }
 
@@ -249,7 +239,10 @@ async function sendScheduleReminders(schedule, reminderDate) {
 
   const { error: insertError } = await client
     .from("notifications")
-    .insert(notificationRows);
+    .upsert(notificationRows, {
+      onConflict: "idempotency_key",
+      ignoreDuplicates: true,
+    });
   if (insertError) {
     throw new Error(`전날 준비물 알림을 저장하지 못했습니다: ${insertError.message}`);
   }
@@ -260,8 +253,8 @@ async function sendScheduleReminders(schedule, reminderDate) {
 }
 
 async function checkAndSendPrepReminders(now = new Date()) {
+  if (!isWithinPrepReminderRecoveryWindow(now)) return;
   const kst = getKstDate(now);
-  if (kst.hour !== 20) return;
 
   const reminderDate = dateKey(kst);
   const targetDate = getTomorrowKey(now);
@@ -302,6 +295,7 @@ function startPrepReminderJob() {
 
 module.exports = {
   checkAndSendPrepReminders,
+  getIncompleteItems,
   getKstDateBounds,
   getTomorrowKey,
   startPrepReminderJob,

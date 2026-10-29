@@ -55,3 +55,11 @@ export function isSlotBusy(blocks, weekday, time) {
     (block) => block.weekday === weekday && time >= block.starttime && time < block.endtime
   );
 }
+
+export function hasFixedTimetableConflict(blocks, dateString, starttime, endtime, allDay = false) {
+  const weekday = getWeekday(dateString);
+  return blocks.some((block) =>
+    block.weekday === weekday &&
+    (allDay || (block.starttime < endtime.slice(0, 5) && starttime.slice(0, 5) < block.endtime))
+  );
+}

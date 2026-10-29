@@ -720,7 +720,53 @@ async function requestAiItems(context) {
   throw parseError;
 }
 
-async function saveRecommendations(schedule, recommendations, regenerate) {
+async function notifyAiSharedItems(schedule, additions, createdBy) {
+  const names = additions.filter((item) => item.kind === "shared").map((item) => item.name);
+  if (names.length === 0) return;
+
+  const client = getSupabase();
+  const [{ data: members, error: memberError }, { data: guests, error: guestError }, { data: room }] =
+    await Promise.all([
+      client.from("room_members").select("userid, schedulenotifenabled").eq("roomid", schedule.roomid),
+      client.from("room_guests").select("id, schedulenotifenabled").eq("roomid", schedule.roomid),
+      client.from("rooms").select("roomname").eq("id", schedule.roomid).maybeSingle(),
+    ]);
+  if (memberError || guestError) {
+    console.error("AI 공용 준비물 알림 대상 조회 실패:", memberError || guestError);
+    return;
+  }
+
+  const absentIds = new Set((schedule.absentees || []).map(String));
+  const recipients = [
+    ...(members || []).map((row) => ({ id: String(row.userid), type: "member", enabled: row.schedulenotifenabled !== false })),
+    ...(guests || []).map((row) => ({ id: String(row.id), type: "guest", enabled: row.schedulenotifenabled !== false })),
+  ].filter((person) =>
+    !absentIds.has(person.id) &&
+    !(createdBy?.id && person.id === String(createdBy.id) && person.type === createdBy.type)
+  );
+  if (recipients.length === 0) return;
+
+  const keyPart = names.map((name) => encodeURIComponent(name)).join(",");
+  const rows = recipients.map((person) => ({
+    roomid: schedule.roomid,
+    receiverid: person.id,
+    senderid: createdBy?.id ? String(createdBy.id) : null,
+    type: "prep_shared_items_added",
+    title: "함께 준비할 항목이 추가됐어요",
+    message: `[${room?.roomname || "모임"}] ${names.join(", ")} 담당 인원을 모집하고 있어요.`,
+    link: `/schedules/${schedule.id}/prep`,
+    isread: false,
+    issilent: !person.enabled,
+    idempotency_key: `prep_ai_shared:${schedule.id}:${person.type}:${person.id}:${keyPart}`,
+  }));
+  const { error } = await client.from("notifications").upsert(rows, {
+    onConflict: "idempotency_key",
+    ignoreDuplicates: true,
+  });
+  if (error) console.error("AI 공용 준비물 알림 저장 실패:", error);
+}
+
+async function saveRecommendations(schedule, recommendations, regenerate, createdBy = null) {
   const client = getSupabase();
   const { data: existingItems, error: itemsError } = await client
     .from("prep_items")
@@ -731,6 +777,7 @@ async function saveRecommendations(schedule, recommendations, regenerate) {
   }
 
   let retainedItems = existingItems || [];
+  const checklistWasEmpty = retainedItems.length === 0;
   if (regenerate) {
     const aiIds = retainedItems
       .filter((item) => item.source === "ai")
@@ -797,8 +844,10 @@ async function saveRecommendations(schedule, recommendations, regenerate) {
       reason: item.reason,
       basis: item.basis,
       source: "ai",
-      createdby: null,
-      createdbytype: null,
+      createdby: createdBy?.id ? String(createdBy.id) : null,
+      createdbytype: ["member", "guest"].includes(createdBy?.type)
+        ? createdBy.type
+        : null,
       sortorder: Math.floor(Date.now() / 1000) + index,
     }));
     let { error: insertError } = await client.from("prep_items").insert(rows);
@@ -811,6 +860,11 @@ async function saveRecommendations(schedule, recommendations, regenerate) {
     }
     if (insertError) {
       throw new Error(`AI 추천 준비물을 저장하지 못했습니다: ${insertError.message}`);
+    }
+    if (!checklistWasEmpty) {
+      await notifyAiSharedItems(schedule, uniqueRecommendations, createdBy).catch((error) =>
+        console.error("AI 공용 준비물 알림 발송 실패:", error)
+      );
     }
   }
 
@@ -914,7 +968,8 @@ router.post("/recommend", async (req, res) => {
     const items = await saveRecommendations(
       schedule,
       recommendations,
-      req.body?.regenerate === true
+      req.body?.regenerate === true,
+      req.body?.createdBy
     );
 
     return res.json({

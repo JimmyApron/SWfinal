@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node jobs/prepReminderRules.test.js && node routes/settlementRules.test.js && node routes/timetable.test.js"
   },
   "keywords": [],
   "author": "",

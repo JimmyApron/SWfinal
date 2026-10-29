@@ -10,6 +10,7 @@ const settlementRouter = require('./routes/settlement')
 const timetableRouter = require('./routes/timetable')
 const { startVoteCloserJob } = require('./jobs/voteJob')
 const { startPrepReminderJob } = require('./jobs/prepReminderJob')
+const { startDiaryNotificationJob } = require('./jobs/diaryNotificationJob')
 
 const app = express()
 
@@ -26,6 +27,7 @@ app.use('/api/timetable', timetableRouter)
 // 🚀 백엔드 자동 마감 작업 시작
 startVoteCloserJob()
 startPrepReminderJob()
+startDiaryNotificationJob()
 
 let myLocation = null
 
