@@ -88,7 +88,8 @@ function toTime(minutes) {
 
 // 30분 칸에 맞춰 시작은 내림, 종료는 올림하고 잘못된 값은 버린다.
 function normalizeClasses(raw) {
-  return (Array.isArray(raw?.classes) ? raw.classes : [])
+  const source = Array.isArray(raw?.classes) ? raw.classes : [];
+  const classes = source
     .map((item) => {
       const start = toMinutes(item.start);
       const end = toMinutes(item.end);
@@ -100,6 +101,7 @@ function normalizeClasses(raw) {
       return { weekday: item.weekday, starttime: toTime(snappedStart), endtime: toTime(snappedEnd) };
     })
     .filter(Boolean);
+  return { classes, partial: classes.length > 0 && classes.length < source.length };
 }
 
 async function recognizeTimetable(jpeg) {
@@ -173,9 +175,9 @@ router.post(
         return res.status(422).json({ message: "이미지를 읽지 못했어요. JPG나 PNG로 다시 올려 주세요." });
       }
 
-      const classes = await recognizeTimetable(jpeg);
-      if (classes.length === 0) return res.status(422).json({ message: FAILURE_MESSAGE });
-      res.json({ classes });
+      const result = await recognizeTimetable(jpeg);
+      if (result.classes.length === 0) return res.status(422).json({ message: FAILURE_MESSAGE });
+      res.json(result);
     } catch (error) {
       console.error("시간표 OCR 실패:", error.name, error.message);
       res.status(500).json({ message: FAILURE_MESSAGE });
@@ -184,5 +186,6 @@ router.post(
 );
 
 router.recognizeTimetable = recognizeTimetable;
+router.normalizeClasses = normalizeClasses;
 
 module.exports = router;

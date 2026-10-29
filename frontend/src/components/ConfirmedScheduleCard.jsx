@@ -111,6 +111,12 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
           )}
         </p>
 
+        {schedule.hasFixedTimetableConflict && !schedule.isAbsent && (
+          <span style={{ display: "inline-block", marginTop: "5px", padding: "2px 7px", borderRadius: "999px", color: "#5F5BD8", backgroundColor: "rgba(124, 121, 255, 0.12)", fontSize: "10px", fontWeight: 600 }}>
+            내 고정 시간표와 겹침 · 일정 확인 필요
+          </span>
+        )}
+
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginTop: "2px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--secondary-text)", fontSize: "12px", flexShrink: 0 }}>
             <FaClock size={11} color="#7C5CFF" />

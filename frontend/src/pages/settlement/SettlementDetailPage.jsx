@@ -133,7 +133,7 @@ function SettlementDetailPage() {
   const { expense, shares, progress, viewer, schedule } = detail;
   const myShare = shares.find((share) => share.isMe);
   const owes = myShare && !viewer.isPayer;
-  const pendingOthers = shares.filter((share) => !share.isPayer && !share.sentat && !share.confirmedat);
+  const pendingOthers = shares.filter((share) => !share.isPayer && share.amount > 0 && !share.isSent && !share.isConfirmed);
   const canRemind = (viewer.isPayer || viewer.isCreator) && pendingOthers.some((share) => !share.isMe);
   const percent = progress.total ? Math.round((progress.settled / progress.total) * 100) : 0;
 
@@ -183,7 +183,7 @@ function SettlementDetailPage() {
           <small>받을 금액</small>
           <strong>
             {formatWon(
-              shares.filter((share) => !share.isPayer && !share.sentat && !share.confirmedat).reduce((sum, share) => sum + share.amount, 0)
+              shares.filter((share) => !share.isPayer && share.amount > 0 && !share.isConfirmed).reduce((sum, share) => sum + share.amount, 0)
             )}
           </strong>
           <span>아직 받지 못한 {pendingOthers.length}명의 금액이에요</span>
@@ -210,36 +210,40 @@ function SettlementDetailPage() {
               <small className="settle-status-line">
                 {share.isPayer
                   ? "결제자"
-                  : share.confirmedat
+                  : share.reconfirmRequired
+                    ? "분담 금액이 바뀌어 다시 확인이 필요해요"
+                    : share.isConfirmed
                     ? "✓ 결제자가 확인했어요"
-                    : share.sentat
+                    : share.isSent
                       ? "보냈어요 · 확인 대기"
-                      : "아직 보내지 않았어요"}
+                      : share.amount <= 0
+                        ? "부담 금액 없음"
+                        : "아직 보내지 않았어요"}
               </small>
             </span>
             <span className="settle-share-side">
               <strong>{formatWon(share.amount)}</strong>
-              {!share.isPayer && share.isMe && (
-                share.sentat && !share.confirmedat ? (
+              {!share.isPayer && share.isMe && share.amount > 0 && (
+                share.isSent && !share.isConfirmed ? (
                   <button type="button" className="settle-mini" disabled={busy} onClick={() => run(() => markExpenseSent(expense.id, false), "보냈어요를 취소했어요")}>
                     보냈어요 취소
                   </button>
-                ) : !share.sentat ? (
+                ) : !share.isSent ? (
                   <button type="button" className="settle-mini on" disabled={busy} onClick={() => run(() => markExpenseSent(expense.id, true), "결제자에게 알렸어요")}>
                     보냈어요
                   </button>
                 ) : null
               )}
-              {!share.isPayer && !share.isMe && viewer.isPayer && (
-                share.confirmedat ? (
+              {!share.isPayer && !share.isMe && viewer.isPayer && share.amount > 0 && (
+                share.isConfirmed ? (
                   <button type="button" className="settle-mini" disabled={busy} onClick={() => run(() => confirmExpenseShare(expense.id, share.id, false))}>
                     확인 취소
                   </button>
-                ) : (
+                ) : share.isSent ? (
                   <button type="button" className="settle-mini on" disabled={busy} onClick={() => run(() => confirmExpenseShare(expense.id, share.id, true), "받았다고 확인했어요")}>
                     받았어요
                   </button>
-                )
+                ) : null
               )}
             </span>
           </div>

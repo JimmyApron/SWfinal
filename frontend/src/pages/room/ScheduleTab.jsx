@@ -18,7 +18,7 @@ import { createNotification, createRoomNotifications } from "../../api/notificat
 import ConfirmedScheduleCard from "../../components/ConfirmedScheduleCard";
 import { FiCalendar, FiClock, FiPlus, FiChevronLeft, FiChevronRight, FiEdit2, FiTrash2, FiMoreVertical } from "react-icons/fi";
 import { getTodayStr } from "../../utils/scheduleUtils";
-import { getFixedTimetable } from "../../api/fixedTimetableApi";
+import { getFixedTimetable, getFixedTimetableConflicts } from "../../api/fixedTimetableApi";
 import { getWeekday, isSlotBusy } from "../../utils/fixedTimetableUtils";
 
 function ScheduleTab({ roomId, ownerUserId, roomName }) {
@@ -46,6 +46,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const [activeCandidateMenu, setActiveCandidateMenu] = useState(null); // 추가: 후보지 메뉴 상태
 
   const [confirmedSchedules, setConfirmedSchedules] = useState([]);
+  const [fixedConflictScheduleIds, setFixedConflictScheduleIds] = useState(new Set());
   const [additionalLocations, setAdditionalLocations] = useState([]);
   const [showConfirmedForm, setShowConfirmedForm] = useState(false);
   const [showAddMethodSheet, setShowAddMethodSheet] = useState(false);
@@ -464,6 +465,19 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     ]);
     setConfirmedSchedules(data || []);
     setAdditionalLocations(locations || []);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setFixedConflictScheduleIds(new Set());
+      } else {
+        const fixedBlocks = await getFixedTimetable(user.id);
+        const conflicts = await getFixedTimetableConflicts(user.id, fixedBlocks);
+        setFixedConflictScheduleIds(new Set(conflicts.confirmed.map((schedule) => Number(schedule.id))));
+      }
+    } catch (error) {
+      console.error("내 고정 시간표 충돌 확인 실패:", error);
+      setFixedConflictScheduleIds(new Set());
+    }
   };
 
   const handleAddConfirmedSchedule = async () => {
@@ -803,6 +817,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                     <ConfirmedScheduleCard
                       schedule={{
                         ...s,
+                        hasFixedTimetableConflict: fixedConflictScheduleIds.has(Number(s.id)),
                         roomname: roomName,
                         additionalLocations: additionalLocations.filter((location) => Number(location.scheduleid) === Number(s.id)),
                         isAbsent,

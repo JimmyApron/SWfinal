@@ -12,13 +12,19 @@ const TYPE_SETTING_MAP = {
   schedule_cancelled: "schedulenotifenabled",
   schedule_new: "schedulenotifenabled",
   schedule_request: "schedulenotifenabled",
+  fixed_timetable_conflict: "schedulenotifenabled",
   prep_assignment_request: "schedulenotifenabled",
   prep_assignment_response: "schedulenotifenabled",
   prep_assignment_vacated: "schedulenotifenabled",
+  prep_checklist_created: "schedulenotifenabled",
+  prep_shared_items_added: "schedulenotifenabled",
   prep_reminder: "schedulenotifenabled",
   settlement_request: "schedulenotifenabled",
   settlement_sent: "schedulenotifenabled",
+  settlement_sent_undone: "schedulenotifenabled",
   settlement_received: "schedulenotifenabled",
+  settlement_received_undone: "schedulenotifenabled",
+  settlement_completed: "schedulenotifenabled",
   settlement_reminder: "schedulenotifenabled",
   settlement_updated: "schedulenotifenabled",
   settlement_deleted: "schedulenotifenabled",
@@ -411,7 +417,7 @@ export async function getMyGuestNotifications(guestId) {
 }
 
 export const TAB_TYPE_MAP = {
-  schedule: ["schedule_confirmed", "schedule_cancelled", "schedule_new", "schedule_request"],
+  schedule: ["schedule_confirmed", "schedule_cancelled", "schedule_new", "schedule_request", "fixed_timetable_conflict"],
   location: [
     "location_request",
     "member_departed",

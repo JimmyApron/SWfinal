@@ -29,12 +29,13 @@ export async function getPrepWeather(scheduleId, userLocation = null) {
   return requestPrepBackend(`/weather/${encodeURIComponent(scheduleId)}${query}`);
 }
 
-export async function recommendPrepItems(scheduleId, regenerate = false, userLocation = null) {
+export async function recommendPrepItems(scheduleId, regenerate = false, userLocation = null, createdBy = null) {
   return requestPrepBackend("/recommend", {
     method: "POST",
     body: JSON.stringify({
       scheduleId,
       regenerate,
+      ...(createdBy ? { createdBy } : {}),
       ...(userLocation ? { userLocation: { lat: userLocation.lat, lng: userLocation.lng } } : {}),
     }),
   });
@@ -299,15 +300,18 @@ export async function requestPrepAssignment(itemId, participant, requester, note
 }
 
 export async function removePrepAssignment(assignmentId, participant) {
-  const query = supabase
+  const { data, error } = await supabase
     .from("prep_assignments")
     .delete()
     .eq("id", assignmentId)
     .eq("memberid", participant.id)
-    .eq("membertype", participant.type);
+    .eq("membertype", participant.type)
+    .select("id, itemid, status")
+    .maybeSingle();
 
-  const { error } = await query;
   throwOnError(error, "담당을 취소하지 못했습니다.");
+  if (!data) throw new Error("담당 상태가 이미 변경되었습니다.");
+  return data;
 }
 
 export async function updatePrepAssignment(assignmentId, participant, changes) {
@@ -344,20 +348,42 @@ export async function handlePrepRequest(assignmentId, participant, accepted) {
   if (!assignment) throw new Error("이미 처리된 부탁입니다.");
 
   if (accepted) {
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from("prep_assignments")
       .update({ status: "assigned" })
       .eq("id", assignmentId)
-      .eq("status", "requested");
+      .eq("status", "requested")
+      .select("id")
+      .maybeSingle();
     throwOnError(error, "부탁을 수락하지 못했습니다.");
+    if (!updated) throw new Error("이미 처리되었거나 담당 자리가 모두 찼습니다.");
   } else {
-    const { error } = await supabase
+    const { data: deleted, error } = await supabase
       .from("prep_assignments")
       .delete()
       .eq("id", assignmentId)
-      .eq("status", "requested");
+      .eq("status", "requested")
+      .select("id")
+      .maybeSingle();
     throwOnError(error, "부탁을 거절하지 못했습니다.");
+    if (!deleted) throw new Error("이미 처리되었거나 취소된 부탁입니다.");
   }
 
   return assignment;
+}
+
+export async function cancelPrepRequest(assignmentId, requester) {
+  const { data, error } = await supabase
+    .from("prep_assignments")
+    .delete()
+    .eq("id", assignmentId)
+    .eq("requestedby", requester.id)
+    .eq("requestedbytype", requester.type)
+    .eq("status", "requested")
+    .select("id, memberid, membertype, itemid")
+    .maybeSingle();
+
+  throwOnError(error, "부탁을 취소하지 못했습니다.");
+  if (!data) throw new Error("이미 처리되었거나 취소된 부탁입니다.");
+  return data;
 }
