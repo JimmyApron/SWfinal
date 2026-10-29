@@ -15,6 +15,11 @@ import GuestLoginPage from "./pages/auth/GuestLoginPage";
 
 import HomePage from "./pages/home/HomePage";
 import ConfirmedScheduleDetailPage from "./pages/home/ConfirmedScheduleDetailPage";
+import PrepChecklistPage from "./pages/home/PrepChecklistPage";
+import SettlementCreatePage from "./pages/settlement/SettlementCreatePage";
+import SettlementListPage from "./pages/settlement/SettlementListPage";
+import SettlementDetailPage from "./pages/settlement/SettlementDetailPage";
+import SettlementReceiptPage from "./pages/settlement/SettlementReceiptPage";
 
 import RoomCreatePage from "./pages/room/RoomCreatePage";
 import RoomInvitePage from "./pages/room/RoomInvitePage";
@@ -45,6 +50,7 @@ import { getPersonalEvents } from "./api/personalEventApi";
 
 import SettingsPage from "./pages/settings/SettingsPage";
 import SettingEditPage from "./pages/settings/SettingEditPage";
+import FixedTimetablePage from "./pages/settings/FixedTimetablePage";
 
 const AUTH_PATHS = ["/", "/login", "/signup", "/guest", "/reset-password"];
 const PERSONAL_REMINDER_POPUP_WINDOW_MS = 60 * 1000;
@@ -56,6 +62,16 @@ const NOTIFICATION_SETTING_COLUMNS = {
   schedule_cancelled: "schedulenotifenabled",
   schedule_new: "schedulenotifenabled",
   schedule_request: "schedulenotifenabled",
+  prep_assignment_request: "schedulenotifenabled",
+  prep_assignment_response: "schedulenotifenabled",
+  prep_assignment_vacated: "schedulenotifenabled",
+  prep_reminder: "schedulenotifenabled",
+  settlement_request: "schedulenotifenabled",
+  settlement_sent: "schedulenotifenabled",
+  settlement_received: "schedulenotifenabled",
+  settlement_reminder: "schedulenotifenabled",
+  settlement_updated: "schedulenotifenabled",
+  settlement_deleted: "schedulenotifenabled",
   location_request: "locationnotifenabled",
   member_departed: "locationnotifenabled",
   arrival_approaching: "locationnotifenabled",
@@ -645,11 +661,18 @@ function App() {
               <Route path="/rooms/:roomid/votes/:voteid" element={<VoteDetailPage />} />
               <Route path="/rooms/:roomid/confirmed-schedule" element={<ConfirmedScheduleDetailPage />} />
               <Route path="/confirmed-schedule" element={<ConfirmedScheduleDetailPage />} />
+              <Route path="/schedules/:scheduleId/prep" element={<PrepChecklistPage />} />
+              <Route path="/schedules/:scheduleId/settlement" element={<SettlementListPage />} />
+              <Route path="/schedules/:scheduleId/settlement/new" element={<SettlementCreatePage />} />
+              <Route path="/schedules/:scheduleId/settlement/:expenseId" element={<SettlementDetailPage />} />
+              <Route path="/schedules/:scheduleId/settlement/:expenseId/receipt" element={<SettlementReceiptPage />} />
+              <Route path="/schedules/:scheduleId/settlement/:expenseId/edit" element={<SettlementCreatePage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/calendar/friend/:friendId" element={<FriendCalendarPage />} />
               <Route path="/notifications" element={<NotificationPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/settings/edit" element={<SettingEditPage />} />
+              <Route path="/settings/timetable" element={<FixedTimetablePage />} />
             </Routes>
           </Layout>
         </BrowserRouter>

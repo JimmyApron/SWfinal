@@ -18,6 +18,8 @@ import { createNotification, createRoomNotifications } from "../../api/notificat
 import ConfirmedScheduleCard from "../../components/ConfirmedScheduleCard";
 import { FiCalendar, FiClock, FiPlus, FiChevronLeft, FiChevronRight, FiEdit2, FiTrash2, FiMoreVertical } from "react-icons/fi";
 import { getTodayStr } from "../../utils/scheduleUtils";
+import { getFixedTimetable } from "../../api/fixedTimetableApi";
+import { getWeekday, isSlotBusy } from "../../utils/fixedTimetableUtils";
 
 function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const navigate = useNavigate();
@@ -629,6 +631,50 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
 
   const myUserId = currentUser?.id || localStorage.getItem("guest_id");
   const myAvailability = availabilities.some((item) => item.userid === myUserId);
+
+  // 이미 저장한 내 선택 + (회원이면) 아직 아무것도 고르지 않은 후보 일정에 고정 시간표를 반영해 미리 채운다.
+  // 이미 저장한 후보는 건드리지 않아서, 직접 뺀 시간이 다시 채워지지 않는다.
+  const handleStartSelectMode = async () => {
+    const mySavedSlots = availabilities
+      .filter((item) => item.userid === myUserId)
+      .map((item) => ({
+        key: getSlotKey(item.candidateid, item.starttime.slice(0, 5)),
+        candidateId: item.candidateid,
+        date: item.date,
+        starttime: item.starttime.slice(0, 5),
+        endtime: item.endtime.slice(0, 5),
+      }));
+
+    let prefilledSlots = [];
+    if (currentUser?.id) {
+      try {
+        const fixedBlocks = await getFixedTimetable(currentUser.id);
+        if (fixedBlocks.length > 0) {
+          const savedCandidateIds = new Set(mySavedSlots.map((slot) => slot.candidateId));
+          candidates
+            .filter((candidate) => !savedCandidateIds.has(candidate.id))
+            .forEach((candidate) => {
+              const weekday = getWeekday(candidate.date);
+              visibleTimeSlots.forEach((time) => {
+                if (!isTimeSelectable(candidate, time) || isSlotBusy(fixedBlocks, weekday, time)) return;
+                prefilledSlots.push({
+                  key: getSlotKey(candidate.id, time),
+                  candidateId: candidate.id,
+                  date: candidate.date,
+                  starttime: time,
+                  endtime: getNextTime(time),
+                });
+              });
+            });
+        }
+      } catch (error) {
+        console.error("고정 시간표 불러오기 실패:", error);
+      }
+    }
+
+    setSelectedSlots([...mySavedSlots, ...prefilledSlots]);
+    setIsSelectMode(true);
+  };
 
   return (
     <div>
@@ -1428,19 +1474,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
           <div style={{ display: "flex", gap: "10px", marginBottom: "24px" }}>
             {!isSelectMode ? (
               <button
-                onClick={() => {
-                  const mySaveSlots = availabilities
-                    .filter((item) => item.userid === myUserId)
-                    .map((item) => ({
-                      key: getSlotKey(item.candidateid, item.starttime.slice(0, 5)),
-                      candidateId: item.candidateid,
-                      date: item.date,
-                      starttime: item.starttime.slice(0, 5),
-                      endtime: item.endtime.slice(0, 5)
-                    }));
-                  setSelectedSlots(mySaveSlots);
-                  setIsSelectMode(true);
-                }}
+                onClick={handleStartSelectMode}
                 style={{
                   flex: 1,
                   padding: "14px",

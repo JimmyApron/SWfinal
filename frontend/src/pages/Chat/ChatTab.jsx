@@ -12,6 +12,7 @@ import {
 } from "react-icons/fi";
 import { supabase } from "../../lib/supabaseClient";
 import { createRoomNotifications } from "../../api/notificationApi";
+import { formatWon, getExpenseAccount, getExpenseSummaries } from "../../api/settlementApi";
 import "./ChatTab.css";
 
 const CHAT_EDIT_LIMIT_MS = 10 * 60 * 1000;
@@ -444,6 +445,195 @@ function escapeMapHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+// 정산 카드: 금액·계좌는 메시지에 담지 않고, 카드가 보일 때 보는 사람 기준으로 서버에서 받아 온다.
+function SettlementMessageCard({ meta, senderName, navigate }) {
+  const [summary, setSummary] = useState(null);
+  const [failed, setFailed] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const expenseIds = (meta.expenseIds || []).join(",");
+
+  useEffect(() => {
+    let active = true;
+    getExpenseSummaries(expenseIds.split(","))
+      .then((data) => {
+        if (active) setSummary(data);
+      })
+      .catch(() => {
+        if (active) setFailed(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [expenseIds]);
+
+  const cardStyle = {
+    minWidth: "230px",
+    maxWidth: "280px",
+    color: "var(--text-color)",
+  };
+
+  if (failed) return <div style={cardStyle}>🧾 정산 정보를 불러오지 못했어요.</div>;
+  if (!summary) return <div style={cardStyle}>🧾 정산 정보를 불러오는 중...</div>;
+
+  const live = summary.items.filter((item) => !item.deleted);
+  if (live.length === 0) return <div style={cardStyle}>🧾 삭제된 정산이에요.</div>;
+
+  const total = live.reduce((sum, item) => sum + item.amount, 0);
+  const owe = live
+    .filter((item) => !item.iPaid && item.myShare != null && !item.mySettled)
+    .reduce((sum, item) => sum + item.myShare, 0);
+  const iOwedAnything = live.some((item) => !item.iPaid && item.myShare != null);
+  const receive = live.filter((item) => item.iPaid).reduce((sum, item) => sum + item.receivable.amount, 0);
+  const receivePeople = live.filter((item) => item.iPaid).reduce((sum, item) => sum + item.receivable.people, 0);
+  const isParticipant = live.some((item) => item.isParticipant);
+  const accountItem = live.find((item) => item.hasAccount);
+
+  const first = live[0];
+  const openResult = () =>
+    navigate(
+      live.length === 1
+        ? `/schedules/${summary.scheduleid}/settlement/${first.id}`
+        : `/schedules/${summary.scheduleid}/settlement`
+    );
+
+  const copyAccount = async () => {
+    try {
+      const account = await getExpenseAccount(accountItem.id);
+      await navigator.clipboard.writeText(account.accountnumber);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      alert("계좌번호를 복사하지 못했어요.");
+    }
+  };
+
+  const formatTime = (iso) => {
+    if (!iso) return "";
+    const date = new Date(iso);
+    const pad = (value) => String(value).padStart(2, "0");
+    return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
+
+  return (
+    <div style={cardStyle}>
+      <div style={{ fontWeight: 700, fontSize: "14px", marginBottom: "8px" }}>
+        🧾 {senderName || "멤버"}님이 지출을 등록했어요.
+      </div>
+
+      {live.length === 1 ? (
+        <div style={{ fontSize: "13px", lineHeight: 1.5 }}>
+          <div style={{ fontWeight: 600 }}>{first.title}</div>
+          <div style={{ color: "var(--sub-text-color, #6A7083)", fontSize: "12px" }}>
+            {formatWon(first.amount)} | {formatTime(first.paidat)}
+          </div>
+        </div>
+      ) : (
+        <div style={{ fontSize: "13px", lineHeight: 1.5 }}>
+          {live.slice(0, 3).map((item) => (
+            <div key={item.id} style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+              <span style={{ fontWeight: 600 }}>{item.title}</span>
+              <span>{formatWon(item.amount)}</span>
+            </div>
+          ))}
+          {live.length > 3 && (
+            <div style={{ color: "var(--sub-text-color, #6A7083)", fontSize: "12px" }}>외 {live.length - 3}건</div>
+          )}
+          <div style={{ marginTop: "4px", fontWeight: 700 }}>총 {formatWon(total)} ({live.length}건)</div>
+        </div>
+      )}
+
+      {isParticipant && (
+        <div
+          style={{
+            marginTop: "10px",
+            padding: "10px 12px",
+            borderRadius: "10px",
+            background: "#F0ECFD",
+            color: "#141826",
+          }}
+        >
+          {owe > 0 && (
+            <div>
+              <div style={{ fontSize: "11px", color: "#6A7083" }}>내가 정산해야 하는 금액</div>
+              <div style={{ fontSize: "18px", fontWeight: 800, color: "#7F5EF6" }}>{formatWon(owe)}</div>
+            </div>
+          )}
+          {receive > 0 && (
+            <div style={{ marginTop: owe > 0 ? "6px" : 0 }}>
+              <div style={{ fontSize: "11px", color: "#6A7083" }}>받을 금액 ({receivePeople}명)</div>
+              <div style={{ fontSize: "18px", fontWeight: 800, color: "#7F5EF6" }}>{formatWon(receive)}</div>
+            </div>
+          )}
+          {owe === 0 && receive === 0 && (
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "#1F9D55" }}>
+              {iOwedAnything ? "✓ 송금을 완료했어요" : "✓ 정산이 끝났어요"}
+            </div>
+          )}
+        </div>
+      )}
+
+      {accountItem && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "8px",
+            marginTop: "8px",
+            padding: "8px 10px",
+            border: "1px solid #E6E7EB",
+            borderRadius: "10px",
+            fontSize: "12px",
+            background: "#fff",
+            color: "#141826",
+          }}
+        >
+          <span>
+            {accountItem.bankname || "계좌"} {accountItem.accountMasked}
+          </span>
+          <button
+            type="button"
+            onClick={copyAccount}
+            style={{
+              flex: "0 0 auto",
+              padding: "4px 9px",
+              border: "1px solid #7F5EF6",
+              borderRadius: "8px",
+              background: "#fff",
+              color: "#7F5EF6",
+              fontSize: "11px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            {copied ? "복사됨" : "복사"}
+          </button>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={openResult}
+        style={{
+          display: "block",
+          width: "100%",
+          marginTop: "8px",
+          padding: "8px 0",
+          border: "none",
+          background: "none",
+          color: "#7F5EF6",
+          fontSize: "13px",
+          fontWeight: 700,
+          cursor: "pointer",
+        }}
+      >
+        정산 결과 보기 ›
+      </button>
+    </div>
+  );
 }
 
 function MapShareMessageCard({ meta }) {
@@ -992,7 +1182,7 @@ function ChatTab({ roomId }) {
 
     try {
       const meta = JSON.parse(message.content);
-      if (meta.__type === "vote") return false;
+      if (meta.__type === "vote" || meta.__type === "settlement") return false;
     } catch {
       // 일반 텍스트 메시지
     }
@@ -1655,7 +1845,7 @@ function ChatTab({ roomId }) {
                       <div
                         className={`chat-bubble ${isMine ? "mine" : "other"}${
                           deletable || pinnable ? " deletable" : ""
-                        }`}
+                        }${meta?.__type === "settlement" ? " settlement-card" : ""}`}
                         onClick={
                           deletable || pinnable
                             ? (event) => {
@@ -1692,6 +1882,16 @@ function ChatTab({ roomId }) {
                                 return (
                                   <VoteMessageCard
                                     meta={meta}
+                                    navigate={navigate}
+                                  />
+                                );
+                              }
+
+                              if (meta.__type === "settlement") {
+                                return (
+                                  <SettlementMessageCard
+                                    meta={meta}
+                                    senderName={message.nickname}
                                     navigate={navigate}
                                   />
                                 );

@@ -934,3 +934,11 @@
   background: var(--accent-color);
   color: var(--accent-text);
 }
+
+/* 정산 카드는 내 메시지여도 보라색 말풍선 대신 카드 배경을 써서 글자가 잘 보이게 한다 */
+.chat-bubble.settlement-card,
+.chat-bubble.mine.settlement-card {
+  background-color: var(--card-bg);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+}

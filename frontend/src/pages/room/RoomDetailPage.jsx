@@ -407,6 +407,40 @@ function RoomDetailPage() {
 
   if (!room) return <div>로딩 중...</div>;
   const isCurrentUserHost = String(room?.createdby) === String(currentUser?.id);
+
+  // 방 이름·이미지는 방장이 아니어도 로그인한 참여자(회원) 누구나 바꿀 수 있다. 게스트는 둘 다 불가.
+  const handleSaveRoomName = async () => {
+    if (isGuestRoomUser) return;
+    const name = newRoomName.trim();
+    if (!name) {
+      alert("방 이름을 입력해 주세요.");
+      return;
+    }
+    if (name === room.roomname) {
+      setIsEditingTitle(false);
+      return;
+    }
+    try {
+      await updateRoomNameApi(roomId, name);
+      setRoom({ ...room, roomname: name });
+      setIsEditingTitle(false);
+    } catch (error) {
+      alert(error.message || "방 이름을 변경하지 못했습니다.");
+    }
+  };
+
+  const handleChangeRoomImage = async (event) => {
+    const file = event.target.files[0];
+    event.target.value = "";
+    if (!file || isGuestRoomUser) return;
+    try {
+      const res = await updateRoomImageApi(file, roomId, currentUser.id);
+      if (res.success) setRoom({ ...room, roomimageurl: res.publicUrl });
+    } catch (error) {
+      console.error("방 이미지 변경 실패:", error);
+      alert("방 이미지를 변경하지 못했습니다.");
+    }
+  };
   const sortedParticipants = [
     ...members.map((m) => ({ ...m, type: "member", joinDate: m.joinedat })),
     ...guests.map((g) => ({ ...g, type: "guest", joinDate: g.createdat })),
@@ -501,16 +535,41 @@ function RoomDetailPage() {
             <button onClick={() => setIsSidebarOpen(false)} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", lineHeight: 1 }}>✕</button>
           </div>
           <hr style={{ margin: "12px 0" }} />
-          <div style={{ textAlign: "center", marginBottom: "20px" }}>
+          <div style={{ textAlign: "center", marginBottom: "14px" }}>
             <div style={{ width: "100px", height: "100px", borderRadius: "24px", margin: "0 auto", overflow: "hidden", border: "1px solid #ddd", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "40px", backgroundColor: "#f3f4f6" }}>
               {room.roomimageurl ? <img src={room.roomimageurl} alt="방" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "🏠"}
             </div>
-            {isCurrentUserHost && <label htmlFor="img-up" style={{ display: "block", marginTop: "8px", fontSize: "12px", cursor: "pointer", color: "#7C5CFF" }}>이미지 변경</label>}
-            <input id="img-up" type="file" style={{ display: "none" }} onChange={async (e) => {
-              const file = e.target.files[0]; if (!file) return;
-              const res = await updateRoomImageApi(file, roomId, currentUser.id);
-              if (res.success) setRoom({ ...room, roomimageurl: res.publicUrl });
-            }} />
+            {!isGuestRoomUser && (
+              <>
+                <label htmlFor="img-up" style={{ display: "block", marginTop: "8px", fontSize: "12px", cursor: "pointer", color: "#7C5CFF" }}>이미지 변경</label>
+                <input id="img-up" type="file" accept="image/*" style={{ display: "none" }} onChange={handleChangeRoomImage} />
+              </>
+            )}
+          </div>
+          <div style={{ marginBottom: "22px", paddingBottom: "20px", borderBottom: "1px solid #F0F0F5" }}>
+            {isEditingTitle ? (
+              <>
+                <input
+                  value={newRoomName}
+                  maxLength={30}
+                  autoFocus
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleSaveRoomName(); }}
+                  style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", border: "1.5px solid #7C5CFF", borderRadius: "12px", background: "#FAF9FF", fontSize: "16px", fontWeight: "700", outline: "none" }}
+                />
+                <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                  <button onClick={() => { setNewRoomName(room.roomname); setIsEditingTitle(false); }} style={{ flex: 1, padding: "9px 0", border: "1px solid #E5E7EB", borderRadius: "10px", background: "#fff", color: "#6B7280", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>취소</button>
+                  <button onClick={handleSaveRoomName} style={{ flex: 1, padding: "9px 0", border: "none", borderRadius: "10px", background: "#7C5CFF", color: "#fff", fontSize: "13px", fontWeight: "700", cursor: "pointer" }}>저장</button>
+                </div>
+              </>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ flex: 1, minWidth: 0, fontSize: "18px", fontWeight: "800", color: "#141826", lineHeight: 1.35, wordBreak: "break-all" }}>{room.roomname}</div>
+                {!isGuestRoomUser && (
+                  <button onClick={() => { setNewRoomName(room.roomname); setIsEditingTitle(true); }} style={{ flex: "0 0 auto", padding: "5px 12px", border: "none", borderRadius: "999px", background: "#F0ECFD", color: "#7C5CFF", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>이름 변경</button>
+                )}
+              </div>
+            )}
           </div>
           <div style={{ marginBottom: "20px" }}>
             <h4 style={{ display: "flex", alignItems: "center", gap: "6px" }}><FaBell size={13} color="#F59E0B" /> 알림 설정</h4>

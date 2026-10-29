@@ -207,6 +207,41 @@ function HomePage() {
     init();
   }, [loadConfirmedSchedules]);
 
+  // 확정 일정 카드에 보이는 방 이름이 바뀌면 해당 방의 카드만 갱신한다.
+  const confirmedRoomIdsKey = [...new Set(confirmedSchedules.map((schedule) => schedule.roomid))]
+    .filter(Boolean)
+    .join(",");
+  useEffect(() => {
+    if (!confirmedRoomIdsKey) return undefined;
+
+    const channel = supabase
+      .channel(`home-room-names-${Date.now()}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "rooms",
+          filter: `id=in.(${confirmedRoomIdsKey})`,
+        },
+        (payload) => {
+          const updated = payload.new;
+          setConfirmedSchedules((prev) =>
+            prev.map((schedule) =>
+              String(schedule.roomid) === String(updated.id)
+                ? { ...schedule, roomname: updated.roomname }
+                : schedule
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [confirmedRoomIdsKey]);
+
   useEffect(() => {
     if (!currentUser) return;
 
