@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { deduplicateRecommendationResult, loadRecommendationResultFromStorage, saveRecommendationResultToStorage } from "../../api/courseRecommendationApi";
+import { normalizeCourseVoteSelection } from "../../utils/courseVoteUtils";
 
 const PAGE_STYLES = {
   page: {
@@ -75,6 +76,7 @@ function CourseRecommendationResultPage() {
   const location = useLocation();
   const { roomid } = useParams();
   const queryParams = new URLSearchParams(location.search);
+  const isNewSchedule = Boolean(location.state?.newScheduleDraft);
   const stateScheduleId = location.state?.schedule?.id || Number(queryParams.get("scheduleId")) || null;
   const stateRoomId = Number(roomid || location.state?.roomId || location.state?.schedule?.roomid || queryParams.get("roomId"));
 
@@ -107,7 +109,7 @@ function CourseRecommendationResultPage() {
   }, [schedule, stateRoomId, stateScheduleId]);
 
   useEffect(() => {
-    if (!stateRoomId || !stateScheduleId) {
+    if (!stateRoomId || (!stateScheduleId && !isNewSchedule)) {
       setError("유효하지 않은 일정 정보입니다.");
       setLoading(false);
       return;
@@ -115,12 +117,12 @@ function CourseRecommendationResultPage() {
 
     if (recommendation) {
       setSelectedCourseIds(recommendation.courses?.map((course) => course.id) || []);
-      saveRecommendationResultToStorage(stateRoomId, stateScheduleId, recommendation);
+      if (!isNewSchedule) saveRecommendationResultToStorage(stateRoomId, stateScheduleId, recommendation);
       setLoading(false);
       return;
     }
 
-    const stored = loadRecommendationResultFromStorage(stateRoomId, stateScheduleId);
+    const stored = !isNewSchedule && loadRecommendationResultFromStorage(stateRoomId, stateScheduleId);
     if (stored) {
       setRecommendation(stored);
       setSelectedCourseIds(stored.courses?.map((course) => course.id) || []);
@@ -130,7 +132,7 @@ function CourseRecommendationResultPage() {
 
     setError("추천 결과를 찾을 수 없습니다. 조건을 다시 설정해 주세요.");
     setLoading(false);
-  }, [recommendation, stateRoomId, stateScheduleId]);
+  }, [recommendation, stateRoomId, stateScheduleId, isNewSchedule]);
 
   const courseList = useMemo(() => recommendation?.courses || [], [recommendation]);
 
@@ -151,6 +153,13 @@ function CourseRecommendationResultPage() {
   );
 
   const handleCreateCourseVote = () => {
+    if (isNewSchedule && selectedCourses.length && stateRoomId) {
+      const draft = location.state.newScheduleDraft;
+      navigate(`/rooms/${stateRoomId}/schedules/new`, { state: { newScheduleDraft: {
+        ...draft, courses: [...(draft.courses || []), ...normalizeCourseVoteSelection(selectedCourses)],
+      } } });
+      return;
+    }
     if (!selectedCourses.length || !stateRoomId || !stateScheduleId) {
       return;
     }
@@ -161,6 +170,8 @@ function CourseRecommendationResultPage() {
         votePurpose: "course",
         title: `${schedule?.title || "추천 코스"} 투표`,
         selectedCourses,
+        schedule,
+        courseVoteDraft: location.state?.courseVoteDraft,
         scheduleId: stateScheduleId,
         fromScheduleId: stateScheduleId,
         scheduleTitle: schedule?.title || "",
@@ -176,6 +187,8 @@ function CourseRecommendationResultPage() {
           schedule,
           roomId: stateRoomId,
           scheduleId: stateScheduleId,
+          courseVoteDraft: location.state?.courseVoteDraft,
+          newScheduleDraft: location.state?.newScheduleDraft,
         },
       });
       return;
@@ -323,7 +336,7 @@ function CourseRecommendationResultPage() {
             disabled={selectedCount === 0}
             onClick={handleCreateCourseVote}
           >
-            선택한 코스로 투표 만들기
+            {isNewSchedule ? '선택한 코스를 일정에 추가' : location.state?.courseVoteDraft ? '선택한 코스를 후보에 추가' : '선택한 코스로 투표 만들기'}
           </button>
           <button type="button" onClick={goBack} style={PAGE_STYLES.secondaryButton}>
             조건 다시 설정

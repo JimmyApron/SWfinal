@@ -162,3 +162,36 @@ export async function assertCourseChangesAllowed(scheduleId) {
     .eq("schedule_id", scheduleId).maybeSingle());
   if (finalization) throw new Error("최종 확정된 일정의 코스 투표와 개인 확정은 변경할 수 없습니다.");
 }
+
+// New-schedule flow: the schedule's recorded creator can choose a course
+// directly, without manufacturing a vote. Existing vote finalization stays unchanged.
+export async function finalizeDirectCourse({ roomId, scheduleId, courseId }) {
+  if (!roomId || !scheduleId || !courseId) throw new Error('모임·일정·코스 정보가 필요합니다.');
+  const schedule = await readResult(supabase.from('confirmed_schedules').select('id, roomid')
+    .eq('id', scheduleId).eq('roomid', Number(roomId)).single());
+  if (!schedule) throw new Error('현재 모임의 일정을 확인하지 못했습니다.');
+  const actor = await getCurrentRoomParticipantInfo(roomId);
+  const creator = await getScheduleCreator(scheduleId);
+  if (!creator || creator.created_by_type !== actor.participantType ||
+      !same(actor.participantId, actor.participantType === 'member' ? creator.created_by_member_id : creator.created_by_guest_id)) {
+    throw new Error('직접 코스 지정은 해당 일정을 만든 참여자만 할 수 있습니다.');
+  }
+  const course = await readResult(supabase.from('courses').select('id')
+    .eq('id', courseId).eq('schedule_id', scheduleId).eq('room_id', Number(roomId)).single());
+  if (!course) throw new Error('해당 일정에 연결된 코스가 아닙니다.');
+  const existing = await getFinalizedCourse(scheduleId);
+  if (existing) {
+    if (!same(existing.course_id, courseId)) throw new Error('이미 다른 코스로 최종 확정되었습니다.');
+    return finishFinalization(existing);
+  }
+  const { error } = await supabase.from('schedule_finalizations').insert([{
+    schedule_id: scheduleId, course_id: courseId, finalized_by_type: actor.participantType,
+    finalized_by_member_id: actor.participantType === 'member' ? actor.participantId : null,
+    finalized_by_guest_id: actor.participantType === 'guest' ? actor.participantId : null,
+    finalized_at: new Date().toISOString(),
+  }]);
+  if (error && error.code !== '23505') throw error;
+  const saved = await getFinalizedCourse(scheduleId);
+  if (!saved || !same(saved.course_id, courseId)) throw new Error('최종 코스 저장 결과를 확인하지 못했습니다.');
+  return finishFinalization(saved);
+}

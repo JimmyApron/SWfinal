@@ -10,11 +10,42 @@ import { confirmMyVotedCourse } from './courseConfirmationApi';
 import { getCourseConfirmationProgress, finalizeCourse } from './courseFinalizationApi';
 import { getFinalizedRoadmap, shareFinalizedCourse } from './courseRoadmapApi';
 import { parseCourseShare } from '../utils/courseRoadmapUtils';
+import { buildManualCourse } from '../utils/manualCourseUtils';
 
 jest.mock('../lib/supabaseClient', () => ({ supabase: { from: jest.fn(), auth: { getUser: jest.fn() } } }));
 jest.mock('./kakaoPlacesApi', () => ({ searchNearbyPlaces: jest.fn(), searchPlacesByKeyword: jest.fn() }));
 jest.mock('./notificationApi', () => ({ createRoomNotifications: jest.fn() }));
 jest.mock('./mapApi', () => ({ updateRoomLocationTransportModes: jest.fn() }));
+
+test('직접 만든 코스 저장·동일 요청 재시도·이름 충돌 차단·투표·확정·로드맵 연결', async () => {
+  localStorage.clear();
+  supabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'member-a' } }, error: null });
+  const schedule = { id: 3, roomid: 1, starttime: '15:30', endtime: '18:00' };
+  const db = { confirmed_schedules: [schedule], rooms: [{ id: 1, roomname: '직접 코스 모임' }],
+    room_members: [{ roomid: 1, userid: 'member-a' }], room_guests: [], profiles: [],
+    courses: [], course_stops: [], votes: [], voteoptions: [], vote_course_links: [],
+    voteresponses: [], schedule_finalizations: [], course_member_confirmations: [] };
+  mockDatabase(supabase, db);
+  const { course, errors } = buildManualCourse({ name: '직접 정한 코스', startTime: '15:30', travelMode: 'walking',
+    stops: [{ id: '11', name: '카페', lat: 37.55, lng: 126.92, expectedStayMin: 40 },
+      { id: '12', name: '식당', lat: 37.5501, lng: 126.9201, expectedStayMin: 50 }] }, schedule);
+  expect(errors).toEqual([]);
+  const rows = buildCourseVoteDbRows(course);
+  const payload = { roomId: 1, scheduleId: 3, courseName: rows.course_name,
+    recommendationCondition: rows.recommendation_condition, estimatedTotalDurationMin: rows.estimated_total_duration_min,
+    estimatedTravelTimeMin: rows.estimated_travel_time_min, estimatedCostPerPerson: null, stops: rows.stops };
+  const saved = await createCourseWithStops(payload);
+  expect((await createCourseWithStops(payload)).id).toBe(saved.id);
+  await expect(createCourseWithStops({ ...payload, stops: [...rows.stops].reverse() })).rejects.toThrow('이름을 바꿔');
+  expect(db.courses).toHaveLength(1);
+  const vote = await createVote({ roomid: 1, scheduleid: 3, userid: 'member-a', nickname: '작성자', title: '직접 코스 투표',
+    votetype: 'course', options: normalizeCourseVoteSelection([saved]), ismultiple: false, isanonymous: false, allowaddoption: false });
+  await finalizeCourse({ roomId: 1, scheduleId: 3, voteId: vote.id, courseId: saved.id });
+  const roadmap = await getFinalizedRoadmap(1, 3);
+  expect(roadmap.course.stops.map(stop => stop.place_name)).toEqual(['카페', '식당']);
+  expect(roadmap.course.stops[1].expected_stay_min).toBe(50);
+  expect(roadmap.course.estimated_cost_per_person).toBeNull();
+});
 
 test('actual APIs compose: create → recommend → persist two → vote/revote → confirm → finalize → roadmap → share → another participant reads', async () => {
   const db = Object.fromEntries(['confirmed_schedules', 'schedule_creation_records', 'courses', 'course_stops', 'votes', 'voteoptions', 'vote_course_links', 'voteresponses', 'course_member_confirmations', 'schedule_finalizations', 'room_messages'].map((table) => [table, []]));

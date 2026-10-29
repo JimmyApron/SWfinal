@@ -1,0 +1,14 @@
+.course-composer { padding: 16px; margin: 12px 0 24px; border: 1px solid #e7e0ff; border-radius: 16px; background: #fcfbff; color: #252237; }
+.course-composer h3, .course-composer h4 { margin: 0 0 12px; }
+.course-composer h4 { margin-top: 16px; }
+.course-composer label { display: block; font-size: 13px; flex: 1; min-width: 0; }
+.course-composer input, .course-composer select { display: block; box-sizing: border-box; width: 100%; min-width: 0; padding: 10px; margin: 6px 0 12px; border: 1px solid #ded8ee; border-radius: 8px; background: white; font: inherit; }
+.course-composer-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.course-composer button { border: 1px solid #ded8ee; border-radius: 9px; background: white; color: #6047b8; padding: 10px 12px; cursor: pointer; font-weight: 600; }
+.course-composer button:disabled { opacity: .45; cursor: default; }
+.course-editor, .course-candidate { padding: 14px; border: 1px solid #e7e0ff; background: white; border-radius: 12px; margin: 12px 0; overflow-wrap: anywhere; }
+.course-stop-list { list-style: none; padding: 0; }
+.course-stop-list > li { border-bottom: 1px solid #eee; padding: 12px 0; }
+.course-composer p { font-size: 13px; line-height: 1.6; }
+.course-composer-hint { color: #6c677a; }
+.course-composer [role=alert], .course-editor ul[role=status] { color: #b33636; font-size: 13px; line-height: 1.7; }

@@ -31,6 +31,7 @@ import MeetingDiaryDetailPage from "./pages/room/MeetingDiaryDetailPage";
 import DiaryCollection from "./pages/room/DiaryCollection";
 import MeetingDiaryEditorPage from "./pages/room/MeetingDiaryEditorPage";
 import ScheduleTab from "./pages/room/ScheduleTab";
+import NewSchedulePage from "./pages/room/NewSchedulePage";
 import AvailableResultPage from "./pages/room/AvailableResultPage";
 
 import LocationTab from "./pages/Location/LocationTab";
@@ -666,6 +667,7 @@ function App() {
               <Route path="/rooms/:roomid/chat" element={<ChatTab />} />
               <Route path="/rooms/:roomid/available-result" element={<AvailableResultPage />} />
               <Route path="/rooms/:roomid/vote-create" element={<VoteCreatePage />} />
+              <Route path="/rooms/:roomid/schedules/new" element={<NewSchedulePage />} />
               <Route path="/rooms/:roomid/votes/:voteid" element={<VoteDetailPage />} />
               <Route path="/rooms/:roomid/confirmed-schedule" element={<ConfirmedScheduleDetailPage />} />
               <Route path="/rooms/:roomid/schedules/:scheduleid/final-course" element={<FinalizedCourseRoadmapPage />} />

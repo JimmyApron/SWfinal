@@ -79,3 +79,31 @@ test('좌표 없으면 추천 차단, 지도/반경 선택 후 요청·저장', 
   await waitFor(() => expect(generateRecommendationResult).toHaveBeenCalledWith(expect.objectContaining({ condition: expect.objectContaining({ searchCenter: expect.objectContaining({ lat: 35, lng: 129 }), searchRadiusMeters: 3000 }) })));
   expect(JSON.parse(localStorage.getItem('course_recommendation_condition_40_177')).searchRadiusMeters).toBe(3000);
 });
+
+test('투표 초안은 추천 결과 화면으로 전달하고 취소 시 투표 작성으로 복귀', async () => {
+  const navigate = jest.fn();
+  useNavigate.mockReturnValue(navigate);
+  const draft = { title: '작성하던 투표', scheduleId: 177, options: [{ course_name: '직접 코스', stops: [] }] };
+  useLocation.mockReturnValue({ search: '', state: { roomId: 40,
+    schedule: { id: 177, roomid: 40, locationlat: 37, locationlng: 127 }, courseVoteDraft: draft } });
+  render(<CourseRecommendationConditionPage />);
+  fireEvent.click(screen.getByRole('button', { name: /추천받기/ }));
+  await waitFor(() => expect(navigate).toHaveBeenCalledWith('/rooms/40/course-recommendation-result', expect.objectContaining({
+    state: expect.objectContaining({ courseVoteDraft: draft }),
+  })));
+  fireEvent.click(screen.getByRole('button', { name: '취소' }));
+  expect(navigate).toHaveBeenLastCalledWith('/rooms/40/vote-create', expect.objectContaining({ state: expect.objectContaining({ courseVoteDraft: draft }) }));
+});
+
+test('새 일정 추천 요청은 저장 ID 없이 가능하고 초안을 결과와 취소 경로에 유지', async () => {
+  const navigate = jest.fn(); useNavigate.mockReturnValue(navigate);
+  const draft = { form: { title: '새 일정' }, mode: 'vote', courses: [] };
+  useLocation.mockReturnValue({ search: '', state: { roomId: 40, schedule: { roomid: 40, locationlat: 37, locationlng: 127 }, newScheduleDraft: draft } });
+  render(<CourseRecommendationConditionPage />);
+  fireEvent.click(screen.getByRole('button', { name: /추천받기/ }));
+  await waitFor(() => expect(navigate).toHaveBeenCalledWith('/rooms/40/course-recommendation-result', expect.objectContaining({
+    state: expect.objectContaining({ newScheduleDraft: draft }),
+  })));
+  fireEvent.click(screen.getByRole('button', { name: '취소' }));
+  expect(navigate).toHaveBeenLastCalledWith('/rooms/40/schedules/new', { state: { newScheduleDraft: draft } });
+});

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { getFinalizedRoadmap, shareFinalizedCourse } from "../../api/courseRoadmapApi";
 import KakaoMapView from "../../components/map/KakaoMapView";
 import { externalMapLink, mapPlaces, numberInfo } from "../../utils/courseRoadmapUtils";
 import "./FinalizedCourseRoadmapPage.css";
 
 export default function FinalizedCourseRoadmapPage() {
+  const navigate = useNavigate();
   const { roomid, scheduleid } = useParams();
   const [state, setState] = useState({ loading: true });
   const [selectedId, setSelectedId] = useState(null);
@@ -68,7 +69,7 @@ export default function FinalizedCourseRoadmapPage() {
       shareLock.current = true;
       setSharing(true);
       setShareResult("");
-      try { await shareFinalizedCourse(roomid, scheduleid); setShareResult("채팅방에 코스를 공유했습니다."); }
+      try { await shareFinalizedCourse(roomid, scheduleid); navigate(`/rooms/${roomid}?tab=chat`); }
       catch (error) { setShareResult(error.message || "코스 공유에 실패했습니다."); }
       finally { setSharing(false); shareLock.current = false; }
     }}>{sharing ? "공유 중..." : "채팅방에 코스 공유하기"}</button>

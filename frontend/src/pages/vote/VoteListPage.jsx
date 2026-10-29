@@ -14,6 +14,9 @@ const LOCATION_VOTE_TYPES = ["location", "middle_location", "additional_location
 const VISIBLE_COUNT = 3;
 
 function getVoteTypeMeta(votetype) {
+  if (votetype === "course") {
+    return { icon: FaMapMarkerAlt, label: "코스 투표" };
+  }
   if (votetype === "schedule") {
     return { icon: FaCalendarAlt, label: "일정 확정" };
   }

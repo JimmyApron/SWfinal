@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FaListUl, FaCalendarAlt, FaMapMarkerAlt, FaRegClock, FaChevronRight, FaChevronDown } from "react-icons/fa";
 import { supabase } from "../../lib/supabaseClient";
 import { createVote } from "../../api/voteApi";
 import { sendVoteNotification } from "../notification/VoteNotification";
 import LocationPicker from "../../components/map/LocationPicker";
+import CourseVoteComposer from "../../components/CourseVoteComposer";
 import { getMemberAvailabilities, getScheduleCandidates } from "../../api/scheduleApi";
 import { createCourseWithStops } from "../../api/courseApi";
 import { getTopAvailableTimes, sortAvailableTimes, getTopConsecutiveDays } from "../../utils/scheduleUtils";
@@ -14,7 +15,7 @@ const VOTE_TYPE_OPTIONS = [
   { value: "general", label: "일반 투표", icon: FaListUl, description: "메뉴/준비물 등 자유 선택" },
   { value: "schedule", label: "일정 확정", icon: FaCalendarAlt, description: "일정 후보 선택" },
   { value: "location", label: "장소 확정", icon: FaMapMarkerAlt, description: "장소 후보 선택" },
-  { value: "course", label: "코스 투표", icon: FaListUl, description: "추천 코스 후보 선택" },
+  { value: "course", label: "코스 투표", icon: FaListUl, description: "추천받거나 직접 만든 코스 선택" },
 ];
 
 function VoteCreatePage() {
@@ -40,7 +41,13 @@ function VoteCreatePage() {
       return s ? JSON.parse(s).id : null;
     } catch { return null; }
   })();
-  const scheduleId = location.state?.scheduleId || null;
+  const [scheduleId, setScheduleId] = useState(location.state?.scheduleId || location.state?.courseVoteDraft?.scheduleId || fromScheduleId || null);
+  const [courseSchedules, setCourseSchedules] = useState([]);
+  const [courseSchedulesLoading, setCourseSchedulesLoading] = useState(false);
+  const [courseScheduleError, setCourseScheduleError] = useState('');
+  const [courseEditing, setCourseEditing] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
   const scheduleTitle = location.state?.scheduleTitle || '';
 
   const [currentUser, setCurrentUser] = useState(null);
@@ -100,9 +107,12 @@ function VoteCreatePage() {
     fetchRoomName();
   }, [roomid]);
 
-  const [title, setTitle] = useState(location.state?.title || "");
+  const [title, setTitle] = useState(location.state?.courseVoteDraft?.title ?? location.state?.title ?? "");
 
   const [options, setOptions] = useState(() => {
+    if (location.state?.courseVoteDraft) {
+      return [...(location.state.courseVoteDraft.options || []), ...normalizeCourseVoteSelection(selectedCourses)];
+    }
     if (selectedCourses.length > 0) {
       return normalizeCourseVoteSelection(selectedCourses);
     }
@@ -140,7 +150,7 @@ function VoteCreatePage() {
       }));
     }
 
-    return [makeEmptyOption(initialVoteType)];
+    return initialVotePurpose === 'course' ? [] : [makeEmptyOption(initialVoteType)];
   });
 
   const currentOptionType = options[0]?.optiontype || "text";
@@ -156,19 +166,35 @@ function VoteCreatePage() {
         if (prev.length > 0 && prev.every((option) => option.optiontype === "course")) {
           return prev;
         }
-        return selectedCourses.length > 0 ? normalizeCourseVoteSelection(selectedCourses) : [
-          { ...makeEmptyOption("course"), optiontype: "course", optiontext: "추천 코스 1" },
-        ];
+        if (!prev.length) return prev;
+        return selectedCourses.length > 0 ? normalizeCourseVoteSelection(selectedCourses) : [];
       });
     }
   }, [selectedCourses, votetype]);
 
+  useEffect(() => {
+    if (votetype !== 'course') return;
+    let active = true;
+    setCourseSchedulesLoading(true);
+    setCourseScheduleError('');
+    supabase.from('confirmed_schedules').select('*').eq('roomid', Number(roomid)).order('date', { ascending: false })
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) { setCourseScheduleError('확정 일정을 불러오지 못했습니다. 다시 시도해 주세요.'); return; }
+        setCourseSchedules(data || []);
+      }).catch(() => { if (active) setCourseScheduleError('확정 일정을 불러오지 못했습니다. 다시 시도해 주세요.'); })
+      .finally(() => { if (active) setCourseSchedulesLoading(false); });
+    return () => { active = false; };
+  }, [votetype, roomid]);
+
+  const courseSchedule = courseSchedules.find(item => String(item.id) === String(scheduleId)) || null;
+
   const [ismultiple, setIsmultiple] = useState(false);
   const [isanonymous, setIsanonymous] = useState(false);
   const [allowaddoption, setAllowaddoption] = useState(false);
-  const [endtimeenabled, setEndtimeenabled] = useState(false);
-  const [endtime, setEndtime] = useState("");
-  const [reminderenabled, setReminderenabled] = useState(false);
+  const [endtimeenabled, setEndtimeenabled] = useState(location.state?.courseVoteDraft?.endtimeenabled || false);
+  const [endtime, setEndtime] = useState(location.state?.courseVoteDraft?.endtime || "");
+  const [reminderenabled, setReminderenabled] = useState(location.state?.courseVoteDraft?.reminderenabled || false);
   const [openPlacePickerIndex, setOpenPlacePickerIndex] = useState(null);
 
   const handleVotetypeChange = (newType) => {
@@ -178,7 +204,7 @@ function VoteCreatePage() {
       setOptions(
         selectedCourses.length > 0
           ? normalizeCourseVoteSelection(selectedCourses)
-          : [{ ...makeEmptyOption("course"), optiontype: "course", optiontext: "추천 코스 1" }]
+          : []
       );
       return;
     }
@@ -328,7 +354,7 @@ function VoteCreatePage() {
     setOptions(options.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = async () => {
+  const handleSubmitVote = async () => {
     if (!currentUser) {
       alert("로그인이 필요합니다.");
       return;
@@ -348,6 +374,13 @@ function VoteCreatePage() {
 
     if (votetype === "course") {
       try {
+        if (courseEditing) { alert('편집 중인 코스를 후보에 반영하거나 편집을 취소해 주세요.'); return; }
+        if (!courseSchedule || !options.length || options.some(option => !option.stops?.length)) {
+          alert('확정 일정을 선택하고 장소가 있는 코스를 1개 이상 추가해 주세요.'); return;
+        }
+        if (new Set(options.map(option => option.course_name?.trim())).size !== options.length) {
+          alert('후보마다 다른 코스 이름을 입력해 주세요.'); return;
+        }
         const resolvedScheduleId = Number(scheduleId || fromScheduleId || null);
         if (!resolvedScheduleId) {
           alert("추천 코스 투표는 연결된 일정이 필요합니다.");
@@ -355,14 +388,14 @@ function VoteCreatePage() {
         }
 
         const persistedCourses = await Promise.all(
-          (selectedCourses.length > 0 ? selectedCourses : options.map((option) => ({ ...option, id: option.courseid }))).map(async (course) => {
+          options.map((option) => ({ ...option, id: option.courseid })).map(async (course) => {
             const normalized = {
               id: course?.id ?? course?.course_id ?? course?.courseId,
               name: course?.name ?? course?.course_name ?? course?.courseName ?? course?.optiontext,
               summary: course?.summary ?? course?.course_summary ?? "",
               totalDurationMin: course?.totalDurationMin ?? course?.total_duration_min ?? course?.totalDuration ?? 0,
-              estimatedTravelTimeMin: course?.estimatedTravelTimeMin ?? course?.estimated_travel_time_min ?? 0,
-              estimatedCostPerPerson: course?.estimatedCostPerPerson ?? course?.estimated_cost_per_person ?? null,
+              estimatedTravelTimeMin: course?.estimatedTravelTimeMin ?? course?.estimated_travel_time_min ?? course?.travel_time_min ?? 0,
+              estimatedCostPerPerson: course?.estimatedCostPerPerson ?? course?.estimated_cost_per_person ?? course?.estimated_cost ?? null,
               stops: Array.isArray(course?.stops) ? course.stops : [],
             };
 
@@ -391,8 +424,8 @@ function VoteCreatePage() {
         preparedOptions = normalizeCourseVoteSelection(persistedCourses);
         setOptions(preparedOptions);
       } catch (error) {
-        console.error("추천 코스 저장 실패:", error);
-        alert(error.message || "추천 코스 저장에 실패했습니다.");
+        console.error("코스 저장 실패:", error);
+        alert(error.message || "코스 저장에 실패했습니다.");
         return;
       }
     }
@@ -479,7 +512,7 @@ function VoteCreatePage() {
     }
 
     // 기존 확정일정에서 진입한 경우 → 확정일정의 voteid를 새 투표로 연결
-    if (fromScheduleId && createdVoteId) {
+    if (fromScheduleId && createdVoteId && votetype !== 'course') {
       await supabase
         .from("confirmed_schedules")
         .update({ voteid: createdVoteId })
@@ -501,6 +534,15 @@ function VoteCreatePage() {
 
     alert("투표가 성공적으로 생성되었습니다.");
     navigate(`/rooms/${roomid}?tab=vote`);
+  };
+
+  const handleSubmit = async () => {
+    if (submitLock.current) return;
+    submitLock.current = true;
+    setSubmitting(true);
+    try { await handleSubmitVote(); }
+    catch (error) { alert(error.message || '투표 생성 중 오류가 발생했습니다.'); }
+    finally { submitLock.current = false; setSubmitting(false); }
   };
 
   const availTopTimes = sortAvailableTimes(getTopAvailableTimes(availabilities), "count");
@@ -707,6 +749,7 @@ function VoteCreatePage() {
 
         <button
           onClick={handleSubmit}
+          disabled={submitting || (votetype === 'course' && (courseEditing || courseSchedulesLoading))}
           style={{
             border: "none",
             background: "none",
@@ -715,7 +758,7 @@ function VoteCreatePage() {
             fontWeight: "bold",
           }}
         >
-          완료
+          {submitting ? '저장 중…' : '완료'}
         </button>
       </div>
 
@@ -909,11 +952,22 @@ function VoteCreatePage() {
               marginBottom: "16px",
             }}
           >
-            추천 코스 {selectedCourses.length}개가 자동으로 투표 후보로 설정되었습니다.
+            추천 코스가 후보에 추가되었습니다. 직접 만든 코스도 함께 추가하거나 후보를 수정할 수 있습니다.
           </p>
         )}
 
-        {options.map((option, index) => (
+        {votetype === 'course' && <CourseVoteComposer
+          schedules={courseSchedules} schedule={courseSchedule} scheduleId={scheduleId}
+          loading={courseSchedulesLoading} error={courseScheduleError} options={options}
+          onEditingChange={setCourseEditing} onChange={setOptions}
+          onScheduleChange={id => { setScheduleId(id ? Number(id) : null); setOptions([]); }}
+          onRecommend={() => navigate(`/rooms/${roomid}/course-recommendation`, {
+            state: { schedule: courseSchedule, roomId: Number(roomid),
+              courseVoteDraft: { title, options, scheduleId, endtimeenabled, endtime, reminderenabled } },
+          })}
+        />}
+
+        {votetype !== 'course' && options.map((option, index) => (
           <div key={index} style={{ marginBottom: "10px" }}>
               {option.optiontype === "text" && (
                 <div
@@ -1205,7 +1259,7 @@ function VoteCreatePage() {
           </div>
         ))}
 
-        <button
+        {votetype !== 'course' && <button
           type="button"
           onClick={handleAddOption}
           style={{
@@ -1220,7 +1274,7 @@ function VoteCreatePage() {
           }}
         >
           +
-        </button>
+        </button>}
 
         {votetype === "schedule" && (
           <button

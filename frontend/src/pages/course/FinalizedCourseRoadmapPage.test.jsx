@@ -4,18 +4,23 @@ import FinalizedCourseRoadmapPage from "./FinalizedCourseRoadmapPage";
 import FinalizedCoursePreview from "../../components/FinalizedCoursePreview";
 import CourseShareMessage from "../../components/CourseShareMessage";
 import { getFinalizedRoadmap, shareFinalizedCourse } from "../../api/courseRoadmapApi";
+import { useNavigate } from "react-router-dom";
 
 jest.mock("../../api/courseRoadmapApi", () => ({ getFinalizedRoadmap: jest.fn(), shareFinalizedCourse: jest.fn() }));
 jest.mock("react-router-dom", () => ({
   useParams: () => ({ roomid: "2", scheduleid: "3" }),
+  useNavigate: jest.fn(),
   Link: ({ to, children, ...props }) => <a href={to} {...props}>{children}</a>,
 }), { virtual: true });
 jest.mock("../../components/map/KakaoMapView", () => function MockMap({ places, onPlaceSelect, selectedPlace }) {
   return <div aria-label="테스트 지도">{places.map((place) => <button key={place.id} onClick={() => onPlaceSelect(place)}>{`지도 ${place.orderNumber}`}</button>)}{selectedPlace && <span>선택 {selectedPlace.name}</span>}</div>;
 });
 let roadmap;
+let navigate;
 const content = JSON.stringify({ __type: "finalized_course", version: 1, roomId: "2", scheduleId: "3", courseId: "20" });
 beforeEach(() => {
+  navigate = jest.fn();
+  useNavigate.mockReturnValue(navigate);
   roadmap = { schedule_id: 3, course_id: 20, schedule: { title: "일정", date: "2026-11-01" }, room: { roomname: "모임" },
     course: { course_name: "코스 A", stops: [
       { id: 1, roadmapId: "a", roadmapNumber: 1, place_name: "첫 장소", latitude: null, longitude: 127 },
@@ -88,7 +93,7 @@ test("삭제·접근 불가 일정은 대체 안내", async () => {
   expect(await screen.findByRole("status")).toHaveTextContent("최종 코스를 조회할 수 없습니다");
   expect(screen.queryByRole("link")).not.toBeInTheDocument();
 });
-test("공유 버튼 중복 클릭 방지와 성공 안내", async () => {
+test("공유 버튼 중복 클릭 방지와 성공 후 해당 모임 채팅방 이동", async () => {
   let complete;
   shareFinalizedCourse.mockImplementation(() => new Promise((resolve) => { complete = resolve; }));
   page();
@@ -96,12 +101,14 @@ test("공유 버튼 중복 클릭 방지와 성공 안내", async () => {
   fireEvent.click(button); fireEvent.click(button);
   expect(shareFinalizedCourse).toHaveBeenCalledTimes(1);
   expect(button).toBeDisabled();
+  expect(navigate).not.toHaveBeenCalled();
   complete({ sent: true });
-  await screen.findByText("채팅방에 코스를 공유했습니다.");
+  await waitFor(() => expect(navigate).toHaveBeenCalledWith('/rooms/2?tab=chat'));
 });
 test("공유 전송 실패는 오류 안내", async () => {
   shareFinalizedCourse.mockRejectedValue(new Error("전송 실패 · 중복 전송 가능"));
   page();
   fireEvent.click(await screen.findByRole("button", { name: "채팅방에 코스 공유하기" }));
   await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("전송 실패"));
+  expect(navigate).not.toHaveBeenCalled();
 });

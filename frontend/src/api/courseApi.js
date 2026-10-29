@@ -194,6 +194,16 @@ export async function createCourseWithStops(coursePayload = {}) {
       throw new Error("기존 코스 장소를 불러오지 못했습니다.");
     }
 
+    const signature = (items) => JSON.stringify(items.map((stop, index) => {
+      const normalized = normalizeCourseStop(stop, index);
+      return { ...normalized,
+        visit_start_time: normalized.visit_start_time?.slice(0, 5) || null,
+        visit_end_time: normalized.visit_end_time?.slice(0, 5) || null };
+    }));
+    if (signature(existingStops || []) !== signature(stops)) {
+      throw new Error(`이 일정에 "${courseName}" 이름의 다른 코스가 이미 있습니다. 코스 이름을 바꿔 주세요.`);
+    }
+
     return {
       ...existingCourse,
       stops: existingStops || [],

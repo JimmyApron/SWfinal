@@ -196,6 +196,8 @@ function CourseRecommendationConditionPage() {
           scheduleId,
           recommendation: result,
           recommendationCondition: finalPayload,
+          courseVoteDraft: location.state?.courseVoteDraft,
+          newScheduleDraft: location.state?.newScheduleDraft,
         },
         replace: false,
       });
@@ -205,6 +207,15 @@ function CourseRecommendationConditionPage() {
   };
 
   const goBack = () => {
+    if (location.state?.newScheduleDraft) {
+      navigate(`/rooms/${roomId}/schedules/new`, { state: { newScheduleDraft: location.state.newScheduleDraft } });
+      return;
+    }
+    if (location.state?.courseVoteDraft) {
+      navigate(`/rooms/${roomId}/vote-create`, { state: { voteType: 'course', votePurpose: 'course',
+        scheduleId, courseVoteDraft: location.state.courseVoteDraft } });
+      return;
+    }
     if (roomId) {
       navigate(`/rooms/${roomId}/confirmed-schedule`, {
         state: { schedule: scheduleFromState },
