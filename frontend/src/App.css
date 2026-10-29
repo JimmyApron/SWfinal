@@ -770,22 +770,17 @@
   --sheet-handle-bg: #fff;
   --sheet-handle-line-top: 26px;
   position: sticky;
-  top: 0;
+  top: -10px;
   z-index: 6;
   width: calc(100% + 32px);
-  height: 32px;
-  margin: -10px -16px 10px;
+  height: calc(var(--sheet-handle-line-top) + 1px);
+  margin: -10px -16px 4px;
   display: flex;
   align-items: flex-start;
   justify-content: center;
   padding-top: 12px;
   border-radius: 24px 24px 0 0;
-  background: linear-gradient(
-    to bottom,
-    var(--sheet-handle-bg) 0,
-    var(--sheet-handle-bg) calc(var(--sheet-handle-line-top) + 1px),
-    transparent calc(var(--sheet-handle-line-top) + 1px)
-  );
+  background: var(--sheet-handle-bg);
   cursor: grab;
   touch-action: none;
 }
@@ -2115,8 +2110,8 @@
 
   .map-sheet-handle {
     width: calc(100% + 24px);
-    height: 30px;
-    margin: -8px -12px 8px;
+    top: -8px;
+    margin: -8px -12px 4px;
     padding-top: 10px;
   }
 
