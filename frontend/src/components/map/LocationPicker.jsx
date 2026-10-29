@@ -26,12 +26,17 @@ function LocationPicker({
   const markerRef = useRef(null);
   const infoWindowRef = useRef(null);
   const pickerRef = useRef(null);
+  const onSelectRef = useRef(onSelect);
 
   const [isReady, setIsReady] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const visiblePlaceholder = String(placeholder).replace(/^기준 장소:\s*/, "");
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
 
   useEffect(() => {
     loadKakaoScript()
@@ -55,14 +60,16 @@ function LocationPicker({
   }, [results.length]);
 
   useEffect(() => {
-    if (!isReady || !mapRef.current || mapObjectRef.current) return;
+    if (!isReady || !mapRef.current) return;
 
-    const map = new window.kakao.maps.Map(mapRef.current, {
-      center: new window.kakao.maps.LatLng(37.5665, 126.978),
-      level: 5,
-    });
-
-    mapObjectRef.current = map;
+    let map = mapObjectRef.current;
+    if (!map) {
+      map = new window.kakao.maps.Map(mapRef.current, {
+        center: new window.kakao.maps.LatLng(37.5665, 126.978),
+        level: 5,
+      });
+      mapObjectRef.current = map;
+    }
 
     if (!allowMapClick) return;
 
@@ -87,7 +94,7 @@ function LocationPicker({
               address,
             });
 
-            onSelect(address, "", {
+            onSelectRef.current?.(address, "", {
               name: address,
               address,
               lat: latlng.getLat(),
@@ -104,7 +111,7 @@ function LocationPicker({
     return () => {
       window.kakao.maps.event.removeListener(map, "click", clickHandler);
     };
-  }, [allowMapClick, isReady, onSelect]);
+  }, [allowMapClick, isReady]);
 
   const placeMarker = (lat, lng, place = {}) => {
     const map = mapObjectRef.current;

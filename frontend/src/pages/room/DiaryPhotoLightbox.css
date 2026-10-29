@@ -1,5 +1,7 @@
 .diary-photo-lightbox { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 56px 64px; background: rgba(12, 12, 18, .94); box-sizing: border-box; }
 .diary-photo-lightbox > img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
+.diary-photo-lightbox > img.is-draggable { cursor: grab; touch-action: pan-y; user-select: none; -webkit-user-drag: none; }
+.diary-photo-lightbox > img.is-draggable:active { cursor: grabbing; }
 .diary-photo-lightbox-close, .diary-photo-lightbox-nav { position: absolute; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .14); color: #fff; cursor: pointer; }
 .diary-photo-lightbox-close { top: max(16px, env(safe-area-inset-top)); right: 18px; width: 42px; height: 42px; font-size: 24px; }
 .diary-photo-lightbox-nav { top: 50%; width: 48px; height: 48px; transform: translateY(-50%); font-size: 28px; }

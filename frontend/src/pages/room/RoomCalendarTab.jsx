@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { FiImage, FiPlus } from "react-icons/fi";
+import { FiImage } from "react-icons/fi";
 import { createLightningMeeting, getCalendarDiaryThumbnails, getMeetingDiaryProgress, getRoomDiaries, getRoomDiaryIdentity, getRoomMeetings } from "../../api/meetupDiaryApi";
 import "./RoomCalendar.css";
 
@@ -22,6 +22,8 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
     try { const saved = JSON.parse(sessionStorage.getItem(`room-calendar-state:${roomId}`) || "null"); if (saved?.month) return new Date(`${saved.month}T12:00:00`); } catch {}
     const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), 1);
   });
+  const [openMonthPicker, setOpenMonthPicker] = useState(null);
+  const activeYearOptionRef = useRef(null);
   const [identity, setIdentity] = useState(null);
   const [meetings, setMeetings] = useState([]);
   const [allMeetings, setAllMeetings] = useState([]);
@@ -47,11 +49,21 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
   const [loading, setLoading] = useState(true);
   const [savingLightning, setSavingLightning] = useState(false);
   const lightningRequestIdRef = useRef(null);
+  const sheetDragRef = useRef({ startY: null, offset: 0, pointerId: null });
+  const suppressSheetClickRef = useRef(false);
+  const sheetDismissTimerRef = useRef(null);
+  const [sheetDragOffset, setSheetDragOffset] = useState(0);
+  const [isSheetDragging, setIsSheetDragging] = useState(false);
+  const [isSheetDismissing, setIsSheetDismissing] = useState(false);
   const [error, setError] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [today, setToday] = useState(getTodayInSeoul);
   const firstDay = dateKey(month);
   const lastDay = dateKey(new Date(month.getFullYear(), month.getMonth() + 1, 0));
+
+  useEffect(() => {
+    if (openMonthPicker === "year") activeYearOptionRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [openMonthPicker]);
 
   const load = useCallback(async ({ initialize = false } = {}) => {
     setLoading(true);
@@ -98,6 +110,7 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
     } finally { setLoading(false); }
   }, [firstDay, identity, lastDay, roomId]);
 
+  useEffect(() => () => window.clearTimeout(sheetDismissTimerRef.current), []);
   useEffect(() => { load({ initialize: true }); }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (identity) load(); }, [firstDay, identity, lastDay, load]);
   useEffect(() => {
@@ -248,6 +261,56 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
 
   async function refreshCalendar() { await load(); }
 
+  function selectCalendarDate(date) {
+    window.clearTimeout(sheetDismissTimerRef.current);
+    sheetDismissTimerRef.current = null;
+    suppressSheetClickRef.current = false;
+    sheetDragRef.current = { startY: null, offset: 0, pointerId: null };
+    setSheetDragOffset(0);
+    setIsSheetDragging(false);
+    setIsSheetDismissing(false);
+    setSelectedDate(date);
+    setSelectedMeetingIndex(0);
+  }
+
+  function dismissCalendarSheet() {
+    if (isSheetDismissing) return;
+    setIsSheetDismissing(true);
+    sheetDismissTimerRef.current = window.setTimeout(() => {
+      setSelectedDate("");
+      setIsSheetDismissing(false);
+      sheetDismissTimerRef.current = null;
+    }, 220);
+  }
+
+  function startCalendarSheetDrag(event) {
+    if (isSheetDismissing) return;
+    sheetDragRef.current = { startY: event.clientY, offset: 0, pointerId: event.pointerId };
+    suppressSheetClickRef.current = false;
+    setIsSheetDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveCalendarSheetDrag(event) {
+    const drag = sheetDragRef.current;
+    if (drag.startY === null || drag.pointerId !== event.pointerId) return;
+    drag.offset = Math.max(0, event.clientY - drag.startY);
+    setSheetDragOffset(drag.offset);
+  }
+
+  function endCalendarSheetDrag(event) {
+    const drag = sheetDragRef.current;
+    if (drag.startY === null || drag.pointerId !== event.pointerId) return;
+    const offset = Math.max(0, event.clientY - drag.startY);
+    const didMove = offset > 8;
+    const shouldDismiss = offset > 72;
+    sheetDragRef.current = { startY: null, offset: 0, pointerId: null };
+    setIsSheetDragging(false);
+    if (didMove) suppressSheetClickRef.current = true;
+    if (shouldDismiss) dismissCalendarSheet();
+    else setSheetDragOffset(0);
+  }
+
   const submitLightning = async (event) => {
     event.preventDefault();
     if (!lightningTitle.trim()) {
@@ -276,32 +339,42 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
       {authMessage && <div className="calendar-notice" role="status">{authMessage}</div>}
       {error && <div className="calendar-error" role="alert">{error}<button type="button" onClick={refreshCalendar}>&#xB2E4;&#xC2DC; &#xBD88;&#xB7EC;&#xC624;&#xAE30;</button></div>}
       <section className="room-calendar-card" aria-label="&#xBC29; &#xACF5;&#xD1B5; &#xC6D4;&#xAC04; &#xCE98;&#xB9B0;&#xB354">
-        <header className="room-calendar-month"><button type="button" aria-label="&#xC774;&#xC804; &#xB2EC;" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>‹</button><strong>{month.getFullYear()}년 {month.getMonth() + 1}월</strong><button type="button" aria-label="&#xB2E4;&#xC74C; &#xB2EC;" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>›</button></header>
+        <header className="room-calendar-month"><button type="button" aria-label="&#xC774;&#xC804; &#xB2EC;" onClick={() => { setOpenMonthPicker(null); setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1)); }}>‹</button><div className="room-calendar-month-heading"><button type="button" className="room-calendar-period-button" aria-expanded={openMonthPicker === "year"} onClick={() => setOpenMonthPicker((open) => open === "year" ? null : "year")}>{month.getFullYear()}년</button><button type="button" className="room-calendar-period-button" aria-expanded={openMonthPicker === "month"} onClick={() => setOpenMonthPicker((open) => open === "month" ? null : "month")}>{month.getMonth() + 1}월</button>{openMonthPicker && <div className={`room-calendar-period-picker ${openMonthPicker}`} aria-label={openMonthPicker === "year" ? "연도 선택" : "월 선택"}>{openMonthPicker === "year" ? <div className="room-calendar-year-options">{Array.from({ length: new Date().getFullYear() + 11 - 1900 }, (_, index) => 1900 + index).map((year) => <button type="button" key={year} ref={year === month.getFullYear() ? activeYearOptionRef : null} className={year === month.getFullYear() ? "selected" : ""} aria-pressed={year === month.getFullYear()} onClick={() => { setMonth(new Date(year, month.getMonth(), 1)); setOpenMonthPicker(null); }}>{year}</button>)}</div> : <div className="room-calendar-month-options">{Array.from({ length: 12 }, (_, index) => index + 1).map((monthNumber) => <button type="button" key={monthNumber} className={monthNumber === month.getMonth() + 1 ? "selected" : ""} aria-pressed={monthNumber === month.getMonth() + 1} onClick={() => { setMonth(new Date(month.getFullYear(), monthNumber - 1, 1)); setOpenMonthPicker(null); }}>{monthNumber}월</button>)}</div>}</div>}</div><button type="button" aria-label="&#xB2E4;&#xC74C; &#xB2EC;" onClick={() => { setOpenMonthPicker(null); setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1)); }}>›</button></header>
         <div className="room-calendar-summary-row"><p className="room-calendar-summary">이번 달 {meetings.filter((meeting) => meeting.lifecycle_status !== "cancelled").length}건 만남이에요</p><button type="button" className="calendar-collection-button" disabled={!identity} onClick={() => navigate(`/rooms/${roomId}/diaries`, { state: { from: `${location.pathname}${location.search}` } })}>기록 모아보기</button></div>
         <div className="room-calendar-grid room-calendar-weekdays">{WEEKDAYS.map((day) => <span key={day}>{day}</span>)}</div>
         <div className="room-calendar-grid room-calendar-days">{calendarDays.map((date) => {
           const key = dateKey(date);
           const dayMeetings = meetingGroups[key] || [];
           const outside = date.getMonth() !== month.getMonth();
-          const needsRecord = Boolean(identity && key <= today && dayMeetings.some((meeting) => meeting.lifecycle_status !== "cancelled") && !dayMeetings.some((meeting) => diaries.some((diary) => diary.meeting_id === meeting.id && diary.author_identity_id === identity && diary.status === "published")));
-          const recordMeeting = dayMeetings.find((meeting) => meeting.lifecycle_status !== "cancelled" && meeting.meeting_date <= today && !diaries.some((diary) => diary.meeting_id === meeting.id && diary.author_identity_id === identity && diary.status === "published"));
           const hasLightning = dayMeetings.some((meeting) => meeting.source_type === "lightning" && meeting.lifecycle_status !== "cancelled");
-          const hasUpcomingMeeting = dayMeetings.some((meeting) => meeting.source_type !== "lightning" && meeting.lifecycle_status !== "cancelled" && meeting.meeting_date > today);
+          const hasScheduledMeeting = dayMeetings.some((meeting) => meeting.source_type !== "lightning" && meeting.lifecycle_status !== "cancelled");
           return <div className="room-calendar-day-wrap" key={key}>
-            <button type="button" className={`room-calendar-day ${diaryCoversByDate[key] ? "has-cover" : ""} ${hasUpcomingMeeting ? "upcoming" : ""} ${outside ? "outside" : ""} ${selectedDate === key ? "selected" : ""} ${key === today ? "today" : ""}`} onClick={() => { setSelectedDate(key); setSelectedMeetingIndex(0); }}>
+            <button type="button" className={`room-calendar-day ${diaryCoversByDate[key] ? "has-cover" : ""} ${hasScheduledMeeting ? "has-scheduled-meeting" : ""} ${outside ? "outside" : ""} ${selectedDate === key ? "selected" : ""} ${key === today ? "today" : ""}`} onClick={() => selectCalendarDate(key)}>
               <span className="room-calendar-day-number">{date.getDate()}</span>
               {publishedDiaryDates.has(key) && <CalendarDayThumbnail src={diaryCoversByDate[key]} />}
               {hasLightning && <span className="room-calendar-lightning" aria-label="Lightning meeting">&#x26A1;&#xFE0F;</span>}
-              {diaryCountsByDate[key] > 0 ? <small className="room-calendar-record-count-badge">{diaryCountsByDate[key]}</small> : dayMeetings.length > 1 && <small>{dayMeetings.length}</small>}
+              {diaryCountsByDate[key] > 0 && <small className="room-calendar-record-count-badge">{diaryCountsByDate[key]}</small>}
             </button>
-            {needsRecord && recordMeeting && <button type="button" className="room-calendar-record-action" aria-label="Add diary" title="Add diary" onClick={(event) => { event.stopPropagation(); openDiaryEditor(recordMeeting, dayMeetings.findIndex((meeting) => meeting.id === recordMeeting.id)); }}><FiPlus aria-hidden="true" /></button>}
           </div>;
         })}</div>
-        <div className="room-calendar-legend"><span><i className="scheduled" />약속 예정</span><span><i className="record-add"><FiPlus aria-hidden="true" /></i>기록 남기</span><span><i className="record-image"><FiImage aria-hidden="true" /></i>기록 있음</span><span><b>&#x26A1;&#xFE0F;</b>번개 만남</span></div>
+        <div className="room-calendar-legend"><span><i className="scheduled" />약속 있음</span><span><i className="record-image"><FiImage aria-hidden="true" /></i>기록 있음</span><span><b>&#x26A1;&#xFE0F;</b>번개 만남</span></div>
       </section>
       {loading && <p className="calendar-loading">캘린더를 불러오는 중...</p>}
-      {selectedDate && <section className={`calendar-selected-section ${showEmptyDayPrompt ? "has-empty-day-prompt" : ""}`} aria-label={`Selected date ${selectedDate}`}>
-        <div className="calendar-sheet-handle" aria-hidden="true" />
+      {selectedDate && <section
+        className={`calendar-selected-section ${showEmptyDayPrompt ? "has-empty-day-prompt" : ""} ${isSheetDragging ? "is-dragging" : ""} ${isSheetDismissing ? "is-dismissing" : ""}`}
+        style={{ "--calendar-sheet-drag-y": `${sheetDragOffset}px` }}
+        aria-label={`Selected date ${selectedDate}`}
+      >
+        <button type="button" className="calendar-sheet-handle" aria-label="날짜 상세 닫기"
+          onClick={() => {
+            if (suppressSheetClickRef.current) { suppressSheetClickRef.current = false; return; }
+            dismissCalendarSheet();
+          }}
+          onPointerDown={startCalendarSheetDrag}
+          onPointerMove={moveCalendarSheetDrag}
+          onPointerUp={endCalendarSheetDrag}
+          onPointerCancel={endCalendarSheetDrag}
+        />
         <header className="calendar-selected-heading"><h2>{selectedDateLabel}</h2>{activeMeeting && <span className="calendar-meeting-badge">{activeMeeting.source_type === "lightning" && <span aria-hidden="true">&#x26A1;&#xFE0F;</span>}{activeMeeting.source_type === "lightning" ? "\uBC88\uAC1C" : "\uC57D\uC18D"}&#xB7; {activeMeetingOrdinal}&#xBC88;&#xC9F8; &#xB9CC;&#xB0A8;</span>}{showEmptyDayPrompt && <span className="calendar-empty-day-badge">&#xC57D;&#xC18D; &#xC5C6;&#xC74C;</span>}{activeMeeting && !selectedDateHasLightning && canCreateLightning && identity && <button type="button" className="calendar-lightning-button" onClick={openLightningForm}>&#xFF0B; &#xBC88;&#xAC1C; &#xB9CC;&#xB0A8; &#xB4F1;&#xB85D;</button>}</header>
         {selectedMeetings.length === 0 && (showEmptyDayPrompt
           ? <div className="calendar-empty-day-prompt"><span className="calendar-empty-day-icon" aria-hidden="true">&#x26A1;&#xFE0F;</span><strong>&#xC774; &#xB0A0; &#xCE5C;&#xAD6C;&#xB4E4;&#xC744; &#xB9CC;&#xB0AC;&#xB098;&#xC694;?</strong><p>&#xC571;&#xC5D0;&#xC11C; &#xC815;&#xD558;&#xC9C0; &#xC54A;&#xC740; &#xBC88;&#xAC1C; &#xB9CC;&#xB0A8;&#xB3C4; &#xAE30;&#xB85D;&#xD560; &#xC218; &#xC788;&#xC5B4;&#xC694;</p><button type="button" className="calendar-empty-day-cta" disabled={!identity} onClick={openLightningForm}>&#x26A1;&#xFE0F; &#xBC88;&#xAC1C; &#xB9CC;&#xB0A8; &#xAE30;&#xB85D;&#xD558;&#xAE30;</button></div>

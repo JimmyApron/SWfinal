@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { FaKeyboard, FaLocationArrow, FaUserFriends } from 'react-icons/fa'
+import { FaCrosshairs, FaKeyboard, FaLocationArrow, FaUserFriends } from 'react-icons/fa'
 
 import KakaoMapView from './KakaoMapView'
-import CurrentLocationButton from './CurrentLocationButton'
 import PlaceSearchPanel from './PlaceSearchPanel'
 import FamousMiddlePlacePanel from './FamousMiddlePlacePanel'
 import LocationPicker from './LocationPicker'
@@ -99,6 +98,7 @@ function MapPage({ roomId }) {
   const [friendMapFitRequest, setFriendMapFitRequest] = useState(0)
   const [mapCenterRequest, setMapCenterRequest] = useState(1)
   const [mapCenterLevel, setMapCenterLevel] = useState(4)
+  const [centerMapOnMyLocation, setCenterMapOnMyLocation] = useState(false)
   const sheetDragStartRef = useRef(null)
   const lastDefaultCenterKeyRef = useRef('')
   const selectedScheduleStorageKey = currentRoomId
@@ -1736,6 +1736,20 @@ function MapPage({ roomId }) {
   const mapMemberRoutePaths = isFriendPanelOpen ? memberRoutePaths : []
   const mapMemberRouteResults = isFriendPanelOpen ? memberRouteResults : []
   const mapMemberLocationLabels = isFriendPanelOpen ? memberLocationLabels : {}
+  const liveMyLocation = isValidMapPoint(currentLocation?.lat, currentLocation?.lng)
+    ? currentLocation
+    : null
+  const myLocationSearchOrigin = myLocationRecord?.transportmode &&
+    isValidMapPoint(myLocationRecord.latitude, myLocationRecord.longitude)
+    ? {
+        name: '내 위치',
+        lat: Number(liveMyLocation?.lat ?? myLocationRecord.latitude),
+        lng: Number(liveMyLocation?.lng ?? myLocationRecord.longitude),
+      }
+    : null
+  const placeSearchOrigin = isValidMapPoint(activeMeetingPlace?.lat, activeMeetingPlace?.lng)
+    ? activeMeetingPlace
+    : myLocationSearchOrigin
   const registeredMemberCount = members.filter(isMemberLocationRegistered).length
   const hasMoreFriendMembers = members.length > FRIEND_LOCATION_PREVIEW_COUNT
   const displayedFriendMembers = showFriendMemberListOnly
@@ -1774,7 +1788,20 @@ function MapPage({ roomId }) {
   const defaultMapCenter = getDefaultMapCenter({
     middlePlace: activeMeetingPlace,
     myLocationRecord,
+    currentLocation,
   })
+
+  const handleCenterOnMyLocation = () => {
+    if (!myLocationSearchOrigin) {
+      setMessage('위치를 등록해주세요')
+      return
+    }
+
+    setActiveMapPanel('default')
+    setCenterMapOnMyLocation(true)
+    setMapCenterLevel(4)
+    setMapCenterRequest((request) => request + 1)
+  }
 
   const openFriendsPanel = () => {
     setActiveMapPanel('friends')
@@ -2159,6 +2186,7 @@ function MapPage({ roomId }) {
     if (lastDefaultCenterKeyRef.current === centerKey) return
 
     lastDefaultCenterKeyRef.current = centerKey
+    setCenterMapOnMyLocation(false)
     setMapCenterLevel(4)
     setMapCenterRequest((request) => request + 1)
   }, [
@@ -2667,9 +2695,11 @@ function MapPage({ roomId }) {
             fitBoundsRequest={isFriendPanelOpen ? friendMapFitRequest : 0}
             centerRequest={!isFriendPanelOpen ? mapCenterRequest : 0}
             centerLevel={mapCenterLevel}
-            preferredCenter={!isFriendPanelOpen ? defaultMapCenter : null}
+            preferredCenter={!isFriendPanelOpen ? (centerMapOnMyLocation && myLocationSearchOrigin ? myLocationSearchOrigin : defaultMapCenter) : null}
             onSetMeetingPlace={handleSetMeetingPlace}
           />
+
+          {!isFriendPanelOpen && <button type="button" className="map-current-location-control" aria-label="내 위치로 이동" title="내 위치로 이동" onClick={handleCenterOnMyLocation}><FaCrosshairs aria-hidden="true" /></button>}
 
           {!isFriendPanelOpen && (
             <div className="map-floating-search">
@@ -2697,11 +2727,10 @@ function MapPage({ roomId }) {
           )}
 
           {!isFriendPanelOpen && (
-            <>
-              {activeMeetingPlace ? (
-                <PlaceSearchPanel
+            <PlaceSearchPanel
                   variant="mapOverlay"
-                  searchLocation={activeMeetingPlace}
+                  searchLocation={placeSearchOrigin}
+                  canSearch={Boolean(placeSearchOrigin)}
                   onSearchResult={(results) => {
                     setPlaces(results)
                     setActiveMapPanel('default')
@@ -2721,10 +2750,6 @@ function MapPage({ roomId }) {
                     setSheetSnap('collapsed')
                   }}
                 />
-              ) : (
-                null
-              )}
-            </>
           )}
 
           {!isFriendPanelOpen && !hasSearchResultsSheet && (
@@ -3132,11 +3157,18 @@ async function readRouteResponseBody(response) {
   }
 }
 
-function getDefaultMapCenter({ middlePlace, myLocationRecord }) {
+function getDefaultMapCenter({ middlePlace, myLocationRecord, currentLocation }) {
   if (isValidMapPoint(middlePlace?.lat, middlePlace?.lng)) {
     return {
       lat: Number(middlePlace.lat),
       lng: Number(middlePlace.lng),
+    }
+  }
+
+  if (isValidMapPoint(currentLocation?.lat, currentLocation?.lng)) {
+    return {
+      lat: Number(currentLocation.lat),
+      lng: Number(currentLocation.lng),
     }
   }
 

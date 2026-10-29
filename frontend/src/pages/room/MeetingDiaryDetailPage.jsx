@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FiArrowLeft, FiChevronLeft, FiChevronRight } from "react-icons/fi";
 import { getDiaryPhotos, getMeetingDiaryDetails, getMeetingDiaryProgress, getRoomDiaryIdentity, getRoomMeetings, saveDiaryReaction, deleteDiaryPhotosAndRecord } from "../../api/meetupDiaryApi";
@@ -25,7 +25,10 @@ export default function MeetingDiaryDetailPage() {
   const [reactionRows, setReactionRows] = useState([]);
   const [selectedAuthor, setSelectedAuthor] = useState(null);
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [photoSlideDirection, setPhotoSlideDirection] = useState("");
   const [showPhotoLightbox, setShowPhotoLightbox] = useState(false);
+  const photoDragRef = useRef({ startX: null, pointerId: null });
+  const suppressPhotoClickRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState(null);
@@ -66,6 +69,7 @@ export default function MeetingDiaryDetailPage() {
       setSelectedAuthor((previous) => records.some((diary) => diary.author_auth_user_id === previous) && !requestedAuthor ? previous : initialAuthor);
       const requestedPhoto = Number(new URLSearchParams(location.search).get("photo"));
       setPhotoIndex(Number.isInteger(requestedPhoto) && requestedPhoto >= 0 ? requestedPhoto : 0);
+      setPhotoSlideDirection("");
     } catch (loadError) { setError(loadError.message || "기록을 불러오지 못했습니다."); }
     finally { setLoading(false); }
   };
@@ -119,27 +123,27 @@ export default function MeetingDiaryDetailPage() {
       <div className="meeting-diary-member-list" style={{ "--member-count": Math.max(members.length, 1) }}>{members.map((member) => {
         const hasDiary = publishedByUserId.has(String(member.userid));
         const isSelected = selectedDiary?.author_auth_user_id === String(member.userid);
-        return <button key={member.userid} className={`meeting-diary-member ${hasDiary ? "written" : "unwritten"} ${isSelected ? "selected" : ""}`} disabled={!hasDiary} onClick={() => { setSelectedAuthor(String(member.userid)); setPhotoIndex(0); }}>
+        return <button key={member.userid} className={`meeting-diary-member ${hasDiary ? "written" : "unwritten"} ${isSelected ? "selected" : ""}`} disabled={!hasDiary} onClick={() => { setSelectedAuthor(String(member.userid)); setPhotoIndex(0); setPhotoSlideDirection(""); }}>
           <span className="meeting-diary-avatar">{member.profiles?.profileimageurl ? <img src={member.profiles.profileimageurl} alt="" /> : String(member.userid) === String(userId) ? "나" : member.nickname?.slice(0, 1) || "?"}</span><span className="meeting-diary-member-caption"><strong>{String(member.userid) === String(userId) ? "나" : member.nickname || "친구"}</strong>{hasDiary && String(member.userid) === String(userId) && <small>🙂</small>}</span>{!hasDiary && <small>미작성</small>}
         </button>;
       })}</div>
     </section>
     <section className="meeting-diary-record">
-      <div className="meeting-diary-record-actions">{selectedDiary && <span className="meeting-diary-visibility">🔒 {selectedDiary.visibility === "private" ? "나만 보기" : "공개"}</span>}{selectedDiary?.author_auth_user_id === userId && <div><button onClick={editDiary}>수정하기</button><button className="delete" disabled={busy} onClick={remove}>삭제하기</button></div>}</div>
+      <div className="meeting-diary-record-actions">{selectedDiary && <span className="meeting-diary-visibility">{selectedDiary.visibility === "private" ? "🔒 나만 보기" : "🔓 공개"}</span>}{selectedDiary?.author_auth_user_id === userId && <div><button onClick={editDiary}>수정하기</button><button className="delete" disabled={busy} onClick={remove}>삭제하기</button></div>}</div>
       {error && <p className="meeting-diary-error" role="alert">{error}</p>}
       {!selectedDiary ? <div className="meeting-diary-empty"><strong>아직 작성된 기록이 없어요</strong><p>이 만남을 함께한 하루를 기록해 보세요.</p>{identity && <button className="meeting-diary-create" onClick={editDiary}>✏️ 기록 남기기</button>}</div> : <>
         <div className="meeting-diary-title-row"><h2>{String(selectedDiary.author_auth_user_id) === String(userId) ? "나의 하루" : `${selectedAuthorMember?.nickname || "친구"}의 하루`}</h2>{selectedDiary.mood_emoji && <span className="meeting-diary-mood" aria-label={`기분 ${selectedDiary.mood_emoji}`}>{selectedDiary.mood_emoji}</span>}</div><time>{timeLabel(selectedDiary.published_at || selectedDiary.updated_at)}</time>
-        {selectedPhotos.length > 0 && <><div className="meeting-diary-photo-frame" role="button" tabIndex={0} aria-label="사진 크게 보기" onClick={() => setShowPhotoLightbox(true)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setShowPhotoLightbox(true); } }} onTouchStart={(event) => { event.currentTarget.dataset.touchX = event.touches[0].clientX; }} onTouchEnd={(event) => { const delta = event.changedTouches[0].clientX - Number(event.currentTarget.dataset.touchX || 0); if (Math.abs(delta) > 40) setPhotoIndex((index) => Math.max(0, Math.min(selectedPhotos.length - 1, index + (delta < 0 ? 1 : -1)))); }}><img src={selectedPhotos[photoIndex]?.url} alt={`기록 사진 ${photoIndex + 1}`} /><span className="meeting-diary-photo-count">▣ 사진 {selectedPhotos.length}장 · 크게 보기</span></div><div className="meeting-diary-dots">{selectedPhotos.map((photo, index) => <button key={photo.id} aria-label={`${index + 1}번째 사진`} className={index === photoIndex ? "active" : ""} onClick={() => setPhotoIndex(index)} />)}</div></>}
+        {selectedPhotos.length > 0 && <><div className={`meeting-diary-photo-frame ${selectedPhotos.length > 1 ? "has-multiple-photos" : ""}`} role="button" tabIndex={0} aria-label="사진 크게 보기" onClick={() => { if (suppressPhotoClickRef.current) { suppressPhotoClickRef.current = false; return; } setShowPhotoLightbox(true); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setShowPhotoLightbox(true); } }} onPointerDown={(event) => { if (selectedPhotos.length < 2) return; photoDragRef.current = { startX: event.clientX, pointerId: event.pointerId }; suppressPhotoClickRef.current = false; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerUp={(event) => { const drag = photoDragRef.current; if (drag.startX === null || drag.pointerId !== event.pointerId) return; const delta = event.clientX - drag.startX; photoDragRef.current = { startX: null, pointerId: null }; if (Math.abs(delta) > 22) { const step = delta < 0 ? 1 : -1; const nextIndex = Math.max(0, Math.min(selectedPhotos.length - 1, photoIndex + step)); suppressPhotoClickRef.current = true; if (nextIndex !== photoIndex) { setPhotoSlideDirection(step > 0 ? "next" : "previous"); setPhotoIndex(nextIndex); } } }} onPointerCancel={() => { photoDragRef.current = { startX: null, pointerId: null }; }}><img key={selectedPhotos[photoIndex]?.id || photoIndex} className={photoSlideDirection ? `photo-slide-${photoSlideDirection}` : ""} src={selectedPhotos[photoIndex]?.url} alt={`기록 사진 ${photoIndex + 1}`} draggable="false" /><span className="meeting-diary-photo-count">▣ 사진 {selectedPhotos.length}장 · 크게 보기</span></div><div className="meeting-diary-dots">{selectedPhotos.map((photo, index) => <button key={photo.id} aria-label={`${index + 1}번째 사진`} className={index === photoIndex ? "active" : ""} onClick={() => { if (index === photoIndex) return; setPhotoSlideDirection(index > photoIndex ? "next" : "previous"); setPhotoIndex(index); }} />)}</div></>}
         <p className="meeting-diary-body">{selectedDiary.body}</p>
-        <div className="meeting-diary-reactions">{selectedDiary.author_auth_user_id !== userId && selectedDiary.visibility === "room" && <button type="button" className="meeting-diary-add-reaction" disabled={busy} onClick={() => setShowEmojiPicker((value) => !value)}>＋ 😊</button>}{reactionRows.length ? Object.entries(reactionRows.reduce((counts, row) => ({ ...counts, [row.emoji]: (counts[row.emoji] || 0) + 1 }), {})).map(([emoji, count]) => {
+        <div className="meeting-diary-reactions">{selectedDiary.author_auth_user_id !== userId && selectedDiary.visibility === "room" && <button type="button" className="meeting-diary-add-reaction" disabled={busy} onClick={() => setShowEmojiPicker((value) => !value)}>＋ <span className="meeting-diary-reaction-emoji">😊</span></button>}{reactionRows.length ? Object.entries(reactionRows.reduce((counts, row) => ({ ...counts, [row.emoji]: (counts[row.emoji] || 0) + 1 }), {})).map(([emoji, count]) => {
           const canReact = selectedDiary.author_auth_user_id !== userId && selectedDiary.visibility === "room";
           const reactedByMe = reactionRows.some((row) => row.emoji === emoji && String(row.actor_identity_id) === String(identity));
           return canReact
-            ? <button type="button" key={emoji} className={`meeting-diary-reaction ${reactedByMe ? "selected" : ""}`} aria-pressed={reactedByMe} disabled={busy} onClick={() => react(emoji)}>{emoji} {count}</button>
-            : <span className="meeting-diary-reaction-count" key={emoji}>{emoji} {count}</span>;
+            ? <button type="button" key={emoji} className={`meeting-diary-reaction ${reactedByMe ? "selected" : ""}`} aria-pressed={reactedByMe} disabled={busy} onClick={() => react(emoji)}><span className="meeting-diary-reaction-emoji">{emoji}</span> <span>{count}</span></button>
+            : <span className="meeting-diary-reaction-count" key={emoji}><span className="meeting-diary-reaction-emoji">{emoji}</span> <span>{count}</span></span>;
         }) : <span className="no-reactions">아직 공감이 없어요</span>}</div>
-        {showEmojiPicker && <div className="meeting-diary-emoji-picker">{EMOJIS.map((emoji) => <button key={emoji} disabled={busy} onClick={() => react(emoji)}>{emoji}</button>)}</div>}
-        <nav className="meeting-diary-pager"><button disabled={currentPosition <= 0} onClick={() => { setSelectedAuthor(visibleAuthors[currentPosition - 1]); setPhotoIndex(0); }}><FiChevronLeft /> 이전 친구</button><span>{currentPosition + 1} / {visibleAuthors.length}</span><button disabled={currentPosition >= visibleAuthors.length - 1} onClick={() => { setSelectedAuthor(visibleAuthors[currentPosition + 1]); setPhotoIndex(0); }}>다음 친구 <FiChevronRight /></button></nav>
+        {showEmojiPicker && <div className="meeting-diary-emoji-picker">{EMOJIS.map((emoji) => <button key={emoji} disabled={busy} onClick={() => react(emoji)}><span className="meeting-diary-picker-emoji">{emoji}</span></button>)}</div>}
+        <nav className="meeting-diary-pager"><button disabled={currentPosition <= 0} onClick={() => { setSelectedAuthor(visibleAuthors[currentPosition - 1]); setPhotoIndex(0); setPhotoSlideDirection(""); }}><FiChevronLeft /> 이전 친구</button><span>{currentPosition + 1} / {visibleAuthors.length}</span><button disabled={currentPosition >= visibleAuthors.length - 1} onClick={() => { setSelectedAuthor(visibleAuthors[currentPosition + 1]); setPhotoIndex(0); setPhotoSlideDirection(""); }}>다음 친구 <FiChevronRight /></button></nav>
       </>}
     </section>
     {showPhotoLightbox && <DiaryPhotoLightbox photos={selectedPhotos} index={Math.min(photoIndex, selectedPhotos.length - 1)} onChange={(updateIndex) => setPhotoIndex((current) => updateIndex(current))} onClose={() => setShowPhotoLightbox(false)} />}

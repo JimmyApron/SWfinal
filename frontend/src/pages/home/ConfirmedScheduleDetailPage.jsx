@@ -814,7 +814,7 @@ function ConfirmedScheduleDetailPage() {
             confirmedMeetingPlace={middlePlace}
             memberRoutePaths={memberRoutePaths}
             memberRouteResults={memberRouteResults}
-            mapHeight="220px"
+            height="270px"
           />
         </div>
       )}

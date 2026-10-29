@@ -19,6 +19,7 @@ function PlaceSearchPanel({
   sheetHandleProps = {},
   onOpenFriends,
   onCloseResults,
+  canSearch = true,
 }) {
   const [selectedCategory, setSelectedCategory] = useState('')
   const [radius, setRadius] = useState('1000')
@@ -40,6 +41,11 @@ function PlaceSearchPanel({
   }, [message])
 
   const handleChangeCategory = (category) => {
+    if (!canSearch) {
+      setMessage('위치를 등록해주세요')
+      return
+    }
+
     setSelectedCategory(category)
     if (variant === 'mapOverlay') {
       setIsFilterOpen(true)
@@ -48,7 +54,12 @@ function PlaceSearchPanel({
 
   const handleSearchPlaces = async (categoryOverride) => {
     if (!searchLocation) {
-      setMessage('먼저 중간 장소를 확정해주세요.')
+      setMessage(variant === 'mapOverlay' ? '위치를 등록해주세요' : '먼저 중간 장소를 확정해주세요.')
+      return
+    }
+
+    if (!canSearch) {
+      setMessage('위치를 등록해주세요')
       return
     }
 
@@ -149,7 +160,7 @@ function PlaceSearchPanel({
     onCloseResults?.()
   }
 
-  if (!searchLocation) {
+  if (!searchLocation && variant !== 'mapOverlay') {
     return (
       <section className={variant === 'mapOverlay' ? 'map-place-search-panel is-empty' : undefined}>
         <h2>주변 장소 추천</h2>
