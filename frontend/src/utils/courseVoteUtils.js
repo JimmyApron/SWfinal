@@ -14,7 +14,7 @@ export function normalizeCourseVoteSelection(courses = []) {
       course?.estimatedTravelTimeMin ?? course?.estimated_travel_time_min ??
         stops.reduce((sum, stop) => sum + Number(stop?.travelTimeFromPrevMin ?? stop?.travel_time_from_prev_min ?? 0), 0)
     );
-    const estimatedCost = Number(
+    const estimatedCost = course?.estimatedCostPerPerson === null || stops.some(stop => stop?.estimatedCost == null && stop?.estimated_cost == null) ? null : Number(
       course?.estimatedCostPerPerson ?? course?.estimated_cost_per_person ??
         stops.reduce((sum, stop) => sum + Number(stop?.estimatedCost ?? stop?.estimated_cost ?? 0), 0)
     );
@@ -46,6 +46,7 @@ export function normalizeCourseVoteSelection(courses = []) {
       total_duration_min: totalDuration,
       travel_time_min: estimatedTravelMinutes,
       stop_count: stopCount,
+      budgetEstimate: course?.budgetEstimate || null,
       stops,
     };
   });
@@ -65,11 +66,7 @@ export function buildCourseVoteDbRows(course) {
         stops.reduce((sum, stop) => sum + asNumber(stop?.travelTimeFromPrevMin ?? stop?.travel_time_from_prev_min ?? 0, 0), 0),
       0
     ),
-    estimated_cost_per_person: asNumber(
-      course?.estimatedCostPerPerson ?? course?.estimated_cost_per_person ??
-        stops.reduce((sum, stop) => sum + asNumber(stop?.estimatedCost ?? stop?.estimated_cost ?? 0, 0), 0),
-      0
-    ),
+    estimated_cost_per_person: course?.estimatedCostPerPerson === null || stops.some(stop => stop?.estimatedCost == null && stop?.estimated_cost == null) ? null : asNumber(course?.estimatedCostPerPerson ?? course?.estimated_cost_per_person ?? stops.reduce((sum, stop) => sum + asNumber(stop?.estimatedCost ?? stop?.estimated_cost, 0), 0), null),
     stops: stops.map((stop, index) => ({
       place_id: stop?.place_id ?? stop?.placeId ?? stop?.id ?? "",
       place_source: stop?.place_source ?? stop?.placeSource ?? "manual",
@@ -83,7 +80,7 @@ export function buildCourseVoteDbRows(course) {
       expected_stay_min: asNumber(stop?.expectedStayMin ?? stop?.expected_stay_min ?? 0, 0),
       travel_time_from_prev_min: asNumber(stop?.travelTimeFromPrevMin ?? stop?.travel_time_from_prev_min ?? 0, 0),
       distance_from_prev_m: asNumber(stop?.distanceFromPrevM ?? stop?.distance_from_prev_m ?? 0, 0),
-      estimated_cost: asNumber(stop?.estimatedCost ?? stop?.estimated_cost ?? 0, 0),
+      estimated_cost: asNumber(stop?.estimatedCost ?? stop?.estimated_cost, null),
       category: stop?.category ?? null,
       image_url: stop?.imageUrl ?? stop?.image_url ?? null,
       rating: asNumber(stop?.rating ?? null, null),

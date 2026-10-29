@@ -141,7 +141,7 @@ function normalizeCourseStop(stop, index) {
     travel_time_from_prev_min: normalizeInteger(resolvedStop.travel_time_from_prev_min ?? resolvedStop.travelTimeFromPrevMin, 0),
     distance_from_prev_m: normalizeInteger(resolvedStop.distance_from_prev_m ?? resolvedStop.distanceFromPrevM, 0),
     image_url: toSafeText(resolvedStop.image_url ?? resolvedStop.imageUrl) || null,
-    estimated_cost: normalizeNumber(resolvedStop.estimated_cost ?? resolvedStop.estimatedCost, 0),
+    estimated_cost: normalizeNumber(resolvedStop.estimated_cost ?? resolvedStop.estimatedCost, null),
     rating: normalizeNumber(resolvedStop.rating, null),
   };
 }
@@ -219,7 +219,7 @@ export async function createCourseWithStops(coursePayload = {}) {
     ),
     estimated_cost_per_person: normalizeNumber(
       coursePayload.estimatedCostPerPerson ?? coursePayload.estimated_cost_per_person,
-      0
+      null
     ),
     created_by_type: participantInfo.participantType,
     created_by_member_id:

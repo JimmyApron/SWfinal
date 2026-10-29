@@ -55,7 +55,9 @@ export default function FinalizedCourseRoadmapPage() {
           {stop.category && <p>{stop.category}</p>}<p>{stop.place_address || "주소 정보 없음"}</p>
           <p>방문 {stop.visit_start_time?.slice(0, 5) || "정보 없음"} ~ {stop.visit_end_time?.slice(0, 5) || "정보 없음"} · 체류 {numberInfo(stop.expected_stay_min, "분")}</p>
           <p>예상 비용 {numberInfo(stop.estimated_cost, "원")}{stop.roadmapNumber > 1 && ` · 이전 장소에서 이동 ${numberInfo(stop.travel_time_from_prev_min, "분")}`}</p>
+          {/* 평점 제공처 확보 후 다시 사용:
           {stop.rating != null && <p>평점 {numberInfo(stop.rating)}</p>}
+          */}
           {typeof stop.image_url === "string" && /^https?:\/\//i.test(stop.image_url) && <img src={stop.image_url} alt={`${stop.place_name} 장소 사진`} loading="lazy" onError={(event) => { event.currentTarget.hidden = true; }} />}
           {href && <a href={href} target="_blank" rel="noreferrer">카카오맵에서 위치 확인</a>}
         </article>;

@@ -14,7 +14,7 @@ export function deduplicateRecommendationResult(payload) {
 }
 
 export async function generateRecommendationResult({ condition, schedule }) {
-  return generateCourseRecommendations({ condition, schedule });
+  return generateCourseRecommendations({ condition: condition ? { ...condition, minRating: 0, ratingProviderAvailable: false, priority: condition.priority === "rating" ? "travel" : condition.priority } : condition, schedule });
 }
 
 export function getCourseRecommendationStorageKey(roomId, scheduleId) {

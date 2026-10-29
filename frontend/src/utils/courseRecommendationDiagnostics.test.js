@@ -3,7 +3,7 @@ import { searchPlacesByKeyword } from '../api/kakaoPlacesApi';
 jest.mock('../api/kakaoPlacesApi', () => ({ searchPlacesByKeyword: jest.fn() }));
 const condition = { activities: ['cafe'], travelMode: 'walking', minRating: 4, budget: 10000 };
 const schedule = { locationlat: 37, locationlng: 127, starttime: '10:00', endtime: '18:00' };
-const place = (id, extra = {}) => ({ id, name: '카페', category: '카페', lat: 37, lng: 127, rating: 5, price: 1000, ...extra });
+const place = (id, extra = {}) => ({ id, name: '카페', category: '카페', lat: 37, lng: 127, rating: 5, priceSource: "test_verified_fixture", price: 1000, ...extra });
 let oldEnvironment;
 let log;
 beforeEach(() => {
@@ -17,7 +17,7 @@ const result = () => JSON.parse(log.mock.calls.find(([tag]) => tag === '[MeetUP 
 test('검색/중복/좌표/평점/예산/카테고리별 건수와 성공 조합 수', async () => {
   searchPlacesByKeyword.mockResolvedValue([place('a'), place('b', { lat: null }), place('c', { rating: 2 }), place('d', { price: 20000 }), place('e', { name: '박물관', category: '박물관' })]);
   await generateCourseRecommendations({ condition, schedule });
-  expect(result().search).toMatchObject({ planned: 3, succeeded: 3, failed: 0, rawCount: 15, uniqueCount: 5, duplicateExcluded: 10, coordinateExcluded: 1, coordinateValid: 4 });
+  expect(result().search).toMatchObject({ planned: 2, succeeded: 2, failed: 0, rawCount: 10, uniqueCount: 5, duplicateExcluded: 5, coordinateExcluded: 1, coordinateValid: 4 });
   expect(result().filter).toMatchObject({ ratingExcluded: 1, priceExcluded: 1, categoryExcluded: 1, candidates: 1, requiredSlots: 1, targetSlots: 1 });
   expect(result().combination.accepted).toBe(1);
 });
@@ -30,7 +30,7 @@ test('API 실패와 정상 응답 0개 구분, HTTP 상태는 추정하지 않�
   searchPlacesByKeyword.mockResolvedValue([]);
   await generateCourseRecommendations({ condition, schedule });
   expect(result().outcome).toBe('search_empty');
-  expect(result().search.empty).toBe(3);
+  expect(result().search.empty).toBe(2);
 });
 test('후보 있지만 시간 조합 실패 구분', async () => {
   searchPlacesByKeyword.mockResolvedValue([place('a'), place('b'), place('c')]);

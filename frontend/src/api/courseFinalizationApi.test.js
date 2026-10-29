@@ -73,18 +73,17 @@ test.each(["direct", "draft", "location", "vote"])("실제 %s 생성 경로에 �
   expect(db.schedule_creation_records).toHaveLength(2);
 });
 
-test("모임 생성자라도 일정 생성자가 아니면 거부", async () => {
-  db.rooms = [{ id: 2, createdby: "v" }];
+test("일정 생성자가 아닌 참여자도 확정하고 실행자 기록 저장", async () => {
   getCurrentRoomParticipantInfo.mockResolvedValue({ participantType: "member", participantId: "v" });
-  await expect(finalizeCourse(request)).rejects.toThrow("일정 생성자만");
+  expect((await finalizeCourse(request)).finalized_by_member_id).toBe("v");
 });
 
-test("생성자 기록 없는 과거 일정은 추정 안 함", async () => {
+test("생성자 기록 없이도 유효 투표가 있으면 확정", async () => {
   db.schedule_creation_records = [];
-  const progress = await getCourseConfirmationProgress(request);
-  expect(progress.canFinalize).toBe(false);
-  expect(progress.reason).toContain("기록이 없어");
-  await expect(finalizeCourse(request)).rejects.toThrow("일정 생성자만");
+  state.fail = "schedule_creation_records:select";
+  expect((await getCourseConfirmationProgress(request)).canFinalize).toBe(true);
+  await finalizeCourse(request);
+  expect(db.schedule_finalizations).toHaveLength(1);
 });
 
 test("전원 동일 코스 확정 성공 및 STEP 07 장소 재조회", async () => {
@@ -101,18 +100,19 @@ test("게스트 일정 생성자 최종 확정", async () => {
   expect((await finalizeCourse(request)).finalized_by_guest_id).toBe("g");
 });
 
-test("같은 UUID라도 생성자 유형이 다르면 권한 없음", async () => {
-  getCurrentRoomParticipantInfo.mockResolvedValue({ participantType: "guest", participantId: "u" });
-  await expect(finalizeCourse(request)).rejects.toThrow("일정 생성자만");
+test("실제 비참여자 검증 실패는 확정 차단", async () => {
+  getCurrentRoomParticipantInfo.mockRejectedValue(new Error("모임 참여자가 아닙니다."));
+  await expect(finalizeCourse(request)).rejects.toThrow("참여자");
+  expect(db.schedule_finalizations).toHaveLength(0);
 });
 
-test.each(["missing", "inactive", "other", "responseMismatch", "wrongIdentity"])("%s 개인 확정이면 실패", async (mode) => {
+test.each(["missing", "inactive", "other", "responseMismatch", "wrongIdentity"])("%s 개인 확정 상태와 관계없이 득표가 있으면 확정", async (mode) => {
   if (mode === "missing") db.course_member_confirmations.pop();
   if (mode === "inactive") db.course_member_confirmations[2].is_active = false;
   if (mode === "other") db.course_member_confirmations[2].course_id = 21;
   if (mode === "responseMismatch") db.voteresponses[2].optionid = 11;
   if (mode === "wrongIdentity") db.course_member_confirmations[2].guest_id = "other";
-  await expect(finalizeCourse(request)).rejects.toThrow("참석자 전원");
+  expect((await finalizeCourse(request)).course_id).toBe(20);
 });
 
 test("불참자 제외 및 중복 참여자 정리", async () => {
@@ -124,21 +124,26 @@ test("불참자 제외 및 중복 참여자 정리", async () => {
   expect(progress.canFinalize).toBe(true);
 });
 
-test("참석자 0명 차단", async () => {
+test("현재 모임 참여자는 참석 대상 집계가 0명이어도 확정 가능", async () => {
   db.confirmed_schedules[0].absentees = ["u", "v", "g"];
-  await expect(finalizeCourse(request)).rejects.toThrow("참석 대상자가 없습니다");
+  expect((await finalizeCourse(request)).course_id).toBe(20);
 });
 
-test("같은 개수라도 탈퇴자의 확정으로 누락 참석자를 대신할 수 없음", async () => {
-  db.course_member_confirmations[2] = confirmation("guest", "left");
-  expect((await getCourseConfirmationProgress(request)).confirmedCount).toBe(2);
-  await expect(finalizeCourse(request)).rejects.toThrow("참석자 전원");
+test("탈퇴자의 응답은 집계하지 않고 개인 확정 기록에는 의존하지 않음", async () => {
+  db.course_member_confirmations = [];
+  db.voteresponses[2].userid = "left";
+  expect((await getCourseConfirmationProgress(request)).courseVoteCount).toBe(2);
+  await finalizeCourse(request);
 });
 
-test("투표 안 한 실제 참여자도 참석자 집합에 포함", async () => {
+test("투표 안 한 참여자가 있어도 한 표로 확정 가능", async () => {
   db.room_members.push({ userid: "new", roomid: 2 });
-  expect((await getCourseConfirmationProgress(request)).eligibleCount).toBe(4);
-  await expect(finalizeCourse(request)).rejects.toThrow("참석자 전원");
+  db.voteresponses = [db.voteresponses[0]];
+  db.course_member_confirmations = [];
+  const progress = await getCourseConfirmationProgress(request);
+  expect(progress.eligibleCount).toBe(4);
+  expect(progress.courseVoteCount).toBe(1);
+  await finalizeCourse(request);
 });
 
 test("회원·게스트 UUID 충돌은 불참 배열 포함 여부와 관계없이 거부", async () => {
@@ -161,9 +166,10 @@ test.each(["room", "schedule", "link", "vote"])("%s 연결 불일치 차단", as
   expect(db.schedule_finalizations).toHaveLength(0);
 });
 
-test("복수 코스 투표 중 지정한 투표의 응답만 확인", async () => {
-  db.voteresponses.forEach((row) => { row.voteid = 2; });
-  await expect(finalizeCourse(request)).rejects.toThrow("참석자 전원");
+test("다른 투표의 표는 집계하지 않으며 지정 투표가 0표여도 확정", async () => {
+  db.voteresponses.forEach(row => { row.voteid = 2; });
+  expect((await getCourseConfirmationProgress(request)).totalVoters).toBe(0);
+  expect((await finalizeCourse(request)).course_id).toBe(20);
 });
 
 test("중복·동시 최종 확정은 UNIQUE로 하나만 저장", async () => {
@@ -191,10 +197,10 @@ test("최종 저장 실패는 성공 표시 안 함", async () => {
   expect(db.votes[0].isclosed).toBeUndefined();
 });
 
-test("진행 조회 성공 후 상태가 바뀌면 최종 저장에서 재검증", async () => {
+test("화면 조회 후 코스 연결이 변경되면 저장 직전 재검증", async () => {
   expect((await getCourseConfirmationProgress(request)).canFinalize).toBe(true);
-  db.course_member_confirmations.pop();
-  await expect(finalizeCourse(request)).rejects.toThrow("참석자 전원");
+  db.vote_course_links = [];
+  await expect(finalizeCourse(request)).rejects.toThrow("연결");
 });
 
 test("필수 조회 실패는 확정 불가", async () => {
@@ -219,13 +225,53 @@ test("최종 확정 후 코스 투표 삭제·편집·선택지 변경 차단", 
   await expect(updateVoteOption(10, { optiontext: "수정" })).rejects.toThrow("변경할 수 없습니다");
 });
 
-test("한계 검증: 마지막 조회와 INSERT 사이 변경은 클라이언트가 원자적으로 차단할 수 없음", async () => {
+test("확정 직전 표가 사라져도 0표 확정 정책에 따라 저장", async () => {
   state.fail = (table, action) => {
-    if (table === "schedule_finalizations" && action === "insert") db.voteresponses[2].optionid = 11;
+    if (table === "schedule_finalizations" && action === "insert") db.voteresponses = [];
     return false;
   };
-  // Documents the remaining transaction gap; this is not a concurrency-safety guarantee.
+  // Votes are informational; their presence is not a finalization condition.
   await finalizeCourse(request);
   expect(db.schedule_finalizations).toHaveLength(1);
-  expect((await getCourseConfirmationProgress(request)).allConfirmed).toBe(false);
+  expect((await getCourseConfirmationProgress(request)).courseVoteCount).toBe(0);
+});
+
+test("다른 코스에만 득표가 있어도 0표 코스 확정 가능", async () => {
+  expect((await finalizeCourse({ ...request, courseId: 21 })).course_id).toBe(21);
+  expect(db.schedule_finalizations).toHaveLength(1);
+});
+test("투표하지 않은 참여자도 득표 코스 확정 가능", async () => {
+  db.voteresponses = db.voteresponses.filter(row => row.userid === "v");
+  expect((await finalizeCourse(request)).finalized_by_member_id).toBe("u");
+});
+test("중복 응답·잘못된 선택지·탈퇴자의 응답을 유효 표로 계산하지 않음", async () => {
+  db.voteresponses.push({ voteid: 1, optionid: 10, userid: "u" });
+  db.voteresponses[1].optionid = 999;
+  db.voteresponses[2].userid = "left";
+  const progress = await getCourseConfirmationProgress(request);
+  expect(progress.totalVoters).toBe(0);
+  expect(progress).not.toHaveProperty("participants");
+  expect(progress).not.toHaveProperty("unconfirmed");
+  expect((await finalizeCourse(request)).course_id).toBe(20);
+});
+test("득표 수와 비율은 유효한 단일 응답 기준", async () => {
+  db.voteresponses[2].optionid = 11;
+  const progress = await getCourseConfirmationProgress(request);
+  expect(progress.options).toEqual([{ optionId: "10", count: 2, percent: 67 }, { optionId: "11", count: 1, percent: 33 }]);
+});
+test("응답이 하나도 없어도 참여자는 코스 확정 가능", async () => {
+  db.voteresponses = [];
+  const progress = await getCourseConfirmationProgress(request);
+  expect(progress.totalVoters).toBe(0);
+  expect(progress.canFinalize).toBe(true);
+  expect((await finalizeCourse(request)).course_id).toBe(20);
+});
+test("개인 확정·생성자 기록 조회 없이 한 명의 투표를 게스트 참여자가 확정", async () => {
+  db.voteresponses = [db.voteresponses[0]];
+  db.course_member_confirmations = [];
+  db.schedule_creation_records = [];
+  state.fail = (table, action) => action === "select" && ["course_member_confirmations", "schedule_creation_records"].includes(table);
+  getCurrentRoomParticipantInfo.mockResolvedValue({ participantType: "guest", participantId: "g" });
+  const saved = await finalizeCourse(request);
+  expect(saved).toMatchObject({ course_id: 20, finalized_by_type: "guest", finalized_by_guest_id: "g", finalized_by_member_id: null });
 });

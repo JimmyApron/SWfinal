@@ -2,11 +2,12 @@ import { generateCourseRecommendations, courseCombinationKey } from './courseRec
 import { searchPlacesByKeyword } from '../api/kakaoPlacesApi';
 import { buildCourseVoteDbRows, normalizeCourseVoteSelection } from './courseVoteUtils';
 import { deduplicateRecommendationResult, loadRecommendationResultFromStorage, getCourseRecommendationStorageKey } from '../api/courseRecommendationApi';
+import { generateRecommendationResult, saveRecommendationResultToStorage } from '../api/courseRecommendationApi';
 
 jest.mock('../api/kakaoPlacesApi', () => ({ searchPlacesByKeyword: jest.fn() }));
 const schedule = { locationlat: 37, locationlng: 127, starttime: '09:00', endtime: '21:00' };
 const condition = { activities: ['cafe'], travelMode: 'walking', maxTravelMinutes: 45, minRating: 0, budget: null };
-const place = (id, category = '카페', extra = {}) => ({ id: String(id), name: `${category} ${id}`, category, address: '서울', lat: 37 + id / 10000, lng: 127, rating: 4.5, price: 1000, ...extra });
+const place = (id, category = '카페', extra = {}) => ({ id: String(id), name: `${category} ${id}`, category, address: '서울', lat: 37 + id / 10000, lng: 127, rating: 4.5, price: 1000, priceSource: "test_verified_fixture", ...extra });
 const run = (changes = {}, time = {}) => generateCourseRecommendations({ condition: { ...condition, ...changes }, schedule: { ...schedule, ...time } });
 beforeEach(() => searchPlacesByKeyword.mockReset().mockResolvedValue(Array.from({ length: 8 }, (_, i) => place(i + 1))));
 
@@ -152,4 +153,59 @@ test('외부 검색 실패는 가짜 코스 없이 빈 결과', async () => {
   searchPlacesByKeyword.mockRejectedValue(new Error('offline'));
   expect((await run()).courses).toHaveLength(0);
   warn.mockRestore();
+});
+
+test('카카오 가격·평점 누락과 과거 평점 조건에도 추천, 추정 예산은 실제 가격과 분리·복구', async () => {
+  searchPlacesByKeyword.mockResolvedValue([place(1, '카페', { rating: null, price: null }), place(2, '카페', { rating: null, price: null }), place(3, '카페', { rating: null, price: null })]);
+  const result = await generateRecommendationResult({ condition: { ...condition, minRating: 4.5, priority: 'rating', budget: 20000 }, schedule });
+  expect(result.courses).toHaveLength(1);
+  expect(result.condition).toMatchObject({ minRating: 0, priority: 'travel' });
+  const course = result.courses[0];
+  expect(course.budgetEstimate).toMatchObject({ min: 15000, max: 30000, status: 'uncertain' });
+  expect(course.estimatedCostPerPerson).toBeNull();
+  expect(course.stops.every(stop => stop.rating === null && stop.estimatedCost === null)).toBe(true);
+  saveRecommendationResultToStorage(40, 177, result);
+  expect(loadRecommendationResultFromStorage(40, 177).courses[0].budgetEstimate).toEqual(course.budgetEstimate);
+  const rows = buildCourseVoteDbRows(course);
+  expect(rows.estimated_cost_per_person).toBeNull();
+  expect(rows.stops[0].estimated_cost).toBeNull();
+  expect(rows.recommendation_condition).toContain('카테고리별 추정');
+  expect(normalizeCourseVoteSelection([course])[0].estimated_cost).toBeNull();
+});
+
+test('추정 예산 초과는 코스를 삭제하지 않고 초과로 표시', async () => {
+  searchPlacesByKeyword.mockResolvedValue([place(1, '카페', { price: null })]);
+  const { courses } = await run({ budget: 1000 });
+  expect(courses).toHaveLength(1);
+  expect(courses[0].budgetEstimate.status).toBe('over');
+});
+
+test('좌표 유무와 무관하게 한국어 유형 검색, 중복 요청 제거', async () => {
+  await run({ activities: ['culture', 'cafe'] });
+  const keywords = searchPlacesByKeyword.mock.calls.map(([query]) => query.keyword);
+  expect(keywords).toContain('카페');
+  expect(keywords).toContain('박물관');
+  expect(keywords).not.toContain('museum');
+  expect(new Set(keywords).size).toBe(keywords.length);
+});
+
+test('저녁 전에 카페 방문이 가능한 일정은 식사 슬롯 뒤로 강제하지 않음', async () => {
+  searchPlacesByKeyword.mockResolvedValue([place(1, '음식점'), place(2), place(3)]);
+  const { courses } = await run({ mealPreferences: { dinner: 'any' } }, { starttime: '15:00', endtime: '18:30' });
+  expect(courses.length).toBeGreaterThan(0);
+  expect(courses[0].stops[0].category).toBe('카페');
+  expect(courses[0].stops[2].mealKey).toBe('dinner');
+});
+
+test('예산 우선은 출처가 있는 저비용 후보를 먼저 추천', async () => {
+  searchPlacesByKeyword.mockResolvedValue([place(1, '카페', { price: 9000 }), place(2), place(3), place(4), place(5)]);
+  const { courses } = await run({ priority: 'budget' });
+  expect(courses[0].stops.every(stop => stop.id !== '1')).toBe(true);
+  expect(courses[0].budgetEstimate.max).toBe(3000);
+});
+
+test('거리 우선은 이전 장소와 가까운 후보를 먼저 선택', async () => {
+  searchPlacesByKeyword.mockResolvedValue([place(1), place(2, '카페', { lat: 37.02 }), place(3), place(4)]);
+  const { courses } = await run({ priority: 'travel' });
+  expect(courses[0].stops.map(stop => stop.id)).toEqual(['1', '3', '4']);
 });

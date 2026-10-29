@@ -91,30 +91,33 @@ export async function getCourseConfirmationProgress({ scheduleId, roomId, voteId
   const course = await readResult(supabase.from("courses").select("*")
     .eq("id", courseId).eq("room_id", Number(roomId)).eq("schedule_id", scheduleId).single());
   if (!schedule || !vote || !course) throw new Error("일정·투표·코스 연결을 확인하지 못했습니다.");
-  const [participants, creator, finalization, responses, confirmations, links, options] = await Promise.all([
-    getEligibleParticipants(schedule), getScheduleCreator(scheduleId), getFinalizedCourse(scheduleId),
+  const [participants, finalization, responses, links, options] = await Promise.all([
+    getEligibleParticipants(schedule), getFinalizedCourse(scheduleId),
     readResult(supabase.from("voteresponses").select("optionid, userid").eq("voteid", voteId)),
-    readResult(supabase.from("course_member_confirmations").select("*").eq("schedule_id", scheduleId).eq("is_active", true)),
     readResult(supabase.from("vote_course_links").select("vote_option_id, course_id").eq("vote_id", voteId)),
     readResult(supabase.from("voteoptions").select("id, optiontype").eq("voteid", voteId)),
   ]);
-  if (!links.some((l) => same(l.course_id, courseId) && options.some((o) => same(o.id, l.vote_option_id) && o.optiontype === "course"))) {
-    throw new Error("해당 투표에 연결된 코스가 아닙니다.");
+  const targetLinks = links.filter(link => same(link.course_id, courseId));
+  if (targetLinks.length !== 1 || !options.some(option => same(option.id, targetLinks[0].vote_option_id) && option.optiontype === "course") ||
+      links.filter(link => same(link.vote_option_id, targetLinks[0].vote_option_id)).length !== 1) {
+    throw new Error("해당 투표에 연결된 코스가 아니거나 연결이 불명확합니다.");
   }
-  const statuses = evaluateCourseConsensus({ participants, responses, confirmations, links, options, courseId });
-  const isCreator = Boolean(creator && creator.created_by_type === participant.participantType &&
-    (participant.participantType === "member"
-      ? same(creator.created_by_member_id, participant.participantId) && creator.created_by_guest_id == null
-      : same(creator.created_by_guest_id, participant.participantId) && creator.created_by_member_id == null));
-  const confirmedCount = statuses.filter((p) => p.confirmed).length;
-  const allConfirmed = statuses.length > 0 && confirmedCount === statuses.length;
-  return { scheduleId: schedule.id, roomId: schedule.roomid, voteId: vote.id, course, creator,
-    eligibleCount: statuses.length, confirmedCount, participants: statuses,
-    unconfirmed: statuses.filter((p) => !p.confirmed), differentCourse: statuses.filter((p) => p.differentCourse),
-    allConfirmed, isCreator, finalization,
-    canFinalize: isCreator && allConfirmed && !finalization,
-    reason: !creator ? "일정 생성자 기록이 없어 최종 확정할 수 없습니다." : !statuses.length ? "참석 대상자가 없습니다." :
-      !allConfirmed ? "참석자 전원의 확정이 완료되면 최종 코스를 확정할 수 있습니다." : "모든 참석자가 같은 코스를 확정했어요!" };
+  const counts = new Map(options.filter(option => option.optiontype === "course").map(option => [String(option.id), 0]));
+  for (const voter of participants) {
+    const rows = responses.filter(row => String(row.userid).toLowerCase() === voter.participantId);
+    // Course votes are single-choice. Do not count ambiguous or duplicate responses.
+    if (rows.length !== 1) continue;
+    const optionId = String(rows[0].optionid);
+    if (!counts.has(optionId) || links.filter(link => same(link.vote_option_id, optionId)).length !== 1) continue;
+    counts.set(optionId, counts.get(optionId) + 1);
+  }
+  const totalVoters = [...counts.values()].reduce((sum, count) => sum + count, 0);
+  const courseVoteCount = counts.get(String(targetLinks[0].vote_option_id)) || 0;
+  return { scheduleId: schedule.id, roomId: schedule.roomid, voteId: vote.id, course, participant,
+    eligibleCount: participants.length, totalVoters, courseVoteCount, finalization,
+    options: [...counts].map(([optionId, count]) => ({ optionId, count, percent: totalVoters ? Math.round(count / totalVoters * 100) : 0 })),
+    canFinalize: !finalization,
+    reason: "투표 여부와 관계없이 참여자 누구나 한 코스를 확정할 수 있습니다." };
 }
 
 export async function canFinalizeCourse(request) {
@@ -124,18 +127,17 @@ export async function canFinalizeCourse(request) {
 export async function finalizeCourse(request) {
   // Re-read everything immediately before INSERT, regardless of UI state.
   const progress = await getCourseConfirmationProgress(request);
-  if (!progress.isCreator) throw new Error("일정 생성자만 최종 확정할 수 있습니다. 생성자 기록을 확인해 주세요.");
   if (progress.finalization) {
     if (!same(progress.finalization.course_id, request.courseId)) throw new Error("이미 다른 코스로 최종 확정되었습니다.");
     return finishFinalization(progress.finalization);
   }
   if (!progress.canFinalize) throw new Error(progress.reason);
-  const creator = progress.creator;
+  const actor = progress.participant;
   const { error } = await supabase.from("schedule_finalizations").insert([{
     schedule_id: progress.scheduleId, course_id: progress.course.id,
-    finalized_by_type: creator.created_by_type,
-    finalized_by_member_id: creator.created_by_member_id,
-    finalized_by_guest_id: creator.created_by_guest_id,
+    finalized_by_type: actor.participantType,
+    finalized_by_member_id: actor.participantType === "member" ? actor.participantId : null,
+    finalized_by_guest_id: actor.participantType === "guest" ? actor.participantId : null,
     finalized_at: new Date().toISOString(),
   }]);
   if (error && error.code !== "23505") throw error;

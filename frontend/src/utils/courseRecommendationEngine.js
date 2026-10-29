@@ -1,3 +1,4 @@
+import { estimateStopBudget, summarizeCourseBudget, formatCourseBudget } from "./courseBudgetUtils";
 import { searchPlacesByKeyword } from "../api/kakaoPlacesApi";
 import { createRecommendationDiagnostics, safeQueryType } from "./courseRecommendationDiagnostics";
 import { validRecommendationCenter, validRecommendationRadius } from "./recommendationAreaUtils";
@@ -90,8 +91,9 @@ function getMealSearchTerms(mealPreferences) {
 
 function buildSearchQueries(condition, schedule) {
   const center = resolveScheduleCenter(schedule, condition);
-  const activityTerms = getActivitySearchTerms(condition);
-  const mealTerms = getMealSearchTerms(condition?.mealPreferences || {});
+  const localized = { activity: "체험", travel: "놀거리", museum: "박물관", culture: "전시", cafe: "카페", park: "공원", nature: "산책", bar: "술집", restaurant: "음식점", food: "맛집", korean: "한식", western: "양식", japanese: "일식", chinese: "중식", snack: "분식", pasta: "파스타", steak: "스테이크", sushi: "초밥", ramen: "라멘", dimsum: "딤섬", tteokbokki: "떡볶이", kimbap: "김밥" };
+  const activityTerms = [...new Set(getActivitySearchTerms(condition).map(term => localized[term] || term))];
+  const mealTerms = [...new Set(getMealSearchTerms(condition?.mealPreferences || {}).map(term => localized[term] || term))];
   const regionKeyword = normalizeText(condition?.preferredRegion || schedule?.location || schedule?.locationaddress || "");
   const queries = [];
 
@@ -117,7 +119,7 @@ function buildSearchQueries(condition, schedule) {
     queries.push({ type: "keyword", value: "맛집", lat: null, lng: null });
   }
 
-  return queries;
+  return queries.filter((query, index) => queries.findIndex(other => other.value === query.value) === index);
 }
 
 async function gatherPlacePool(condition, schedule, diagnostic) {
@@ -161,7 +163,8 @@ async function gatherPlacePool(condition, schedule, diagnostic) {
           placeSource: "kakao",
           imageUrl: place.imageUrl || null,
           rating: toNumber(place.rating, null),
-          price: toNumber(place.price, null),
+          price: place.priceSource ? toNumber(place.price, null) : null,
+          priceSource: place.priceSource || null,
           sourceQuery: query.value,
         });
       });
@@ -240,7 +243,8 @@ function scorePlace(place, condition) {
 
   const priority = condition?.priority || "travel";
   if (priority === "budget") {
-    if (place.price != null) score -= place.price / 300;
+    const range = estimateStopBudget(place);
+    score -= (range.max ?? 100000) / 300;
   }
   if (priority === "rating") {
     if (place.rating != null) score += place.rating * 8;
@@ -267,10 +271,11 @@ const ACTIVITY_MATCH = {
   bar: ["bar", "술집", "주점", "맥주"],
 };
 function matchesPlace(place, tokens) {
-  const text = `${place.category} ${place.name}`.toLowerCase();
+  const text = String(place.category || place.name || '').toLowerCase();
   return tokens.some((token) => text.includes(token));
 }
 function mealMatches(place, preference) {
+  if (/카페|커피|술집|주점|cafe|bar/i.test(place.category || '')) return false;
   return matchesPlace(place, preference === "any"
     ? ["restaurant", "food", "음식", "식당", "한식", "양식", "일식", "중식", "분식"]
     : MEAL_CATEGORY_MAP[preference] || [String(preference).toLowerCase()]);
@@ -306,6 +311,8 @@ function selectCourseCandidates(scoredPlaces, condition, schedule, diagnostic) {
   filter.targetSlots = targetCount;
   filter.candidates = candidates.length;
   filter.categoryExcluded = pool.length - candidates.length;
+  filter.mealMatches = candidates.filter(place => requiredSlots.some(slot => slot.mealKey && slot.matches(place))).length;
+  filter.activityMatches = candidates.filter(place => requiredSlots.some(slot => !slot.mealKey && slot.matches(place))).length;
   filter.slotMatches = requiredSlots.map((slot, index) => ({ index: index + 1, type: slot.mealKey || 'activity',
     matchesBeforeNumericFilters: scoredPlaces.filter(slot.matches).length,
     matches: candidates.filter(slot.matches).length }));
@@ -315,22 +322,31 @@ function selectCourseCandidates(scoredPlaces, condition, schedule, diagnostic) {
   filter.minimumStayMinutes = requiredSlots.reduce((sum, slot) => sum + (slot.mealKey ? mealtimeMinutes(slot.mealKey) : 60), 0)
     + Math.max(0, targetCount - requiredSlots.length) * 60;
   filter.invalidTimeRange = !Number.isFinite(start) || !Number.isFinite(end) || end <= start;
+  if (filter.slotMatches.some(slot => slot.matches === 0)) {
+    combination.slotMismatchExcluded += candidates.length;
+    return [];
+  }
   if (!targetCount || slots.length > targetCount) return [];
   while (slots.length < targetCount) slots.push({ mealKey: null, matches: allowed });
   const result = [];
   const seen = new Set();
   let attempts = 0;
   if (filter.invalidTimeRange) return [];
-  function visit(stops, used, clock, knownCost) {
+  function visit(stops, used, clock, knownCost, remainingSlots) {
     combination.visits += 1;
     if (++attempts > 5000 || result.length >= 5) { combination.searchLimitReached = attempts > 5000; return; }
-    if (stops.length === slots.length) {
+    if (!remainingSlots.length) {
       const signature = courseCombinationKey(stops);
       if (!seen.has(signature)) { seen.add(signature); result.push(stops); combination.accepted += 1; }
       else combination.duplicateExcluded += 1;
       return;
     }
-    const slot = slots[stops.length];
+    // Keep meals chronological, but allow activities before the next meal.
+    // Otherwise a dinner slot forces all activities to start after dinner.
+    const activityIndex = remainingSlots.findIndex(slot => !slot.mealKey);
+    const nextIndices = [...new Set([0, activityIndex].filter(index => index >= 0))];
+    for (const slotIndex of nextIndices) {
+    const slot = remainingSlots[slotIndex];
     const previous = stops[stops.length - 1];
     const usage = (place) => result.reduce((count, course) => count + Number(course.some((stop) => stop.id === place.id)), 0);
     const ranked = candidates.filter((place) => {
@@ -340,8 +356,9 @@ function selectCourseCandidates(scoredPlaces, condition, schedule, diagnostic) {
     }).map((place) => ({ place,
       travel: previous ? estimateTravelMinutes(previous, place, condition.travelMode) : 0,
       novelty: usage(place),
-    })).sort((a, b) => a.novelty - b.novelty ||
-      (condition.priority === "travel" ? a.travel - b.travel : 0) || b.place.score - a.place.score);
+    })).sort((a, b) =>
+      (condition.priority === "budget" ? (estimateStopBudget(a.place, slot.mealKey).max ?? 100000) - (estimateStopBudget(b.place, slot.mealKey).max ?? 100000) : 0) ||
+      (condition.priority === "travel" ? a.travel - b.travel : 0) || a.novelty - b.novelty || b.place.score - a.place.score);
     for (const { place, travel } of ranked) {
       const stay = slot.mealKey ? mealtimeMinutes(slot.mealKey) : 60;
       const mealWindow = MEAL_WINDOWS[slot.mealKey];
@@ -349,18 +366,20 @@ function selectCourseCandidates(scoredPlaces, condition, schedule, diagnostic) {
       if (travel == null) { combination.invalidTravelExcluded += 1; continue; }
       if (travel > condition.maxTravelMinutes) { combination.travelLimitExcluded += 1; continue; }
       if (visitStart + stay > end || (mealWindow && visitStart + stay > mealWindow.end)) { combination.timeLimitExcluded += 1; continue; }
-      const cost = knownCost + (place.price ?? 0);
+      const cost = knownCost + (place.priceSource ? place.price ?? 0 : 0);
       if (condition.budget != null && cost > condition.budget) { combination.totalBudgetExcluded += 1; continue; }
-      const next = { ...place, order: stops.length + 1, mealKey: slot.mealKey,
+      const next = { ...place, budgetEstimate: estimateStopBudget(place, slot.mealKey), order: stops.length + 1, mealKey: slot.mealKey,
         visitStartTime: formatTimeFromMinutes(visitStart), visitEndTime: formatTimeFromMinutes(visitStart + stay),
         waitingTimeMin: visitStart - clock - travel,
         expectedStayMin: stay, travelTimeFromPrevMin: travel,
         distanceFromPrevM: previous ? Math.round(buildDistanceEstimate(previous, place)) : 0 };
-      visit([...stops, next], new Set([...used, place.id]), visitStart + stay, cost);
+      visit([...stops, next], new Set([...used, place.id]), visitStart + stay, cost, remainingSlots.filter((_, index) => index !== slotIndex));
       if (result.length >= 5 || attempts > 5000) break;
     }
+    if (result.length >= 5 || attempts > 5000) break;
+    }
   }
-  visit([], new Set(), start, 0);
+  visit([], new Set(), start, 0, slots);
   combination.searchLimitReached = attempts > 5000;
   return result;
 }
@@ -391,8 +410,8 @@ export async function generateCourseRecommendations({ condition, schedule }) {
     travelMode: condition?.travelMode || "transit",
     maxTravelMinutes: toNumber(condition?.maxTravelMinutes, 45),
     budget: toNumber(condition?.budget, null),
-    minRating: toNumber(condition?.minRating, 0),
-    priority: condition?.priority || "travel",
+    minRating: condition?.ratingProviderAvailable === false ? 0 : toNumber(condition?.minRating, 0),
+    priority: condition?.ratingProviderAvailable === false && condition?.priority === "rating" ? "travel" : condition?.priority || "travel",
     preferredRegion: condition?.preferredRegion || schedule?.location || "",
     searchCenter: condition.searchCenter || null,
     searchRadiusMeters: condition.searchRadiusMeters ?? null,
@@ -406,7 +425,7 @@ export async function generateCourseRecommendations({ condition, schedule }) {
       : search.uniqueCount ? 'coordinates_empty' : search.failed ? 'api_failure_partial_empty' : 'search_empty');
     return {
       courses: [],
-      warning: "현재 조건으로는 추천 가능한 장소를 찾지 못했습니다. 지역 또는 활동 조건을 조정해 주세요.",
+      warning: search.failed ? "장소 검색에 실패했습니다. 잠시 후 다시 시도해 주세요." : search.coordinateExcluded ? "검색 장소의 좌표를 확인할 수 없습니다." : search.areaExcluded ? "선택한 추천 구역 안에 장소가 없습니다. 반경을 조정해 주세요." : "선택한 구역에서 장소 검색 결과가 없습니다. 지역 또는 활동 조건을 조정해 주세요.",
     };
   }
 
@@ -432,10 +451,11 @@ export async function generateCourseRecommendations({ condition, schedule }) {
     chosenCourses.push({
       id: `course-${index + 1}`,
       name: buildCourseName(index),
-      summary,
+      summary: `${summary} · ${formatCourseBudget(summarizeCourseBudget(orderedStops, floorCondition.budget))} · 카테고리별 추정 금액, 실제 이용 요금은 다를 수 있습니다.`,
       totalDurationMin: totalMinutes,
       estimatedTravelTimeMin: totalTravelMinutes,
       estimatedCostPerPerson: estimatedCost,
+      budgetEstimate: summarizeCourseBudget(orderedStops, floorCondition.budget),
       stopCount: orderedStops.length,
       stops: orderedStops.map((stop) => ({
         id: stop.id,
@@ -450,6 +470,8 @@ export async function generateCourseRecommendations({ condition, schedule }) {
         imageUrl: stop.imageUrl || null,
         rating: stop.rating ?? null,
         estimatedCost: stop.price ?? null,
+        priceSource: stop.priceSource,
+        budgetEstimate: stop.budgetEstimate,
         visitStartTime: stop.visitStartTime,
         visitEndTime: stop.visitEndTime,
         expectedStayMin: stop.expectedStayMin,
@@ -460,6 +482,8 @@ export async function generateCourseRecommendations({ condition, schedule }) {
   }
 
   const validCourses = chosenCourses.filter((course) => course.stops.length > 0);
+  const budgetRank = { within: 0, not_set: 0, uncertain: 1, over: 2 };
+  validCourses.sort((a, b) => budgetRank[a.budgetEstimate.status] - budgetRank[b.budgetEstimate.status] || (floorCondition.priority === "budget" ? (a.budgetEstimate.max ?? Infinity) - (b.budgetEstimate.max ?? Infinity) : 0));
   diagnostic.finish(validCourses.length ? 'success' : 'no_combination');
 
   return {
@@ -467,11 +491,22 @@ export async function generateCourseRecommendations({ condition, schedule }) {
     center,
     condition: floorCondition,
     source: "kakao",
-    warning: !validCourses.length ? "조건과 일정 범위에 맞는 서로 다른 코스를 찾지 못했습니다. 장소·평점·비용 정보 또는 조건을 확인해 주세요."
+    warning: !validCourses.length ? recommendationFailureReason(diagnostic.stats)
       : validCourses.some((course) => course.stops.some((stop) =>
           (floorCondition.minRating > 0 && stop.rating == null) || (floorCondition.budget != null && stop.estimatedCost == null)))
-        ? "일부 장소의 평점·비용 정보가 없어 최소 평점과 총예산 충족 여부를 확인할 수 없습니다." : null,
+        ? "일부 장소의 비용 정보 또는 추정 범위로 조건 충족 여부를 확인할 수 없습니다." : null,
   };
+}
+
+function recommendationFailureReason({ filter, combination }) {
+  if (filter.invalidTimeRange) return '일정 시작·종료 시간을 확인해 주세요.';
+  if (filter.slotMatches.some(slot => !slot.matches)) return '선택한 식사·활동 유형에 맞는 장소가 부족합니다.';
+  if (combination.searchLimitReached) return '현재 탐색 범위에서 코스를 구성하지 못했습니다. 활동 또는 시간 조건을 조정해 주세요.';
+  if (combination.timeLimitExcluded && combination.travelLimitExcluded) return '일정 시간과 이동 제한에 맞는 코스를 찾지 못했습니다. 시간 또는 이동 조건을 조정해 주세요.';
+  if (combination.timeLimitExcluded) return '선택한 시간에 방문할 수 있는 코스를 찾지 못했습니다. 시간 또는 활동 조건을 조정해 주세요.';
+  if (combination.travelLimitExcluded) return '장소 간 이동 제한에 맞는 코스가 없습니다. 이동 시간 조건을 조정해 주세요.';
+  if (combination.totalBudgetExcluded) return '확인된 비용이 설정 예산을 초과합니다. 예산 조건을 조정해 주세요.';
+  return '현재 조건에 맞는 코스를 구성하지 못했습니다. 조건을 조정해 주세요.';
 }
 
 function mealtimeMinutes(mealKey) {

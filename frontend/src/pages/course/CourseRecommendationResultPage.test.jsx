@@ -17,3 +17,18 @@ test('state의 중복 조합 제거 후 실제 표시 개수와 투표 전달 �
   fireEvent.click(screen.getByRole('button', { name: '선택한 코스로 투표 만들기' }));
   expect(navigate).toHaveBeenCalledWith('/rooms/1/vote-create', expect.objectContaining({ state: expect.objectContaining({ selectedCourses: [course], scheduleId: 2 }) }));
 });
+
+test('예산 범위·추정 안내·평점 없음 표시와 선택 데이터 전달', () => {
+  const navigate = jest.fn();
+  useNavigate.mockReturnValue(navigate);
+  const course = { id: 'range', name: '예산 코스', estimatedCostPerPerson: null,
+    budgetEstimate: { min: 5000, max: 10000, status: 'uncertain', unknownCount: 0 },
+    stops: [{ id: 'p1', placeName: '카페', category: '카페', rating: null }] };
+  useLocation.mockReturnValue({ search: '', state: { schedule: { id: 2, roomid: 1 }, recommendation: { courses: [course] } } });
+  render(<CourseRecommendationResultPage />);
+  expect(screen.getByText('예상 예산: 1인 기준 5,000~10,000원')).toBeInTheDocument();
+  expect(screen.getByText(/실제 이용 요금은 다를 수 있습니다/)).toHaveTextContent('예산 충족 여부 확인 필요');
+  expect(screen.queryByText(/평점/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '선택한 코스로 투표 만들기' }));
+  expect(navigate).toHaveBeenCalledWith('/rooms/1/vote-create', expect.objectContaining({ state: expect.objectContaining({ selectedCourses: [course] }) }));
+});

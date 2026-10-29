@@ -1,3 +1,4 @@
+import { formatCourseBudget } from "../../utils/courseBudgetUtils";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
@@ -260,9 +261,10 @@ function CourseRecommendationResultPage() {
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" }}>
                       <span style={PAGE_STYLES.chip}>{course.summary}</span>
                       <span style={PAGE_STYLES.chip}>{course.totalDurationMin || 0}분</span>
-                      <span style={PAGE_STYLES.chip}>{course.estimatedCostPerPerson == null ? "비용 정보 없음" : `예산 ${Number(course.estimatedCostPerPerson).toLocaleString()}원`}</span>
+                      <span style={PAGE_STYLES.chip}>{course.budgetEstimate ? formatCourseBudget(course.budgetEstimate) : course.estimatedCostPerPerson == null ? "비용 정보 없음" : `예상 예산 ${Number(course.estimatedCostPerPerson).toLocaleString()}원`}</span>
                     </div>
 
+                    {course.budgetEstimate && <p style={{ fontSize: 12, color: "#66657A" }}>카테고리별 추정 금액 · 실제 이용 요금은 다를 수 있습니다. {course.budgetEstimate.status === "over" ? "예상 범위가 설정 예산을 초과합니다." : course.budgetEstimate.status === "uncertain" ? "예산 충족 여부 확인 필요" : ""}</p>}
                     <div style={{ marginTop: "12px", display: "grid", gap: "8px" }}>
                       {course.stops.map((stop, stopIndex) => (
                         <div key={`${course.id}-${stop.order || stopIndex}`} style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
@@ -292,7 +294,9 @@ function CourseRecommendationResultPage() {
                             <div style={{ marginTop: "6px", display: "flex", flexWrap: "wrap", gap: "6px", fontSize: "11px", color: "#4D4E5C" }}>
                               <span style={PAGE_STYLES.chip}>{getTimeLabel(stop.visitStartTime, stop.visitEndTime)}</span>
                               <span style={PAGE_STYLES.chip}>{stop.expectedStayMin || 60}분 체류</span>
-                              {stop.rating != null && <span style={PAGE_STYLES.chip}>평점 {Number(stop.rating).toFixed(1)}</span>}
+                              {/* 평점 제공처 확보 후 다시 사용:
+                              <span style={PAGE_STYLES.chip}>{stop.rating == null ? "평점 정보 없음" : `평점 ${Number(stop.rating).toFixed(1)}`}</span>
+                              */}
                               {stop.travelTimeFromPrevMin != null && <span style={PAGE_STYLES.chip}>이동 {stop.travelTimeFromPrevMin}분</span>}
                             </div>
                           </div>

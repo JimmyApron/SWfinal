@@ -29,8 +29,8 @@ export async function searchNearbyPlaces({
               place.road_address_name ||
               place.address_name ||
               '주소 정보 없음',
-            lat: Number(place.y),
-            lng: Number(place.x),
+            lat: place.y == null || String(place.y).trim() === '' ? null : Number(place.y),
+            lng: place.x == null || String(place.x).trim() === '' ? null : Number(place.x),
             phone: place.phone || '',
             distance: place.distance ? Number(place.distance) : null,
             kakaoMapUrl: place.place_url || '',
@@ -107,8 +107,8 @@ export async function searchPlacesByKeyword({
               place.address_name ||
               '주소 정보 없음',
             category: place.category_name || '',
-            lat: Number(place.y),
-            lng: Number(place.x),
+            lat: place.y == null || String(place.y).trim() === '' ? null : Number(place.y),
+            lng: place.x == null || String(place.x).trim() === '' ? null : Number(place.x),
             phone: place.phone || '',
             distance: place.distance ? Number(place.distance) : null,
             kakaoMapUrl: place.place_url || '',

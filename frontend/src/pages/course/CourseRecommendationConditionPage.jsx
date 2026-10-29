@@ -14,9 +14,9 @@ const TRAVEL_OPTIONS = [
 ];
 
 const PRIORITY_OPTIONS = [
+  // 평점 제공처 확보 후 다시 사용: { value: "rating", label: "평점 우선" },
   { value: "travel", label: "이동 시간 최소화" },
   { value: "budget", label: "예산 우선" },
-  { value: "rating", label: "평점 우선" },
   { value: "variety", label: "다양한 활동 우선" },
 ];
 
@@ -69,7 +69,8 @@ function getDefaultForm(schedule) {
     travelMode: "transit",
     maxTravelMinutes: 45,
     budget: "",
-    minRating: 3.5,
+    minRating: 0,
+    ratingProviderAvailable: false,
     priority: "travel",
     preferredRegion: regionFallback,
     regionDetail: regionFallback,
@@ -116,7 +117,7 @@ function CourseRecommendationConditionPage() {
   const [form, setForm] = useState(() => {
     const base = getDefaultForm(resolvedSchedule || scheduleFromState);
     const saved = readStoredDraft(roomId, scheduleId);
-    return { ...base, ...(saved || {}) };
+    return { ...base, ...(saved || {}), minRating: 0, ratingProviderAvailable: false, priority: saved?.priority === "rating" ? "travel" : saved?.priority || base.priority };
   });
   const [validationError, setValidationError] = useState("");
   const selectArea = useCallback((center) => {
@@ -146,7 +147,6 @@ function CourseRecommendationConditionPage() {
     if (!validRecommendationRadius(form.searchRadiusMeters)) return "추천 반경은 500m~5km 사이로 선택해 주세요.";
     const budgetValue = Number(form.budget);
     const maxTravelMinutesValue = Number(form.maxTravelMinutes);
-    const minRatingValue = Number(form.minRating);
 
     if (form.budget !== "" && (!Number.isFinite(budgetValue) || budgetValue < 0)) {
       return "예산은 0 이상이어야 합니다.";
@@ -156,9 +156,6 @@ function CourseRecommendationConditionPage() {
       return "이동 시간은 0보다 커야 합니다.";
     }
 
-    if (!Number.isFinite(minRatingValue) || minRatingValue < 0 || minRatingValue > 5) {
-      return "최소 평점은 0~5점 범위여야 합니다.";
-    }
 
     return "";
   };
@@ -352,9 +349,10 @@ function CourseRecommendationConditionPage() {
             />
           </label>
           <div style={rangeLabelsStyle}><span>0원</span><span>{Math.max(100000, Number(form.budget) || 0).toLocaleString("ko-KR")}원</span></div>
-          <p style={hintStyle}>하루 코스 전체의 1인당 예산 상한입니다. 비용 정보가 없는 장소는 예산 충족 여부를 확인할 수 없습니다.</p>
+          <p style={hintStyle}>하루 코스 전체의 1인당 예상 예산입니다. 카테고리별 추정 금액이며 실제 이용 요금은 다를 수 있습니다.</p>
         </section>
 
+        {/* Rating UI retained for future verified data providers.
         <section style={cardStyle}>
           <div style={sectionTitleStyle}>최소 평점</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
@@ -385,6 +383,7 @@ function CourseRecommendationConditionPage() {
             평점 정보가 없는 장소는 다음 추천 알고리즘 단계에서 별도 처리됩니다.
           </div>
         </section>
+        */}
 
         <section style={cardStyle}>
           <div style={sectionTitleStyle}>추천 우선순위</div>

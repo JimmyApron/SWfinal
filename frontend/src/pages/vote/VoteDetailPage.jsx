@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FaRegComment, FaMapMarkerAlt, FaChevronRight, FaChevronDown, FaRegClock } from "react-icons/fa";
 import { supabase } from "../../lib/supabaseClient";
-import { getMyCourseConfirmation, confirmMyVotedCourse } from "../../api/courseConfirmationApi";
 import CourseFinalizationPanel from "../../components/CourseFinalizationPanel";
 import {
   getVoteDetail,
@@ -34,43 +33,16 @@ import LocationPicker from "../../components/map/LocationPicker";
 import { createRoomNotifications } from "../../api/notificationApi";
 
 function VoteDetailPage() {
+  // 개인별 투표 여부와 명단은 투표 상세에서 표시하지 않는다.
+  const showVoterIdentities = false;
   const { roomid, voteid } = useParams();
   const navigate = useNavigate();
 
   const [vote, setVote] = useState(null);
-  const [courseConfirmation, setCourseConfirmation] = useState(null);
-  const [confirmationError, setConfirmationError] = useState("");
   const [courseBusy, setCourseBusy] = useState(false);
   const [courseFinalized, setCourseFinalized] = useState(false);
   const courseActionLock = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    setCourseConfirmation(null);
-    setConfirmationError("");
-    if (vote?.votetype === "course") {
-      getMyCourseConfirmation(voteid, roomid).then((state) => {
-        if (!cancelled) setCourseConfirmation(state);
-      }).catch((error) => { if (!cancelled) setConfirmationError(error.message); });
-    }
-    return () => { cancelled = true; };
-  }, [vote, voteid, roomid]);
-
-  useEffect(() => {
-    if (vote?.votetype !== "course" || !vote.scheduleid) return;
-    const channel = supabase.channel(`course-confirmation-${voteid}`)
-      .on("postgres_changes", {
-        event: "*", schema: "public", table: "course_member_confirmations",
-        filter: `schedule_id=eq.${vote.scheduleid}`,
-      }, () => loadVote()).subscribe();
-    const refresh = () => loadVote();
-    window.addEventListener("focus", refresh);
-    return () => {
-      supabase.removeChannel(channel);
-      window.removeEventListener("focus", refresh);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vote?.votetype, vote?.scheduleid, voteid]);
   const [currentUser, setCurrentUser] = useState(null);
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [newOptionText, setNewOptionText] = useState("");
@@ -220,7 +192,7 @@ function VoteDetailPage() {
 
         const { data: courseStopsData } = await supabase
           .from("course_stops")
-          .select("course_id, place_name, place_address, visit_start_time, visit_end_time, travel_time_from_prev_min, estimated_cost")
+          .select("id, course_id, stop_order, latitude, longitude, place_name, place_address, visit_start_time, visit_end_time, travel_time_from_prev_min, estimated_cost")
           .in("course_id", courseIds);
 
         const courseStopsMap = {};
@@ -419,7 +391,7 @@ function VoteDetailPage() {
   );
 
   const handleSelectOption = (optionid) => {
-    if (!vote.ismultiple) {
+    if (vote.votetype === "course" || !vote.ismultiple) {
       setSelectedOptions([optionid]);
       return;
     }
@@ -2993,15 +2965,11 @@ function VoteDetailPage() {
               )}
             </div>
 
-            {vote.votetype === "course" && <CourseFinalizationPanel key={vote.id} vote={vote} roomId={roomid} onFinalized={setCourseFinalized} />}
-            {vote.votetype === "course" && !courseFinalized && (
-              <div aria-live="polite" style={{ background: "#F3F0FF", padding: "14px", borderRadius: "14px", marginBottom: "16px", color: "#7B61FF" }}>
-                {confirmationError || (!courseConfirmation ? "개인 확정 상태 확인 중..." :
-                  courseConfirmation.course ? "투표와 개인 확정은 별개입니다. 본인이 투표한 코스를 아래에서 확정해 주세요." :
-                    "먼저 코스를 선택해 투표해 주세요.")}
-              </div>
-            )}
-            {showVotingUI ? (
+            {vote.votetype === "course" ? (
+              <CourseFinalizationPanel key={vote.id} vote={vote} roomId={roomid} onFinalized={setCourseFinalized}
+                isVoting={showVotingUI} selectedOptions={selectedOptions} onSelect={handleSelectOption}
+                onSubmit={handleSubmitVote} onReVote={handleReVote} voteBusy={courseBusy} isClosed={isClosed} />
+            ) : showVotingUI ? (
               <>
                 {vote.voteoptions?.map((option) => (
                   <div key={option.id}>
@@ -3328,31 +3296,7 @@ function VoteDetailPage() {
                         >
                           <div style={{ flex: 1 }}>
                             {renderOptionContent(option)}
-                            {vote.votetype === "course" && courseConfirmation &&
-                              String(courseConfirmation.optionId) === String(option.id) && (
-                              <div style={{ padding: "12px", marginTop: "8px", borderRadius: "12px", border: "1px solid #7B61FF", background: "#F3F0FF" }}>
-                                <strong>{courseConfirmation.isConfirmed ? "확정 완료" : "내가 투표한 코스"}</strong>
-                                {!courseFinalized && !courseConfirmation.isConfirmed && (
-                                  <button type="button" disabled={courseBusy}
-                                    style={{ display: "block", marginTop: "8px", padding: "10px 14px", border: 0, borderRadius: "12px", background: "#7B61FF", color: "white" }}
-                                    onClick={async () => {
-                                      if (courseActionLock.current) return;
-                                      courseActionLock.current = true;
-                                      setCourseBusy(true);
-                                      setConfirmationError("");
-                                      try {
-                                        const saved = await confirmMyVotedCourse(voteid, roomid, courseConfirmation.course.id);
-                                        setCourseConfirmation(saved);
-                                      } catch (error) {
-                                        setCourseConfirmation(null);
-                                        setConfirmationError(error.message || "개인 확정에 실패했습니다.");
-                                      } finally { setCourseBusy(false); courseActionLock.current = false; }
-                                    }}>
-                                    {courseBusy ? "저장 중..." : "이 코스로 확정하기"}
-                                  </button>
-                                )}
-                              </div>
-                            )}
+
                           </div>
 
                           {isPlaceOption(option) && (
@@ -3516,7 +3460,7 @@ function VoteDetailPage() {
 
                           <span
                             onClick={() => {
-                              if (!vote.isanonymous) {
+                              if (showVoterIdentities && !vote.isanonymous) {
                                 setShowVotersForOption(
                                   isShowingVoters ? null : option.id
                                 );
@@ -3525,7 +3469,7 @@ function VoteDetailPage() {
                             style={{
                               color: "#7c79ff",
                               fontWeight: "bold",
-                              cursor: vote.isanonymous ? "default" : "pointer",
+                              cursor: showVoterIdentities && !vote.isanonymous ? "pointer" : "default",
                             }}
                           >
                             {count}명 ({percent}%)
@@ -3558,7 +3502,7 @@ function VoteDetailPage() {
                         />
                       </div>
 
-                      {!vote.isanonymous && isShowingVoters && (
+                      {showVoterIdentities && !vote.isanonymous && isShowingVoters && (
                         <div
                           style={{
                             marginTop: "8px",
@@ -3643,13 +3587,13 @@ function VoteDetailPage() {
                 >
                   <div
                     onClick={() =>
-                      !vote.isanonymous && setShowParticipants(!showParticipants)
+                      showVoterIdentities && !vote.isanonymous && setShowParticipants(!showParticipants)
                     }
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      cursor: vote.isanonymous ? "default" : "pointer",
+                      cursor: showVoterIdentities && !vote.isanonymous ? "pointer" : "default",
                     }}
                   >
                     <span style={{ fontSize: "15px", fontWeight: "bold" }}>
@@ -3661,7 +3605,7 @@ function VoteDetailPage() {
                     </span>
                   </div>
 
-                  {!vote.isanonymous && showParticipants && (
+                  {showVoterIdentities && !vote.isanonymous && showParticipants && (
                     <div
                       style={{
                         marginTop: "10px",

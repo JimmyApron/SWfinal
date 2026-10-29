@@ -362,7 +362,7 @@ function VoteCreatePage() {
               summary: course?.summary ?? course?.course_summary ?? "",
               totalDurationMin: course?.totalDurationMin ?? course?.total_duration_min ?? course?.totalDuration ?? 0,
               estimatedTravelTimeMin: course?.estimatedTravelTimeMin ?? course?.estimated_travel_time_min ?? 0,
-              estimatedCostPerPerson: course?.estimatedCostPerPerson ?? course?.estimated_cost_per_person ?? 0,
+              estimatedCostPerPerson: course?.estimatedCostPerPerson ?? course?.estimated_cost_per_person ?? null,
               stops: Array.isArray(course?.stops) ? course.stops : [],
             };
 

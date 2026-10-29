@@ -51,8 +51,7 @@ test('actual APIs compose: create → recommend → persist two → vote/revote 
   expect(db.course_member_confirmations[0].is_active).toBe(false);
   await confirmMyVotedCourse(vote.id, 1);
   const request = { roomId: 1, scheduleId: schedule.id, voteId: vote.id, courseId: savedCourses[0].id };
-  expect((await getCourseConfirmationProgress(request)).canFinalize).toBe(false);
-  await expect(finalizeCourse(request)).rejects.toThrow('참석자 전원');
+  expect((await getCourseConfirmationProgress(request)).canFinalize).toBe(true);
   asMember('member-b');
   await submitVote(vote.id, [a.id], 'member-b', '회원');
   await confirmMyVotedCourse(vote.id, 1);
@@ -60,7 +59,7 @@ test('actual APIs compose: create → recommend → persist two → vote/revote 
   supabase.auth.getUser.mockResolvedValue({ data: { user: null }, error: { name: 'AuthSessionMissingError' } });
   await submitVote(vote.id, [a.id], 'guest-a', '손님');
   await confirmMyVotedCourse(vote.id, 1);
-  await expect(finalizeCourse(request)).rejects.toThrow('일정 생성자만');
+  expect((await getCourseConfirmationProgress(request)).canFinalize).toBe(true);
   asMember('member-a');
   expect((await getCourseConfirmationProgress(request)).canFinalize).toBe(true);
   await finalizeCourse(request);

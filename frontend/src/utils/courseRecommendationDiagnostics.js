@@ -20,7 +20,7 @@ export function createRecommendationDiagnostics(condition = {}) {
     search: { planned: 0, succeeded: 0, failed: 0, empty: 0, requests: [], rawCount: 0,
       uniqueCount: 0, duplicateExcluded: 0, coordinateExcluded: 0, coordinateValid: 0, areaExcluded: 0, areaValid: 0 },
     filter: { ratingExcluded: 0, priceExcluded: 0, missingRating: 0, missingPrice: 0,
-      categoryExcluded: 0, candidates: 0, requiredSlots: 0, targetSlots: 0, slotMatches: [],
+      categoryExcluded: 0, candidates: 0, mealMatches: 0, activityMatches: 0, requiredSlots: 0, targetSlots: 0, slotMatches: [],
       availableMinutes: null, minimumStayMinutes: null, invalidTimeRange: false },
     combination: { visits: 0, usedExcluded: 0, slotMismatchExcluded: 0, invalidTravelExcluded: 0,
       travelLimitExcluded: 0, timeLimitExcluded: 0, totalBudgetExcluded: 0, duplicateExcluded: 0,
