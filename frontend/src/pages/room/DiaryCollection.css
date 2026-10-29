@@ -2,8 +2,11 @@
 .collection-topbar { position: sticky; top: 0; z-index: 5; display: grid; height: 54px; grid-template-columns: 44px 1fr 44px; align-items: center; padding: env(safe-area-inset-top) max(12px, calc((100vw - 520px) / 2)) 0; border-bottom: 1px solid #f0f0f3; background: rgba(255,255,255,.96); box-sizing: content-box; }
 .collection-topbar h1 { margin: 0; font-size: 17px; font-weight: 750; text-align: center; }
 .collection-topbar button { display: grid; width: 38px; height: 38px; place-items: center; border: 0; background: transparent; color: #282835; font-size: 21px; cursor: pointer; }
-.collection-topbar .collection-refresh { justify-self: end; color: #7774ed; }
 .collection-tabs { display: flex; gap: 7px; max-width: 480px; margin: 13px auto 10px; padding: 0 16px; }
+.collection-toolbar { position: relative; width: min(100%, 520px); margin: 0 auto; }
+.collection-view-toggle { display: flex; width: max-content; gap: 2px; margin: 0 16px 12px auto; padding: 3px; border: 1px solid #ecebfa; border-radius: 10px; background: #f8f7ff; }
+.collection-view-toggle button { padding: 6px 10px; border: 0; border-radius: 7px; background: transparent; color: #777585; font: inherit; font-size: 11px; white-space: nowrap; cursor: pointer; }
+.collection-view-toggle button.selected { background: #7c79ff; color: #fff; font-weight: 700; box-shadow: 0 1px 3px #7c79ff33; }
 .collection-tabs button { min-width: 64px; padding: 8px 13px; border: 1px solid #e8e8ee; border-radius: 999px; background: #fff; color: #777785; font: inherit; font-size: 12px; cursor: pointer; }
 .collection-tabs button.selected { border-color: #171724; background: #171724; color: #fff; font-weight: 700; }
 .collection-body { width: min(100%, 520px); margin: 0 auto; padding: 4px 16px max(28px, env(safe-area-inset-bottom)); box-sizing: border-box; }
@@ -12,6 +15,13 @@
 .collection-month-controls { display: flex; align-items: center; gap: 7px; }
 .collection-month-controls h2 { margin: 0; font-size: 15px; }
 .collection-month-controls button { display: grid; width: 27px; height: 27px; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #777585; cursor: pointer; }
+.collection-all-summary { margin: 5px 0 12px; color: #8b8998; font-size: 11px; text-align: right; }
+.collection-month-section { margin: 0 0 22px; }
+.collection-month-section > h2 { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 14px 0 10px; color: #282835; font-size: 17px; font-weight: 750; }
+.collection-month-section > h2 small { color: #8b8998; font-size: 10px; font-weight: 500; }
+.collection-month-sections { display: grid; gap: 6px; }
+.collection-load-more { display: block; width: 100%; margin: 8px 0 20px; padding: 11px; border: 1px solid #e8e7ef; border-radius: 12px; background: #fff; color: #7774ed; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.collection-unwritten-toggle { margin: 0 0 7px; padding: 0; border: 0; background: transparent; color: #7774ed; font: inherit; font-size: 10px; font-weight: 700; cursor: pointer; }
 .collection-state { padding: 30px 12px; color: #8c8a99; font-size: 13px; text-align: center; }
 .collection-error { padding: 12px; border-radius: 12px; background: #fff2f0; color: #9e3b35; font-size: 12px; }
 .collection-error button { display: block; margin-top: 8px; border: 0; background: transparent; color: inherit; font-weight: 700; }

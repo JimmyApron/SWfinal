@@ -24,17 +24,24 @@ export async function getRoomDiaryIdentity(roomId) {
 }
 
 export async function getRoomMeetings(roomId, firstDay, lastDay) {
-  let query = supabase
-    .from("room_meetings")
-    .select("id, source_type, source_schedule_id, title, meeting_date, start_time, end_time, is_all_day, location, location_address, lifecycle_status, attendance_status, created_at")
-    .eq("room_id", Number(roomId))
-    .order("meeting_date")
-    .order("created_at");
-  if (firstDay) query = query.gte("meeting_date", firstDay);
-  if (lastDay) query = query.lte("meeting_date", lastDay);
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
+  const meetings = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    let query = supabase
+      .from("room_meetings")
+      .select("id, source_type, source_schedule_id, title, meeting_date, start_time, end_time, is_all_day, location, location_address, lifecycle_status, attendance_status, created_at")
+      .eq("room_id", Number(roomId))
+      .order("meeting_date")
+      .order("created_at")
+      .order("id")
+      .range(from, from + pageSize - 1);
+    if (firstDay) query = query.gte("meeting_date", firstDay);
+    if (lastDay) query = query.lte("meeting_date", lastDay);
+    const { data, error } = await query;
+    if (error) throw error;
+    meetings.push(...(data || []));
+    if (!data || data.length < pageSize) return meetings;
+  }
 }
 
 export async function getRoomDiaries(roomId, meetingIds = []) {
@@ -178,7 +185,7 @@ export async function uploadDiaryPhotos({ roomId, meetingId, diaryId, photos, ex
   }
 }
 
-export async function createLightningMeeting({ roomId, date, title, startTime, endTime, location, address, participantUserIds = [] }) {
+export async function createLightningMeeting({ roomId, date, title, startTime, endTime, location, address, participantUserIds = [], requestId }) {
   const { data, error } = await supabase.rpc("create_room_lightning_meeting", {
     p_room_id: String(roomId),
     p_meeting_date: date,
@@ -188,6 +195,7 @@ export async function createLightningMeeting({ roomId, date, title, startTime, e
     p_location: location || null,
     p_location_address: address || null,
     p_participant_actor_ids: participantUserIds,
+    p_request_id: requestId || crypto.randomUUID(),
   });
   if (error) throw error;
   return data;

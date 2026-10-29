@@ -25,6 +25,7 @@ import {
   createNotification,
   deleteNotification,
 } from "../../api/notificationApi";
+import { getRoomDiaryIdentity } from "../../api/meetupDiaryApi";
 
 function cacheRoomPopupSetting(roomId, column, value) {
   if (!roomId || !column) return;
@@ -115,6 +116,14 @@ function RoomDetailPage() {
     vote: true,
     chat: true,
   });
+  const [diaryActorIdentityId, setDiaryActorIdentityId] = useState(null);
+  const [diaryNotifSettings, setDiaryNotifSettings] = useState({
+    reminders_enabled: true,
+    published_diary_enabled: true,
+    reaction_enabled: true,
+    lightning_enabled: true,
+    all_complete_enabled: true,
+  });
 
   useEffect(() => {
     const queryTab = searchParams.get("tab");
@@ -183,7 +192,24 @@ function RoomDetailPage() {
         cacheRoomPopupSetting(roomId, "votenotifenabled", nextSettings.vote);
         cacheRoomPopupSetting(roomId, "chatnotifenabled", nextSettings.chat);
       }
+      try {
+        const diaryIdentity = await getRoomDiaryIdentity(roomId);
+        setDiaryActorIdentityId(diaryIdentity.identityId);
+        if (diaryIdentity.identityId) {
+          const { data: diarySettings, error: diarySettingsError } = await supabase
+            .from("room_diary_notification_settings")
+            .select("reminders_enabled, published_diary_enabled, reaction_enabled, lightning_enabled, all_complete_enabled")
+            .eq("room_id", Number(roomId))
+            .eq("actor_identity_id", diaryIdentity.identityId)
+            .maybeSingle();
+          if (diarySettingsError) throw diarySettingsError;
+          if (diarySettings) setDiaryNotifSettings(diarySettings);
+        }
+      } catch (error) {
+        console.error("기록 알림 설정 조회 실패:", error);
+      }
     } else {
+      setDiaryActorIdentityId(null);
       const guestId = localStorage.getItem("guest_id");
       if (guestId) {
         setCurrentUser({ id: guestId, type: "guest" });
@@ -405,6 +431,22 @@ function RoomDetailPage() {
     }
   };
 
+  const handleToggleDiaryNotification = async (column) => {
+    if (!diaryActorIdentityId || currentUser?.type !== "member") return;
+    const nextValue = diaryNotifSettings[column] === false;
+    const { error } = await supabase.from("room_diary_notification_settings").upsert({
+      room_id: Number(roomId),
+      actor_identity_id: diaryActorIdentityId,
+      [column]: nextValue,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "room_id,actor_identity_id" });
+    if (error) {
+      alert("기록 알림 설정 저장 실패: " + error.message);
+      return;
+    }
+    setDiaryNotifSettings((previous) => ({ ...previous, [column]: nextValue }));
+  };
+
   if (!room) return <div>로딩 중...</div>;
   const isCurrentUserHost = String(room?.createdby) === String(currentUser?.id);
 
@@ -579,6 +621,23 @@ function RoomDetailPage() {
                 <button onClick={() => handleToggleNotification(t)} style={{ background: notifSettings[t] ? "#8366F4" : "#E0E0E0", color: "#fff", border: "none", borderRadius: "20px", padding: "4px 12px", width: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>{notifSettings[t] ? "ON" : "OFF"}</button>
               </div>
             ))}
+            {currentUser?.type === "member" && (
+              <>
+                <h4 style={{ margin: "18px 0 8px" }}>기록 알림</h4>
+                {[
+                  ["reminders_enabled", "기록 미작성"],
+                  ["published_diary_enabled", "친구 기록"],
+                  ["reaction_enabled", "이모지 반응"],
+                  ["lightning_enabled", "번개 만남"],
+                  ["all_complete_enabled", "모두 기록 완료"],
+                ].map(([column, label]) => (
+                  <div key={column} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                    <span style={{ fontSize: "14px" }}>{label} 알림</span>
+                    <button onClick={() => handleToggleDiaryNotification(column)} style={{ background: diaryNotifSettings[column] !== false ? "#8366F4" : "#E0E0E0", color: "#fff", border: "none", borderRadius: "20px", padding: "4px 12px", width: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>{diaryNotifSettings[column] !== false ? "ON" : "OFF"}</button>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
           <button onClick={handleOpenInviteModal} style={{ width: "100%", padding: "10px", background: "#7c79ff", color: "#fff", border: "none", borderRadius: "8px", fontWeight: "bold", marginBottom: "20px" }}>친구 초대</button>
           <div style={{ background: "#f0f0f0", padding: "10px", borderRadius: "8px", marginBottom: "20px", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px" }}>

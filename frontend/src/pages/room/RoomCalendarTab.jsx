@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { FiImage, FiPlus } from "react-icons/fi";
 import { createLightningMeeting, getCalendarDiaryThumbnails, getMeetingDiaryProgress, getRoomDiaries, getRoomDiaryIdentity, getRoomMeetings } from "../../api/meetupDiaryApi";
@@ -17,6 +17,8 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [month, setMonth] = useState(() => {
+    const requestedDate = new URLSearchParams(window.location.search).get("date");
+    if (requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) return new Date(`${requestedDate}T12:00:00`);
     try { const saved = JSON.parse(sessionStorage.getItem(`room-calendar-state:${roomId}`) || "null"); if (saved?.month) return new Date(`${saved.month}T12:00:00`); } catch {}
     const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), 1);
   });
@@ -26,7 +28,11 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
   const [diaries, setDiaries] = useState([]);
   const [diariesLoaded, setDiariesLoaded] = useState(false);
   const [diaryCovers, setDiaryCovers] = useState({});
-  const [selectedDate, setSelectedDate] = useState(() => { try { return JSON.parse(sessionStorage.getItem(`room-calendar-state:${roomId}`) || "null")?.selectedDate || ""; } catch { return ""; } });
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const requestedDate = new URLSearchParams(window.location.search).get("date");
+    if (requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) return requestedDate;
+    try { return JSON.parse(sessionStorage.getItem(`room-calendar-state:${roomId}`) || "null")?.selectedDate || ""; } catch { return ""; }
+  });
   const [selectedMeetingIndex, setSelectedMeetingIndex] = useState(() => { try { return JSON.parse(sessionStorage.getItem(`room-calendar-state:${roomId}`) || "null")?.selectedMeetingIndex || 0; } catch { return 0; } });
   const [meetingProgressById, setMeetingProgressById] = useState({});
   const [showLightning, setShowLightning] = useState(false);
@@ -40,6 +46,7 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
   const [lightningEnd, setLightningEnd] = useState("");
   const [loading, setLoading] = useState(true);
   const [savingLightning, setSavingLightning] = useState(false);
+  const lightningRequestIdRef = useRef(null);
   const [error, setError] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [today, setToday] = useState(getTodayInSeoul);
@@ -93,6 +100,19 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
 
   useEffect(() => { load({ initialize: true }); }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (identity) load(); }, [firstDay, identity, lastDay, load]);
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const requestedDate = params.get("date");
+    const requestedMeetingId = params.get("meetingId");
+    if (!requestedDate || !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) return;
+    setMonth(new Date(`${requestedDate}T12:00:00`));
+    setSelectedDate(requestedDate);
+    if (requestedMeetingId) {
+      const sameDateMeetings = meetings.filter((meeting) => meeting.meeting_date === requestedDate);
+      const index = sameDateMeetings.findIndex((meeting) => meeting.id === requestedMeetingId);
+      if (index >= 0) setSelectedMeetingIndex(index);
+    }
+  }, [location.search, meetings]);
   useEffect(() => {
     const nextMidnight = new Date(`${today}T00:00:00+09:00`).getTime() + 24 * 60 * 60 * 1000;
     const midnightTimer = window.setTimeout(() => setToday(getTodayInSeoul()), Math.max(0, nextMidnight - Date.now()));
@@ -216,6 +236,7 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
     setLightningTitleError(false);
     setLightningTitle(""); setLightningLocation(""); setLightningStart(""); setLightningEnd("");
     setError("");
+    lightningRequestIdRef.current = null;
     setShowLightning(true);
   }
 
@@ -233,15 +254,19 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
       setLightningTitleError(true);
       return;
     }
+    if (savingLightning) return;
     setLightningTitleError(false);
     setError("");
     try {
-      await createLightningMeeting({ roomId, date: selectedDate, title: lightningTitle.trim(), startTime: lightningStart, endTime: lightningEnd, location: lightningLocation.trim(), participantUserIds: lightningParticipantIds });
+      setSavingLightning(true);
+      lightningRequestIdRef.current ||= crypto.randomUUID();
+      await createLightningMeeting({ roomId, date: selectedDate, title: lightningTitle.trim(), startTime: lightningStart, endTime: lightningEnd, location: lightningLocation.trim(), participantUserIds: lightningParticipantIds, requestId: lightningRequestIdRef.current });
       const date = new Date(`${selectedDate}T12:00:00`);
       setMonth(new Date(date.getFullYear(), date.getMonth(), 1));
       setSelectedMeetingIndex(0);
-      setShowLightning(false);
       await refreshCalendar();
+      lightningRequestIdRef.current = null;
+      setShowLightning(false);
     } catch (createError) { setError(createError.message || "\uBC88\uAC1C \uB9CC\uB0A8 \uB4F1\uB85D\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."); }
     finally { setSavingLightning(false); }
   };
