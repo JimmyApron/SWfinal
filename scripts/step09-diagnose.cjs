@@ -47,6 +47,8 @@ async function main() {
   await client.from('__offline_header_probe__').select('id');
 }
 
+module.exports = { classify };
+
 if (require.main === module) {
   main().catch((error) => {
     console.error("Diagnostic failed:", {
