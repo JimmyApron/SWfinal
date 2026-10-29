@@ -408,42 +408,6 @@ function CourseRecommendationConditionPage() {
           </div>
         </section>
 
-        <section style={cardStyle}>
-          <div style={sectionTitleStyle}>지역 메모 (선택)</div>
-          <p style={{ fontSize: '12px', color: '#646478' }}>실제 추천 범위는 위 지도에서 선택한 중심점과 반경을 기준으로 합니다.</p>
-          <label style={{ display: "block" }}>
-            <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "6px" }}>지역 이름</div>
-            <input
-              type="text"
-              value={form.preferredRegion}
-              onChange={(event) => {
-                setForm((prev) => ({ ...prev, preferredRegion: event.target.value, regionDetail: event.target.value }));
-                setValidationError("");
-              }}
-              placeholder="예: 강남역, 홍대, 청담동"
-              style={inputStyle}
-            />
-          </label>
-
-          <label style={{ display: "block", marginTop: "12px" }}>
-            <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "6px" }}>상세 주소 / 지역 메모</div>
-            <textarea
-              value={form.regionDetail}
-              onChange={(event) => {
-                setForm((prev) => ({ ...prev, regionDetail: event.target.value }));
-                setValidationError("");
-              }}
-              placeholder="예: 강남역 주변, 지하철 2호선 기준"
-              rows={3}
-              style={{
-                ...inputStyle,
-                resize: "vertical",
-                minHeight: "88px",
-              }}
-            />
-          </label>
-        </section>
-
         {validationError && (
           <div
             style={{
@@ -512,17 +476,6 @@ const priorityButtonStyle = {
   width: "100%",
   textAlign: "left",
   cursor: "pointer",
-  color: "#17172B",
-};
-
-const inputStyle = {
-  width: "100%",
-  border: "1px solid #E7E0FF",
-  borderRadius: "10px",
-  background: "#fff",
-  padding: "10px 12px",
-  fontSize: "14px",
-  boxSizing: "border-box",
   color: "#17172B",
 };
 

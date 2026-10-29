@@ -592,7 +592,21 @@ export async function cancelConfirmedSchedule(scheduleId, voteid) {
     .delete()
     .eq("id", scheduleId);
 
-  if (deleteError) throw new Error("확정 일정 취소 실패");
+  if (deleteError) {
+    console.error("확정 일정 삭제 오류", {
+      code: deleteError.code,
+      message: deleteError.message,
+      hint: deleteError.hint,
+    });
+    const reason = deleteError.code === "23503"
+      ? "연결된 데이터 때문에 일정을 삭제할 수 없습니다."
+      : deleteError.code === "42501"
+        ? "일정을 취소할 권한이 없습니다."
+        : "일정 삭제 요청이 실패했습니다. 개발자 도구 콘솔에서 상세 오류를 확인해 주세요.";
+    const error = new Error(`${reason}${deleteError.code ? ` (오류 코드: ${deleteError.code})` : ""}`);
+    error.cause = deleteError;
+    throw error;
+  }
 
   if (voteid) {
     await supabase

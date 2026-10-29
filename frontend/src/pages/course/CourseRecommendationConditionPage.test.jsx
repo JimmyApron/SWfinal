@@ -34,6 +34,18 @@ test('이동 버튼과 예산 슬라이더 값을 저장·전달하고 기존 �
   })));
   expect(JSON.parse(localStorage.getItem('course_recommendation_condition_40_177')).budget).toBe(25000);
 });
+test('카페와 저녁을 선택하면 추천 요청에 두 조건과 일정 시간이 모두 전달', async () => {
+  setup({ locationlat: 37, locationlng: 127, starttime: '15:30', endtime: '18:30' });
+  fireEvent.click(screen.getByRole('button', { name: '카페' }));
+  fireEvent.click(screen.getByRole('button', { name: '식사' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: '저녁 먹기' }));
+  fireEvent.click(screen.getByRole('button', { name: /추천받기/ }));
+  await waitFor(() => expect(generateRecommendationResult).toHaveBeenCalledWith(expect.objectContaining({
+    condition: expect.objectContaining({ activities: ['cafe'], mealPreferences: expect.objectContaining({ dinner: 'any' }) }),
+    schedule: expect.objectContaining({ starttime: '15:30', endtime: '18:30' }),
+  })));
+});
+
 test('예산 제한을 다시 해제하면 빈 값으로 전달', async () => {
   setup({ locationlat: 37, locationlng: 127 });
   const unlimited = screen.getByRole('checkbox', { name: '예산 제한 없음' });

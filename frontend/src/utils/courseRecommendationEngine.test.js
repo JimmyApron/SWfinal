@@ -36,6 +36,35 @@ test('빈 후보는 빈 코스와 안내', async () => {
   searchPlacesByKeyword.mockResolvedValue([]);
   expect((await run()).courses).toEqual([]);
 });
+
+test('저녁만 선택한 짧은 일정은 식당 3곳을 강제하지 않음', async () => {
+  searchPlacesByKeyword.mockResolvedValue(Array.from({ length: 6 }, (_, i) => place(i + 1, '한식')));
+  const { courses } = await run({ activities: [], mealPreferences: { dinner: 'any' } },
+    { starttime: '15:30', endtime: '18:30' });
+  expect(courses.length).toBeGreaterThan(0);
+  expect(courses.every(c => c.stops.length === 1 && c.stops[0].mealKey === 'dinner')).toBe(true);
+});
+
+test('카페와 저녁은 추가 방문 없이도 추천하고 필수 두 방문은 유지', async () => {
+  searchPlacesByKeyword.mockResolvedValue([place(1), place(2), place(3, '한식'), place(4, '한식')]);
+  const { courses } = await run({ mealPreferences: { dinner: 'any' } },
+    { starttime: '15:30', endtime: '18:30' });
+  expect(courses.length).toBeGreaterThan(0);
+  for (const course of courses) {
+    expect(course.stops).toHaveLength(2);
+    expect(course.stops.some(s => s.category === '카페')).toBe(true);
+    expect(course.stops.some(s => s.mealKey === 'dinner')).toBe(true);
+    expect(course.stops[1].visitEndTime <= '18:30').toBe(true);
+  }
+});
+
+test('18시 종료 일정은 저녁 필수 조건을 없애서 우회하지 않음', async () => {
+  const response = await run({ mealPreferences: { dinner: 'any' } },
+    { starttime: '15:30', endtime: '18:00' });
+  expect(response.courses).toHaveLength(0);
+  expect(response.warning).toContain('저녁');
+  expect(searchPlacesByKeyword).not.toHaveBeenCalled();
+});
 test('저녁 일정에 아침 요청은 검색 전 거부', async () => {
   const response = await run({ mealPreferences: { breakfast: 'any' } }, { starttime: '18:00', endtime: '22:00' });
   expect(response.courses).toHaveLength(0);

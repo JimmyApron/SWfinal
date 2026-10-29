@@ -287,7 +287,7 @@ export function courseCombinationKey(stops) {
   return JSON.stringify(stops.map((stop) => `${stop.placeSource || stop.place_source || "kakao"}:${stop.id ?? stop.place_id ?? `${stop.placeName}:${stop.placeAddress}`}`).sort());
 }
 
-function selectCourseCandidates(scoredPlaces, condition, schedule, diagnostic) {
+function selectCourseCandidates(scoredPlaces, condition, schedule, diagnostic, targetLimit = Infinity) {
   const filter = diagnostic.stats.filter;
   const combination = diagnostic.stats.combination;
   const meals = ["breakfast", "lunch", "dinner"].filter((key) => condition.mealPreferences[key]);
@@ -306,7 +306,7 @@ function selectCourseCandidates(scoredPlaces, condition, schedule, diagnostic) {
   const requiredSlots = [...slots];
   const allowed = (place) => !requiredSlots.length || requiredSlots.some((slot) => slot.matches(place));
   const candidates = pool.filter(allowed);
-  const targetCount = Math.min(candidates.length, Math.max(3, slots.length));
+  const targetCount = Math.min(candidates.length, Math.max(3, slots.length), targetLimit);
   filter.requiredSlots = slots.length;
   filter.targetSlots = targetCount;
   filter.candidates = candidates.length;
@@ -381,6 +381,13 @@ function selectCourseCandidates(scoredPlaces, condition, schedule, diagnostic) {
   }
   visit([], new Set(), start, 0, slots);
   combination.searchLimitReached = attempts > 5000;
+  // Extra visits are optional. Keep all requested meals/activities, but try a
+  // shorter course when padding to three visits cannot fit the schedule.
+  if (!result.length && !combination.searchLimitReached && combination.timeLimitExcluded > 0 &&
+      requiredSlots.length > 0 && targetCount > requiredSlots.length &&
+      requiredSlots.reduce((sum, slot) => sum + (slot.mealKey ? mealtimeMinutes(slot.mealKey) : 60), 0) <= end - start) {
+    return selectCourseCandidates(scoredPlaces, condition, schedule, diagnostic, requiredSlots.length);
+  }
   return result;
 }
 
