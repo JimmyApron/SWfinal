@@ -273,8 +273,8 @@ const OCR_SYSTEM_PROMPT = [
   "영수증 사진이나 은행·카드 앱 결제 내역 캡처에서 결제 정보를 읽어 JSON으로만 답하세요.",
   "- candidates: 이미지에서 찾은 개별 결제를 한 건씩 담습니다. 영수증 한 장이면 1건, 카드 앱 결제 내역 목록처럼 여러 건이 보이면 보이는 결제를 모두(최대 20건) 담으세요.",
   "- totalAmount: 그 결제의 최종 결제 금액(합계/결제금액/승인금액). 부가세·할인·봉사료가 따로 있으면 최종 결제 금액을 쓰세요.",
-  "- 금액은 쉼표와 '원' 없이 정수로 쓰세요. 마이너스(-) 금액이면 취소 건입니다.",
-  "- 승인취소·결제취소·환불된 건은 isCancelled를 true로 하세요. 취소 내역과, 그 취소로 상쇄된 원래 승인 건 둘 다 true입니다.",
+  "- 금액은 쉼표와 '원' 없이 양의 정수로 쓰세요. 앱 내역에서 '-20,000원'처럼 마이너스로 표시된 금액은 출금·결제를 뜻하므로 절댓값(20000)을 쓰고 취소로 보지 마세요.",
+  "- '취소', '승인취소', '환불' 등 취소를 뜻하는 글자가 있는 건만 isCancelled를 true로 하세요. 승인취소·결제취소·환불된 건은 isCancelled를 true로 하세요. 취소 내역과, 그 취소로 상쇄된 원래 승인 건 둘 다 true입니다.",
   "- '이번 달 누적', '누적 사용금액', '총 이용금액'처럼 여러 결제를 합친 누적·합계 금액은 결제가 아니므로 candidates에 넣지 마세요. 금액으로도 쓰지 마세요.",
   "- paidAt: 결제 일시를 ISO 8601(한국 시간이면 +09:00)로 쓰세요. 시간 없이 날짜만 보이면 'YYYY-MM-DD'만 쓰세요. 연도가 없으면 오늘 날짜 기준으로 가장 가까운 과거 날짜로 보세요.",
   "- 은행 앱 이체 캡처라면 storeName에 받는 사람 또는 가게 이름을 넣고 sourceType은 bank_capture, 카드 앱 결제 캡처면 card_capture, 종이 영수증이면 receipt로 하세요.",
@@ -304,8 +304,8 @@ const MAX_OCR_CANDIDATES = 20;
 function normalizeCandidate(raw) {
   const warnings = [];
   const totalAmount =
-    Number.isInteger(raw.totalAmount) && raw.totalAmount > 0 && raw.totalAmount <= 1_000_000_000
-      ? raw.totalAmount
+    Number.isInteger(raw.totalAmount) && raw.totalAmount !== 0 && Math.abs(raw.totalAmount) <= 1_000_000_000
+      ? Math.abs(raw.totalAmount)
       : null;
   const storeName = typeof raw.storeName === "string" && raw.storeName.trim()
     ? raw.storeName.trim().slice(0, 60)
@@ -342,7 +342,7 @@ function normalizeCandidate(raw) {
 // 취소된 건, 금액이 마이너스인 건, "누적" 금액은 후보에서 뺀다. (모델이 놓친 경우를 서버에서 한 번 더 거른다)
 function isUsableCandidate(raw) {
   if (!raw || raw.isCancelled === true) return false;
-  if (Number.isInteger(raw.totalAmount) && raw.totalAmount <= 0) return false;
+  if (Number.isInteger(raw.totalAmount) && raw.totalAmount === 0) return false;
   if (typeof raw.storeName === "string" && /누적/.test(raw.storeName)) return false;
   return true;
 }
@@ -356,9 +356,7 @@ function sameStore(a, b) {
 // 모델이 취소 내역만 표시하고 원래 승인 건을 놓치는 경우를 서버에서 보완한다.
 function dropCancelledPairs(rawList) {
   const list = rawList.filter(Boolean);
-  const cancellations = list.filter(
-    (item) => item.isCancelled === true || (Number.isInteger(item.totalAmount) && item.totalAmount < 0)
-  );
+  const cancellations = list.filter((item) => item.isCancelled === true);
   const removed = new Set(cancellations);
 
   cancellations.forEach((cancellation) => {

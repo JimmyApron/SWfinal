@@ -63,6 +63,8 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
     isTimeValid(schedule.date) &&
     (schedule.isallday || isTimeValid(schedule.starttime));
 
+  const showFixedConflict = Boolean(schedule.hasFixedTimetableConflict) && !schedule.isAbsent;
+
   return (
     <div
       onClick={onClick}
@@ -111,12 +113,6 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
           )}
         </p>
 
-        {schedule.hasFixedTimetableConflict && !schedule.isAbsent && (
-          <span style={{ display: "inline-block", marginTop: "5px", padding: "2px 7px", borderRadius: "999px", color: "#5F5BD8", backgroundColor: "rgba(124, 121, 255, 0.12)", fontSize: "10px", fontWeight: 600 }}>
-            내 고정 시간표와 겹침 · 일정 확인 필요
-          </span>
-        )}
-
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginTop: "2px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--secondary-text)", fontSize: "12px", flexShrink: 0 }}>
             <FaClock size={11} color="#7C5CFF" />
@@ -136,9 +132,14 @@ function ConfirmedScheduleCard({ schedule, onClick, actions }) {
       <div style={{ height: "1px", backgroundColor: "var(--border-color)", margin: "0 -4px" }} />
 
       {/* 하단 정보 영역: 주변 장소 태그 | 남은 시간 */}
-      {(schedule.additionalLocations?.length > 0 || showReminder) && (
+      {(schedule.additionalLocations?.length > 0 || showReminder || showFixedConflict) && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", fontSize: "11px" }}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px", flex: 1, minWidth: 0 }}>
+            {showFixedConflict && (
+              <span style={{ padding: "2px 7px", borderRadius: "999px", color: "#5F5BD8", backgroundColor: "rgba(124, 121, 255, 0.12)", fontSize: "10px", fontWeight: 600 }}>
+                내 고정 시간표와 겹침 · 일정 확인 필요
+              </span>
+            )}
             {schedule.additionalLocations?.map((place) => (
               <span
                 key={place.id}

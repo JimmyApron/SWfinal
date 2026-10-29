@@ -20,6 +20,7 @@ import {
 import { createNotification, deleteFriendRequestNotification } from "../../api/notificationApi";
 import RoomListPage from "../room/RoomListPage";
 import ConfirmedScheduleCard from "../../components/ConfirmedScheduleCard";
+import { getFixedTimetable, getFixedTimetableConflicts } from "../../api/fixedTimetableApi";
 import RoomCreateForm from "../../components/room/RoomCreateForm";
 import RoomInviteForm from "../../components/room/RoomInviteForm";
 
@@ -138,10 +139,20 @@ function HomePage() {
 
     const additionalLocationMap = new Map(additionalLocationEntries);
 
+    let fixedConflictIds = new Set();
+    try {
+      const fixedBlocks = await getFixedTimetable(userId);
+      const conflicts = await getFixedTimetableConflicts(userId, fixedBlocks);
+      fixedConflictIds = new Set(conflicts.confirmed.map((schedule) => Number(schedule.id)));
+    } catch (error) {
+      console.error("내 고정 시간표 충돌 확인 실패:", error);
+    }
+
     setConfirmedSchedules(
       (data || []).map((schedule) => ({
         ...schedule,
         additionalLocations: additionalLocationMap.get(schedule.id) || [],
+        hasFixedTimetableConflict: fixedConflictIds.has(Number(schedule.id)),
       }))
     );
   }, []);
