@@ -153,7 +153,9 @@ function ConfirmedScheduleDetailPage() {
           .single(),
         supabase
           .from("confirmed_schedules")
-          .select("absentees")
+          .select(
+            "absentees, date, starttime, endtime, isallday, location, locationaddress, locationlat, locationlng"
+          )
           .eq("id", schedule.id)
           .maybeSingle(),
       ]);
@@ -164,6 +166,33 @@ function ConfirmedScheduleDetailPage() {
 
       if (scheduleData) {
         setAbsentees(scheduleData.absentees || []);
+
+        // 이동 시 전달된 schedule(location.state)은 날짜·장소 등록 전 값일 수 있어 DB 값으로 맞춘다.
+        if (scheduleData.date) {
+          const savedTiming = {
+            date: scheduleData.date,
+            starttime: scheduleData.starttime || "",
+            endtime: scheduleData.endtime || "",
+            isallday: Boolean(scheduleData.isallday),
+          };
+          setScheduleTiming(savedTiming);
+          setTimingDraft(savedTiming);
+        }
+
+        if (scheduleData.location) {
+          setLocationText(scheduleData.location);
+          setLocationAddress(scheduleData.locationaddress || "");
+          if (scheduleData.locationlat != null && scheduleData.locationlng != null) {
+            const savedPlace = {
+              name: scheduleData.location,
+              address: scheduleData.locationaddress || "",
+              lat: scheduleData.locationlat,
+              lng: scheduleData.locationlng,
+            };
+            setSelectedMeetingPlace(savedPlace);
+            setDraftMeetingPlace(savedPlace);
+          }
+        }
       }
 
       const participants = await getRoomParticipants(schedule.roomid);
@@ -746,7 +775,11 @@ function ConfirmedScheduleDetailPage() {
     .map(toMapPlace)
     .filter((place) => Number.isFinite(Number(place.lat)) && Number.isFinite(Number(place.lng)));
 
-  const isLocationUndecided = !(selectedMeetingPlace?.name || schedule.location);
+  const isLocationUndecided = !(
+    selectedMeetingPlace?.name ||
+    locationText ||
+    schedule.location
+  );
 
   const middlePlaceSection = (
     <>
@@ -774,7 +807,7 @@ function ConfirmedScheduleDetailPage() {
             <FaMapMarkerAlt color="#7C5CFF" size={13} />
             {isLocationUndecided
               ? "만날 장소: 미등록"
-              : `만날 장소: ${selectedMeetingPlace?.name || schedule.location}`}
+              : `만날 장소: ${selectedMeetingPlace?.name || locationText || schedule.location}`}
           </p>
           {!isLocationUndecided && (selectedMeetingPlace?.address || locationAddress) && (
             <p style={{ margin: "3px 0 0", fontSize: "12px", color: "#9CA3AF" }}>

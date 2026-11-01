@@ -894,7 +894,14 @@ router.get("/weather/:scheduleId", async (req, res) => {
       parseUserLocation({ lat: req.query.lat, lng: req.query.lng })
     );
     const [result, air] = await Promise.all([
-      getScheduleWeather(schedule, origin),
+      getScheduleWeather(schedule, origin).catch((error) => {
+        console.error("날씨 없이 응답합니다:", error);
+        return {
+          weather: null,
+          weatherBasis: weatherBasisOf(origin),
+          weatherSource: describeOrigin(origin),
+        };
+      }),
       getScheduleAir(schedule, origin),
     ]);
     return res.json({ ...result, air, needsLocation: origin.type === "none" });
