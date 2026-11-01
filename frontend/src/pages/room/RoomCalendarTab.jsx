@@ -142,10 +142,6 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
     groups[meeting.meeting_date] = [...(groups[meeting.meeting_date] || []), meeting];
     return groups;
   }, {}), [meetings]);
-  const publishedDiaryDates = useMemo(() => new Set(diaries
-    .filter((diary) => diary.status === "published")
-    .map((diary) => meetingForDiary(diary, meetings)?.meeting_date)
-    .filter(Boolean)), [diaries, meetings]);
   const firstPublicDiaryByDate = useMemo(() => {
     return diaries.reduce((records, diary) => {
       if (diary.status !== "published" || diary.visibility !== "room") return records;
@@ -351,7 +347,7 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
           return <div className="room-calendar-day-wrap" key={key}>
             <button type="button" className={`room-calendar-day ${diaryCoversByDate[key] ? "has-cover" : ""} ${hasScheduledMeeting ? "has-scheduled-meeting" : ""} ${outside ? "outside" : ""} ${selectedDate === key ? "selected" : ""} ${key === today ? "today" : ""}`} onClick={() => selectCalendarDate(key)}>
               <span className="room-calendar-day-number">{date.getDate()}</span>
-              {publishedDiaryDates.has(key) && <CalendarDayThumbnail src={diaryCoversByDate[key]} />}
+              {diaryCoversByDate[key] && <CalendarDayThumbnail src={diaryCoversByDate[key]} />}
               {hasLightning && <span className="room-calendar-lightning" aria-label="Lightning meeting">&#x26A1;&#xFE0F;</span>}
               {diaryCountsByDate[key] > 0 && <small className="room-calendar-record-count-badge">{diaryCountsByDate[key]}</small>}
             </button>
@@ -428,7 +424,7 @@ function meetingForDiary(diary, meetings) { return meetings.find((meeting) => me
 function CalendarDayThumbnail({ src }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => { setFailed(false); }, [src]);
-  if (!src || failed) return <FiImage className="room-calendar-day-image-icon" aria-label="&#xAE30;&#xB85D; &#xC0AC;&#xC9C4; &#xC5C6;&#xC74C;" />;
+  if (!src || failed) return null;
   return <img className="room-calendar-day-cover" src={src} alt="&#xC774; &#xB0A0;&#xC9DC;&#xC758; &#xAE30;&#xB85D; &#xC0AC;&#xC9C4;" onError={() => setFailed(true)} />;
 }
 

@@ -659,7 +659,7 @@ function DiaryEditor({ roomId, meeting, identityId, profileImageUrl = "", onClos
         <div className="diary-character-count">{body.length}/500</div>
         <div className="diary-field-label" id="diary-visibility-label">공개 범위</div>
         <div className="diary-visibility-options" role="group" aria-labelledby="diary-visibility-label">
-          <button type="button" className={visibility === "room" ? "selected" : ""} aria-pressed={visibility === "room"} onClick={() => updateVisibility("room")}>🔓 모임 친구 공개</button>
+          <button type="button" className={visibility === "room" ? "selected" : ""} aria-pressed={visibility === "room"} onClick={() => updateVisibility("room")}>🔓 공개</button>
           <button type="button" className={visibility === "private" ? "selected" : ""} aria-pressed={visibility === "private"} onClick={() => updateVisibility("private")}>🔒 나만 보기</button>
         </div>
         {errorMessage && <div className={`diary-save-state ${status === "failed" ? "error" : ""}`} role={status === "failed" ? "alert" : undefined}>{status === "failed" ? `저장 실패 · ${errorMessage}` : errorMessage}{status === "failed" && <button type="button" className="diary-retry-button" disabled={busy} onClick={() => resetFailed ? startNewDraft() : persist(false)}>{resetFailed ? "초기화 다시 시도" : "다시 저장"}</button>}</div>}

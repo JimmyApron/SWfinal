@@ -41,7 +41,6 @@
 .room-calendar-day-number { position: relative; z-index: 1; display: grid; width: 24px; height: 24px; box-sizing: border-box; place-items: center; border: 1px solid rgba(124,121,255,.2); border-radius: 50%; background: rgba(255,255,255,.58); color: #45435f; font-size: 10px; font-weight: 700; line-height: 1; }
 .room-calendar-day:not(.has-scheduled-meeting):not(.selected):not(.today):not(.has-cover) > .room-calendar-day-number { border-color: transparent; background: transparent; }
 .room-calendar-day.has-cover > .room-calendar-day-number { position: absolute; top: 3px; left: 4px; }
-.room-calendar-day-image-icon { position: absolute; bottom: 3px; left: 50%; z-index: 1; width: 15px; height: 15px; transform: translateX(-50%); color: #7c79ff; }
 .room-calendar-lightning { position: absolute; top: 2px; right: 3px; z-index: 2; color: #f0a52c; font-size: 11px; line-height: 1; }
 .room-calendar-day.outside { color: #c6c5ce; }
 .room-calendar-day.selected { border-color: #c7c5ff; background: #f7f6ff; }
