@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import LocationPicker from './map/LocationPicker';
+import PlaceRating from './PlaceRating';
 import KakaoMapView from './map/KakaoMapView';
 import { buildManualCourse, manualStop } from '../utils/manualCourseUtils';
 import { normalizeCourseVoteSelection } from '../utils/courseVoteUtils';
+import { formatCourseBudget, summarizeCourseBudget } from '../utils/courseBudgetUtils';
 import './CourseVoteComposer.css';
 
 export default function CourseVoteComposer({ schedules, schedule, scheduleId, onScheduleChange, loading, error,
@@ -100,8 +102,19 @@ export default function CourseVoteComposer({ schedules, schedule, scheduleId, on
     {!options.length && <p>추천받거나 직접 만든 코스를 후보에 추가해 주세요.</p>}
     {options.map((option, index) => <article className="course-candidate" key={index}>
       <strong>{option.course_name || option.optiontext}</strong>
-      <p>{option.stops?.map(stop => stop.placeName || stop.place_name || stop.name).join(' → ')}</p>
-      <p>{option.stop_count}곳 · 예상 {option.total_duration_min}분 · 비용 정보 확인 필요</p>
+      <div style={{ display: 'grid', gap: 6, margin: '12px 0' }}>{option.stops?.map((stop, stopIndex) =>
+        <div key={stopIndex} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
+          <span>{stopIndex + 1}. {stop.placeName || stop.place_name || stop.name}</span>
+          <PlaceRating rating={stop.rating} />
+        </div>
+      )}</div>
+      <p>{option.stop_count}곳 · 예상 {option.total_duration_min}분 · {
+        option.budgetEstimate?.max != null
+          ? formatCourseBudget(option.budgetEstimate)
+          : option.estimated_cost != null
+            ? `1인 예상 ${Number(option.estimated_cost).toLocaleString('ko-KR')}원`
+            : formatCourseBudget(option.budgetEstimate || summarizeCourseBudget(option.stops || []))
+      }</p>
       <div className="course-composer-actions">
         <button type="button" aria-expanded={editing === index && !!draft} aria-controls={editing === index && draft ? `course-editor-${index}` : undefined} disabled={!!draft || !schedule} onClick={() => open(index)}>수정·지도 보기</button>
         <button type="button" disabled={!!draft} onClick={() => onChange(options.filter((_, i) => i !== index))}>후보 삭제</button>

@@ -4,7 +4,7 @@ function asNumber(value, fallback = 0) {
   return Number.isFinite(numeric) ? numeric : fallback;
 }
 
-export function normalizeCourseVoteSelection(courses = []) {
+export function normalizeCourseVoteSelection(courses = [], startNumber = null) {
   return (Array.isArray(courses) ? courses : []).map((course, index) => {
     const stops = Array.isArray(course?.stops) ? course.stops : [];
     const totalDuration = Number(
@@ -18,7 +18,8 @@ export function normalizeCourseVoteSelection(courses = []) {
       course?.estimatedCostPerPerson ?? course?.estimated_cost_per_person ??
         stops.reduce((sum, stop) => sum + Number(stop?.estimatedCost ?? stop?.estimated_cost ?? 0), 0)
     );
-    const courseName = course?.name || course?.course_name || `추천 코스 ${index + 1}`;
+    const originalName = course?.name || course?.course_name || `추천 코스 ${index + 1}`;
+    const courseName = startNumber == null ? originalName : `${startNumber + index}. ${originalName.replace(/^\d+\.\s*/, '')}`;
     const stopCount = stops.length;
     const optionText = [
       courseName,

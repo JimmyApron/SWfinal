@@ -192,7 +192,7 @@ function VoteDetailPage() {
 
         const { data: courseStopsData } = await supabase
           .from("course_stops")
-          .select("id, course_id, stop_order, latitude, longitude, place_name, place_address, visit_start_time, visit_end_time, travel_time_from_prev_min, estimated_cost")
+          .select("id, course_id, stop_order, latitude, longitude, place_name, place_address, visit_start_time, visit_end_time, travel_time_from_prev_min, estimated_cost, rating")
           .in("course_id", courseIds);
 
         const courseStopsMap = {};
@@ -2954,6 +2954,7 @@ function VoteDetailPage() {
             <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
               {vote.ismultiple && <span style={badgeStyle}>복수선택</span>}
               {vote.isanonymous && <span style={badgeStyle}>익명투표</span>}
+              {vote.votetype === "course" && <span style={badgeStyle}>코스 투표</span>}
               {isLocationVote && (
                 <span style={badgeStyle}>
                   {isManualLocationVote

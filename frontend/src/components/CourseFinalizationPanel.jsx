@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import { finalizeCourse, getCourseConfirmationProgress } from '../api/courseFinalizationApi';
 import { roadmapPath } from '../utils/courseRoadmapUtils';
 import KakaoMapView from './map/KakaoMapView';
+import PlaceRating from './PlaceRating';
 import './CourseFinalizationPanel.css';
 
 export default function CourseFinalizationPanel({ vote, roomId, onFinalized, isVoting = false, selectedOptions = [], onSelect, onSubmit, onReVote, voteBusy = false, isClosed = false }) {
@@ -52,8 +53,7 @@ export default function CourseFinalizationPanel({ vote, roomId, onFinalized, isV
     } catch (failure) { message = failure.message || '코스 확정에 실패했습니다.'; }
     finally { await refresh(); if (message) setError(message); setBusy(false); lock.current = false; }
   }
-  return <section className="course-vote-results" aria-label="코스 투표 결과">
-    <span className="course-vote-badge">코스 투표</span>
+  return <section className={`course-vote-results${isVoting && !saved ? ' is-voting' : ''}`} aria-label="코스 투표 결과">
     <p className="course-vote-help">투표 여부와 관계없이 참여자 누구나 한 코스를 확정할 수 있어요.</p>
     {error && <p role="alert">{error}</p>}
     {!progress && !error && <p>투표 결과를 확인하고 있습니다.</p>}
@@ -69,16 +69,19 @@ export default function CourseFinalizationPanel({ vote, roomId, onFinalized, isV
         <div className="course-vote-row">
           <label className="course-vote-name">
             {isVoting && !saved && <input type="radio" name={`course-vote-${vote.id}`} checked={selectedOptions.some(id => String(id) === String(option.id))} disabled={saving} onChange={() => onSelect?.(option.id)} />}
-            <span><strong>{meta.course_name || option.optiontext}</strong><small>{stops.map(stop => stop.place_name).join(' → ')}</small></span>
+            <span><strong>{meta.course_name || option.optiontext}</strong></span>
           </label>
           <div className="course-vote-actions">
-            <button type="button" onClick={() => setOpened(opened === option.id ? null : option.id)} aria-expanded={opened === option.id}>{opened === option.id ? '지도접기' : '지도보기'}</button>
+            <button type="button" onClick={() => setOpened(opened === option.id ? null : option.id)} aria-expanded={opened === option.id} aria-controls={`course-vote-detail-${option.id}`}>{opened === option.id ? '상세접기' : '상세보기'}</button>
             {progress && <button type="button" className={confirmed ? 'course-vote-confirmed' : 'course-vote-confirm'} disabled={saving || Boolean(saved) || !courseId} onClick={() => confirm(courseId)}>{confirmed ? '코스 확정됨' : busy ? '저장 중...' : '코스 확정'}</button>}
             <span className="course-vote-count">{progress ? `${count}명 (${percent}%)` : '집계 확인 중'}</span>
           </div>
         </div>
         <div role="progressbar" aria-label={`${meta.course_name || option.optiontext} 득표율`} aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} className="course-vote-bar"><div style={{ width: `${percent}%` }} /></div>
-        {opened === option.id && <div className="course-vote-detail">{places.length > 0 ? <KakaoMapView places={places} routePath={places} numberedPlaces height="260px" /> : <p>표시할 장소 좌표가 없습니다.</p>}<ol>{stops.map((stop, index) => <li key={stop.id || index}>{stop.place_name} {stop.visit_start_time?.slice(0, 5)}{stop.visit_end_time ? ` ~ ${stop.visit_end_time.slice(0, 5)}` : ''}</li>)}</ol></div>}
+        {opened === option.id && <div id={`course-vote-detail-${option.id}`} className="course-vote-detail">{places.length > 0 ? <KakaoMapView places={places} routePath={places} numberedPlaces height="260px" /> : <p>표시할 장소 좌표가 없습니다.</p>}<ol>{stops.map((stop, index) => <li key={stop.id || index}>
+          {stop.place_name} {stop.visit_start_time?.slice(0, 5)}{stop.visit_end_time ? ` ~ ${stop.visit_end_time.slice(0, 5)}` : ''}
+          <div style={{ marginTop: 3, marginBottom: 8 }}><PlaceRating rating={stop.rating} /></div>
+        </li>)}</ol></div>}
       </article>;
     })}
     {saved ? <div className="course-vote-final"><strong>최종 확정 완료 · {saved.course.course_name}</strong><ol>{saved.course.stops.map((stop, index) => <li key={stop.id || index}>{stop.place_name}</li>)}</ol><Link to={roadmapPath(roomId, vote.scheduleid)}>전체 코스 보기</Link></div>

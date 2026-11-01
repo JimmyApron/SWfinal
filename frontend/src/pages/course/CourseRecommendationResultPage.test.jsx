@@ -1,11 +1,64 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { confirmRecommendedCourse } from '../../api/directRecommendationApi';
 import CourseRecommendationResultPage from './CourseRecommendationResultPage';
 import { useLocation, useNavigate } from 'react-router-dom';
 jest.mock('react-router-dom', () => ({ useLocation: jest.fn(), useNavigate: jest.fn(), useParams: () => ({ roomid: '1' }) }));
 jest.mock('../../lib/supabaseClient', () => ({ supabase: {} }));
+jest.mock('../../api/directRecommendationApi', () => ({ confirmRecommendedCourse: jest.fn() }));
+jest.mock('../../components/map/KakaoMapView', () => function Map({ places, routePath, numberedPlaces }) {
+  return <div data-testid="course-map" data-places={JSON.stringify(places)} data-route={JSON.stringify(routePath)} data-numbered={String(numberedPlaces)} />;
+});
 
 beforeEach(() => {
+  jest.clearAllMocks();
   window.scrollTo = jest.fn();
+});
+
+test('상세를 펼칠 때만 유효한 좌표의 방문 순서 지도 표시', () => {
+  useNavigate.mockReturnValue(jest.fn());
+  useLocation.mockReturnValue({ search: '', state: { schedule: { id: 2, roomid: 1 }, recommendation: { courses: [{
+    id: 'map', name: '지도 코스', stops: [
+      { placeName: '첫 장소', latitude: 37.5, longitude: 127 },
+      { placeName: '좌표 없음', latitude: null, longitude: null },
+      { placeName: '세 번째', lat: '37.6', lng: '127.1' },
+    ],
+  }] } } });
+  render(<CourseRecommendationResultPage />);
+  expect(screen.queryByTestId('course-map')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '코스 상세 보기' }));
+  const map = screen.getByTestId('course-map');
+  expect(JSON.parse(map.dataset.places)).toEqual([
+    expect.objectContaining({ name: '첫 장소', lat: 37.5, lng: 127, orderNumber: 1 }),
+    expect.objectContaining({ name: '세 번째', lat: 37.6, lng: 127.1, orderNumber: 3 }),
+  ]);
+  expect(map.dataset.route).toBe(map.dataset.places);
+  expect(map.dataset.numbered).toBe('true');
+  fireEvent.click(screen.getByRole('button', { name: '코스 상세 접기' }));
+  expect(screen.queryByTestId('course-map')).not.toBeInTheDocument();
+});
+
+test('추천 한 코스를 바로 확정하면 투표 대신 확정 로드맵으로 이동', async () => {
+  const navigate = jest.fn();
+  useNavigate.mockReturnValue(navigate);
+  const course = { id: 'direct', name: '바로 갈 코스', stops: [{ placeName: '카페' }] };
+  useLocation.mockReturnValue({ search: '', state: { schedule: { id: 2, roomid: 1 }, recommendation: { courses: [course] } } });
+  confirmRecommendedCourse.mockResolvedValue({ course_id: 3 });
+  render(<CourseRecommendationResultPage />);
+  fireEvent.click(screen.getByRole('button', { name: '이 코스로 바로 확정' }));
+  expect(screen.getByRole('button', { name: '확정 중…' })).toBeDisabled();
+  await waitFor(() => expect(navigate).toHaveBeenCalledWith('/rooms/1/schedules/2/final-course', { replace: true }));
+  expect(confirmRecommendedCourse).toHaveBeenCalledWith({ roomId: 1, scheduleId: 2, course });
+});
+
+test('확정 실패를 표시하고 다시 시도할 수 있음', async () => {
+  useNavigate.mockReturnValue(jest.fn());
+  useLocation.mockReturnValue({ search: '', state: { schedule: { id: 2, roomid: 1 },
+    recommendation: { courses: [{ id: 'fail', name: '실패 코스', stops: [{ placeName: '카페' }] }] } } });
+  confirmRecommendedCourse.mockRejectedValue(new Error('일정 생성자만 확정할 수 있습니다.'));
+  render(<CourseRecommendationResultPage />);
+  fireEvent.click(screen.getByRole('button', { name: '이 코스로 바로 확정' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('일정 생성자만');
+  expect(screen.getByRole('button', { name: '이 코스로 바로 확정' })).toBeEnabled();
 });
 
 test('기본 카드는 요약만 보여주고 상세보기 아래에 장소·비용·체류 시간을 펼친다', () => {
@@ -46,7 +99,7 @@ test('아직 저장하지 않은 새 일정도 추천 결과 선택 후 새 일�
   render(<CourseRecommendationResultPage />);
   fireEvent.click(screen.getByRole('button', { name: '선택한 코스를 일정에 추가' }));
   expect(navigate).toHaveBeenCalledWith('/rooms/1/schedules/new', expect.objectContaining({ state: { newScheduleDraft: expect.objectContaining({
-    form: draft.form, mode: 'direct', courses: [draft.courses[0], expect.objectContaining({ course_name: '새 추천' })],
+    form: draft.form, mode: 'direct', courses: [draft.courses[0], expect.objectContaining({ course_name: '2. 새 추천' })],
   }) } }));
 });
 test('state의 중복 조합 제거 후 실제 표시 개수와 투표 전달 일치, 누락 비용 안내', () => {
@@ -72,7 +125,7 @@ test('예산 범위·추정 안내·평점 없음 표시와 선택 데이터 전
     stops: [{ id: 'p1', placeName: '카페', category: '카페', rating: null }] };
   useLocation.mockReturnValue({ search: '', state: { schedule: { id: 2, roomid: 1 }, recommendation: { courses: [course] } } });
   render(<CourseRecommendationResultPage />);
-  expect(screen.getByText('한 사람당 예상 비용')).toBeInTheDocument();
+  expect(screen.getByText('1인 예상 비용')).toBeInTheDocument();
   expect(screen.getByText('5,000~10,000원')).toBeInTheDocument();
   expect(screen.queryByText(/실제 이용 요금은 다를 수 있습니다/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '코스 상세 보기' }));

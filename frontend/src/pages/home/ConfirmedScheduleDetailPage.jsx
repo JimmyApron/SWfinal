@@ -895,6 +895,12 @@ function ConfirmedScheduleDetailPage() {
           </button>
         </div>
 
+        {!isLocationOnly && (
+          <div style={{ marginTop: "10px" }}>
+            <FinalizedCoursePreview roomId={schedule.roomid} scheduleId={schedule.id} />
+          </div>
+        )}
+
         {additionalLocations.length > 0 && (
           <>
             <div style={{ height: "1px", backgroundColor: "#E5E7EB", margin: "8px -12px" }} />
@@ -1440,7 +1446,6 @@ function ConfirmedScheduleDetailPage() {
           </div>
         )}
 
-        <FinalizedCoursePreview roomId={schedule.roomid} scheduleId={schedule.id} />
         {middlePlaceSection}
 
         <PrepSummaryCard

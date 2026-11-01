@@ -80,8 +80,13 @@ test('선택·투표·재투표 동작과 지도 상세', async () => {
   expect(onSelect).toHaveBeenCalledWith(11);
   fireEvent.click(screen.getByRole('button', { name: '투표하기' }));
   expect(onSubmit).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getAllByRole('button', { name: '지도보기' })[0]);
+  expect(screen.queryByText('카페')).not.toBeInTheDocument();
+  fireEvent.click(screen.getAllByRole('button', { name: '상세보기' })[0]);
   expect(screen.getByText('코스 지도')).toBeInTheDocument();
+  expect(screen.getByText('카페')).toBeInTheDocument();
+  expect(screen.getByText('평점 정보 없음')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '상세접기' }));
+  expect(screen.queryByText('평점 정보 없음')).not.toBeInTheDocument();
   view.rerender(<CourseFinalizationPanel vote={vote} roomId={2} onFinalized={jest.fn()} onReVote={onReVote} />);
   fireEvent.click(screen.getByRole('button', { name: '다시 투표하기' }));
   expect(onReVote).toHaveBeenCalledTimes(1);

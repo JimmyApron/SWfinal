@@ -1,10 +1,26 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { deduplicateRecommendationResult, loadRecommendationResultFromStorage, saveRecommendationResultToStorage } from "../../api/courseRecommendationApi";
 import { normalizeCourseVoteSelection } from "../../utils/courseVoteUtils";
+import { confirmRecommendedCourse } from "../../api/directRecommendationApi";
+import PlaceRating from "../../components/PlaceRating";
+import KakaoMapView from "../../components/map/KakaoMapView";
+import { validCoordinate } from "../../utils/courseRoadmapUtils";
 
 const PAGE_STYLES = {
+  summaryTag: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '5px 9px',
+    borderRadius: 8,
+    background: '#F5F2FF',
+    border: '1px solid #EAE4FF',
+    color: '#6650B0',
+    fontSize: 12,
+    fontWeight: 500,
+    lineHeight: 1.5,
+  },
   page: {
     minHeight: "100vh",
     background: "#F7F5FF",
@@ -93,6 +109,26 @@ function CourseRecommendationResultPage() {
   const [error, setError] = useState("");
   const [selectedCourseIds, setSelectedCourseIds] = useState([]);
   const [expandedCourseIds, setExpandedCourseIds] = useState([]);
+  const [confirmingCourseId, setConfirmingCourseId] = useState(null);
+  const [confirmationError, setConfirmationError] = useState('');
+  const confirmationLock = useRef(false);
+
+  const handleConfirmCourse = async (course) => {
+    if (confirmationLock.current || !stateRoomId || !stateScheduleId) return;
+    confirmationLock.current = true;
+    setConfirmingCourseId(course.id);
+    setConfirmationError('');
+    try {
+      const result = await confirmRecommendedCourse({ roomId: stateRoomId, scheduleId: stateScheduleId, course });
+      if (result.warning) window.alert(result.warning);
+      navigate(`/rooms/${stateRoomId}/schedules/${stateScheduleId}/final-course`, { replace: true });
+    } catch (failure) {
+      setConfirmationError(failure.message || '코스 확정에 실패했습니다. 다시 시도해 주세요.');
+    } finally {
+      confirmationLock.current = false;
+      setConfirmingCourseId(null);
+    }
+  };
 
   useLayoutEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
@@ -168,7 +204,7 @@ function CourseRecommendationResultPage() {
     if (isNewSchedule && selectedCourses.length && stateRoomId) {
       const draft = location.state.newScheduleDraft;
       navigate(`/rooms/${stateRoomId}/schedules/new`, { state: { newScheduleDraft: {
-        ...draft, courses: [...(draft.courses || []), ...normalizeCourseVoteSelection(selectedCourses)],
+        ...draft, courses: [...(draft.courses || []), ...normalizeCourseVoteSelection(selectedCourses, (draft.courses || []).length + 1)],
       } } });
       return;
     }
@@ -269,6 +305,15 @@ function CourseRecommendationResultPage() {
               courseList.map((course, index) => {
                 const checked = selectedCourseIds.includes(course.id);
                 const expanded = expandedCourseIds.includes(course.id);
+                const mapPlaces = course.stops.map((stop, stopIndex) => ({
+                  id: `${course.id}-${stopIndex}`,
+                  name: stop.placeName,
+                  address: stop.placeAddress,
+                  lat: stop.latitude ?? stop.lat,
+                  lng: stop.longitude ?? stop.lng,
+                  orderNumber: stopIndex + 1,
+                })).filter(place => validCoordinate(place.lat, place.lng))
+                  .map(place => ({ ...place, lat: Number(place.lat), lng: Number(place.lng) }));
                 return (
                   <div key={course.id} style={{ ...PAGE_STYLES.card, padding: "14px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
@@ -285,17 +330,25 @@ function CourseRecommendationResultPage() {
                     </div>
 
                     <div style={{ display: 'grid', gap: 8, marginTop: 12, fontSize: 14, lineHeight: 1.6 }}>
-                      <div>{course.stops.some(stop => stop.mealKey) || course.summary?.includes('식사 포함') || course.summary?.includes('식사가 포함') ? '🍽️ 식사가 포함돼 있어요' : '🌿 식사 없이 즐기는 코스예요'}</div>
-                      <div>{({ walking: '걸어서 이동해요', walk: '걸어서 이동해요', transit: '대중교통으로 이동해요', car: '자동차로 이동해요' })[course.travelMode || recommendation?.condition?.travelMode || course.summary?.match(/\b(walking|walk|transit|car)\b/)?.[1]] || '이동 방법은 상세 일정을 확인해 주세요'}{course.totalDurationMin > 0 ? ` · 전체 약 ${course.totalDurationMin >= 60 ? `${Math.floor(course.totalDurationMin / 60)}시간${course.totalDurationMin % 60 ? ` ${course.totalDurationMin % 60}분` : ''}` : `${course.totalDurationMin}분`} 코스` : ''}</div>
-                      <div style={{ color: '#6650B0' }}>{({ rating: '평점 높은 장소 위주로 골랐어요.', budget: '예산을 먼저 고려했어요.', variety: '다양한 활동을 담았어요.', travel: '장소 사이 이동이 편한 코스예요.' })[course.priority || recommendation?.condition?.priority || (course.summary?.includes('평점') ? 'rating' : course.summary?.includes('예산 우선') ? 'budget' : 'travel')]}</div>
-                      {course.barMode && <div>🍸 {course.barMode === 'dinner' ? '주점에서 저녁 식사와 한잔을 함께해요.' : '저녁 식사 후 주점에서 2차를 즐겨요.'}</div>}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        <span style={PAGE_STYLES.summaryTag}>{course.stops.some(stop => stop.mealKey) || course.summary?.includes('식사 포함') || course.summary?.includes('식사가 포함') ? '식사 포함' : '식사 미포함'}</span>
+                        <span style={PAGE_STYLES.summaryTag}>{({ walking: '도보 이동', walk: '도보 이동', transit: '대중교통 이동', car: '자동차 이동' })[course.travelMode || recommendation?.condition?.travelMode || course.summary?.match(/\b(walking|walk|transit|car)\b/)?.[1]] || '이동 수단 미정'}{course.totalDurationMin > 0 ? ` · 약 ${course.totalDurationMin >= 60 ? `${Math.floor(course.totalDurationMin / 60)}시간${course.totalDurationMin % 60 ? ` ${course.totalDurationMin % 60}분` : ''}` : `${course.totalDurationMin}분`}` : ''}</span>
+                        <span style={PAGE_STYLES.summaryTag}>{({ rating: '높은 평점 우선', budget: '예산 우선', variety: '다양한 활동 포함', travel: '이동 시간 최소화' })[course.priority || recommendation?.condition?.priority || (course.summary?.includes('평점') ? 'rating' : course.summary?.includes('예산 우선') ? 'budget' : 'travel')]}</span>
+                        {course.barMode && <span style={PAGE_STYLES.summaryTag}>{course.barMode === 'dinner' ? '저녁 식사 · 주점 포함' : '식사 후 2차 포함'}</span>}
+                      </div>
                       <div style={{ padding: '12px 14px', background: '#F7F5FF', borderRadius: 12 }}>
-                        <div style={{ fontSize: 13, color: '#66657A' }}>한 사람당 예상 비용</div>
+                        <div style={{ fontSize: 13, color: '#66657A' }}>1인 예상 비용</div>
                         <div style={{ fontSize: 18, fontWeight: 700, marginTop: 3 }}>{course.budgetEstimate?.max != null ? `${Number(course.budgetEstimate.min).toLocaleString('ko-KR')}~${Number(course.budgetEstimate.max).toLocaleString('ko-KR')}원` : course.budgetEstimate ? '비용 정보 확인 필요' : course.estimatedCostPerPerson == null ? '비용 정보 없음' : `${Number(course.estimatedCostPerPerson).toLocaleString('ko-KR')}원`}</div>
                       </div>
                     </div>
 
                     {expanded && <div id={`course-details-${course.id}`} role="region" aria-label={`${course.name} 상세 정보`} style={{ marginTop: "12px", display: "grid", gap: "8px" }}>
+                      {mapPlaces.length > 0 ? (
+                        <div aria-label="코스 방문 순서 지도">
+                          <KakaoMapView places={mapPlaces} routePath={mapPlaces.length > 1 ? mapPlaces : []} numberedPlaces height="280px" />
+                          <p style={{ fontSize: 12, color: '#66657A', margin: '6px 0' }}>번호는 방문 순서이며, 연결선은 실제 이동 경로가 아닌 직선입니다.</p>
+                        </div>
+                      ) : <p style={{ fontSize: 13, color: '#66657A' }}>지도에 표시할 장소 좌표가 없습니다.</p>}
                       {course.budgetEstimate && <p style={{ fontSize: 13, lineHeight: 1.6, color: "#66657A", margin: 0 }}>식사와 활동 종류를 바탕으로 계산한 금액이에요. 실제 이용 요금은 다를 수 있습니다. {course.budgetEstimate.status === "over" ? "설정한 예산보다 많이 들 수 있어요." : course.budgetEstimate.status === "uncertain" ? "선택한 예산 안에 가능한지 확인해 주세요." : ""}</p>}
                       {expanded && <p style={{ fontSize: 13, color: '#66657A', margin: '0 0 4px' }}>총 이동 시간: {course.estimatedTravelTimeMin == null ? '정보 없음' : `${course.estimatedTravelTimeMin}분`} · 이동 시간과 비용은 추정치입니다.</p>}
                       {course.stops.map((stop, stopIndex) => (
@@ -320,7 +373,10 @@ function CourseRecommendationResultPage() {
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
-                              <div style={{ flex: '1 1 100px', fontWeight: 700, fontSize: 14, overflowWrap: 'anywhere' }}>{stop.placeName}</div>
+                              <div style={{ flex: '1 1 100px', fontWeight: 700, fontSize: 14, overflowWrap: 'anywhere' }}>
+                                {stop.placeName}
+                                <div style={{ marginTop: 3 }}><PlaceRating rating={stop.rating} /></div>
+                              </div>
                               <div style={{ marginLeft: 'auto', textAlign: 'right', fontSize: 12, lineHeight: 1.6 }}>
                                 <div style={{ color: '#6650B0', fontWeight: 600 }}>{getStopCostLabel(stop)}</div>
                                 <div style={{ color: '#66657A' }}>{stop.expectedStayMin == null ? '체류 시간 미정' : `${stop.expectedStayMin}분 체류`}</div>
@@ -333,9 +389,6 @@ function CourseRecommendationResultPage() {
                             <p style={{ margin: '6px 0' }}>방문 시간: {getTimeLabel(stop.visitStartTime, stop.visitEndTime)}</p>
                             {stop.waitingTimeMin > 0 && <p style={{ margin: '6px 0' }}>방문 전 여유 시간: {stop.waitingTimeMin}분 · 쉬거나 자유롭게 둘러보세요.</p>}
                             {stopIndex > 0 && <p style={{ margin: '6px 0' }}>이전 장소에서 이동: {stop.travelTimeFromPrevMin == null ? '시간 정보 없음' : `${stop.travelTimeFromPrevMin}분`}{stop.distanceFromPrevM != null ? ` · ${Number(stop.distanceFromPrevM).toLocaleString()}m` : ''}</p>}
-                            <div style={{ marginTop: "6px", display: "flex", flexWrap: "wrap", gap: "6px", fontSize: "11px", color: "#4D4E5C" }}>
-                              <span style={PAGE_STYLES.chip}>{stop.rating == null ? "평점 정보 없음" : `구글 평점 ${Number(stop.rating).toFixed(1)}`}</span>
-                            </div>
                             </div>}
                           </div>
                         </div>
@@ -347,6 +400,13 @@ function CourseRecommendationResultPage() {
                         {expanded ? '코스 상세 접기' : '코스 상세 보기'}
                       </button>
                     </div>
+                    {!isNewSchedule && !location.state?.courseVoteDraft && (
+                      <button type="button" disabled={confirmingCourseId !== null}
+                        onClick={() => handleConfirmCourse(course)}
+                        style={{ ...PAGE_STYLES.primaryButton, marginTop: '10px', opacity: confirmingCourseId !== null ? 0.5 : 1 }}>
+                        {confirmingCourseId === course.id ? '확정 중…' : '이 코스로 바로 확정'}
+                      </button>
+                    )}
                   </div>
                 );
               })
@@ -355,15 +415,16 @@ function CourseRecommendationResultPage() {
         )}
 
         <div style={{ marginTop: "16px", display: "grid", gap: "10px" }}>
+          {confirmationError && <p role="alert" style={{ color: '#B42318' }}>{confirmationError}</p>}
           <button
             type="button"
             style={{ ...PAGE_STYLES.primaryButton, opacity: selectedCount === 0 ? 0.5 : 1 }}
-            disabled={selectedCount === 0}
+            disabled={selectedCount === 0 || confirmingCourseId !== null}
             onClick={handleCreateCourseVote}
           >
             {isNewSchedule ? '선택한 코스를 일정에 추가' : location.state?.courseVoteDraft ? '선택한 코스를 후보에 추가' : '선택한 코스로 투표 만들기'}
           </button>
-          <button type="button" onClick={goBack} style={PAGE_STYLES.secondaryButton}>
+          <button type="button" disabled={confirmingCourseId !== null} onClick={goBack} style={PAGE_STYLES.secondaryButton}>
             조건 다시 설정
           </button>
         </div>

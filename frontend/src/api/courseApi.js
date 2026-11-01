@@ -161,7 +161,7 @@ export async function createCourseWithStops(coursePayload = {}) {
     throw new Error("해당 일정은 현재 모임에 속하지 않습니다.");
   }
 
-  const courseName = toSafeText(coursePayload.courseName ?? coursePayload.course_name);
+  let courseName = toSafeText(coursePayload.courseName ?? coursePayload.course_name);
   if (!courseName) {
     throw new Error("코스 이름을 입력해 주세요.");
   }
@@ -200,15 +200,22 @@ export async function createCourseWithStops(coursePayload = {}) {
         visit_start_time: normalized.visit_start_time?.slice(0, 5) || null,
         visit_end_time: normalized.visit_end_time?.slice(0, 5) || null };
     }));
-    if (signature(existingStops || []) !== signature(stops)) {
-      throw new Error(`이 일정에 "${courseName}" 이름의 다른 코스가 이미 있습니다. 코스 이름을 바꿔 주세요.`);
+    if (signature(existingStops || []) === signature(stops)) {
+      return {
+        ...existingCourse,
+        stops: existingStops || [],
+        isDuplicate: true,
+      };
     }
 
-    return {
-      ...existingCourse,
-      stops: existingStops || [],
-      isDuplicate: true,
-    };
+    const { data: namedCourses, error: namesError } = await supabase
+      .from("courses").select("course_name").eq("room_id", roomId).eq("schedule_id", scheduleId);
+    if (namesError) throw new Error("코스 번호를 확인하지 못했습니다. 다시 시도해 주세요.");
+    const usedNames = new Set((namedCourses || []).map(course => course.course_name));
+    const baseName = courseName.replace(/^\d+\.\s*/, "");
+    let number = Math.max(0, ...(namedCourses || []).map(course => Number(course.course_name?.match(/^(\d+)\./)?.[1]) || 0)) + 1;
+    while (usedNames.has(`${number}. ${baseName}`)) number += 1;
+    courseName = `${number}. ${baseName}`;
   }
 
   const normalizedStops = stops.map((stop, index) => normalizeCourseStop(stop, index));

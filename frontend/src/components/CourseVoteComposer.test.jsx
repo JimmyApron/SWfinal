@@ -8,6 +8,12 @@ jest.mock('./map/LocationPicker', () => function Picker({ onSelect }) { return <
   <button onClick={() => onSelect('식당 B', '홍대', { id: '2', lat: 37.5501, lng: 126.9201 })}>식당 검색 결과</button>
 </>; });
 const schedule = { id: 3, title: '홍대 약속', starttime: '15:30', endtime: '18:00' };
+test('추천 후보의 기존 추정 가격 범위를 표시', () => {
+  render(<Fixture initialOptions={[{ course_name: '추천 코스', stop_count: 2, total_duration_min: 120,
+    estimated_cost: null, budgetEstimate: { min: 13000, max: 28000 }, stops: [{ placeName: '카페' }] }]} />);
+  expect(screen.getByText(/1인 기준 13,000~28,000원/)).toBeInTheDocument();
+  expect(screen.queryByText(/비용 정보 확인 필요/)).not.toBeInTheDocument();
+});
 function Fixture({ initialOptions = [] }) {
   const [options, setOptions] = useState(initialOptions);
   return <CourseVoteComposer schedules={[schedule]} schedule={schedule} scheduleId={3} options={options}

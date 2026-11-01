@@ -321,6 +321,7 @@ test('누락 평점/비용은 유지하되 조건 충족으로 단정하지 않�
 });
 test('중복 제거된 코스 ID와 장소가 선택지/저장 데이터로 그대로 전달', async () => {
   const { courses } = await run();
+  courses.forEach((course, index) => expect(course.name).toMatch(new RegExp(`^${index + 1}\\. `)));
   const selected = [courses[0], courses[2]];
   expect(normalizeCourseVoteSelection(selected).map((o) => o.courseid)).toEqual(selected.map((c) => c.id));
   expect(new Set(selected.map((c) => courseCombinationKey(buildCourseVoteDbRows(c).stops)))).toHaveProperty('size', 2);

@@ -569,7 +569,7 @@ export async function generateCourseRecommendations({ condition, schedule }) {
   diagnostic.finish(validCourses.length ? 'success' : 'no_combination');
 
   return {
-    courses: validCourses.slice(0, 5),
+    courses: validCourses.slice(0, 5).map((course, index) => ({ ...course, name: `${index + 1}. ${course.name}` })),
     center,
     condition: floorCondition,
     source: "kakao",

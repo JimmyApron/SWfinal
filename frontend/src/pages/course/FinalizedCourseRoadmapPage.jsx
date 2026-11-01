@@ -31,7 +31,10 @@ export default function FinalizedCourseRoadmapPage() {
   if (!state.data) return <main className="course-roadmap"><p>아직 최종 확정된 코스가 없습니다.</p><Link to={`/rooms/${roomid}`}>모임으로 돌아가기</Link></main>;
   const { course, schedule, room } = state.data;
   return <main className="course-roadmap">
-    <Link to={`/rooms/${roomid}?tab=schedule&scheduleId=${scheduleid}`}>← 일정으로 돌아가기</Link>
+    <Link to={`/rooms/${roomid}?tab=schedule&scheduleId=${scheduleid}`} aria-label="일정으로 돌아가기"
+      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, fontSize: 28, textDecoration: 'none' }}>
+      {'<'}
+    </Link>
     <header><p>{room.roomname} · {schedule.title || "이름 없는 일정"}</p><span className="course-roadmap-badge">최종 확정 완료</span>
       <h1>{course.course_name}</h1><p>{schedule.date || "날짜 정보 없음"} · {schedule.isallday ? "종일" : `${schedule.starttime?.slice(0, 5) || "시작 시간 정보 없음"} ~ ${schedule.endtime?.slice(0, 5) || "종료 시간 정보 없음"}`}</p></header>
     <section className="course-roadmap-card" aria-label="전체 코스 요약">

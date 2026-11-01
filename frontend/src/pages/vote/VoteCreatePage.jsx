@@ -111,7 +111,8 @@ function VoteCreatePage() {
 
   const [options, setOptions] = useState(() => {
     if (location.state?.courseVoteDraft) {
-      return [...(location.state.courseVoteDraft.options || []), ...normalizeCourseVoteSelection(selectedCourses)];
+      const previous = location.state.courseVoteDraft.options || [];
+      return [...previous, ...normalizeCourseVoteSelection(selectedCourses, previous.length + 1)];
     }
     if (selectedCourses.length > 0) {
       return normalizeCourseVoteSelection(selectedCourses);
