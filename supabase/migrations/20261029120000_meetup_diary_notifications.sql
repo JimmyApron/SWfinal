@@ -323,7 +323,6 @@ DECLARE
   v_room_name text;
   v_actor_id uuid;
   v_setting_enabled boolean;
-  v_first_reaction_notice boolean;
   v_delivery_key text := 'diary_reminder:'||p_meeting_id::text||':'||p_recipient_user_id::text;
   v_role text := COALESCE(nullif(current_setting('request.jwt.claim.role',true),''),nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'role');
 BEGIN
@@ -390,6 +389,7 @@ DECLARE
   v_emoji text;
   v_idempotency_key text;
   v_setting_enabled boolean;
+  v_first_reaction_notice boolean;
   v_role text := COALESCE(nullif(current_setting('request.jwt.claim.role',true),''),nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'role');
 BEGIN
   IF v_role IS DISTINCT FROM 'service_role' THEN RAISE EXCEPTION 'Server role required' USING ERRCODE='42501'; END IF;
@@ -427,7 +427,7 @@ BEGIN
       IF v_diary.status<>'published' OR v_diary.visibility<>'room'
          OR p_recipient_user_id<>(SELECT i.auth_user_id FROM public.room_actor_identities i WHERE i.id=v_diary.author_identity_id)
          OR p_recipient_user_id=v_actor_user_id THEN RETURN 'skipped'; END IF;
-      SELECT r.emoji INTO v_emoji FROM public.diary_reactions r WHERE r.id=substring(v_event.event_key from length('diary_reaction:')+1);
+      SELECT r.emoji INTO v_emoji FROM public.diary_reactions r WHERE r.id=substring(v_event.event_key from length('diary_reaction:')+1)::uuid;
       IF v_emoji IS NULL THEN RETURN 'skipped'; END IF;
       v_type:='diary_reaction'; v_setting:='reaction_enabled';
       v_title:=COALESCE(v_actor_name,'방 멤버')||'님이 내 기록에 '||v_emoji||'를 남겼어요';
