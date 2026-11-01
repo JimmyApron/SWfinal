@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { FiMapPin } from "react-icons/fi";
 import { getDiaryPhotos, getMyMeetingDiary, saveDiary, uploadDiaryPhotos } from "../../api/meetupDiaryApi";
 import "./RoomCalendar.css";
 
@@ -641,6 +642,7 @@ function DiaryEditor({ roomId, meeting, identityId, profileImageUrl = "", onClos
       {fullScreen && <header className="diary-fullscreen-hero">
         <div className="diary-fullscreen-topbar"><button type="button" onClick={closeEditor} aria-label="닫기">×</button><strong>{roomName}</strong><span className={status === "failed" ? "failed" : ""}>{saveLabel}</span></div>
         <h1>{meeting.title || "함께한 만남"}</h1><p>{dateSubtitle}</p>
+        <p className="diary-fullscreen-location"><FiMapPin aria-hidden="true" />{meeting.location?.trim() || meeting.location_address?.trim() || "미정"}</p>
       </header>}
       {restoredDraftTime && <div className="diary-draft-restore-banner"><span>✎ {formatDraftRestoreTime(Number(restoredDraftTime))}</span><button type="button" disabled={busy} onClick={startNewDraft}>새로 쓰기</button></div>}
       <section className={`diary-sheet ${fullScreen ? "diary-fullscreen-sheet" : ""}`} role="dialog" aria-modal="true" aria-labelledby="diary-title">

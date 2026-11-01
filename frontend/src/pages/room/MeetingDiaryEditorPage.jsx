@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { getRoomDiaryIdentity, getRoomMeetings } from "../../api/meetupDiaryApi";
+import { getMeetingWithCurrentPlace, getRoomDiaryIdentity, getRoomMeetings } from "../../api/meetupDiaryApi";
 import { supabase } from "../../lib/supabaseClient";
 import DiaryEditor from "./DiaryEditor";
 import "./MeetingDiaryDetailPage.css";
@@ -40,11 +40,12 @@ export default function MeetingDiaryEditorPage() {
         if (!auth.user || !auth.identityId) throw new Error("이 방의 회원만 기록을 작성할 수 있습니다.");
         const found = meetings.find((item) => item.id === meetingId);
         if (!found) throw new Error("이 방에서 만남을 찾을 수 없습니다.");
+        const currentMeeting = await getMeetingWithCurrentPlace(roomId, found);
         if (active) {
           setIdentity(auth.identityId);
           setProfileImageUrl(profile?.profileimageurl || auth.user.user_metadata?.avatar_url || auth.user.user_metadata?.picture || "");
           setRoomName(room?.roomname || "모임");
-          setMeeting(found);
+          setMeeting(currentMeeting);
           setOrdinal(meetings.findIndex((item) => item.id === meetingId) + 1);
         }
       } catch (loadError) {

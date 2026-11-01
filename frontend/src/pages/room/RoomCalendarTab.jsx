@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { FiImage } from "react-icons/fi";
-import { createLightningMeeting, getCalendarDiaryThumbnails, getMeetingDiaryProgress, getRoomDiaries, getRoomDiaryIdentity, getRoomMeetings } from "../../api/meetupDiaryApi";
+import { FiImage, FiMapPin } from "react-icons/fi";
+import { createLightningMeeting, getCalendarDiaryThumbnails, getMeetingDiaryProgress, getRoomDiaries, getRoomDiaryIdentity, getRoomMeetings, updateLightningMeetingPlace } from "../../api/meetupDiaryApi";
+import LocationPicker from "../../components/map/LocationPicker";
 import "./RoomCalendar.css";
 
 const WEEKDAYS = ["\uC77C", "\uC6D4", "\uD654", "\uC218", "\uBAA9", "\uAE08", "\uD1A0"];
@@ -38,12 +39,16 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
   const [selectedMeetingIndex, setSelectedMeetingIndex] = useState(() => { try { return JSON.parse(sessionStorage.getItem(`room-calendar-state:${roomId}`) || "null")?.selectedMeetingIndex || 0; } catch { return 0; } });
   const [meetingProgressById, setMeetingProgressById] = useState({});
   const [showLightning, setShowLightning] = useState(false);
+  const [editingLightningMeetingId, setEditingLightningMeetingId] = useState(null);
   const [showDiarySavedToast, setShowDiarySavedToast] = useState(false);
   const [lightningTitle, setLightningTitle] = useState("");
   const [lightningTitleError, setLightningTitleError] = useState(false);
   const [lightningParticipantIds, setLightningParticipantIds] = useState([]);
   const [authUserId, setAuthUserId] = useState(null);
   const [lightningLocation, setLightningLocation] = useState("");
+  const [lightningLocationAddress, setLightningLocationAddress] = useState("");
+  const [lightningSelectedPlace, setLightningSelectedPlace] = useState(null);
+  const [showLightningPlacePicker, setShowLightningPlacePicker] = useState(false);
   const [lightningStart, setLightningStart] = useState("");
   const [lightningEnd, setLightningEnd] = useState("");
   const [loading, setLoading] = useState(true);
@@ -241,11 +246,22 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
   }
 
   function openLightningForm() {
+    setEditingLightningMeetingId(null);
     setLightningParticipantIds([]);
     setLightningTitleError(false);
-    setLightningTitle(""); setLightningLocation(""); setLightningStart(""); setLightningEnd("");
+    setLightningTitle(""); setLightningLocation(""); setLightningLocationAddress(""); setLightningSelectedPlace(null); setShowLightningPlacePicker(false); setLightningStart(""); setLightningEnd("");
     setError("");
     lightningRequestIdRef.current = null;
+    setShowLightning(true);
+  }
+
+  function openLightningPlaceEdit(meeting) {
+    setEditingLightningMeetingId(meeting.id);
+    setLightningLocation(meeting.location || "");
+    setLightningLocationAddress(meeting.location_address || "");
+    setLightningSelectedPlace(null);
+    setShowLightningPlacePicker(false);
+    setError("");
     setShowLightning(true);
   }
 
@@ -319,7 +335,7 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
     try {
       setSavingLightning(true);
       lightningRequestIdRef.current ||= crypto.randomUUID();
-      await createLightningMeeting({ roomId, date: selectedDate, title: lightningTitle.trim(), startTime: lightningStart, endTime: lightningEnd, location: lightningLocation.trim(), participantUserIds: lightningParticipantIds, requestId: lightningRequestIdRef.current });
+      await createLightningMeeting({ roomId, date: selectedDate, title: lightningTitle.trim(), startTime: lightningStart, endTime: lightningEnd, location: lightningLocation.trim(), address: lightningLocationAddress.trim(), participantUserIds: lightningParticipantIds, requestId: lightningRequestIdRef.current });
       const date = new Date(`${selectedDate}T12:00:00`);
       setMonth(new Date(date.getFullYear(), date.getMonth(), 1));
       setSelectedMeetingIndex(0);
@@ -328,6 +344,28 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
       setShowLightning(false);
     } catch (createError) { setError(createError.message || "\uBC88\uAC1C \uB9CC\uB0A8 \uB4F1\uB85D\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."); }
     finally { setSavingLightning(false); }
+  };
+
+  const submitLightningPlaceEdit = async (event) => {
+    event.preventDefault();
+    if (savingLightning || !editingLightningMeetingId) return;
+    setError("");
+    try {
+      setSavingLightning(true);
+      await updateLightningMeetingPlace({
+        roomId,
+        meetingId: editingLightningMeetingId,
+        location: lightningLocation.trim(),
+        address: lightningLocationAddress.trim(),
+      });
+      await refreshCalendar();
+      setShowLightning(false);
+      setEditingLightningMeetingId(null);
+    } catch (saveError) {
+      setError(saveError.message || "번개 만남 장소를 수정하지 못했습니다.");
+    } finally {
+      setSavingLightning(false);
+    }
   };
 
   return (
@@ -375,15 +413,16 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
         {selectedMeetings.length === 0 && (showEmptyDayPrompt
           ? <div className="calendar-empty-day-prompt"><span className="calendar-empty-day-icon" aria-hidden="true">&#x26A1;&#xFE0F;</span><strong>&#xC774; &#xB0A0; &#xCE5C;&#xAD6C;&#xB4E4;&#xC744; &#xB9CC;&#xB0AC;&#xB098;&#xC694;?</strong><p>&#xC571;&#xC5D0;&#xC11C; &#xC815;&#xD558;&#xC9C0; &#xC54A;&#xC740; &#xBC88;&#xAC1C; &#xB9CC;&#xB0A8;&#xB3C4; &#xAE30;&#xB85D;&#xD560; &#xC218; &#xC788;&#xC5B4;&#xC694;</p><button type="button" className="calendar-empty-day-cta" disabled={!identity} onClick={openLightningForm}>&#x26A1;&#xFE0F; &#xBC88;&#xAC1C; &#xB9CC;&#xB0A8; &#xAE30;&#xB85D;&#xD558;&#xAE30;</button></div>
           : <div className="calendar-empty-meeting"><p>&#xB4F1;&#xB85D;&#xB41C; &#xB9CC;&#xB0A8;&#xC774; &#xC5C6;&#xC2B5;&#xB2C8;&#xB2E4;.</p></div>)}
-        {selectedMeetings.length > 0 && <div className={`calendar-meeting-carousel ${selectedMeetings.length > 1 ? "has-multiple" : "single"} ${!isActiveRecordPublished && activeMeeting?.meeting_date <= today ? "has-record-hint" : ""}`}>
+        {selectedMeetings.length > 0 && <div className={`calendar-meeting-carousel ${selectedMeetings.length > 1 ? "has-multiple" : "single"} ${activeMeeting?.source_type === "lightning" && activeMeeting.lifecycle_status !== "cancelled" && identity ? "has-place-edit" : ""} ${!isActiveRecordPublished && activeMeeting?.meeting_date <= today ? "has-record-hint" : ""}`}>
           {selectedMeetings.length > 1 && <button type="button" className="calendar-meeting-arrow previous" aria-label="&#xC774;&#xC804; &#xB9CC;&#xB0A8;" onClick={() => setSelectedMeetingIndex((activeMeetingIndex - 1 + selectedMeetings.length) % selectedMeetings.length)}>&#x2039;</button>}
           {activeMeeting && <article key={activeMeeting.id} className={`calendar-meeting-card ${isActiveRecordPublished ? "is-complete" : ""}`}>
-              <button type="button" className="calendar-meeting-summary" disabled={activeMeeting.meeting_date > today} onClick={() => openMeetingRecords(activeMeeting.id)} aria-label={`${activeMeeting.title || "\uC57D\uC18D"} \uAE30\uB85D \uC0C1\uC138 \uBCF4\uAE30`}>
+              <div className="calendar-meeting-summary">
+              <button type="button" className="calendar-meeting-summary-open" disabled={activeMeeting.meeting_date > today} onClick={() => openMeetingRecords(activeMeeting.id)} aria-label={`${activeMeeting.title || "\uC57D\uC18D"} \uAE30\uB85D \uC0C1\uC138 \uBCF4\uAE30`} />
               <div className="calendar-meeting-summary-main">
                 <div className="calendar-meeting-info">
                   <strong>{activeMeeting.title || (activeMeeting.source_type === "lightning" ? "\uBC88\uAC1C \uB9CC\uB0A8" : "\uD655\uC815 \uC77C\uC815")}</strong>
-                  <span>{activeMeeting.start_time ? new Intl.DateTimeFormat("ko-KR", { hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(`2000-01-01T${activeMeeting.start_time}`)) : "\uD558\uB8E8 \uC885\uC77C"}{activeMeeting.location ? ` ? ?? ${activeMeeting.location}` : ""}</span>
-                  {activeMeeting.lifecycle_status === "cancelled" && <em>痍⑥냼???쇱젙</em>}
+                  <span>{activeMeeting.start_time ? new Intl.DateTimeFormat("ko-KR", { hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(`2000-01-01T${activeMeeting.start_time}`)) : "\uD558\uB8E8 \uC885\uC77C"}{activeMeeting.location && <>{" \u00B7 "}<FiMapPin className="calendar-meeting-place-icon" aria-hidden="true" />{" "}{activeMeeting.location}</>}</span>
+                  {activeMeeting.lifecycle_status === "cancelled" && <em>취소된 일정</em>}
                 </div>
                 {activeMeeting.meeting_date <= today && <span className="calendar-meeting-chevron" aria-hidden="true">&#x203A;</span>}
               </div>
@@ -395,9 +434,10 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
                   {participants.length > 4 && <span className="calendar-participant-avatar calendar-participant-more">+{participants.length - 4}</span>}
                 </div>
                 <span className="calendar-record-count">{activeMeetingDiaryCount ?? "\u2014"}/{activeMeetingProgress?.target_count ?? participants.length}&#xBA85; &#xAE30;&#xB85D;</span>
+                {activeMeeting.source_type === "lightning" && activeMeeting.lifecycle_status !== "cancelled" && identity && <button type="button" className="calendar-lightning-place-edit" onClick={() => openLightningPlaceEdit(activeMeeting)}>장소 수정</button>}
                 {isActiveRecordPublished && <span className="calendar-record-complete-label">&#x2713; &#xB0B4; &#xAE30;&#xB85D; &#xC791;&#xC131; &#xC644;&#xB8CC;</span>}
               </div>
-              </button>
+              </div>
               {activeMeeting.meeting_date > today && <div className="calendar-upcoming-record"><button type="button" disabled>&#xAE30;&#xB85D;&#xC740; {new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", timeZone: "Asia/Seoul" }).format(new Date(`${activeMeeting.meeting_date}T12:00:00+09:00`))}&#xBD80;&#xD130; &#xC791;&#xC131;&#xD560; &#xC218; &#xC788;&#xC5B4;&#xC694;</button></div>}
               {!isActiveRecordPublished && activeMeeting.meeting_date <= today && <button type="button" className="calendar-record-cta" disabled={!identity} onClick={() => openDiaryEditor(activeMeeting, activeMeetingIndex)}>&#xAE30;&#xB85D; &#xC4F0;&#xAE30;</button>}
           </article>}
@@ -407,13 +447,41 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
         </div>}
       </section>}
       {showDiarySavedToast && <div className="diary-autosave-toast" role="status">쓰던 글은 자동 저장됐어요. 언제든 이어 쓸 수 있어요.</div>}
-      {showLightning && <div className="diary-modal"><form className="diary-sheet lightning-sheet" onSubmit={submitLightning}>
+      {showLightning && <div className="diary-modal"><form className={`diary-sheet lightning-sheet ${showLightningPlacePicker ? "is-place-picker" : ""}`} onSubmit={showLightningPlacePicker ? (event) => event.preventDefault() : editingLightningMeetingId ? submitLightningPlaceEdit : submitLightning}>
+        {showLightningPlacePicker ? <>
+          <header className="diary-sheet-header lightning-place-header"><button type="button" className="lightning-place-back" onClick={() => setShowLightningPlacePicker(false)} aria-label="번개 만남 화면으로 돌아가기">‹</button><h2>장소 선택</h2><button type="button" className="diary-icon-button" onClick={() => setShowLightning(false)} aria-label="닫기">&times;</button></header>
+          <div className="lightning-place-picker" onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }}>
+            <LocationPicker
+              initialPlace={lightningSelectedPlace}
+              prefillKeywordFromInitialPlace={false}
+              includeAddressSearch
+              mapHeight="min(38dvh, 290px)"
+              onSelect={(name, address, place) => {
+                const selectedName = (name || place?.name || address || place?.address || "").trim();
+                if (!selectedName) return;
+                const selectedAddress = (address || place?.address || "").trim();
+                setLightningLocation(selectedName);
+                setLightningLocationAddress(selectedAddress);
+                setLightningSelectedPlace({ ...place, name: selectedName, address: selectedAddress });
+                setShowLightningPlacePicker(false);
+              }}
+            />
+          </div>
+        </> : editingLightningMeetingId ? <>
+          <header className="diary-sheet-header"><div><p className="diary-eyebrow">{selectedDate}</p><h2>번개 만남 장소 수정</h2></div><button type="button" className="diary-icon-button" onClick={() => setShowLightning(false)} aria-label="닫기">&times;</button></header>
+          <label className="diary-field-label" htmlFor="lightning-location-edit">장소</label>
+          <div className="lightning-place-row"><input id="lightning-location-edit" className="diary-select" value={lightningLocation} onChange={(event) => { setLightningLocation(event.target.value); setLightningLocationAddress(""); setLightningSelectedPlace(null); }} maxLength={200} placeholder="장소를 입력해 주세요" /><button type="button" className="lightning-place-button" onClick={() => setShowLightningPlacePicker(true)}>지도에서 선택</button></div>
+          <p className="lightning-place-edit-hint">장소를 비워두면 미정으로 표시됩니다. 저장하면 기록 화면에도 반영돼요.</p>
+          {error && <p className="diary-error">{error}</p>}
+          <button type="submit" className="diary-publish-button" disabled={savingLightning}>{savingLightning ? "저장 중..." : "장소 저장"}</button>
+        </> : <>
         <header className="diary-sheet-header"><div><p className="diary-eyebrow">{selectedDate ? new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "long" }).format(new Date(`${selectedDate}T12:00:00`)) : ""}</p><h2>&#x26A1;&#xFE0F; &#xBC88;&#xAC1C; &#xB9CC;&#xB0A8; &#xAE30;&#xB85D;&#xD558;&#xAE30;</h2></div><button type="button" className="diary-icon-button" onClick={() => setShowLightning(false)} aria-label="&#xB2EB;&#xAE30;">&times;</button></header>
         <div className="lightning-time-row"><label htmlFor="lightning-start">&#xC2DC;&#xC791; &#xC2DC;&#xAC04;<input id="lightning-start" type="time" value={lightningStart} onChange={(event) => setLightningStart(event.target.value)} /></label><label htmlFor="lightning-end">&#xC885;&#xB8CC; &#xC2DC;&#xAC04;<input id="lightning-end" type="time" value={lightningEnd} onChange={(event) => setLightningEnd(event.target.value)} /></label></div>
         <label className="diary-field-label" htmlFor="lightning-title">&#xC774;&#xB984; <span className="lightning-required-mark" aria-label="Required">*</span></label><input id="lightning-title" className="diary-select" value={lightningTitle} onChange={(event) => { setLightningTitle(event.target.value); if (event.target.value.trim()) setLightningTitleError(false); }} maxLength={120} placeholder="&#xD568;&#xAED8;&#xD55C; &#xB9CC;&#xB0A8;" />{lightningTitleError && <p className="lightning-field-error">&#xC774;&#xB984;&#xC744; &#xC785;&#xB825;&#xD574; &#xC8FC;&#xC138;&#xC694;.</p>}
-        <label className="diary-field-label" htmlFor="lightning-location">&#xC7A5;&#xC18C; <span className="lightning-optional-label">(&#xC120;&#xD0DD;)</span></label><input id="lightning-location" className="diary-select" value={lightningLocation} onChange={(event) => setLightningLocation(event.target.value)} maxLength={200} placeholder="&#xC7A5;&#xC18C;&#xB97C; &#xC785;&#xB825;&#xD574; &#xC8FC;&#xC138;&#xC694;" />
+        <label className="diary-field-label" htmlFor="lightning-location">&#xC7A5;&#xC18C; <span className="lightning-optional-label">(&#xC120;&#xD0DD;)</span></label><div className="lightning-place-row"><input id="lightning-location" className="diary-select" value={lightningLocation} onChange={(event) => { setLightningLocation(event.target.value); setLightningLocationAddress(""); setLightningSelectedPlace(null); }} maxLength={200} placeholder="&#xC7A5;&#xC18C;&#xB97C; &#xC785;&#xB825;&#xD574; &#xC8FC;&#xC138;&#xC694;" /><button type="button" className="lightning-place-button" onClick={() => setShowLightningPlacePicker(true)}>지도에서 선택</button></div>
         <fieldset className="lightning-members"><legend>&#xAC19;&#xC774; &#xB9CC;&#xB09C; &#xC0AC;&#xB78C; <span className="lightning-optional-label">(&#xC120;&#xD0DD;)</span></legend><div className="lightning-member-options">{participants.filter((participant) => String(participant.userid || "") !== authUserId).map((participant, index) => { const userId = String(participant.userid || ""); const selected = lightningParticipantIds.includes(userId); return <button type="button" key={userId || participant.id || index} className={`lightning-member-option ${selected ? "selected" : ""}`} aria-pressed={selected} onClick={() => userId && userId !== authUserId && toggleLightningParticipant(userId)} disabled={!userId}><span className="lightning-member-avatar">{participant.profiles?.profileimageurl ? <img src={participant.profiles.profileimageurl} alt="" /> : participant.nickname?.trim()?.slice(0, 1) || "?"}</span><span>{participant.nickname || "Member"}</span>{selected && <b aria-hidden="true">&#x2713;</b>}</button>; })}</div></fieldset>
         {error && <p className="diary-error">{error}</p>}<button type="submit" className="diary-publish-button" disabled={savingLightning || !selectedDate}>{savingLightning ? "\uB4F1\uB85D\uC911..." : "\uAE30\uB85D\uD558\uAE30"}</button>
+        </>}
       </form></div>}
     </main>
   );

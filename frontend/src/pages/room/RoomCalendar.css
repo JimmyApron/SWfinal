@@ -79,6 +79,7 @@
 .calendar-selected-heading { margin-bottom: 14px; }
 .calendar-selected-heading h2 { margin: 3px 0 0; font-size: 18px; }
 .calendar-meeting-badge { display: inline-flex; min-height: 36px; box-sizing: border-box; align-items: center; justify-content: center; padding: 0 10px; border-radius: 999px; background: #f0efff; color: #716ef0; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.calendar-lightning-place-edit { position: relative; z-index: 2; min-height: 30px; margin-left: auto; padding: 0 9px; border: 1px solid #dcdcf0; border-radius: 9px; background: #fff; color: #625fe8; font: inherit; font-size: 11px; font-weight: 800; white-space: nowrap; cursor: pointer; pointer-events: auto; }
 .calendar-empty-meeting { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 15px; border-radius: 13px; background: #f8f8fb; color: #858393; font-size: 13px; }
 .calendar-empty-meeting p { margin: 0; }
 .calendar-empty-meeting button { border: 0; background: transparent; color: #706df1; font-weight: 700; cursor: pointer; }
@@ -91,15 +92,21 @@
 .calendar-meeting-position { grid-column: 2; grid-row: 4; justify-self: center; margin-top: 0; color: #858393; font-size: 11px; }
 .calendar-meeting-carousel:not(.has-record-hint) .calendar-meeting-position { grid-row: 3; }
 .calendar-meeting-card { display: contents; }
-.calendar-meeting-summary { display: block; width: 100%; min-width: 0; box-sizing: border-box; grid-column: 2; grid-row: 1; padding: 12px; border: 1px solid #e8e6ef; border-radius: 15px; background: #faf9fd; color: inherit; text-align: left; font: inherit; cursor: pointer; }
-.calendar-meeting-summary:disabled { cursor: default; }
+.calendar-meeting-summary { position: relative; display: block; width: 100%; min-width: 0; box-sizing: border-box; grid-column: 2; grid-row: 1; padding: 12px; border: 1px solid #e8e6ef; border-radius: 15px; background: #faf9fd; color: inherit; text-align: left; font: inherit; }
+.calendar-meeting-summary-open { position: absolute; z-index: 1; inset: 0; width: 100%; padding: 0; border: 0; border-radius: 15px; background: transparent; cursor: pointer; }
+.calendar-meeting-summary-open:disabled { cursor: default; }
+.calendar-meeting-summary-open:focus-visible { outline: 2px solid #7c79ff; outline-offset: 2px; }
 .calendar-meeting-card.is-complete .calendar-meeting-summary { border: 2px solid #f4dc8b; box-shadow: 0 0 0 2px rgba(244, 220, 139, .18); }
 .calendar-meeting-summary-main { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.calendar-meeting-summary-main, .calendar-meeting-participants { pointer-events: none; }
 .calendar-meeting-chevron { flex: 0 0 auto; color: #aaa8b8; font-size: 22px; }
 .calendar-meeting-info { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4px; }
 .calendar-meeting-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .calendar-meeting-info span, .calendar-meeting-info em { color: #8c8a99; font-size: 11px; font-style: normal; }
+.calendar-meeting-place-icon { vertical-align: -2px; }
 .calendar-meeting-participants { display: flex; align-items: center; gap: 9px; margin-top: 11px; padding-top: 10px; border-top: 1px solid #eeedf3; }
+.calendar-meeting-carousel.has-place-edit .calendar-meeting-participants { flex-wrap: wrap; }
+.calendar-meeting-carousel.has-place-edit .calendar-record-complete-label { flex-basis: 100%; margin-left: 0; text-align: left; }
 .calendar-participant-avatars { display: flex; align-items: center; padding-left: 2px; }
 .calendar-participant-avatar { display: grid; width: 27px; height: 27px; place-items: center; overflow: hidden; margin-left: -3px; border: 2px solid #faf9fd; border-radius: 50%; background: #d9d9e1; color: #fff; font-size: 10px; font-weight: 800; }
 .calendar-participant-avatar:nth-child(3n + 1) { background: #8a78f6; }
@@ -176,6 +183,7 @@
 .diary-fullscreen-topbar > span.failed { color: #c24135; }
 .diary-fullscreen-hero h1 { margin: 10px 0 4px; font-size: 22px; line-height: 1.3; }
 .diary-fullscreen-hero p { margin: 0; color: #89869a; font-size: 11px; }
+.diary-fullscreen-hero .diary-fullscreen-location { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 6px; font-size: 12px; }
 .diary-draft-restore-banner { display: flex; width: min(calc(100% - 36px), 520px); min-height: 34px; box-sizing: border-box; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 10px; align-self: center; margin: 10px auto 0; padding: 5px 12px; border: 1px solid #f0dfa8; border-radius: 12px; background: #fff9ed; color: #655a43; font-size: 12px; line-height: 1.4; }
 .diary-draft-restore-banner > span { min-width: 0; }
 .diary-draft-restore-banner button { flex: 0 0 auto; padding: 6px 9px; border: 0; border-radius: 9px; background: transparent; color: #7166df; font: inherit; font-weight: 800; white-space: nowrap; cursor: pointer; }
@@ -243,6 +251,15 @@
 .diary-reactions button { padding: 7px 10px; border: 1px solid #e7e7ee; border-radius: 20px; background: #fff; cursor: pointer; }
 .diary-reactions button.selected { border-color: #bdbbff; background: #f2f1ff; }
 .lightning-sheet { display: flex; max-height: min(78vh, 680px); flex-direction: column; gap: 6px; }
+.lightning-sheet.is-place-picker { max-height: min(90dvh, 760px); }
+.lightning-place-row { display: flex; align-items: stretch; gap: 8px; }
+.lightning-place-row .diary-select { min-width: 0; flex: 1; }
+.lightning-place-button { flex: 0 0 auto; padding: 0 11px; border: 1px solid #d5d3ff; border-radius: 11px; background: #f3f2ff; color: #6764d5; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.lightning-place-header { gap: 8px; }
+.lightning-place-header h2 { flex: 1; }
+.lightning-place-back { padding: 0 4px; border: 0; background: transparent; color: #454354; font-size: 30px; line-height: 1; cursor: pointer; }
+.lightning-place-picker { min-height: 0; overflow-y: auto; }
+.lightning-place-edit-hint { margin: 5px 0 8px; color: #898797; font-size: 11px; line-height: 1.5; }
 .lightning-time-row { display: flex; gap: 10px; margin: 9px 0; }
 .lightning-time-row label { flex: 1; color: #656374; font-size: 11px; }
 .lightning-time-row input { display: block; width: 100%; box-sizing: border-box; margin-top: 6px; padding: 9px; border: 1px solid #e7e7ee; border-radius: 10px; }

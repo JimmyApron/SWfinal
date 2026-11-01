@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { FiArrowLeft, FiChevronLeft, FiChevronRight } from "react-icons/fi";
-import { getDiaryPhotos, getMeetingDiaryDetails, getMeetingDiaryProgress, getRoomDiaryIdentity, getRoomMeetings, saveDiaryReaction, deleteDiaryPhotosAndRecord } from "../../api/meetupDiaryApi";
+import { FiArrowLeft, FiChevronLeft, FiChevronRight, FiMapPin } from "react-icons/fi";
+import { getDiaryPhotos, getMeetingDiaryDetails, getMeetingDiaryProgress, getMeetingWithCurrentPlace, getRoomDiaryIdentity, getRoomMeetings, saveDiaryReaction, deleteDiaryPhotosAndRecord } from "../../api/meetupDiaryApi";
 import { supabase } from "../../lib/supabaseClient";
 import DiaryPhotoLightbox from "./DiaryPhotoLightbox";
 import "./MeetingDiaryDetailPage.css";
@@ -54,12 +54,15 @@ export default function MeetingDiaryDetailPage() {
       const foundMeeting = meetings.find((item) => item.id === meetingId);
       if (!foundMeeting) throw new Error("이 방에서 만남을 찾을 수 없습니다.");
       if (!auth.identityId || !auth.user) throw new Error("이 방의 회원만 기록을 볼 수 있습니다.");
-      const records = await getMeetingDiaryDetails(meetingId);
+      const [currentMeeting, records] = await Promise.all([
+        getMeetingWithCurrentPlace(roomId, foundMeeting),
+        getMeetingDiaryDetails(meetingId),
+      ]);
       let meetingProgress = null;
       try { meetingProgress = await getMeetingDiaryProgress(meetingId); }
       catch (progressError) { setError(progressError.message || "기록 작성 현황을 불러오지 못했습니다."); }
       const loadedPhotos = await Promise.all(records.map(async (diary) => [diary.id, await getDiaryPhotos(diary.id)]));
-      setIdentity(auth.identityId); setUserId(auth.user.id); setRoom(roomData); setMembers(memberData || []); setMeeting(foundMeeting);
+      setIdentity(auth.identityId); setUserId(auth.user.id); setRoom(roomData); setMembers(memberData || []); setMeeting(currentMeeting);
       setMeetingOrdinal(meetings.findIndex((item) => item.id === meetingId) + 1);
       setDiaries(records); setProgress(meetingProgress || { published_count: new Set(records.map((diary) => diary.author_auth_user_id).filter(Boolean)).size, target_count: (memberData || []).length, published_member_ids: records.map((diary) => diary.author_auth_user_id).filter(Boolean) }); setPhotosByDiary(Object.fromEntries(loadedPhotos));
       const requestedAuthor = new URLSearchParams(location.search).get("author");
@@ -117,6 +120,7 @@ export default function MeetingDiaryDetailPage() {
     <header className="meeting-diary-hero">
       <div className="meeting-diary-topbar"><button className="meeting-diary-back" onClick={back} aria-label="캘린더로 돌아가기"><FiArrowLeft /></button><strong>{room?.roomname || "모임"}</strong><span aria-hidden="true" /></div>
       <h1>{meeting?.title || "함께한 만남"}</h1><p>{dateLabel(meeting?.meeting_date)} · {meetingOrdinal}번째 만남</p>
+      <p className="meeting-diary-location"><FiMapPin aria-hidden="true" />{meeting?.location?.trim() || meeting?.location_address?.trim() || "미정"}</p>
     </header>
     <section className="meeting-diary-members">
       <div className="meeting-diary-section-heading"><strong>우리의 기록</strong><span>{progress?.published_count ?? diaries.length}명 작성 · 전체 {members.length}명</span></div>

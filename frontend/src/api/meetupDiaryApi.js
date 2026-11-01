@@ -44,6 +44,18 @@ export async function getRoomMeetings(roomId, firstDay, lastDay) {
   }
 }
 
+export async function getMeetingWithCurrentPlace(roomId, meeting) {
+  if (meeting?.source_type !== "confirmed_schedule" || !meeting.source_schedule_id) return meeting;
+  const { data, error } = await supabase
+    .from("confirmed_schedules")
+    .select("location, locationaddress")
+    .eq("id", meeting.source_schedule_id)
+    .eq("roomid", Number(roomId))
+    .maybeSingle();
+  if (error || !data) return meeting;
+  return { ...meeting, location: data.location, location_address: data.locationaddress };
+}
+
 export async function getRoomDiaries(roomId, meetingIds = []) {
   if (meetingIds.length === 0) return [];
   const { data, error } = await supabase
@@ -199,6 +211,16 @@ export async function createLightningMeeting({ roomId, date, title, startTime, e
   });
   if (error) throw error;
   return data;
+}
+
+export async function updateLightningMeetingPlace({ roomId, meetingId, location, address }) {
+  const { error } = await supabase.rpc("update_room_lightning_meeting_place", {
+    p_room_id: String(roomId),
+    p_meeting_id: meetingId,
+    p_location: location || null,
+    p_location_address: address || null,
+  });
+  if (error) throw error;
 }
 
 export async function saveDiaryReaction({ diaryId, identityId, emoji }) {
