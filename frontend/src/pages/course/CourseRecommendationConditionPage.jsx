@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { generateRecommendationResult } from "../../api/courseRecommendationApi";
 import RecommendationAreaPicker from "../../components/RecommendationAreaPicker";
 import CourseActivityPreferences from "../../components/CourseActivityPreferences";
 import { mealTimeError } from "../../utils/mealTimeUtils";
+import { resolveCourseMeals, barTimeError } from '../../utils/courseBarUtils';
 import { scheduleRecommendationCenter, validRecommendationCenter, validRecommendationRadius } from "../../utils/recommendationAreaUtils";
 
 const TRAVEL_OPTIONS = [
@@ -66,6 +67,7 @@ function getDefaultForm(schedule) {
       dinner: null,
     },
     activities: [],
+    barMode: 'dinner',
     travelMode: "transit",
     maxTravelMinutes: 45,
     budget: "",
@@ -120,6 +122,8 @@ function CourseRecommendationConditionPage() {
     return { ...base, ...(saved || {}), ratingProviderAvailable: true };
   });
   const [validationError, setValidationError] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const generatingRef = useRef(false);
   const selectArea = useCallback((center) => {
     setForm((previous) => ({ ...previous, searchCenter: center, preferredRegion: center.name, regionDetail: center.address }));
     setValidationError("");
@@ -137,8 +141,14 @@ function CourseRecommendationConditionPage() {
   }, [form, storedKey]);
 
   const validateForm = () => {
+    const effectiveMeals = resolveCourseMeals(form);
+    if (form.budget !== '' && Number(form.budget) === 0 && Object.values(effectiveMeals).some(Boolean)) {
+      return '1인당 예산이 0원이라 식사가 포함된 코스를 추천할 수 없어요. 예산을 늘리거나 식사 선택을 해제해 주세요.';
+    }
+    const barError = barTimeError(form, resolvedSchedule || scheduleFromState);
+    if (barError) return barError;
     for (const key of ['breakfast', 'lunch', 'dinner']) {
-      if (form.mealPreferences[key]) {
+      if (effectiveMeals[key]) {
         const error = mealTimeError(key, resolvedSchedule || scheduleFromState);
         if (error) return error;
       }
@@ -161,11 +171,16 @@ function CourseRecommendationConditionPage() {
   };
 
   const handleSaveAndReturn = async () => {
+    if (generatingRef.current) return;
     const errorMessage = validateForm();
     if (errorMessage) {
       setValidationError(errorMessage);
       return;
     }
+
+    generatingRef.current = true;
+    setIsGenerating(true);
+    setValidationError('');
 
     const payload = {
       ...form,
@@ -174,11 +189,10 @@ function CourseRecommendationConditionPage() {
       scheduleId,
     };
 
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem("course_recommendation_saved", JSON.stringify(payload));
-    }
-
     try {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("course_recommendation_saved", JSON.stringify(payload));
+      }
       const result = await generateRecommendationResult({
         condition: payload,
         schedule: resolvedSchedule || scheduleFromState,
@@ -203,6 +217,9 @@ function CourseRecommendationConditionPage() {
       });
     } catch (err) {
       setValidationError(err?.message || "추천 생성 중 오류가 발생했습니다.");
+    } finally {
+      generatingRef.current = false;
+      setIsGenerating(false);
     }
   };
 
@@ -224,6 +241,18 @@ function CourseRecommendationConditionPage() {
     }
     navigate(-1);
   };
+
+  if (isGenerating) {
+    return <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, boxSizing: 'border-box', background: '#F7F5FF', color: '#17172B' }}>
+      <div role="status" aria-live="polite" aria-busy="true" style={{ width: '100%', maxWidth: 360, padding: '32px 24px', boxSizing: 'border-box', borderRadius: 24, background: '#fff', textAlign: 'center', boxShadow: '0 8px 28px rgba(123, 97, 255, 0.1)' }}>
+        <div aria-hidden="true" style={{ fontSize: 40, marginBottom: 16 }}>🗺️</div>
+        <h2 style={{ fontSize: 21, margin: '0 0 12px' }}>나에게 맞는 코스를 찾고 있어요</h2>
+        <p style={{ fontSize: 15, lineHeight: 1.7, color: '#66657A', margin: '0 0 24px' }}>주변 장소와 평점을 확인하고<br />선택한 조건에 맞게 일정을 짜고 있어요.</p>
+        <progress aria-label="코스 추천 진행 중" style={{ width: '100%', height: 8, accentColor: '#7B61FF' }} />
+        <p style={{ fontSize: 13, color: '#66657A', lineHeight: 1.6, margin: '18px 0 0' }}>조금만 기다려 주세요.<br />완료되면 추천 결과를 보여드릴게요.</p>
+      </div>
+    </div>;
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: "#F7F5FF", color: "#17172B" }}>
@@ -360,7 +389,7 @@ function CourseRecommendationConditionPage() {
             />
           </label>
           <div style={rangeLabelsStyle}><span>0원</span><span>{Math.max(100000, Number(form.budget) || 0).toLocaleString("ko-KR")}원</span></div>
-          <p style={hintStyle}>하루 코스 전체의 1인당 예상 예산입니다. 카테고리별 추정 금액이며 실제 이용 요금은 다를 수 있습니다.</p>
+          <p style={hintStyle}>코스 전체의 1인당 예상 최대 비용이 이 금액 안에 드는 장소를 추천해요. 비용을 확인할 수 없는 장소는 제외하며, 0원은 무료로 확인된 장소만 추천해요. 실제 이용 요금은 다를 수 있습니다.</p>
         </section>
 
 
@@ -421,6 +450,7 @@ function CourseRecommendationConditionPage() {
 
         {validationError && (
           <div
+            role="alert"
             style={{
               background: "#FFF1F2",
               border: "1px solid #FEC2C7",

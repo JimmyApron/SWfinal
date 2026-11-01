@@ -16,3 +16,9 @@ test('예산 충족·초과·불확실·미설정과 미확인 비용 합계', (
   expect(summarizeCourseBudget([...stops, { category: '기타' }], 50000)).toMatchObject({ max: null, unknownCount: 1, status: 'uncertain' });
   expect(formatCourseBudget(summarizeCourseBudget([{ category: '기타' }]))).toBe('비용 정보 확인 필요');
 });
+
+test('놀거리 예상 비용도 활동에 맞게 구분하며 무료로 가정하지 않음', () => {
+  expect(estimateStopBudget({ category: '스포츠 > 볼링장' })).toMatchObject({ category: 'bowling', min: 5000, max: 20000 });
+  expect(estimateStopBudget({ category: '카페', name: '친구 보드게임카페' })).toMatchObject({ category: 'boardgame', min: 5000, max: 15000 });
+  expect(estimateStopBudget({ category: '서비스', name: '방탈출' })).toMatchObject({ category: 'escape', min: 15000, max: 35000 });
+});

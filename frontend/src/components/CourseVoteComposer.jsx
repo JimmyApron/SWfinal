@@ -38,25 +38,7 @@ export default function CourseVoteComposer({ schedules, schedule, scheduleId, on
     onChange(editing >= 0 ? options.map((old, i) => i === editing ? option : old) : [...options, option]);
     setDraft(null); setEditing(null); setMessage('');
   };
-  return <section className="course-composer" aria-label="코스 후보 만들기">
-    <h3>코스 후보 만들기</h3>
-    {!hideScheduleSelector && <label>연결할 확정 일정
-      <select aria-label="연결할 확정 일정" value={scheduleId || ''} disabled={loading} onChange={event => {
-        if ((options.length || draft) && !window.confirm('일정을 바꾸면 작성한 코스 후보가 초기화됩니다. 계속할까요?')) return;
-        onScheduleChange(event.target.value); setDraft(null); setEditing(null); setMessage('');
-      }}>
-        <option value="">일정을 선택해 주세요</option>
-        {schedules.map(item => <option key={item.id} value={item.id}>{item.title || '확정 일정'} · {item.date} {item.starttime?.slice(0, 5)}~{item.endtime?.slice(0, 5)}</option>)}
-      </select>
-    </label>}
-    {loading && <p role="status">확정 일정을 불러오고 있습니다.</p>}
-    {error && <p role="alert">{error}</p>}
-    {!hideScheduleSelector && !loading && !error && !schedules.length && <p>먼저 모임에서 일정을 확정해 주세요.</p>}
-    <div className="course-composer-actions">
-      <button type="button" disabled={!schedule || !!draft} onClick={onRecommend}>추천받기</button>
-      <button type="button" disabled={!schedule || !!draft} onClick={() => open()}>직접 만들기</button>
-    </div>
-    {draft && <div className="course-editor">
+  const editor = draft && <div className="course-editor" id={`course-editor-${editing}`} role="region" aria-label={editing >= 0 ? `${draft.name || '코스'} 수정` : '직접 코스 만들기'}>
       <h4>{editing >= 0 ? '코스 수정' : '직접 코스 만들기'}</h4>
       <label>코스 이름<input aria-label="코스 이름" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="예: 홍대 카페와 저녁" /></label>
       <div className="course-composer-actions">
@@ -89,12 +71,31 @@ export default function CourseVoteComposer({ schedules, schedule, scheduleId, on
         <p className="course-composer-hint">지도 선과 이동 시간은 좌표 기반 추정입니다. 실제 경로·영업시간·비용은 별도로 확인해 주세요.</p>
       </section>}
       {!!preview?.errors.length && <ul role="status">{preview.errors.map(item => <li key={item}>{item}</li>)}</ul>}
+      {message && <p role="status">{message}</p>}
       <div className="course-composer-actions">
         <button type="button" disabled={!!preview?.errors.length} onClick={save}>{editing >= 0 ? '후보 수정 완료' : '투표 후보에 추가'}</button>
         <button type="button" onClick={() => { setDraft(null); setEditing(null); setMessage(''); }}>편집 취소</button>
       </div>
-    </div>}
-    {message && <p role="status">{message}</p>}
+    </div>;
+  return <section className="course-composer" aria-label="코스 후보 만들기">
+    <h3>코스 후보 만들기</h3>
+    {!hideScheduleSelector && <label>연결할 확정 일정
+      <select aria-label="연결할 확정 일정" value={scheduleId || ''} disabled={loading} onChange={event => {
+        if ((options.length || draft) && !window.confirm('일정을 바꾸면 작성한 코스 후보가 초기화됩니다. 계속할까요?')) return;
+        onScheduleChange(event.target.value); setDraft(null); setEditing(null); setMessage('');
+      }}>
+        <option value="">일정을 선택해 주세요</option>
+        {schedules.map(item => <option key={item.id} value={item.id}>{item.title || '확정 일정'} · {item.date} {item.starttime?.slice(0, 5)}~{item.endtime?.slice(0, 5)}</option>)}
+      </select>
+    </label>}
+    {loading && <p role="status">확정 일정을 불러오고 있습니다.</p>}
+    {error && <p role="alert">{error}</p>}
+    {!hideScheduleSelector && !loading && !error && !schedules.length && <p>먼저 모임에서 일정을 확정해 주세요.</p>}
+    <div className="course-composer-actions">
+      <button type="button" disabled={!schedule || !!draft} onClick={onRecommend}>추천받기</button>
+      <button type="button" disabled={!schedule || !!draft} onClick={() => open()}>직접 만들기</button>
+    </div>
+    {editing === -1 && editor}
     <h4>투표 후보 {options.length}개</h4>
     {!options.length && <p>추천받거나 직접 만든 코스를 후보에 추가해 주세요.</p>}
     {options.map((option, index) => <article className="course-candidate" key={index}>
@@ -102,9 +103,10 @@ export default function CourseVoteComposer({ schedules, schedule, scheduleId, on
       <p>{option.stops?.map(stop => stop.placeName || stop.place_name || stop.name).join(' → ')}</p>
       <p>{option.stop_count}곳 · 예상 {option.total_duration_min}분 · 비용 정보 확인 필요</p>
       <div className="course-composer-actions">
-        <button type="button" disabled={!!draft || !schedule} onClick={() => open(index)}>수정·지도 보기</button>
+        <button type="button" aria-expanded={editing === index && !!draft} aria-controls={editing === index && draft ? `course-editor-${index}` : undefined} disabled={!!draft || !schedule} onClick={() => open(index)}>수정·지도 보기</button>
         <button type="button" disabled={!!draft} onClick={() => onChange(options.filter((_, i) => i !== index))}>후보 삭제</button>
       </div>
+      {editing === index && editor}
     </article>)}
     {draft && <p>편집 중인 코스는 ‘투표 후보에 추가’ 또는 ‘후보 수정 완료’를 눌러야 반영됩니다.</p>}
   </section>;

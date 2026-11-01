@@ -1,7 +1,10 @@
+import { matchesActivity } from './courseActivityOptions';
 // Planning assumptions, not provider prices or verified admission/menu fees.
 export const CATEGORY_BUDGET_RANGES = {
   breakfast: [5000, 12000], lunch: [8000, 18000], dinner: [10000, 25000],
   cafe: [5000, 10000], experience: [10000, 35000], culture: [0, 20000], bar: [15000, 40000],
+  escape: [15000, 35000], bowling: [5000, 20000], boardgame: [5000, 15000],
+  karaoke: [5000, 20000], workshop: [15000, 60000],
 };
 
 export function estimateStopBudget(place, mealKey = null) {
@@ -9,7 +12,8 @@ export function estimateStopBudget(place, mealKey = null) {
     return { min: place.price, max: place.price, source: 'verified', priceSource: place.priceSource };
   }
   const text = `${place.category || ''}`.toLowerCase();
-  const kind = mealKey || (/카페|커피|cafe/.test(text) ? 'cafe'
+  const specificActivity = ['escape', 'bowling', 'boardgame', 'karaoke', 'workshop'].find(type => matchesActivity(place, type));
+  const kind = mealKey || specificActivity || (/카페|커피|cafe/.test(text) ? 'cafe'
     : /술집|주점|맥주|bar/.test(text) ? 'bar'
     : /박물관|미술관|전시|문화|museum|culture/.test(text) ? 'culture'
     : /체험|액티비티|테마파크|activity/.test(text) ? 'experience' : null);

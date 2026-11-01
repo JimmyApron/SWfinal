@@ -4,6 +4,38 @@ import { useLocation, useNavigate } from 'react-router-dom';
 jest.mock('react-router-dom', () => ({ useLocation: jest.fn(), useNavigate: jest.fn(), useParams: () => ({ roomid: '1' }) }));
 jest.mock('../../lib/supabaseClient', () => ({ supabase: {} }));
 
+beforeEach(() => {
+  window.scrollTo = jest.fn();
+});
+
+test('기본 카드는 요약만 보여주고 상세보기 아래에 장소·비용·체류 시간을 펼친다', () => {
+  useNavigate.mockReturnValue(jest.fn());
+  const course = { id: 'detail', name: '상세 코스', estimatedTravelTimeMin: 12, stops: [
+    { id: 'a', placeName: '식당', placeAddress: '서울 식당 주소', visitStartTime: '12:00', visitEndTime: '13:00', expectedStayMin: 60, estimatedCost: 15000 },
+    { id: 'b', placeName: '카페', placeAddress: '서울 카페 주소', travelTimeFromPrevMin: 12, distanceFromPrevM: 800 },
+  ] };
+  useLocation.mockReturnValue({ search: '', state: { schedule: { id: 2, roomid: 1 }, recommendation: { courses: [course] } } });
+  render(<CourseRecommendationResultPage />);
+  expect(screen.queryByRole('region', { name: '상세 코스 상세 정보' })).not.toBeInTheDocument();
+  expect(screen.queryByText('식당')).not.toBeInTheDocument();
+  expect(screen.queryByText('1인 15,000원')).not.toBeInTheDocument();
+  expect(screen.queryByText('60분 체류')).not.toBeInTheDocument();
+  expect(screen.queryByText('서울 식당 주소')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '코스 상세 보기' }));
+  expect(screen.getByRole('button', { name: '코스 상세 접기' })).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getByText('서울 식당 주소')).toBeInTheDocument();
+  expect(screen.getByText(/방문 시간: 12:00 ~ 13:00/)).toBeInTheDocument();
+  expect(screen.getByText(/이전 장소에서 이동: 12분 · 800m/)).toBeInTheDocument();
+  expect(screen.getAllByText('식당')).toHaveLength(1);
+  expect(screen.getByText('1인 15,000원')).toBeInTheDocument();
+  expect(screen.getByText('60분 체류')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '코스 상세 접기' }));
+  expect(screen.queryByText('서울 식당 주소')).not.toBeInTheDocument();
+  expect(screen.queryByText('1인 15,000원')).not.toBeInTheDocument();
+  expect(screen.queryByText('60분 체류')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '코스 상세 보기' })).toHaveAttribute('aria-expanded', 'false');
+});
+
 test('아직 저장하지 않은 새 일정도 추천 결과 선택 후 새 일정 초안으로 복귀', () => {
   const navigate = jest.fn();
   useNavigate.mockReturnValue(navigate);
@@ -40,8 +72,11 @@ test('예산 범위·추정 안내·평점 없음 표시와 선택 데이터 전
     stops: [{ id: 'p1', placeName: '카페', category: '카페', rating: null }] };
   useLocation.mockReturnValue({ search: '', state: { schedule: { id: 2, roomid: 1 }, recommendation: { courses: [course] } } });
   render(<CourseRecommendationResultPage />);
-  expect(screen.getByText('예상 예산: 1인 기준 5,000~10,000원')).toBeInTheDocument();
-  expect(screen.getByText(/실제 이용 요금은 다를 수 있습니다/)).toHaveTextContent('예산 충족 여부 확인 필요');
+  expect(screen.getByText('한 사람당 예상 비용')).toBeInTheDocument();
+  expect(screen.getByText('5,000~10,000원')).toBeInTheDocument();
+  expect(screen.queryByText(/실제 이용 요금은 다를 수 있습니다/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '코스 상세 보기' }));
+  expect(screen.getByText(/실제 이용 요금은 다를 수 있습니다/)).toHaveTextContent('선택한 예산 안에 가능한지 확인해 주세요.');
   expect(screen.getByText('평점 정보 없음')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '선택한 코스로 투표 만들기' }));
   expect(navigate).toHaveBeenCalledWith('/rooms/1/vote-create', expect.objectContaining({ state: expect.objectContaining({ selectedCourses: [course] }) }));

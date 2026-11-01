@@ -1,13 +1,16 @@
-import { courseCombinationKey, generateCourseRecommendations } from "../utils/courseRecommendationEngine";
+import { courseCombinationKey, courseOverlapCount, generateCourseRecommendations } from "../utils/courseRecommendationEngine";
 
 export function deduplicateRecommendationResult(payload) {
   if (!payload || !Array.isArray(payload.courses)) return null;
   const seen = new Set();
+  const accepted = [];
   const courses = payload.courses.filter((course) => {
     if (!Array.isArray(course?.stops) || !course.stops.length) return false;
     const signature = courseCombinationKey(course.stops);
     if (seen.has(signature)) return false;
+    if (accepted.some(stops => courseOverlapCount(stops, course.stops) >= 2)) return false;
     seen.add(signature);
+    accepted.push(course.stops);
     return true;
   }).slice(0, 5);
   return { ...payload, courses };
