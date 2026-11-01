@@ -307,9 +307,7 @@ function CourseRecommendationResultPage() {
                             <div style={{ marginTop: "6px", display: "flex", flexWrap: "wrap", gap: "6px", fontSize: "11px", color: "#4D4E5C" }}>
                               <span style={PAGE_STYLES.chip}>{getTimeLabel(stop.visitStartTime, stop.visitEndTime)}</span>
                               <span style={PAGE_STYLES.chip}>{stop.expectedStayMin || 60}분 체류</span>
-                              {/* 평점 제공처 확보 후 다시 사용:
-                              <span style={PAGE_STYLES.chip}>{stop.rating == null ? "평점 정보 없음" : `평점 ${Number(stop.rating).toFixed(1)}`}</span>
-                              */}
+                              <span style={PAGE_STYLES.chip}>{stop.rating == null ? "평점 정보 없음" : `구글 평점 ${Number(stop.rating).toFixed(1)}`}</span>
                               {stop.travelTimeFromPrevMin != null && <span style={PAGE_STYLES.chip}>이동 {stop.travelTimeFromPrevMin}분</span>}
                             </div>
                           </div>

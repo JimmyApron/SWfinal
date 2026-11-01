@@ -1,4 +1,6 @@
 import { generateCourseRecommendations, courseCombinationKey } from './courseRecommendationEngine';
+import { attachGoogleRatings } from '../api/googlePlacesApi';
+jest.mock('../api/googlePlacesApi', () => ({ attachGoogleRatings: jest.fn(async places => places) }));
 import { searchPlacesByKeyword } from '../api/kakaoPlacesApi';
 import { buildCourseVoteDbRows, normalizeCourseVoteSelection } from './courseVoteUtils';
 import { deduplicateRecommendationResult, loadRecommendationResultFromStorage, getCourseRecommendationStorageKey } from '../api/courseRecommendationApi';
@@ -9,13 +11,26 @@ const schedule = { locationlat: 37, locationlng: 127, starttime: '09:00', endtim
 const condition = { activities: ['cafe'], travelMode: 'walking', maxTravelMinutes: 45, minRating: 0, budget: null };
 const place = (id, category = '카페', extra = {}) => ({ id: String(id), name: `${category} ${id}`, category, address: '서울', lat: 37 + id / 10000, lng: 127, rating: 4.5, price: 1000, priceSource: "test_verified_fixture", ...extra });
 const run = (changes = {}, time = {}) => generateCourseRecommendations({ condition: { ...condition, ...changes }, schedule: { ...schedule, ...time } });
-beforeEach(() => searchPlacesByKeyword.mockReset().mockResolvedValue(Array.from({ length: 8 }, (_, i) => place(i + 1))));
+beforeEach(() => {
+  attachGoogleRatings.mockReset().mockImplementation(async places => places);
+  searchPlacesByKeyword.mockReset().mockResolvedValue(Array.from({ length: 8 }, (_, i) => place(i + 1)));
+});
 
 test('충분한 실제 후보에서 5개 서로 다른 장소 조합', async () => {
   const { courses } = await run();
   expect(courses).toHaveLength(5);
   expect(new Set(courses.map((c) => courseCombinationKey(c.stops))).size).toBe(5);
   expect(courses.every((c) => c.stops.every((s) => Number(s.id) >= 1 && Number(s.id) <= 8))).toBe(true);
+});
+
+test('구글 평점을 연결해 최소 평점 미달·미확인 장소를 제외하고 높은 평점부터 추천', async () => {
+  searchPlacesByKeyword.mockResolvedValue([place(1), place(2), place(3), place(4), place(5)]);
+  attachGoogleRatings.mockImplementationOnce(async places => places.map(p => ({ ...p, rating: ({ 1: 3.5, 2: null, 3: 4.1, 4: 4.9, 5: 4.6 })[p.id] })));
+  const result = await generateRecommendationResult({ condition: { ...condition, minRating: 4, priority: 'rating' }, schedule });
+  expect(attachGoogleRatings).toHaveBeenCalled();
+  expect(result.condition).toMatchObject({ minRating: 4, priority: 'rating' });
+  expect(result.courses[0].stops.map(stop => stop.id)).toEqual(['4', '5', '3']);
+  expect(result.courses.every(course => course.stops.every(stop => stop.rating >= 4))).toBe(true);
 });
 test('동일 장소 집합의 순서만 바뀐 코스도 중복으로 판단', () => {
   expect(courseCombinationKey([{ id: '1' }, { id: '2' }])).toBe(courseCombinationKey([{ id: '2' }, { id: '1' }]));
@@ -151,13 +166,13 @@ test('최소 평점과 코스 총예산 초과 장소/조합 제외', async () =
 test('누락 좌표 제외, 제약 없는 누락 평점/비용은 null 유지', async () => {
   searchPlacesByKeyword.mockResolvedValue([place(1, '카페', { lat: null }), place(2, '카페', { rating: null, price: null }), place(3)]);
   const { courses } = await run();
-  expect(courses[0].stops.map((s) => s.id)).toEqual(['2', '3']);
-  expect(courses[0].stops[0].rating).toBeNull();
+  expect(courses[0].stops.map((s) => s.id)).toEqual(['3', '2']);
+  expect(courses[0].stops.find(stop => stop.id === '2').rating).toBeNull();
   expect(courses[0].estimatedCostPerPerson).toBeNull();
 });
 test('누락 평점/비용은 유지하되 조건 충족으로 단정하지 않고 안내', async () => {
   searchPlacesByKeyword.mockResolvedValue([place(1, '카페', { rating: null, price: null })]);
-  expect((await run({ minRating: 4 })).warning).toContain('충족 여부를 확인할 수 없습니다');
+  expect((await run({ minRating: 4 })).warning).toContain('평점 기준');
   const result = await run({ budget: 5000 });
   expect(result.courses).toHaveLength(1);
   expect(result.courses[0].estimatedCostPerPerson).toBeNull();
@@ -184,9 +199,9 @@ test('외부 검색 실패는 가짜 코스 없이 빈 결과', async () => {
   warn.mockRestore();
 });
 
-test('카카오 가격·평점 누락과 과거 평점 조건에도 추천, 추정 예산은 실제 가격과 분리·복구', async () => {
+test('평점 제한 없이 가격·평점 누락 장소도 추천, 추정 예산은 실제 가격과 분리·복구', async () => {
   searchPlacesByKeyword.mockResolvedValue([place(1, '카페', { rating: null, price: null }), place(2, '카페', { rating: null, price: null }), place(3, '카페', { rating: null, price: null })]);
-  const result = await generateRecommendationResult({ condition: { ...condition, minRating: 4.5, priority: 'rating', budget: 20000 }, schedule });
+  const result = await generateRecommendationResult({ condition: { ...condition, minRating: 0, priority: 'travel', budget: 20000 }, schedule });
   expect(result.courses).toHaveLength(1);
   expect(result.condition).toMatchObject({ minRating: 0, priority: 'travel' });
   const course = result.courses[0];

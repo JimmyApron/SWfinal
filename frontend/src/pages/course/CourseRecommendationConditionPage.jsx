@@ -14,7 +14,7 @@ const TRAVEL_OPTIONS = [
 ];
 
 const PRIORITY_OPTIONS = [
-  // 평점 제공처 확보 후 다시 사용: { value: "rating", label: "평점 우선" },
+  { value: "rating", label: "평점 우선" },
   { value: "travel", label: "이동 시간 최소화" },
   { value: "budget", label: "예산 우선" },
   { value: "variety", label: "다양한 활동 우선" },
@@ -70,8 +70,8 @@ function getDefaultForm(schedule) {
     maxTravelMinutes: 45,
     budget: "",
     minRating: 0,
-    ratingProviderAvailable: false,
-    priority: "travel",
+    ratingProviderAvailable: true,
+    priority: "rating",
     preferredRegion: regionFallback,
     regionDetail: regionFallback,
     notes: "",
@@ -117,7 +117,7 @@ function CourseRecommendationConditionPage() {
   const [form, setForm] = useState(() => {
     const base = getDefaultForm(resolvedSchedule || scheduleFromState);
     const saved = readStoredDraft(roomId, scheduleId);
-    return { ...base, ...(saved || {}), minRating: 0, ratingProviderAvailable: false, priority: saved?.priority === "rating" ? "travel" : saved?.priority || base.priority };
+    return { ...base, ...(saved || {}), ratingProviderAvailable: true };
   });
   const [validationError, setValidationError] = useState("");
   const selectArea = useCallback((center) => {
@@ -363,16 +363,17 @@ function CourseRecommendationConditionPage() {
           <p style={hintStyle}>하루 코스 전체의 1인당 예상 예산입니다. 카테고리별 추정 금액이며 실제 이용 요금은 다를 수 있습니다.</p>
         </section>
 
-        {/* Rating UI retained for future verified data providers.
+
         <section style={cardStyle}>
-          <div style={sectionTitleStyle}>최소 평점</div>
+          <div style={sectionTitleStyle}>최소 평점 (구글맵 기준)</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-            {[0, 2.5, 3, 3.5, 4, 4.5].map((value) => {
+            {[0, 3.5, 4, 4.5].map((value) => {
               const selected = Number(form.minRating) === Number(value);
               return (
                 <button
                   key={value}
                   type="button"
+                  aria-pressed={selected}
                   onClick={() => {
                     setForm((prev) => ({ ...prev, minRating: value }));
                     setValidationError("");
@@ -391,10 +392,9 @@ function CourseRecommendationConditionPage() {
           </div>
 
           <div style={{ marginTop: "12px", fontSize: "12px", color: "#66657A" }}>
-            평점 정보가 없는 장소는 다음 추천 알고리즘 단계에서 별도 처리됩니다.
+            지도와 동일한 구글맵 평점을 사용합니다. 최소 평점을 선택하면 평점이 없는 장소는 제외됩니다.
           </div>
         </section>
-        */}
 
         <section style={cardStyle}>
           <div style={sectionTitleStyle}>추천 우선순위</div>

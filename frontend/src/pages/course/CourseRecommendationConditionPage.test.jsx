@@ -30,7 +30,7 @@ test('이동 버튼과 예산 슬라이더 값을 저장·전달하고 기존 �
   expect(screen.getByText('1인당 최대 25,000원')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /추천받기/ }));
   await waitFor(() => expect(generateRecommendationResult).toHaveBeenCalledWith(expect.objectContaining({
-    condition: expect.objectContaining({ travelMode: 'walking', maxTravelMinutes: 20, budget: 25000, minRating: 0, priority: 'travel' }),
+    condition: expect.objectContaining({ travelMode: 'walking', maxTravelMinutes: 20, budget: 25000, minRating: 0, priority: 'rating' }),
   })));
   expect(JSON.parse(localStorage.getItem('course_recommendation_condition_40_177')).budget).toBe(25000);
 });
@@ -54,13 +54,13 @@ test('예산 제한을 다시 해제하면 빈 값으로 전달', async () => {
   fireEvent.click(screen.getByRole('button', { name: /추천받기/ }));
   await waitFor(() => expect(generateRecommendationResult).toHaveBeenCalledWith(expect.objectContaining({ condition: expect.objectContaining({ budget: '' }) })));
 });
-test('과거 평점 조건은 초기화하고 평점 UI를 제거', () => {
+test('저장된 평점 조건을 복원하고 구글 평점 UI 표시', () => {
   localStorage.setItem('course_recommendation_condition_40_177', JSON.stringify({ minRating: 4.5, priority: 'rating' }));
   setup({ locationlat: 37, locationlng: 127 });
-  expect(screen.queryByRole('button', { name: '4.5점 이상' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '평점 우선' })).not.toBeInTheDocument();
-  expect(screen.queryByText(/평점/)).not.toBeInTheDocument();
-  expect(JSON.parse(localStorage.getItem('course_recommendation_condition_40_177'))).toMatchObject({ minRating: 0, priority: 'travel', ratingProviderAvailable: false });
+  expect(screen.getByRole('button', { name: '4.5점 이상' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('button', { name: '평점 우선' })).toBeInTheDocument();
+  expect(screen.getByText('최소 평점 (구글맵 기준)')).toBeInTheDocument();
+  expect(JSON.parse(localStorage.getItem('course_recommendation_condition_40_177'))).toMatchObject({ minRating: 4.5, priority: 'rating', ratingProviderAvailable: true });
 });
 test('확정 장소 좌표를 기본 중심으로 설정하고 추천 요청에 포함', async () => {
   setup({ locationlat: 37, locationlng: 127, location: '확정 장소' });

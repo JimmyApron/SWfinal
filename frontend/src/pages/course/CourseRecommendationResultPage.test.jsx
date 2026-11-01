@@ -42,7 +42,7 @@ test('예산 범위·추정 안내·평점 없음 표시와 선택 데이터 전
   render(<CourseRecommendationResultPage />);
   expect(screen.getByText('예상 예산: 1인 기준 5,000~10,000원')).toBeInTheDocument();
   expect(screen.getByText(/실제 이용 요금은 다를 수 있습니다/)).toHaveTextContent('예산 충족 여부 확인 필요');
-  expect(screen.queryByText(/평점/)).not.toBeInTheDocument();
+  expect(screen.getByText('평점 정보 없음')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '선택한 코스로 투표 만들기' }));
   expect(navigate).toHaveBeenCalledWith('/rooms/1/vote-create', expect.objectContaining({ state: expect.objectContaining({ selectedCourses: [course] }) }));
 });
