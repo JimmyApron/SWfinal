@@ -24,6 +24,11 @@ function FixedTimetablePage() {
   const skipSavedNavigationWarningRef = useRef(false);
   const isDirty = cells.size !== savedCells.size || [...cells].some((key) => !savedCells.has(key));
 
+  // 마이페이지에서 스크롤한 채로 들어와도 항상 맨 위에서 시작한다.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [isLoading]);
+
   useEffect(() => {
     const load = async () => {
       try {
