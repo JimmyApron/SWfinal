@@ -55,6 +55,7 @@ import { getPersonalEvents } from "./api/personalEventApi";
 import SettingsPage from "./pages/settings/SettingsPage";
 import SettingEditPage from "./pages/settings/SettingEditPage";
 import FixedTimetablePage from "./pages/settings/FixedTimetablePage";
+import PaymentAccountsPage from "./pages/settings/PaymentAccountsPage";
 
 const AUTH_PATHS = ["/", "/login", "/signup", "/guest", "/reset-password"];
 const PERSONAL_REMINDER_POPUP_WINDOW_MS = 60 * 1000;
@@ -686,6 +687,7 @@ function App() {
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/settings/edit" element={<SettingEditPage />} />
               <Route path="/settings/timetable" element={<FixedTimetablePage />} />
+              <Route path="/settings/accounts" element={<PaymentAccountsPage />} />
             </Routes>
           </Layout>
         </BrowserRouter>

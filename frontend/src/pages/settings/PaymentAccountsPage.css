@@ -1,0 +1,159 @@
+.pay-acc-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--secondary-text);
+  margin: 0 0 14px;
+}
+
+.pay-acc-error {
+  font-size: 13px;
+  color: #e5484d;
+  margin: 0 0 12px;
+}
+
+.pay-acc-empty {
+  text-align: center;
+  font-size: 13px;
+  color: var(--secondary-text);
+  padding: 24px 0;
+}
+
+.pay-acc-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pay-acc-card {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--card-bg);
+  padding: 14px;
+}
+
+.pay-acc-card.is-default {
+  border-color: #7c5cff;
+}
+
+.pay-acc-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.pay-acc-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: #7c5cff;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.pay-acc-info p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--secondary-text);
+  word-break: break-all;
+}
+
+.pay-acc-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.pay-acc-actions button,
+.pay-acc-form-actions button {
+  flex: 1;
+  padding: 8px 0;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pay-acc-actions .is-danger {
+  color: #e5484d;
+}
+
+.pay-acc-add {
+  width: 100%;
+  padding: 12px;
+  border: 1px dashed #7c5cff;
+  border-radius: 12px;
+  background: transparent;
+  color: #7c5cff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pay-acc-add:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.pay-acc-form {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--card-bg);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pay-acc-form h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.pay-acc-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--secondary-text);
+}
+
+.pay-acc-form input[type="text"],
+.pay-acc-form select {
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+}
+
+.pay-acc-form .pay-acc-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: inherit;
+  font-size: 13px;
+}
+
+.pay-acc-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.pay-acc-form-actions button {
+  padding: 10px 0;
+  font-size: 13px;
+}
+
+.pay-acc-form-actions .is-primary {
+  background: #7c5cff;
+  border-color: #7c5cff;
+  color: #fff;
+}

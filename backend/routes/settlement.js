@@ -544,12 +544,59 @@ async function loadExpense(expenseId) {
 
 async function getSavedAccount(viewer) {
   if (viewer.type !== "member") return null;
-  const { data } = await getAdmin()
+  // 계좌 자동 채우기는 부가 기능이라, 조회에 실패해도 정산 화면은 열리게 한다.
+  const accounts = await listMyAccounts(viewer.id).catch((error) => {
+    console.error("저장된 계좌 조회 실패:", error.message);
+    return [];
+  });
+  const account = accounts.find((item) => item.isdefault) || accounts[0];
+  return account ? { bankname: account.bankname, accountnumber: account.accountnumber } : null;
+}
+
+function toAccountDto(row) {
+  return {
+    id: row.id,
+    label: row.label || row.bankname || "내 계좌",
+    bankname: row.bankname || "",
+    accountnumber: row.accountnumber,
+    isdefault: Boolean(row.isdefault),
+  };
+}
+
+// 기본 계좌가 맨 위, 나머지는 최근에 만든 순서
+async function listMyAccounts(userId) {
+  const { data, error } = await getAdmin()
     .from("user_payment_accounts")
-    .select("bankname, accountnumber")
-    .eq("userid", viewer.id)
-    .maybeSingle();
-  return data?.accountnumber ? { bankname: data.bankname || "", accountnumber: data.accountnumber } : null;
+    .select("id, label, bankname, accountnumber, isdefault")
+    .eq("userid", userId)
+    .order("isdefault", { ascending: false })
+    .order("id", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data || []).filter((row) => row.accountnumber).map(toAccountDto);
+}
+
+async function setDefaultAccount(userId, accountId) {
+  const client = getAdmin();
+  const { error: clearError } = await client
+    .from("user_payment_accounts")
+    .update({ isdefault: false })
+    .eq("userid", userId)
+    .eq("isdefault", true);
+  if (clearError) throw new Error(clearError.message);
+  const { error } = await client
+    .from("user_payment_accounts")
+    .update({ isdefault: true, updatedat: new Date().toISOString() })
+    .eq("userid", userId)
+    .eq("id", accountId);
+  if (error) throw new Error(error.message);
+}
+
+function parseAccountBody(body) {
+  const accountnumber = normalizeAccountNumber(body?.accountnumber);
+  if (!accountnumber) throw new HttpError(400, "계좌번호를 입력해 주세요.");
+  const bankname = body?.bankname ? String(body.bankname).trim().slice(0, 30) : null;
+  const label = body?.label ? String(body.label).trim().slice(0, 20) : null;
+  return { accountnumber, bankname, label: label || bankname || "내 계좌" };
 }
 
 // 정산 화면에 필요한 일정·참여자·내 정보
@@ -1354,16 +1401,124 @@ router.put(
   "/me/account",
   handle(async (req, res) => {
     const member = await authenticateMember(req);
-    const accountnumber = normalizeAccountNumber(req.body?.accountnumber);
-    if (!accountnumber) throw new HttpError(400, "계좌번호를 입력해 주세요.");
-    const bankname = req.body?.bankname ? String(req.body.bankname).slice(0, 30) : null;
+    const { accountnumber, bankname, label } = parseAccountBody(req.body);
+    const client = getAdmin();
+
+    // 같은 번호가 이미 있으면 새로 만들지 않고 그 계좌를 기본으로 쓴다.
+    const { data: existing, error: findError } = await client
+      .from("user_payment_accounts")
+      .select("id")
+      .eq("userid", member.id)
+      .eq("accountnumber", accountnumber)
+      .limit(1)
+      .maybeSingle();
+    if (findError) throw new Error(findError.message);
+
+    let accountId = existing?.id;
+    if (!accountId) {
+      const { data: created, error } = await client
+        .from("user_payment_accounts")
+        .insert({ userid: member.id, label, bankname, accountnumber, isdefault: false })
+        .select("id")
+        .single();
+      if (error) throw new Error(error.message);
+      accountId = created.id;
+    }
+    await setDefaultAccount(member.id, accountId);
+
+    res.json({ account: { bankname: bankname || "", accountnumber } });
+  })
+);
+
+// 마이페이지 계좌 관리 (회원 전용)
+router.get(
+  "/me/accounts",
+  handle(async (req, res) => {
+    const member = await authenticateMember(req);
+    res.json({ accounts: await listMyAccounts(member.id) });
+  })
+);
+
+router.post(
+  "/me/accounts",
+  handle(async (req, res) => {
+    const member = await authenticateMember(req);
+    const { accountnumber, bankname, label } = parseAccountBody(req.body);
+    const existingAccounts = await listMyAccounts(member.id);
+    if (existingAccounts.length >= 10) throw new HttpError(400, "계좌는 최대 10개까지 저장할 수 있어요.");
+
+    const { data: created, error } = await getAdmin()
+      .from("user_payment_accounts")
+      .insert({ userid: member.id, label, bankname, accountnumber, isdefault: false })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+
+    // 첫 계좌이거나 기본으로 지정하면 기본 계좌로 둔다.
+    if (existingAccounts.length === 0 || req.body?.isdefault === true) {
+      await setDefaultAccount(member.id, created.id);
+    }
+    res.status(201).json({ accounts: await listMyAccounts(member.id) });
+  })
+);
+
+router.put(
+  "/me/accounts/:accountId",
+  handle(async (req, res) => {
+    const member = await authenticateMember(req);
+    const accountId = toId(req.params.accountId, "accountId");
+    const { accountnumber, bankname, label } = parseAccountBody(req.body);
+
+    const { data, error } = await getAdmin()
+      .from("user_payment_accounts")
+      .update({ label, bankname, accountnumber, updatedat: new Date().toISOString() })
+      .eq("userid", member.id)
+      .eq("id", accountId)
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) throw new HttpError(404, "계좌를 찾을 수 없어요.");
+
+    if (req.body?.isdefault === true) await setDefaultAccount(member.id, accountId);
+    res.json({ accounts: await listMyAccounts(member.id) });
+  })
+);
+
+router.post(
+  "/me/accounts/:accountId/default",
+  handle(async (req, res) => {
+    const member = await authenticateMember(req);
+    const accountId = toId(req.params.accountId, "accountId");
+    const accounts = await listMyAccounts(member.id);
+    if (!accounts.some((account) => account.id === accountId)) throw new HttpError(404, "계좌를 찾을 수 없어요.");
+
+    await setDefaultAccount(member.id, accountId);
+    res.json({ accounts: await listMyAccounts(member.id) });
+  })
+);
+
+router.delete(
+  "/me/accounts/:accountId",
+  handle(async (req, res) => {
+    const member = await authenticateMember(req);
+    const accountId = toId(req.params.accountId, "accountId");
+    const accounts = await listMyAccounts(member.id);
+    const target = accounts.find((account) => account.id === accountId);
+    if (!target) throw new HttpError(404, "계좌를 찾을 수 없어요.");
 
     const { error } = await getAdmin()
       .from("user_payment_accounts")
-      .upsert({ userid: member.id, bankname, accountnumber, updatedat: new Date().toISOString() }, { onConflict: "userid" });
+      .delete()
+      .eq("userid", member.id)
+      .eq("id", accountId);
     if (error) throw new Error(error.message);
 
-    res.json({ account: { bankname: bankname || "", accountnumber } });
+    // 기본 계좌를 지우면 남은 계좌 중 가장 최근 것을 기본으로 올린다.
+    if (target.isdefault) {
+      const next = accounts.find((account) => account.id !== accountId);
+      if (next) await setDefaultAccount(member.id, next.id);
+    }
+    res.json({ accounts: await listMyAccounts(member.id) });
   })
 );
 

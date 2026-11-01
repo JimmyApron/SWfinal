@@ -117,6 +117,27 @@ export function saveMyAccount(account) {
   return requestSettlement("/me/account", { method: "PUT", json: account });
 }
 
+// 마이페이지 계좌 관리 (회원 전용). 모든 응답은 최신 계좌 목록({ accounts })을 돌려준다.
+export function getMyAccounts() {
+  return requestSettlement("/me/accounts");
+}
+
+export function addMyAccount(account) {
+  return requestSettlement("/me/accounts", { method: "POST", json: account });
+}
+
+export function updateMyAccount(accountId, account) {
+  return requestSettlement(`/me/accounts/${encodeURIComponent(accountId)}`, { method: "PUT", json: account });
+}
+
+export function setDefaultMyAccount(accountId) {
+  return requestSettlement(`/me/accounts/${encodeURIComponent(accountId)}/default`, { method: "POST" });
+}
+
+export function deleteMyAccount(accountId) {
+  return requestSettlement(`/me/accounts/${encodeURIComponent(accountId)}`, { method: "DELETE" });
+}
+
 export function getExpenseDetail(expenseId) {
   return requestSettlement(`/expenses/${encodeURIComponent(expenseId)}`);
 }

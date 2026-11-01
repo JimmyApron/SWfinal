@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { logoutApi, getCurrentUserApi } from '../../api/authApi'
 import { supabase } from '../../lib/supabaseClient'
 import { useTheme } from '../../context/ThemeContext'
-import { FaChevronLeft, FaMoon, FaBell, FaUser, FaSignOutAlt, FaChevronRight, FaCalendarAlt } from 'react-icons/fa'
+import { FaChevronLeft, FaMoon, FaBell, FaUser, FaSignOutAlt, FaChevronRight, FaCalendarAlt, FaWallet } from 'react-icons/fa'
 import { FiUser } from 'react-icons/fi'
 import './SettingsPage.css'
 
@@ -146,6 +146,14 @@ function SettingsPage() {
           <div className="row-info">
             <div className="icon-box"><FaCalendarAlt /></div>
             <span className="row-label">고정 시간표</span>
+          </div>
+          <FaChevronRight color="#9ca3af" />
+        </button>
+
+        <button type="button" className="menu-card" onClick={() => navigate('/settings/accounts')}>
+          <div className="row-info">
+            <div className="icon-box"><FaWallet /></div>
+            <span className="row-label">내 계좌 관리</span>
           </div>
           <FaChevronRight color="#9ca3af" />
         </button>

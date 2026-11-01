@@ -648,7 +648,7 @@ function SettlementCreatePage() {
             accountnumber: accountToSave.accountnumber.trim(),
           });
           setMyAccount(saved.account);
-          setToast("내 계좌를 저장했어요");
+          setToast("기본 계좌로 저장했어요");
         } catch (saveError) {
           console.error("내 계좌 저장 실패:", saveError);
         }
@@ -1030,7 +1030,7 @@ function SettlementCreatePage() {
                       checked={item.saveAccount}
                       onChange={(event) => updateItem(item.uid, { saveAccount: event.target.checked })}
                     />
-                    다음에도 이 계좌를 쓸까요?
+                    기본 계좌로 저장 (마이페이지에서 관리)
                   </label>
                 )}
               </>
