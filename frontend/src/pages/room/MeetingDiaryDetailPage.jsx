@@ -115,12 +115,13 @@ export default function MeetingDiaryDetailPage() {
   if (error && !meeting) return <main className="meeting-diary-page"><button className="meeting-diary-back" onClick={back}><FiArrowLeft /> 뒤로</button><p className="meeting-diary-state" role="alert">{error}</p></main>;
   const publishedByUserId = new Set(progress?.published_member_ids || []);
   const currentPosition = Math.max(0, visibleAuthors.indexOf(selectedAuthor));
+  const meetingPlace = meeting?.location?.trim() || meeting?.location_address?.trim();
 
   return <main className="meeting-diary-page">
     <header className="meeting-diary-hero">
       <div className="meeting-diary-topbar"><button className="meeting-diary-back" onClick={back} aria-label="캘린더로 돌아가기"><FiArrowLeft /></button><strong>{room?.roomname || "모임"}</strong><span aria-hidden="true" /></div>
       <h1>{meeting?.title || "함께한 만남"}</h1><p>{dateLabel(meeting?.meeting_date)} · {meetingOrdinal}번째 만남</p>
-      <p className="meeting-diary-location"><FiMapPin aria-hidden="true" />{meeting?.location?.trim() || meeting?.location_address?.trim() || "미정"}</p>
+      {meetingPlace && <p className="meeting-diary-location"><FiMapPin aria-hidden="true" />{meetingPlace}</p>}
     </header>
     <section className="meeting-diary-members">
       <div className="meeting-diary-section-heading"><strong>우리의 기록</strong><span>{progress?.published_count ?? diaries.length}명 작성 · 전체 {members.length}명</span></div>
