@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import CourseVoteComposer from './CourseVoteComposer';
 
 jest.mock('./map/KakaoMapView', () => function Map({ places }) { return <div data-testid="map">{places.map(p => p.name).join(' → ')}</div>; });
@@ -8,8 +8,8 @@ jest.mock('./map/LocationPicker', () => function Picker({ onSelect }) { return <
   <button onClick={() => onSelect('식당 B', '홍대', { id: '2', lat: 37.5501, lng: 126.9201 })}>식당 검색 결과</button>
 </>; });
 const schedule = { id: 3, title: '홍대 약속', starttime: '15:30', endtime: '18:00' };
-function Fixture() {
-  const [options, setOptions] = useState([]);
+function Fixture({ initialOptions = [] }) {
+  const [options, setOptions] = useState(initialOptions);
   return <CourseVoteComposer schedules={[schedule]} schedule={schedule} scheduleId={3} options={options}
     onChange={setOptions} onScheduleChange={jest.fn()} onRecommend={jest.fn()} />;
 }
@@ -45,4 +45,32 @@ test('중복 장소 추가와 일정 초과 코스의 후보 추가 차단', () 
   fireEvent.change(screen.getByLabelText('1번째 체류 시간'), { target: { value: '180' } });
   expect(screen.getByText(/30분 초과/)).toBeInTheDocument();
   expect(screen.getByText('투표 후보에 추가')).toBeDisabled();
+});
+
+test('두 번째 추천 후보의 수정 화면과 지도가 해당 카드 아래에 나타나고 그 후보만 저장', () => {
+  const initialOptions = ['첫 추천', '두 번째 추천'].map((name, index) => ({
+    course_name: name, stop_count: 1, total_duration_min: 45,
+    stops: [{ id: String(index + 1), placeName: `장소 ${index + 1}`, lat: 37.55, lng: 126.92, expectedStayMin: 45 }],
+  }));
+  render(<Fixture initialOptions={initialOptions} />);
+  const [first, second] = screen.getAllByRole('article');
+  fireEvent.click(within(second).getByRole('button', { name: '수정·지도 보기' }));
+  expect(within(first).queryByLabelText('코스 이름')).not.toBeInTheDocument();
+  expect(within(second).getByLabelText('코스 이름')).toHaveValue('두 번째 추천');
+  expect(within(second).getByTestId('map')).toHaveTextContent('장소 2');
+  expect(screen.getAllByTestId('map')).toHaveLength(1);
+  fireEvent.change(within(second).getByLabelText('코스 이름'), { target: { value: '첫 추천' } });
+  fireEvent.click(within(second).getByRole('button', { name: '후보 수정 완료' }));
+  expect(within(second).getByRole('status')).toHaveTextContent('후보마다 다른 코스 이름');
+  fireEvent.change(within(second).getByLabelText('코스 이름'), { target: { value: '두 번째 수정 완료' } });
+  fireEvent.change(within(second).getByLabelText('1번째 체류 시간'), { target: { value: '30' } });
+  fireEvent.click(within(second).getByRole('button', { name: '후보 수정 완료' }));
+  expect(within(first).getByText('첫 추천')).toBeInTheDocument();
+  expect(within(second).getByText('두 번째 수정 완료')).toBeInTheDocument();
+  expect(within(second).getByText(/1곳 · 예상 30분/)).toBeInTheDocument();
+  expect(screen.queryByLabelText('코스 이름')).not.toBeInTheDocument();
+  fireEvent.click(within(first).getByRole('button', { name: '수정·지도 보기' }));
+  expect(within(first).getByLabelText('코스 이름')).toHaveValue('첫 추천');
+  fireEvent.click(within(first).getByRole('button', { name: '편집 취소' }));
+  expect(screen.queryByLabelText('코스 이름')).not.toBeInTheDocument();
 });

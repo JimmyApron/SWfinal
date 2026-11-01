@@ -1,5 +1,4 @@
-import { formatCourseBudget } from "../../utils/courseBudgetUtils";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { deduplicateRecommendationResult, loadRecommendationResultFromStorage, saveRecommendationResultToStorage } from "../../api/courseRecommendationApi";
@@ -71,6 +70,14 @@ function getTimeLabel(startTime, endTime) {
   return startTime || endTime;
 }
 
+function getStopCostLabel(stop) {
+  if (stop.budgetEstimate?.max != null) {
+    const { min, max } = stop.budgetEstimate;
+    return min === max ? `1인 ${Number(max).toLocaleString('ko-KR')}원` : `1인 ${Number(min).toLocaleString('ko-KR')}~${Number(max).toLocaleString('ko-KR')}원`;
+  }
+  return stop.estimatedCost == null ? '비용 확인 필요' : `1인 ${Number(stop.estimatedCost).toLocaleString('ko-KR')}원`;
+}
+
 function CourseRecommendationResultPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -85,6 +92,11 @@ function CourseRecommendationResultPage() {
   const [loading, setLoading] = useState(!recommendation);
   const [error, setError] = useState("");
   const [selectedCourseIds, setSelectedCourseIds] = useState([]);
+  const [expandedCourseIds, setExpandedCourseIds] = useState([]);
+
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [location.key, loading]);
 
   useEffect(() => {
     const restoreSchedule = async () => {
@@ -256,6 +268,7 @@ function CourseRecommendationResultPage() {
             ) : (
               courseList.map((course, index) => {
                 const checked = selectedCourseIds.includes(course.id);
+                const expanded = expandedCourseIds.includes(course.id);
                 return (
                   <div key={course.id} style={{ ...PAGE_STYLES.card, padding: "14px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
@@ -271,16 +284,22 @@ function CourseRecommendationResultPage() {
                       />
                     </div>
 
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" }}>
-                      <span style={PAGE_STYLES.chip}>{course.summary}</span>
-                      <span style={PAGE_STYLES.chip}>{course.totalDurationMin || 0}분</span>
-                      <span style={PAGE_STYLES.chip}>{course.budgetEstimate ? formatCourseBudget(course.budgetEstimate) : course.estimatedCostPerPerson == null ? "비용 정보 없음" : `예상 예산 ${Number(course.estimatedCostPerPerson).toLocaleString()}원`}</span>
+                    <div style={{ display: 'grid', gap: 8, marginTop: 12, fontSize: 14, lineHeight: 1.6 }}>
+                      <div>{course.stops.some(stop => stop.mealKey) || course.summary?.includes('식사 포함') || course.summary?.includes('식사가 포함') ? '🍽️ 식사가 포함돼 있어요' : '🌿 식사 없이 즐기는 코스예요'}</div>
+                      <div>{({ walking: '걸어서 이동해요', walk: '걸어서 이동해요', transit: '대중교통으로 이동해요', car: '자동차로 이동해요' })[course.travelMode || recommendation?.condition?.travelMode || course.summary?.match(/\b(walking|walk|transit|car)\b/)?.[1]] || '이동 방법은 상세 일정을 확인해 주세요'}{course.totalDurationMin > 0 ? ` · 전체 약 ${course.totalDurationMin >= 60 ? `${Math.floor(course.totalDurationMin / 60)}시간${course.totalDurationMin % 60 ? ` ${course.totalDurationMin % 60}분` : ''}` : `${course.totalDurationMin}분`} 코스` : ''}</div>
+                      <div style={{ color: '#6650B0' }}>{({ rating: '평점 높은 장소 위주로 골랐어요.', budget: '예산을 먼저 고려했어요.', variety: '다양한 활동을 담았어요.', travel: '장소 사이 이동이 편한 코스예요.' })[course.priority || recommendation?.condition?.priority || (course.summary?.includes('평점') ? 'rating' : course.summary?.includes('예산 우선') ? 'budget' : 'travel')]}</div>
+                      {course.barMode && <div>🍸 {course.barMode === 'dinner' ? '주점에서 저녁 식사와 한잔을 함께해요.' : '저녁 식사 후 주점에서 2차를 즐겨요.'}</div>}
+                      <div style={{ padding: '12px 14px', background: '#F7F5FF', borderRadius: 12 }}>
+                        <div style={{ fontSize: 13, color: '#66657A' }}>한 사람당 예상 비용</div>
+                        <div style={{ fontSize: 18, fontWeight: 700, marginTop: 3 }}>{course.budgetEstimate?.max != null ? `${Number(course.budgetEstimate.min).toLocaleString('ko-KR')}~${Number(course.budgetEstimate.max).toLocaleString('ko-KR')}원` : course.budgetEstimate ? '비용 정보 확인 필요' : course.estimatedCostPerPerson == null ? '비용 정보 없음' : `${Number(course.estimatedCostPerPerson).toLocaleString('ko-KR')}원`}</div>
+                      </div>
                     </div>
 
-                    {course.budgetEstimate && <p style={{ fontSize: 12, color: "#66657A" }}>카테고리별 추정 금액 · 실제 이용 요금은 다를 수 있습니다. {course.budgetEstimate.status === "over" ? "예상 범위가 설정 예산을 초과합니다." : course.budgetEstimate.status === "uncertain" ? "예산 충족 여부 확인 필요" : ""}</p>}
-                    <div style={{ marginTop: "12px", display: "grid", gap: "8px" }}>
+                    {expanded && <div id={`course-details-${course.id}`} role="region" aria-label={`${course.name} 상세 정보`} style={{ marginTop: "12px", display: "grid", gap: "8px" }}>
+                      {course.budgetEstimate && <p style={{ fontSize: 13, lineHeight: 1.6, color: "#66657A", margin: 0 }}>식사와 활동 종류를 바탕으로 계산한 금액이에요. 실제 이용 요금은 다를 수 있습니다. {course.budgetEstimate.status === "over" ? "설정한 예산보다 많이 들 수 있어요." : course.budgetEstimate.status === "uncertain" ? "선택한 예산 안에 가능한지 확인해 주세요." : ""}</p>}
+                      {expanded && <p style={{ fontSize: 13, color: '#66657A', margin: '0 0 4px' }}>총 이동 시간: {course.estimatedTravelTimeMin == null ? '정보 없음' : `${course.estimatedTravelTimeMin}분`} · 이동 시간과 비용은 추정치입니다.</p>}
                       {course.stops.map((stop, stopIndex) => (
-                        <div key={`${course.id}-${stop.order || stopIndex}`} style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                        <div key={`${course.id}-${stop.order || stopIndex}`} style={{ display: "flex", gap: "10px", alignItems: "flex-start", borderBottom: '1px solid #EEE7FF', padding: '8px 0' }}>
                           <div
                             style={{
                               width: "24px",
@@ -294,32 +313,38 @@ function CourseRecommendationResultPage() {
                               fontSize: "11px",
                               fontWeight: 700,
                               marginTop: "2px",
+                              flexShrink: 0,
                             }}
                           >
                             {stop.order || stopIndex + 1}
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 700, fontSize: "14px" }}>{stop.placeName}</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+                              <div style={{ flex: '1 1 100px', fontWeight: 700, fontSize: 14, overflowWrap: 'anywhere' }}>{stop.placeName}</div>
+                              <div style={{ marginLeft: 'auto', textAlign: 'right', fontSize: 12, lineHeight: 1.6 }}>
+                                <div style={{ color: '#6650B0', fontWeight: 600 }}>{getStopCostLabel(stop)}</div>
+                                <div style={{ color: '#66657A' }}>{stop.expectedStayMin == null ? '체류 시간 미정' : `${stop.expectedStayMin}분 체류`}</div>
+                              </div>
+                            </div>
+                            {expanded && <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.6 }}>
                             <div style={{ fontSize: "12px", color: "#66657A", marginTop: "2px" }}>{stop.category || "기타"}</div>
-                            <div style={{ fontSize: "12px", color: "#4D4E5C", marginTop: "5px" }}>
-                              {stop.placeAddress || "주소 정보 없음"}
-                            </div>
+                            {stop.activityDescription && <p style={{ margin: '6px 0', fontSize: 14, color: '#6650B0', lineHeight: 1.5 }}>{stop.activityDescription}</p>}
+                            <p style={{ margin: '6px 0' }}>{stop.placeAddress || '주소 정보 없음'}</p>
+                            <p style={{ margin: '6px 0' }}>방문 시간: {getTimeLabel(stop.visitStartTime, stop.visitEndTime)}</p>
+                            {stop.waitingTimeMin > 0 && <p style={{ margin: '6px 0' }}>방문 전 여유 시간: {stop.waitingTimeMin}분 · 쉬거나 자유롭게 둘러보세요.</p>}
+                            {stopIndex > 0 && <p style={{ margin: '6px 0' }}>이전 장소에서 이동: {stop.travelTimeFromPrevMin == null ? '시간 정보 없음' : `${stop.travelTimeFromPrevMin}분`}{stop.distanceFromPrevM != null ? ` · ${Number(stop.distanceFromPrevM).toLocaleString()}m` : ''}</p>}
                             <div style={{ marginTop: "6px", display: "flex", flexWrap: "wrap", gap: "6px", fontSize: "11px", color: "#4D4E5C" }}>
-                              <span style={PAGE_STYLES.chip}>{getTimeLabel(stop.visitStartTime, stop.visitEndTime)}</span>
-                              <span style={PAGE_STYLES.chip}>{stop.expectedStayMin || 60}분 체류</span>
-                              {/* 평점 제공처 확보 후 다시 사용:
-                              <span style={PAGE_STYLES.chip}>{stop.rating == null ? "평점 정보 없음" : `평점 ${Number(stop.rating).toFixed(1)}`}</span>
-                              */}
-                              {stop.travelTimeFromPrevMin != null && <span style={PAGE_STYLES.chip}>이동 {stop.travelTimeFromPrevMin}분</span>}
+                              <span style={PAGE_STYLES.chip}>{stop.rating == null ? "평점 정보 없음" : `구글 평점 ${Number(stop.rating).toFixed(1)}`}</span>
                             </div>
+                            </div>}
                           </div>
                         </div>
                       ))}
-                    </div>
+                    </div>}
 
                     <div style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
-                      <button type="button" style={{ ...PAGE_STYLES.secondaryButton, padding: "10px 12px", width: "100%" }}>
-                        코스 상세 보기
+                      <button type="button" aria-expanded={expanded} aria-controls={`course-details-${course.id}`} onClick={() => setExpandedCourseIds(previous => previous.includes(course.id) ? previous.filter(id => id !== course.id) : [...previous, course.id])} style={{ ...PAGE_STYLES.secondaryButton, padding: "10px 12px", width: "100%" }}>
+                        {expanded ? '코스 상세 접기' : '코스 상세 보기'}
                       </button>
                     </div>
                   </div>

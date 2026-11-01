@@ -1,8 +1,9 @@
 export const MEAL_WINDOWS = {
-  breakfast: { label: '아침', start: 360, end: 660, stay: 45 },
-  lunch: { label: '점심', start: 660, end: 960, stay: 60 },
-  dinner: { label: '저녁', start: 1020, end: 1440, stay: 75 },
+  breakfast: { label: '아침', start: 360, end: 660, preferredStart: 480, stay: 45 },
+  lunch: { label: '점심', start: 660, end: 960, preferredStart: 750, stay: 60 },
+  dinner: { label: '저녁', start: 1020, end: 1440, preferredStart: 1080, stay: 60 },
 };
+export const MIN_MEAL_GAP_MINUTES = 180;
 export function timeMinutes(value, fallback) {
   if (!value) return fallback;
   const [hours, minutes] = String(value).split(':').map(Number);
