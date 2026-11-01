@@ -31,7 +31,8 @@
 .meeting-diary-title-row { display: flex; align-items: center; gap: 7px; }
 .meeting-diary-record h2 { margin: 4px 0 2px; font-size: 18px; }
 .meeting-diary-record time { color: #92919b; font-size: 11px; }
-.meeting-diary-photo-frame { position: relative; width: 100%; overflow: hidden; margin-top: 12px; border-radius: 14px; background: #f3f2f7; aspect-ratio: 1.52; touch-action: pan-y; }
+.meeting-diary-photo-carousel { position: relative; margin-top: 12px; }
+.meeting-diary-photo-frame { position: relative; width: 100%; overflow: hidden; border-radius: 14px; background: #f3f2f7; aspect-ratio: 1.52; touch-action: pan-y; }
 .meeting-diary-photo-frame { cursor: zoom-in; }
 .meeting-diary-photo-frame.has-multiple-photos { cursor: grab; user-select: none; -webkit-user-select: none; }
 .meeting-diary-photo-frame.has-multiple-photos:active { cursor: grabbing; }
@@ -41,6 +42,10 @@
 @keyframes diary-photo-enter-next { from { opacity: .55; transform: translateX(32px) scale(.985); } to { opacity: 1; transform: translateX(0) scale(1); } }
 @keyframes diary-photo-enter-previous { from { opacity: .55; transform: translateX(-32px) scale(.985); } to { opacity: 1; transform: translateX(0) scale(1); } }
 .meeting-diary-photo-count { position: absolute; bottom: 9px; left: 10px; padding: 4px 7px; border-radius: 8px; background: rgba(20,20,24,.68); color: #fff; font-size: 10px; }
+.meeting-diary-photo-arrow { position: absolute; top: 50%; z-index: 1; display: grid; width: 32px; height: 32px; place-items: center; padding: 0; transform: translateY(-50%); border: 1px solid #e8e7f1; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(20,20,24,.15); color: #716ef0; font-size: 20px; cursor: pointer; }
+.meeting-diary-photo-arrow.previous { left: -16px; }
+.meeting-diary-photo-arrow.next { right: -16px; }
+.meeting-diary-photo-arrow:disabled { opacity: .4; cursor: default; }
 .meeting-diary-dots { display: flex; justify-content: center; gap: 5px; padding: 7px 0; }
 .meeting-diary-dots button { width: 6px; height: 6px; padding: 0; border: 0; border-radius: 8px; background: #dddce4; }
 .meeting-diary-dots button.active { width: 15px; background: #7c79ff; }
