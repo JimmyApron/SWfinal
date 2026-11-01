@@ -23,6 +23,11 @@ function PaymentAccountsPage() {
   const [form, setForm] = useState(null); // null이면 목록만 보인다
   const [error, setError] = useState("");
 
+  // 마이페이지에서 스크롤한 채로 들어와도 항상 맨 위에서 시작한다.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [isLoading]);
+
   useEffect(() => {
     const load = async () => {
       try {
