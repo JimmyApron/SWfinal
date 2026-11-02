@@ -1,4 +1,4 @@
-﻿.room-calendar-page { min-height: 100%; padding: 22px 0 30px; background: #fff; color: #26253a; }
+﻿.room-calendar-page { min-height: 100%; padding: 14px 0 30px; background: #fff; color: #26253a; }
 .calendar-selected-heading, .room-calendar-month, .diary-collection-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .diary-collection-header h2 { margin: 3px 0 5px; font-size: 23px; }
 .room-calendar-eyebrow, .diary-eyebrow { margin: 0; color: #7c79ff; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
@@ -66,6 +66,19 @@
 .room-calendar-legend i.record-image { color: #7c79ff; }
 .room-calendar-legend i.record-image svg { width: 14px; height: 14px; stroke-width: 1.6; }
 .room-calendar-legend b { color: #f0a52c; font-size: 12px; line-height: 1; }
+.room-drive-backup { margin: 0 0 12px; padding: 12px; border: 1px solid #e7e5f4; border-radius: 13px; background: #faf9ff; }
+.room-drive-backup-main { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.room-drive-backup-main > div { display: flex; flex-direction: column; gap: 3px; }
+.room-drive-backup-main strong { font-size: 12px; }
+.room-drive-backup-main span, .room-drive-backup small { color: #858393; font-size: 11px; }
+.room-drive-backup small { display: block; margin-top: 8px; }
+.room-drive-backup .room-drive-backup-error { color: #b42318; }
+.room-drive-backup-reconnect { margin-top: 7px; padding: 0; border: 0; background: transparent; color: #625fe8; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.room-drive-backup-switch { width: 43px; height: 25px; flex: 0 0 43px; padding: 3px; border: 0; border-radius: 99px; background: #cbcbd6; cursor: pointer; }
+.room-drive-backup-switch.on { background: #7c79ff; }
+.room-drive-backup-switch:disabled { opacity: .6; cursor: default; }
+.room-drive-backup-switch > span { display: block; width: 19px; height: 19px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.14); transition: transform .18s; }
+.room-drive-backup-switch.on > span { transform: translateX(18px); }
 .calendar-loading { color: #8e8c9c; text-align: center; font-size: 12px; }
 .calendar-selected-section { position: fixed; right: auto; bottom: 64px; left: 50%; z-index: 9000; width: min(calc(100vw - 24px), 680px); max-height: calc(100vh - 76px); max-height: calc(100dvh - 76px); box-sizing: border-box; overflow-y: auto; margin: 0; transform: translate(-50%, var(--calendar-sheet-drag-y, 0px)); transition: transform .22s cubic-bezier(.2,.8,.2,1); animation: calendar-sheet-rise .24s ease-out both; }
 .calendar-selected-section.is-dragging { transition: none; }
@@ -264,7 +277,7 @@
 .lightning-time-row label { flex: 1; color: #656374; font-size: 11px; }
 .lightning-time-row input { display: block; width: 100%; box-sizing: border-box; margin-top: 6px; padding: 9px; border: 1px solid #e7e7ee; border-radius: 10px; }
 @media (max-width: 520px) {
-  .room-calendar-page { padding: 16px 0 24px; }
+  .room-calendar-page { padding: 8px 0 24px; }
   .calendar-collection-button { padding: 9px 10px; font-size: 11px; }
   .room-calendar-card { padding: 10px 9px; border-radius: 15px; }
   .calendar-selected-section { padding: 10px 9px; border-radius: 15px; }

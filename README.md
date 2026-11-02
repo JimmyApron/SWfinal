@@ -15,3 +15,5 @@ npm start
 cd backend
 npm install
 node server.js
+
+방 캘린더 Google Drive 백업 설정: [docs/room-drive-backup.md](docs/room-drive-backup.md)

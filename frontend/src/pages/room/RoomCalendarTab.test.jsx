@@ -2,6 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import RoomCalendarTab from "./RoomCalendarTab";
+jest.mock("./RoomDriveBackupControl", () => () => <div data-testid="drive-backup-control" />);
 import {
   getCalendarDiaryThumbnails,
   getMeetingDiaryProgress,
@@ -38,6 +39,7 @@ test("다른 방 구성원도 번개 만남 장소를 수정할 수 있다", asy
   updateLightningMeetingPlace.mockImplementation(async ({ location }) => { savedLocation = location; });
 
   const { container } = render(<MemoryRouter><RoomCalendarTab roomId={2} participants={[]} /></MemoryRouter>);
+  expect(await screen.findByTestId("drive-backup-control")).toBeInTheDocument();
   fireEvent.click(await screen.findByRole("button", { name: "장소 수정" }));
   fireEvent.change(screen.getByLabelText("장소"), { target: { value: "새 장소" } });
   fireEvent.click(screen.getByRole("button", { name: "장소 저장" }));
