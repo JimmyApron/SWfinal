@@ -66,7 +66,7 @@
 .room-calendar-legend i.record-image { color: #7c79ff; }
 .room-calendar-legend i.record-image svg { width: 14px; height: 14px; stroke-width: 1.6; }
 .room-calendar-legend b { color: #f0a52c; font-size: 12px; line-height: 1; }
-.room-drive-backup { margin: 0 0 12px; padding: 12px; border: 1px solid #e7e5f4; border-radius: 13px; background: #faf9ff; }
+.room-drive-backup { position: relative; margin: 0 0 12px; padding: 12px 67px 12px 12px; border: 1px solid #e7e5f4; border-radius: 13px; background: #faf9ff; }
 .room-drive-backup-main { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .room-drive-backup-main > div { display: flex; flex-direction: column; gap: 3px; }
 .room-drive-backup-main strong { font-size: 12px; }
@@ -74,7 +74,7 @@
 .room-drive-backup small { display: block; margin-top: 8px; }
 .room-drive-backup .room-drive-backup-error { color: #b42318; }
 .room-drive-backup-reconnect { margin-top: 7px; padding: 0; border: 0; background: transparent; color: #625fe8; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
-.room-drive-backup-switch { width: 43px; height: 25px; flex: 0 0 43px; padding: 3px; border: 0; border-radius: 99px; background: #cbcbd6; cursor: pointer; }
+.room-drive-backup-switch { position: absolute; top: 50%; right: 12px; width: 43px; height: 25px; padding: 3px; border: 0; border-radius: 99px; background: #cbcbd6; cursor: pointer; transform: translateY(-50%); }
 .room-drive-backup-switch.on { background: #7c79ff; }
 .room-drive-backup-switch:disabled { opacity: .6; cursor: default; }
 .room-drive-backup-switch > span { display: block; width: 19px; height: 19px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.14); transition: transform .18s; }
