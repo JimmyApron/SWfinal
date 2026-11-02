@@ -37,7 +37,7 @@ test('상세를 펼칠 때만 유효한 좌표의 방문 순서 지도 표시', 
   expect(screen.queryByTestId('course-map')).not.toBeInTheDocument();
 });
 
-test('추천 한 코스를 바로 확정하면 투표 대신 확정 로드맵으로 이동', async () => {
+test('추천 한 코스를 바로 확정하면 투표 대신 일정 상세 화면으로 이동', async () => {
   const navigate = jest.fn();
   useNavigate.mockReturnValue(navigate);
   const course = { id: 'direct', name: '바로 갈 코스', stops: [{ placeName: '카페' }] };
@@ -46,7 +46,10 @@ test('추천 한 코스를 바로 확정하면 투표 대신 확정 로드맵으
   render(<CourseRecommendationResultPage />);
   fireEvent.click(screen.getByRole('button', { name: '이 코스로 바로 확정' }));
   expect(screen.getByRole('button', { name: '확정 중…' })).toBeDisabled();
-  await waitFor(() => expect(navigate).toHaveBeenCalledWith('/rooms/1/schedules/2/final-course', { replace: true }));
+  await waitFor(() => expect(navigate).toHaveBeenCalledWith('/rooms/1/confirmed-schedule', {
+    state: { schedule: { id: 2, roomid: 1 } },
+    replace: true,
+  }));
   expect(confirmRecommendedCourse).toHaveBeenCalledWith({ roomId: 1, scheduleId: 2, course });
 });
 

@@ -19,9 +19,13 @@ test('추천 장소를 저장하고 투표 없이 해당 코스를 확정', asyn
     courseName: '추천', stops: [expect.objectContaining({ place_name: '카페', latitude: 37, longitude: 127 })] }));
   expect(finalizeDirectCourse).toHaveBeenCalledWith({ roomId: 1, scheduleId: 2, courseId: 3 });
 });
-test('생성자가 아니면 코스 저장 전 차단', async () => {
+test('일정 생성자가 아닌 모임 참여자도 확정 가능', async () => {
   getScheduleCreator.mockResolvedValue({ created_by_type: 'member', created_by_member_id: 'other' });
-  await expect(confirmRecommendedCourse(request)).rejects.toThrow('만든 참여자만');
+  await expect(confirmRecommendedCourse(request)).resolves.toEqual({ course_id: 3 });
+});
+test('모임 참여자가 아니면 코스 저장 전 차단', async () => {
+  getCurrentRoomParticipantInfo.mockRejectedValue(new Error('모임 참여자만 이용할 수 있습니다.'));
+  await expect(confirmRecommendedCourse(request)).rejects.toThrow('참여자');
   expect(createCourseWithStops).not.toHaveBeenCalled();
 });
 test('이미 확정된 일정에는 새 코스를 저장하지 않음', async () => {

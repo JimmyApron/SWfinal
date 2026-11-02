@@ -170,12 +170,8 @@ export async function finalizeDirectCourse({ roomId, scheduleId, courseId }) {
   const schedule = await readResult(supabase.from('confirmed_schedules').select('id, roomid')
     .eq('id', scheduleId).eq('roomid', Number(roomId)).single());
   if (!schedule) throw new Error('현재 모임의 일정을 확인하지 못했습니다.');
+  // 모임 참여자(회원·게스트)라면 누구나 직접 확정할 수 있다. 참여자가 아니면 여기서 예외가 난다.
   const actor = await getCurrentRoomParticipantInfo(roomId);
-  const creator = await getScheduleCreator(scheduleId);
-  if (!creator || creator.created_by_type !== actor.participantType ||
-      !same(actor.participantId, actor.participantType === 'member' ? creator.created_by_member_id : creator.created_by_guest_id)) {
-    throw new Error('직접 코스 지정은 해당 일정을 만든 참여자만 할 수 있습니다.');
-  }
   const course = await readResult(supabase.from('courses').select('id')
     .eq('id', courseId).eq('schedule_id', scheduleId).eq('room_id', Number(roomId)).single());
   if (!course) throw new Error('해당 일정에 연결된 코스가 아닙니다.');

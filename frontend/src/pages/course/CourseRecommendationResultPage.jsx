@@ -121,9 +121,16 @@ function CourseRecommendationResultPage() {
     try {
       const result = await confirmRecommendedCourse({ roomId: stateRoomId, scheduleId: stateScheduleId, course });
       if (result.warning) window.alert(result.warning);
-      navigate(`/rooms/${stateRoomId}/schedules/${stateScheduleId}/final-course`, { replace: true });
+      navigate(`/rooms/${stateRoomId}/confirmed-schedule`, {
+        state: { schedule: schedule || { id: stateScheduleId, roomid: stateRoomId } },
+        replace: true,
+      });
     } catch (failure) {
-      setConfirmationError(failure.message || '코스 확정에 실패했습니다. 다시 시도해 주세요.');
+      console.error('코스 확정 실패:', failure);
+      const message = failure.message || '코스 확정에 실패했습니다. 다시 시도해 주세요.';
+      setConfirmationError(message);
+      // 오류 문구는 페이지 맨 아래에 있어 놓치기 쉬우니 바로 알려 준다.
+      window.alert(message);
     } finally {
       confirmationLock.current = false;
       setConfirmingCourseId(null);

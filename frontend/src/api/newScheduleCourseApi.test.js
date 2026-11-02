@@ -81,10 +81,10 @@ test('최종 확정 실패 후 저장된 코스를 재사용해서 재시도', a
   expect(db.schedule_finalizations).toHaveLength(1);
 });
 
-test('생성자가 아닌 다른 참여자는 투표 없이 직접 지정 불가', async () => {
+test('생성자가 아니어도 모임 참여자는 직접 지정 가능', async () => {
   const saved = await saveNewScheduleWithCourse({ schedule, mode: 'direct', courses, selectedCourseId: 'draft-course' });
   supabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'member-b' } }, error: null });
-  await expect(finalizeDirectCourse({ roomId: 1, scheduleId: saved.schedule.id, courseId: saved.courses[0].id })).rejects.toThrow('만든 참여자만');
+  await expect(finalizeDirectCourse({ roomId: 1, scheduleId: saved.schedule.id, courseId: saved.courses[0].id })).resolves.toBeTruthy();
 });
 
 test('게스트 생성자도 새 일정과 직접 코스 저장 가능', async () => {

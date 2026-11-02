@@ -93,7 +93,7 @@ test("삭제·접근 불가 일정은 대체 안내", async () => {
   expect(await screen.findByRole("status")).toHaveTextContent("최종 코스를 조회할 수 없습니다");
   expect(screen.queryByRole("link")).not.toBeInTheDocument();
 });
-test("공유 버튼 중복 클릭 방지와 성공 후 해당 모임 채팅방 이동", async () => {
+test("공유 버튼 중복 클릭 방지, 성공해도 자동 이동 없이 채팅방 보기로 이동", async () => {
   let complete;
   shareFinalizedCourse.mockImplementation(() => new Promise((resolve) => { complete = resolve; }));
   page();
@@ -103,7 +103,9 @@ test("공유 버튼 중복 클릭 방지와 성공 후 해당 모임 채팅방 �
   expect(button).toBeDisabled();
   expect(navigate).not.toHaveBeenCalled();
   complete({ sent: true });
-  await waitFor(() => expect(navigate).toHaveBeenCalledWith('/rooms/2?tab=chat'));
+  expect(await screen.findByText('채팅방에 코스를 공유했어요.')).toBeInTheDocument();
+  expect(navigate).not.toHaveBeenCalled();
+  expect(screen.getByRole('link', { name: /채팅방 보기/ })).toHaveAttribute('href', '/rooms/2?tab=chat');
 });
 test("공유 전송 실패는 오류 안내", async () => {
   shareFinalizedCourse.mockRejectedValue(new Error("전송 실패 · 중복 전송 가능"));

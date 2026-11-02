@@ -3,6 +3,7 @@ import { getFinalizedCourse, readResult } from "./courseFinalizationApi";
 import { getCurrentRoomParticipantInfo } from "./courseApi";
 import { orderedStops } from "../utils/courseRoadmapUtils";
 import { createRoomMessage } from "./chatMessageApi";
+import { getApiBaseUrl } from "./apiBaseUrl";
 
 export async function getFinalizedRoadmap(roomId, scheduleId, expectedCourseId = null) {
   if (!/^[1-9]\d*$/.test(String(roomId)) || !/^[1-9]\d*$/.test(String(scheduleId))) throw new Error("유효하지 않은 모임 또는 일정입니다.");
@@ -19,6 +20,39 @@ export async function getFinalizedRoadmap(roomId, scheduleId, expectedCourseId =
   const room = await readResult(supabase.from("rooms").select("id, roomname").eq("id", Number(roomId)).single());
   return { ...finalization, schedule, room,
     course: { ...finalization.course, stops: orderedStops(finalization.course.stops) } };
+}
+
+// 확정 코스 해제·수정은 브라우저에서 직접 쓸 수 없어 백엔드(/api/course)를 거친다.
+async function postCourseApi(path, payload, fallbackMessage) {
+  const headers = { "Content-Type": "application/json" };
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const guestId = localStorage.getItem("guest_id");
+  if (guestId) headers["X-Guest-Id"] = guestId;
+
+  const response = await fetch(`${getApiBaseUrl()}/course${path}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    // JSON 본문이 없는 404는 서버가 이 API를 모르는 것(백엔드 미재시작)이다.
+    if (response.status === 404 && !body) throw new Error("서버에 이 기능이 아직 반영되지 않았어요. 백엔드를 다시 시작해 주세요.");
+    throw new Error(body?.message || fallbackMessage);
+  }
+  return body;
+}
+
+// 최종 확정을 해제해 코스를 다시 정할 수 있게 한다.
+export function resetFinalizedCourse(scheduleId) {
+  return postCourseApi("/reset-finalization", { scheduleId }, "코스 확정을 해제하지 못했습니다.");
+}
+
+// 확정된 코스의 방문 장소를 통째로 바꾼다. (course: buildCourseVoteDbRows 결과 모양)
+export function updateFinalizedCourseStops(scheduleId, course) {
+  return postCourseApi("/update-stops", { scheduleId, course }, "코스를 수정하지 못했습니다.");
 }
 
 export async function shareFinalizedCourse(roomId, scheduleId) {

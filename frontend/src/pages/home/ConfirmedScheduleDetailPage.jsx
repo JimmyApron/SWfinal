@@ -25,6 +25,7 @@ import LocationPicker from "../../components/map/LocationPicker";
 import PrepSummaryCard from "../../components/PrepSummaryCard";
 import { getTodayStr } from "../../utils/scheduleUtils";
 import { getPrepWeather } from "../../api/prepApi";
+import { resetFinalizedCourse } from "../../api/courseRoadmapApi";
 import { getWeatherEmoji } from "../../utils/weatherEmoji";
 import { listExpenses } from "../../api/settlementApi";
 
@@ -715,6 +716,18 @@ function ConfirmedScheduleDetailPage() {
     }
   };
 
+  const handleChangeCourse = async () => {
+    if (!window.confirm("확정된 코스를 해제하고 다시 정할까요? 모임 참여자들에게 알림이 가요.")) return;
+    try {
+      await resetFinalizedCourse(schedule.id);
+      navigate(`/rooms/${schedule.roomid}/course-recommendation`, {
+        state: { schedule, roomId: schedule.roomid },
+      });
+    } catch (error) {
+      alert(error.message || "코스 확정을 해제하지 못했습니다.");
+    }
+  };
+
   const handleAddLocation = async () => {
     if (!additionalPlace?.name) {
       alert("추가할 장소를 선택하세요.");
@@ -897,7 +910,7 @@ function ConfirmedScheduleDetailPage() {
 
         {!isLocationOnly && (
           <div style={{ marginTop: "10px" }}>
-            <FinalizedCoursePreview roomId={schedule.roomid} scheduleId={schedule.id} />
+            <FinalizedCoursePreview roomId={schedule.roomid} scheduleId={schedule.id} onChangeCourse={handleChangeCourse} />
           </div>
         )}
 
