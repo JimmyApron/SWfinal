@@ -153,10 +153,10 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   );
 
   const getHeatmapColor = (count) => {
-    if (count >= 4) return "color-mix(in srgb, var(--accent-color) 76%, var(--card-bg))";
-    if (count === 3) return "color-mix(in srgb, var(--accent-color) 58%, var(--card-bg))";
-    if (count === 2) return "color-mix(in srgb, var(--accent-color) 40%, var(--card-bg))";
-    return "color-mix(in srgb, var(--accent-color) 22%, var(--card-bg))";
+    if (count >= 4) return "color-mix(in srgb, var(--accent-color) 85%, var(--card-bg))";
+    if (count === 3) return "color-mix(in srgb, var(--accent-color) 70%, var(--card-bg))";
+    if (count === 2) return "color-mix(in srgb, var(--accent-color) 55%, var(--card-bg))";
+    return "color-mix(in srgb, var(--accent-color) 38%, var(--card-bg))";
   };
 
   const getMemberColor = (userid) => {
@@ -1392,7 +1392,11 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                                 : (time.endsWith(":30") ? "1px solid var(--border-color)" : "1px solid color-mix(in srgb, var(--border-color) 55%, transparent)"),
                               borderLeft: showMySelection ? mySelectionBorder : "none",
                               borderRight: showMySelection ? mySelectionBorder : "1px solid var(--border-color)",
-                              boxShadow: showMySelection ? `0 0 0 1px color-mix(in srgb, ${mySelectionBorderColor} 18%, transparent)` : "none",
+                              boxShadow: showMySelection
+                                ? `0 0 0 1px color-mix(in srgb, ${mySelectionBorderColor} 18%, transparent)`
+                                : (selectable && availableCount > 0
+                                  ? `inset 0 -${time.endsWith(":30") ? 2 : 1}px 0 var(--card-bg)`
+                                  : "none"),
 
                               cursor: selectable ? "pointer" : "default",
                               padding: 0,
