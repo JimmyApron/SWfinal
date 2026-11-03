@@ -50,7 +50,9 @@ import {
   getMyNotifications,
   TAB_TYPE_MAP,
 } from "./api/notificationApi";
-import { getPersonalEvents } from "./api/personalEventApi";
+import { getPersonalEvents, getTeammateRoomEvents } from "./api/personalEventApi";
+import { getEventStartTimes, isRepeatingRoomEvent } from "./lib/eventRepeat";
+import { getReminderRoomTodos, hasCompletedRoomTodo } from "./api/roomTodoApi";
 
 import SettingsPage from "./pages/settings/SettingsPage";
 import SettingEditPage from "./pages/settings/SettingEditPage";
@@ -143,23 +145,22 @@ async function fetchHolidays(year, month) {
   }
 }
 
+// 방 공용 일정은 반복 회차별로, 개인 일정은 시작 시각 하나만 알림 대상으로 본다
+function getPersonalEventReminderTargets(event, now) {
+  if (!event?.reminder || event.reminder === "none") return [];
+  const minutes = Number(event.reminder);
+  if (!Number.isFinite(minutes) || minutes < 0) return [];
+  const startTimes = isRepeatingRoomEvent(event)
+    ? getEventStartTimes(event, now, Math.ceil(minutes / 1440) + 1)
+    : [getPersonalEventStartAt(event)].filter(Boolean);
+  return startTimes.map((startAt) => new Date(startAt.getTime() - minutes * 60 * 1000));
+}
+
 function getPersonalEventStartAt(event) {
   if (!event?.date) return null;
   const time = event.starttime || "00:00";
   const startAt = new Date(`${event.date}T${time.slice(0, 5)}:00`);
   return Number.isNaN(startAt.getTime()) ? null : startAt;
-}
-
-function getPersonalEventReminderAt(event) {
-  if (!event?.reminder || event.reminder === "none") return null;
-
-  const reminderMinutes = Number(event.reminder);
-  if (!Number.isFinite(reminderMinutes) || reminderMinutes < 0) return null;
-
-  const startAt = getPersonalEventStartAt(event);
-  if (!startAt) return null;
-
-  return new Date(startAt.getTime() - reminderMinutes * 60 * 1000);
 }
 
 function getPersonalEventReminderKey(event, reminderAt) {
@@ -168,7 +169,7 @@ function getPersonalEventReminderKey(event, reminderAt) {
 
 function getPersonalEventReminderMessage(event) {
   const startLabel = event.starttime ? ` ${event.starttime}` : "";
-  return `[개인 일정] ${event.title}${startLabel} 일정이 곧 시작됩니다.`;
+  return `[${event.roomids?.length ? "방 일정" : "개인 일정"}] ${event.title}${startLabel} 일정이 곧 시작됩니다.`;
 }
 
 async function shouldSkipPersonalReminderDate(reminderAt) {
@@ -204,6 +205,14 @@ function getCachedRoomPopupSetting(roomId, settingColumn) {
   } catch {
     return null;
   }
+}
+
+// 여러 방에 공유된 일정은 하나라도 알림이 켜진 방이 있으면 띄운다
+async function isAnyRoomNotificationPopupAllowed(roomIds, type) {
+  for (const id of roomIds) {
+    if (await isRoomNotificationPopupAllowed(id, type)) return true;
+  }
+  return false;
 }
 
 async function isRoomNotificationPopupAllowed(roomId, type) {
@@ -565,15 +574,16 @@ function NotificationListener() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!isMounted || !user?.id) return;
 
-        const events = await getPersonalEvents(user.id);
+        const [ownEvents, teammateEvents] = await Promise.all([
+          getPersonalEvents(user.id),
+          getTeammateRoomEvents(user.id).catch(() => []),
+        ]);
+        const events = [...(ownEvents || []), ...teammateEvents];
         if (!isMounted) return;
 
         const now = Date.now();
 
-        for (const event of events || []) {
-          const reminderAt = getPersonalEventReminderAt(event);
-          if (!reminderAt) continue;
-
+        for (const { event, reminderAt } of events.flatMap((item) => getPersonalEventReminderTargets(item, now).map((at) => ({ event: item, reminderAt: at })))) {
           const reminderTime = reminderAt.getTime();
           if (reminderTime > now) continue;
           if (now - reminderTime > PERSONAL_REMINDER_POPUP_WINDOW_MS) continue;
@@ -584,6 +594,8 @@ function NotificationListener() {
           shownPersonalReminderKeysRef.current.add(reminderKey);
 
           if (await shouldSkipPersonalReminderDate(reminderAt)) continue;
+          // 방 일정은 그 방의 "일정 알림" 설정이 꺼져 있으면 팝업을 띄우지 않는다
+          if (event.roomids?.length && !(await isAnyRoomNotificationPopupAllowed(event.roomids, "schedule_new"))) continue;
           if (!isMounted) return;
 
           window.dispatchEvent(new CustomEvent("app-toast", {
@@ -591,9 +603,41 @@ function NotificationListener() {
               id: reminderKey,
               type: "personal_event_reminder",
               message: getPersonalEventReminderMessage(event),
-              link: "/calendar",
+              link: event.roomids?.length ? `/rooms/${event.roomids[0]}?tab=calendar` : "/calendar",
             },
           }));
+        }
+
+        // 방 공동 할 일: 방 멤버 모두에게 회차별로 알림 (내가 이미 완료한 회차는 제외)
+        const roomTodos = await getReminderRoomTodos().catch(() => []);
+        for (const todo of roomTodos) {
+          if (todo.assignees?.length && !todo.assignees.map(String).includes(String(user.id))) continue;
+          const minutes = Number(todo.reminder);
+          if (!Number.isFinite(minutes) || minutes < 0) continue;
+          const startTimes = getEventStartTimes({ ...todo, starttime: todo.duetime || "09:00" }, now, Math.ceil(minutes / 1440) + 1);
+          for (const startAt of startTimes) {
+            const reminderAt = new Date(startAt.getTime() - minutes * 60 * 1000);
+            const reminderTime = reminderAt.getTime();
+            if (reminderTime > now || now - reminderTime > PERSONAL_REMINDER_POPUP_WINDOW_MS) continue;
+
+            const reminderKey = `room-todo:${todo.id}:${reminderTime}`;
+            if (shownPersonalReminderKeysRef.current.has(reminderKey)) continue;
+            shownPersonalReminderKeysRef.current.add(reminderKey);
+
+            if (await shouldSkipPersonalReminderDate(reminderAt)) continue;
+            if (!(await isRoomNotificationPopupAllowed(todo.roomid, "schedule_new"))) continue;
+            if (await hasCompletedRoomTodo(todo.id, getLocalDateKey(startAt), user.id)) continue;
+            if (!isMounted) return;
+
+            window.dispatchEvent(new CustomEvent("app-toast", {
+              detail: {
+                id: reminderKey,
+                type: "personal_event_reminder",
+                message: `[공동 할 일] ${todo.title}${todo.duetime ? ` ${todo.duetime.slice(0, 5)}` : ""} 할 일이 곧 시작됩니다.`,
+                link: `/rooms/${todo.roomid}?tab=calendar`,
+              },
+            }));
+          }
         }
       } catch (error) {
         console.error("개인 일정 알림 확인 실패:", error);
