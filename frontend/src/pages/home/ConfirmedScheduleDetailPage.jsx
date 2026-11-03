@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FaCalendarAlt, FaMapMarkerAlt, FaBell } from "react-icons/fa";
 import { supabase } from "../../lib/supabaseClient";
+import { getApiBaseUrl } from "../../api/apiBaseUrl";
 import {
   addAdditionalConfirmedLocation,
   cancelConfirmedSchedule,
@@ -1911,10 +1912,6 @@ const shortcutButtonStyle = {
   cursor: "pointer",
   fontSize: "12px",
 };
-
-function getApiBaseUrl() {
-  return (process.env.REACT_APP_API_BASE_URL || "http://localhost:5000/api").replace(/\/$/, "");
-}
 
 async function readRouteResponseBody(response) {
   const contentType = response.headers.get("content-type") || "";

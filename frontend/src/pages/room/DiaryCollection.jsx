@@ -20,8 +20,8 @@ const monthTitle = (key) => {
 const meetingTitle = (meeting) => meeting?.title || (meeting?.source_type === "lightning" ? "번개 만남" : "함께한 만남");
 const isPastActiveMeeting = (meeting, today) => meeting.meeting_date <= today && meeting.lifecycle_status !== "cancelled";
 const parseMonth = (value) => /^\d{4}-(0[1-9]|1[0-2])$/.test(value || "") ? new Date(`${value}-01T12:00:00`) : new Date(`${monthKey(new Date())}-01T12:00:00`);
-const fromLocation = (location) => {
-  const params = new URLSearchParams(location.search);
+const fromLocation = (search) => {
+  const params = new URLSearchParams(search);
   return {
     tab: ["meetings", "photos", "mine"].includes(params.get("tab")) ? params.get("tab") : "meetings",
     view: params.get("view") === "all" ? "all" : "monthly",
@@ -54,7 +54,7 @@ export default function DiaryCollection() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const routeState = fromLocation(location);
+  const routeState = useMemo(() => fromLocation(location.search), [location.search]);
   const { tab, view, month } = routeState;
   const [today] = useState(todayInSeoul);
   const [showUnreadMeetings, setShowUnreadMeetings] = useState(false);
@@ -73,7 +73,7 @@ export default function DiaryCollection() {
 
   const updateRoute = (changes) => {
     const params = new URLSearchParams(location.search);
-    const next = { ...routeState, ...changes };
+    const next = { ...routeState, month: parseMonth(selectedMonthKey || monthKey(month)), ...changes };
     params.set("tab", next.tab);
     params.set("view", next.view);
     params.set("month", monthKey(next.month));
@@ -159,7 +159,19 @@ export default function DiaryCollection() {
     }
   }, [loading, location.pathname, location.search, location.state?.collectionScrollY]);
 
-  const monthMeetings = useMemo(() => meetings.filter((meeting) => monthOf(meeting) === monthKey(month)), [meetings, month]);
+  const availableMonthKeys = useMemo(() => {
+    const recordedMeetingIds = new Set(diaries
+      .filter((diary) => diary.status === "published" && (tab !== "mine" || diary.author_auth_user_id === userId))
+      .map((diary) => diary.meeting_id));
+    return [...new Set(meetings.filter((meeting) => recordedMeetingIds.has(meeting.id)).map(monthOf).filter(Boolean))]
+      .sort((a, b) => b.localeCompare(a));
+  }, [diaries, meetings, tab, userId]);
+  const requestedMonthKey = monthKey(month);
+  const selectedMonthKey = availableMonthKeys.includes(requestedMonthKey) ? requestedMonthKey : availableMonthKeys[0] || null;
+  const selectedMonthIndex = availableMonthKeys.indexOf(selectedMonthKey);
+  const previousMonthKey = availableMonthKeys[selectedMonthIndex + 1];
+  const nextMonthKey = selectedMonthIndex > 0 ? availableMonthKeys[selectedMonthIndex - 1] : null;
+  const monthMeetings = useMemo(() => meetings.filter((meeting) => monthOf(meeting) === selectedMonthKey), [meetings, selectedMonthKey]);
   const selectedMeetings = view === "all" ? meetings : monthMeetings;
   const selectedIds = useMemo(() => new Set(selectedMeetings.map((meeting) => meeting.id)), [selectedMeetings]);
   const records = useMemo(() => diaries.filter((diary) => selectedIds.has(diary.meeting_id) && diary.status === "published"), [diaries, selectedIds]);
@@ -203,11 +215,10 @@ export default function DiaryCollection() {
   const ownPublishedCount = selectedMeetings.filter((meeting) => ownPublishedFor(meeting.id)).length;
   const heartCount = records.filter((diary) => diary.author_auth_user_id === userId).reduce((sum, diary) => sum + (reactionCounts[diary.id] || []).length, 0);
   const meetingGroups = groupByMonth(meetingsWithRecords, (meeting) => meeting);
-  const unreadGroups = groupByMonth(ownMissingMeetings, (meeting) => meeting);
   const photoGroupsByMonth = groupByMonth(flatPhotos, (entry) => entry.meeting).map(([key, items]) => [key, groupPhotosByMeeting(items)]);
   const ownGroups = groupByMonth(orderedRecords.filter((diary) => diary.author_auth_user_id === userId), (diary) => meetings.find((meeting) => meeting.id === diary.meeting_id));
-  const meetingMonthKeys = [...new Set([...meetingGroups.map(([key]) => key), ...unreadGroups.map(([key]) => key)])].sort((a, b) => b.localeCompare(a));
-  const ownMonthKeys = [...new Set([...ownGroups.map(([key]) => key), ...(view === "all" ? unreadGroups.map(([key]) => key) : [])])].sort((a, b) => b.localeCompare(a));
+  const meetingMonthKeys = meetingGroups.map(([key]) => key);
+  const ownMonthKeys = ownGroups.map(([key]) => key);
   const monthsToShow = view === "all" ? Math.max(1, visibleMonthCount) : Infinity;
   const write = (meeting) => {
     sessionStorage.setItem(`diary-collection:${location.pathname}${location.search}`, String(window.scrollY));
@@ -252,7 +263,7 @@ export default function DiaryCollection() {
     <header className="collection-topbar"><button type="button" onClick={back} aria-label="뒤로 가기"><FiArrowLeft /></button><h1>기록 모아보기</h1><span aria-hidden="true" /></header>
     <div className="collection-toolbar"><nav className="collection-tabs" aria-label="기록 보기 방식">{[["meetings", "만남별"], ["photos", "사진"], ["mine", "내 기록"]].map(([key, label]) => <button type="button" key={key} className={tab === key ? "selected" : ""} aria-pressed={tab === key} onClick={() => updateRoute({ tab: key })}>{label}</button>)}</nav><div className="collection-view-toggle" role="group" aria-label="조회 기간">{[["all", "전체 보기"], ["monthly", "월별 보기"]].map(([key, label]) => <button type="button" key={key} className={view === key ? "selected" : ""} aria-pressed={view === key} onClick={() => updateRoute({ view: key })}>{label}</button>)}</div></div>
     <div className="collection-body">
-      {view === "monthly" && <div className="collection-month-row"><div className="collection-month-controls"><button type="button" onClick={() => updateRoute({ month: new Date(month.getFullYear(), month.getMonth() - 1, 1) })} aria-label="이전 달"><FiChevronLeft /></button><h2>{monthTitle(monthKey(month))}</h2><button type="button" onClick={() => updateRoute({ month: new Date(month.getFullYear(), month.getMonth() + 1, 1) })} aria-label="다음 달"><FiChevronRight /></button></div>{tab === "meetings" ? <span>{meetingsWithRecords.length}번 만남 · 기록 {records.length}개</span> : tab === "photos" ? <span>사진 {flatPhotos.length}장</span> : null}</div>}
+      {view === "monthly" && !loading && selectedMonthKey && <div className="collection-month-row"><div className="collection-month-controls"><button type="button" disabled={!previousMonthKey} onClick={() => updateRoute({ month: parseMonth(previousMonthKey) })} aria-label="이전 달"><FiChevronLeft /></button><h2>{monthTitle(selectedMonthKey)}</h2><button type="button" disabled={!nextMonthKey} onClick={() => updateRoute({ month: parseMonth(nextMonthKey) })} aria-label="다음 달"><FiChevronRight /></button></div>{tab === "meetings" ? <span>{meetingsWithRecords.length}번 만남 · 기록 {records.length}개</span> : tab === "photos" ? <span>사진 {flatPhotos.length}장</span> : null}</div>}
       {view === "all" && !loading && !error && tab !== "mine" && <div className="collection-all-summary">{tab === "meetings" ? `전체 ${meetingsWithRecords.length}번 만남 · 기록 ${records.length}개` : `전체 사진 ${flatPhotos.length}장`}</div>}
       {loading && <p className="collection-state">기록을 불러오는 중…</p>}
       {error && <div className="collection-error" role="alert">{error}<button type="button" onClick={load}>다시 불러오기</button></div>}
@@ -262,7 +273,7 @@ export default function DiaryCollection() {
           const items = meetingGroups.find(([groupKey]) => groupKey === key)?.[1] || [];
           return <section className="collection-month-section" key={key}>{view === "all" && <h2>{monthTitle(key)}</h2>}{items.length > 0 && <div className="collection-meeting-list">{items.map(renderMeetingCard)}</div>}</section>;
         })}
-        {!meetingMonthKeys.length && <p className="collection-state">{view === "monthly" && monthMeetings.length === 0 ? "이 달의 만남이 없습니다." : "아직 작성된 기록이 없어요."}</p>}
+        {!meetingMonthKeys.length && <p className="collection-state">아직 작성된 기록이 없어요.</p>}
         {view === "all" && meetingMonthKeys.length > monthsToShow && <button type="button" className="collection-load-more" onClick={() => setVisibleMonthCount((count) => count + 6)}>이전 기록 더 보기</button>}
       </>}
       {!loading && !error && tab === "photos" && (photoGroupsByMonth.length ? <div className="collection-month-sections">{(view === "all" ? photoGroupsByMonth.slice(0, monthsToShow) : photoGroupsByMonth).map(([key, meetingGroupsForMonth]) => <section className="collection-month-section" key={key}>{view === "all" && <h2>{monthTitle(key)} <small>사진 {meetingGroupsForMonth.reduce((count, [, items]) => count + items.length, 0)}장</small></h2>}<div className="collection-photo-groups">{meetingGroupsForMonth.map(([meetingKey, items]) => { const meeting = items[0].meeting; return <section key={`${meetingKey}-${meeting.id}`}><h3>{dateFormat(meeting.meeting_date, { month: "long", day: "numeric" })} · {ordinal(meeting.id)}번째 만남</h3><div className="collection-photo-grid">{items.map(({ diary, photo }) => <button type="button" key={photo.id} onClick={() => openPhotos(diary, photo.id)} aria-label="사진 크게 보기"><img src={photo.url} alt="내 만남 기록 사진" loading="lazy" /></button>)}</div></section>; })}</div></section>)}</div> : <p className="collection-state">아직 모아 볼 사진이 없어요.</p>)}
@@ -270,16 +281,16 @@ export default function DiaryCollection() {
       {!loading && !error && tab === "mine" && <>
         <section className="collection-stats"><div><strong>{visibleMeetingCount}번</strong><span>함께한 만남</span></div><div><strong>{ownPublishedCount}개</strong><span>내가 쓴 기록</span></div><div><strong>{heartCount}개</strong><span>받은 공감</span></div></section>
         {renderUnread(ownMissingMeetings)}
-        {ownMonthKeys.length > 0 && (view === "all" || ownMonthKeys.includes(monthKey(month))) && <div className="collection-sort-caption">최신순</div>}
-        {(view === "all" ? ownMonthKeys.slice(0, monthsToShow) : [monthKey(month)]).map((key) => {
+        {ownMonthKeys.length > 0 && (view === "all" || ownMonthKeys.includes(selectedMonthKey)) && <div className="collection-sort-caption">최신순</div>}
+        {(view === "all" ? ownMonthKeys.slice(0, monthsToShow) : ownMonthKeys).map((key) => {
           const items = ownGroups.find(([groupKey]) => groupKey === key)?.[1] || [];
           return <section className="collection-month-section collection-mine-list" key={key}><h3>{monthTitle(key)}</h3>{items.slice().sort((a, b) => meetings.find((meeting) => meeting.id === b.meeting_id)?.meeting_date.localeCompare(meetings.find((meeting) => meeting.id === a.meeting_id)?.meeting_date || "") || (b.published_at || "").localeCompare(a.published_at || "")).map((diary) => {
             const meeting = meetings.find((item) => item.id === diary.meeting_id); if (!meeting) return null;
             const diaryPhotos = photos[diary.id] || [];
             return <article className="collection-own-card" key={diary.id} onClick={() => openRecord(meeting, diary)}><div className="collection-own-heading"><span className="collection-avatar">나</span><span><b>나의 하루 {diary.mood_emoji || ""}</b><small>{dateFormat(meeting.meeting_date, { month: "long", day: "numeric", weekday: "short" })} · {ordinal(meeting.id)}번째 만남 · {meetingTitle(meeting)}</small></span><em>{diary.visibility === "room" ? "공개" : "나만 보기"}</em></div>{diaryPhotos[0] && <img className="collection-own-cover" src={diaryPhotos.find((photo) => photo.is_cover)?.url || diaryPhotos[0].url} alt="기록 대표 사진" loading="lazy" onClick={(event) => { event.stopPropagation(); openPhotos(diary, (diaryPhotos.find((photo) => photo.is_cover) || diaryPhotos[0]).id); }} />}<p>{diary.body || "사진 기록"}</p><footer><span>{Object.entries((reactionCounts[diary.id] || []).reduce((counts, emoji) => ({ ...counts, [emoji]: (counts[emoji] || 0) + 1 }), {})).slice(0, 3).map(([emoji, count]) => `${emoji} ${count}`).join("  ")}</span><span onClick={(event) => { event.stopPropagation(); write(meeting); }}>수정 · 보기 ›</span></footer></article>;
-          })}{items.length === 0 && <p className="collection-state">아직 작성한 기록이 없어요.</p>}</section>;
+          })}</section>;
         })}
-        {view === "all" && !ownGroups.length && !ownMissingMeetings.length && <p className="collection-state">아직 작성한 기록이 없어요.</p>}
+        {!ownGroups.length && !ownMissingMeetings.length && <p className="collection-state">아직 작성한 기록이 없어요.</p>}
         {view === "all" && ownMonthKeys.length > monthsToShow && <button type="button" className="collection-load-more" onClick={() => setVisibleMonthCount((count) => count + 6)}>이전 기록 더 보기</button>}
       </>}
     </div>

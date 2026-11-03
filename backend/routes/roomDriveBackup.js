@@ -1,6 +1,7 @@
 const crypto = require('crypto')
 const express = require('express')
 const { createClient } = require('@supabase/supabase-js')
+const { syncBackupFiles } = require('./driveBackupFiles')
 
 const router = express.Router()
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
@@ -127,78 +128,6 @@ async function accessToken(userId) {
   return token.access_token
 }
 
-async function driveRequest(token, url, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    headers: { Authorization: `Bearer ${token}`, ...(options.headers || {}) },
-  })
-  if (!response.ok) {
-    const body = await response.text()
-    throw new Error(`Google Drive ${response.status}: ${body.slice(0, 300)}`)
-  }
-  return response.status === 204 ? null : response.json()
-}
-
-async function listBackupFiles(token, prefix) {
-  const files = []
-  let pageToken = ''
-  do {
-    const params = new URLSearchParams({
-      spaces: 'drive',
-      q: `'root' in parents and name contains '${prefix}' and trashed = false`,
-      fields: 'nextPageToken,files(id,name,mimeType)',
-      pageSize: '1000',
-    })
-    if (pageToken) params.set('pageToken', pageToken)
-    const page = await driveRequest(token, `https://www.googleapis.com/drive/v3/files?${params}`)
-    files.push(...(page.files || []).filter((file) => file.name.startsWith(prefix)))
-    pageToken = page.nextPageToken || ''
-  } while (pageToken)
-  return files
-}
-
-async function createDriveFile(token, name, content, mimeType) {
-  if (content.length > 5 * 1024 * 1024) {
-    const start = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json; charset=UTF-8',
-        'X-Upload-Content-Type': mimeType,
-        'X-Upload-Content-Length': String(content.length),
-      },
-      body: JSON.stringify({ name, mimeType }),
-    })
-    const location = start.headers.get('location')
-    if (!start.ok || !location) throw new Error(`Google Drive 업로드 시작 실패: ${start.status}`)
-    return driveRequest(token, location, {
-      method: 'PUT',
-      headers: { 'Content-Type': mimeType, 'Content-Length': String(content.length) },
-      body: content,
-    })
-  }
-  const boundary = `backup_${crypto.randomUUID()}`
-  const metadata = Buffer.from(JSON.stringify({ name, mimeType }))
-  const body = Buffer.concat([
-    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n`),
-    metadata,
-    Buffer.from(`\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`),
-    content,
-    Buffer.from(`\r\n--${boundary}--`),
-  ])
-  return driveRequest(token, 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name', {
-    method: 'POST',
-    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
-    body,
-  })
-}
-
-async function replaceDriveFile(token, fileId, content, mimeType) {
-  return driveRequest(token, `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media&fields=id`, {
-    method: 'PATCH', headers: { 'Content-Type': mimeType }, body: content,
-  })
-}
-
 async function allRows(query) {
   const rows = []
   for (let from = 0; ; from += 1000) {
@@ -250,40 +179,15 @@ async function performBackup(userId, roomId) {
   const token = await accessToken(userId)
   const snapshot = await roomSnapshot(userId, roomId)
   if (!(await isBackupEnabled(userId, roomId))) return
-  const prefix = `syk-room-${roomId}-member-${userId}-`
-  const files = await listBackupFiles(token, prefix)
-  const byName = new Map(files.map((file) => [file.name, file]))
-  const activePhotoNames = new Set()
-
-  for (const diary of snapshot.diaries) {
-    for (const photo of diary.photos) {
-      const name = `${prefix}photo-${photo.id}`
-      activePhotoNames.add(name)
-      let file = byName.get(name)
-      if (!file) {
-        const { data: blob, error } = await getAdmin().storage.from(PHOTO_BUCKET).download(photo.storage_path)
-        if (error) throw error
-        const mimeType = blob.type || 'application/octet-stream'
-        file = await createDriveFile(token, name, Buffer.from(await blob.arrayBuffer()), mimeType)
-        byName.set(name, file)
-      }
-      photo.drive_file_id = file.id
-      delete photo.storage_path
-    }
-  }
-
-  const manifestName = `${prefix}backup.json`
-  if (!(await isBackupEnabled(userId, roomId))) return
-  const manifest = Buffer.from(JSON.stringify(snapshot, null, 2))
-  const oldManifest = byName.get(manifestName)
-  if (oldManifest) await replaceDriveFile(token, oldManifest.id, manifest, 'application/json')
-  else await createDriveFile(token, manifestName, manifest, 'application/json')
-
-  for (const file of files) {
-    if (file.name.startsWith(`${prefix}photo-`) && !activePhotoNames.has(file.name)) {
-      await driveRequest(token, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}`, { method: 'DELETE' })
-    }
-  }
+  await syncBackupFiles({
+    token, userId, snapshot,
+    isEnabled: () => isBackupEnabled(userId, roomId),
+    downloadPhoto: async (storagePath) => {
+      const { data, error } = await getAdmin().storage.from(PHOTO_BUCKET).download(storagePath)
+      if (error) throw error
+      return data
+    },
+  })
 }
 
 async function isBackupEnabled(userId, roomId) {

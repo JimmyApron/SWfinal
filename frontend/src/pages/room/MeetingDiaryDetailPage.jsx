@@ -5,6 +5,7 @@ import { getDiaryPhotos, getMeetingDiaryDetails, getMeetingDiaryProgress, getMee
 import { supabase } from "../../lib/supabaseClient";
 import DiaryPhotoLightbox from "./DiaryPhotoLightbox";
 import "./MeetingDiaryDetailPage.css";
+import { getMeetingMembers } from "../../utils/meetingParticipants";
 
 const EMOJIS = ["😊", "❤️", "😂", "🥹", "👏", "🎉"];
 const dateLabel = (value) => value ? new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "long", timeZone: "Asia/Seoul" }).format(new Date(`${value}T12:00:00+09:00`)) : "";
@@ -59,12 +60,12 @@ export default function MeetingDiaryDetailPage() {
         getMeetingDiaryDetails(meetingId),
       ]);
       let meetingProgress = null;
-      try { meetingProgress = await getMeetingDiaryProgress(meetingId); }
+      try { meetingProgress = await getMeetingDiaryProgress(meetingId, currentMeeting); }
       catch (progressError) { setError(progressError.message || "기록 작성 현황을 불러오지 못했습니다."); }
       const loadedPhotos = await Promise.all(records.map(async (diary) => [diary.id, await getDiaryPhotos(diary.id)]));
-      setIdentity(auth.identityId); setUserId(auth.user.id); setRoom(roomData); setMembers(memberData || []); setMeeting(currentMeeting);
+      setIdentity(auth.identityId); setUserId(auth.user.id); setRoom(roomData); setMembers(getMeetingMembers(currentMeeting, memberData || [])); setMeeting(currentMeeting);
       setMeetingOrdinal(meetings.findIndex((item) => item.id === meetingId) + 1);
-      setDiaries(records); setProgress(meetingProgress || { published_count: new Set(records.map((diary) => diary.author_auth_user_id).filter(Boolean)).size, target_count: (memberData || []).length, published_member_ids: records.map((diary) => diary.author_auth_user_id).filter(Boolean) }); setPhotosByDiary(Object.fromEntries(loadedPhotos));
+      setDiaries(records); setProgress(meetingProgress || { published_count: new Set(records.map((diary) => diary.author_auth_user_id).filter(Boolean)).size, target_count: getMeetingMembers(currentMeeting, memberData || []).length, published_member_ids: records.map((diary) => diary.author_auth_user_id).filter(Boolean) }); setPhotosByDiary(Object.fromEntries(loadedPhotos));
       const requestedAuthor = new URLSearchParams(location.search).get("author");
       const initialAuthor = records.some((diary) => diary.author_auth_user_id === requestedAuthor)
         ? requestedAuthor

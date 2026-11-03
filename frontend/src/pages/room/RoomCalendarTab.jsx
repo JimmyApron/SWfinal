@@ -13,6 +13,7 @@ import RoomGoogleCalendarControl from "../../components/GoogleCalendarControl";
 import { fetchGoogleCalendarEvents } from "../calendar/CalendarPage";
 import { addEventToGoogleCalendar } from "../../api/googleCalendarApi";
 import "./RoomCalendar.css";
+import { getMeetingMembers } from "../../utils/meetingParticipants";
 
 // 색은 일정이 아니라 사람에게 붙인다. 방 약속(#7c79ff)·개인 일정(회색)과 겹치지 않는 팀원 전용 팔레트
 const MEMBER_COLORS = ["#f44336", "#ff9800", "#43a047", "#1e88e5", "#e91e63", "#8e24aa", "#00acc1", "#8d6e63"];
@@ -231,6 +232,7 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
   const selectedDateHasLightning = selectedMeetings.some((meeting) => meeting.source_type === "lightning" && meeting.lifecycle_status !== "cancelled");
   const activeMeetingIndex = selectedMeetings.length ? selectedMeetingIndex % selectedMeetings.length : 0;
   const activeMeeting = selectedMeetings[activeMeetingIndex];
+  const activeMeetingParticipants = getMeetingMembers(activeMeeting, participants);
   const activeMeetingProgress = activeMeeting ? meetingProgressById[activeMeeting.id] : null;
   const activeRecord = activeMeeting ? diaries.find((diary) => diary.meeting_id === activeMeeting.id && diary.author_identity_id === identity) : null;
   const isActiveRecordPublished = Boolean(diariesLoaded && activeRecord?.status === "published");
@@ -476,7 +478,7 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
     setMeetingProgressById({});
     Promise.all(meetingIds.map(async (meetingId) => {
       try {
-        return [meetingId, await getMeetingDiaryProgress(meetingId)];
+        return [meetingId, await getMeetingDiaryProgress(meetingId, selectedMeetings.find((meeting) => meeting.id === meetingId))];
       } catch (progressError) {
         if (active) setError(progressError.message || "기록 현황을 불러오지 못했습니다.");
         return [meetingId, null];
@@ -783,13 +785,13 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
                 {activeMeeting.meeting_date <= today && <span className="calendar-meeting-chevron" aria-hidden="true">&#x203A;</span>}
               </div>
               <div className="calendar-meeting-participants">
-                <div className="calendar-participant-avatars" aria-label={`참여 인원 ${participants.length}명`}>
-                  {participants.slice(0, 4).map((participant) => <span className={`calendar-participant-avatar ${activePublishedMemberIds.has(String(participant.userid)) ? "written" : "unwritten"}`} key={participant.userid || participant.id} title={participant.nickname}>
+                <div className="calendar-participant-avatars" aria-label={`참여 인원 ${activeMeetingParticipants.length}명`}>
+                  {activeMeetingParticipants.slice(0, 4).map((participant) => <span className={`calendar-participant-avatar ${activePublishedMemberIds.has(String(participant.userid)) ? "written" : "unwritten"}`} key={participant.userid || participant.id} title={participant.nickname}>
                     {participant.profiles?.profileimageurl ? <img src={participant.profiles.profileimageurl} alt="" /> : participant.nickname?.trim()?.slice(0, 1) || "?"}
                   </span>)}
-                  {participants.length > 4 && <span className="calendar-participant-avatar calendar-participant-more">+{participants.length - 4}</span>}
+                  {activeMeetingParticipants.length > 4 && <span className="calendar-participant-avatar calendar-participant-more">+{activeMeetingParticipants.length - 4}</span>}
                 </div>
-                <span className="calendar-record-count">{activeMeetingDiaryCount ?? "\u2014"}/{activeMeetingProgress?.target_count ?? participants.length}&#xBA85; &#xAE30;&#xB85D;</span>
+                <span className="calendar-record-count">{activeMeetingDiaryCount ?? "\u2014"}/{activeMeetingProgress?.target_count ?? activeMeetingParticipants.length}&#xBA85; &#xAE30;&#xB85D;</span>
                 {activeMeeting.source_type === "lightning" && activeMeeting.lifecycle_status !== "cancelled" && identity && <button type="button" className="calendar-lightning-place-edit" onClick={() => openLightningPlaceEdit(activeMeeting)}>장소 수정</button>}
                 {isActiveRecordPublished && <span className="calendar-record-complete-label">&#x2713; &#xB0B4; &#xAE30;&#xB85D; &#xC791;&#xC131; &#xC644;&#xB8CC;</span>}
               </div>
@@ -891,7 +893,7 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
         <div className="lightning-time-row"><label htmlFor="lightning-start">&#xC2DC;&#xC791; &#xC2DC;&#xAC04;<input id="lightning-start" type="time" value={lightningStart} onChange={(event) => setLightningStart(event.target.value)} /></label><label htmlFor="lightning-end">&#xC885;&#xB8CC; &#xC2DC;&#xAC04;<input id="lightning-end" type="time" value={lightningEnd} onChange={(event) => setLightningEnd(event.target.value)} /></label></div>
         <label className="diary-field-label" htmlFor="lightning-title">&#xC774;&#xB984; <span className="lightning-required-mark" aria-label="Required">*</span></label><input id="lightning-title" className="diary-select" value={lightningTitle} onChange={(event) => { setLightningTitle(event.target.value); if (event.target.value.trim()) setLightningTitleError(false); }} maxLength={120} placeholder="&#xD568;&#xAED8;&#xD55C; &#xB9CC;&#xB0A8;" />{lightningTitleError && <p className="lightning-field-error">&#xC774;&#xB984;&#xC744; &#xC785;&#xB825;&#xD574; &#xC8FC;&#xC138;&#xC694;.</p>}
         <label className="diary-field-label" htmlFor="lightning-location">&#xC7A5;&#xC18C; <span className="lightning-optional-label">(&#xC120;&#xD0DD;)</span></label><div className="lightning-place-row"><input id="lightning-location" className="diary-select" value={lightningLocation} onChange={(event) => { setLightningLocation(event.target.value); setLightningLocationAddress(""); setLightningSelectedPlace(null); }} maxLength={200} placeholder="&#xC7A5;&#xC18C;&#xB97C; &#xC785;&#xB825;&#xD574; &#xC8FC;&#xC138;&#xC694;" /><button type="button" className="lightning-place-button" onClick={() => setShowLightningPlacePicker(true)}>지도에서 선택</button></div>
-        <fieldset className="lightning-members"><legend>&#xAC19;&#xC774; &#xB9CC;&#xB09C; &#xC0AC;&#xB78C; <span className="lightning-optional-label">(&#xC120;&#xD0DD;)</span></legend><div className="lightning-member-options">{participants.filter((participant) => String(participant.userid || "") !== authUserId).map((participant, index) => { const userId = String(participant.userid || ""); const selected = lightningParticipantIds.includes(userId); return <button type="button" key={userId || participant.id || index} className={`lightning-member-option ${selected ? "selected" : ""}`} aria-pressed={selected} onClick={() => userId && userId !== authUserId && toggleLightningParticipant(userId)} disabled={!userId}><span className="lightning-member-avatar">{participant.profiles?.profileimageurl ? <img src={participant.profiles.profileimageurl} alt="" /> : participant.nickname?.trim()?.slice(0, 1) || "?"}</span><span>{participant.nickname || "Member"}</span>{selected && <b aria-hidden="true">&#x2713;</b>}</button>; })}</div></fieldset>
+        <fieldset className="lightning-members"><legend>&#xAC19;&#xC774; &#xB9CC;&#xB09C; &#xC0AC;&#xB78C; <span className="lightning-optional-label">(&#xC120;&#xD0DD;)</span></legend><p className="lightning-participant-hint">선택하지 않으면 나 혼자 만난 기록으로 저장돼요.</p><div className="lightning-member-options">{participants.filter((participant) => String(participant.userid || "") !== authUserId).map((participant, index) => { const userId = String(participant.userid || ""); const selected = lightningParticipantIds.includes(userId); return <button type="button" key={userId || participant.id || index} className={`lightning-member-option ${selected ? "selected" : ""}`} aria-pressed={selected} onClick={() => userId && userId !== authUserId && toggleLightningParticipant(userId)} disabled={!userId}><span className="lightning-member-avatar">{participant.profiles?.profileimageurl ? <img src={participant.profiles.profileimageurl} alt="" /> : participant.nickname?.trim()?.slice(0, 1) || "?"}</span><span>{participant.nickname || "Member"}</span>{selected && <b aria-hidden="true">&#x2713;</b>}</button>; })}</div></fieldset>
         {error && <p className="diary-error">{error}</p>}<button type="submit" className="diary-publish-button" disabled={savingLightning || !selectedDate}>{savingLightning ? "\uB4F1\uB85D\uC911..." : "\uAE30\uB85D\uD558\uAE30"}</button>
         </>}
       </form></div>}

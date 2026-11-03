@@ -88,9 +88,18 @@ export default function RoomDriveBackupControl({ roomId, canBackup = true, check
     googleLogin()
   }
 
+  async function syncNow() {
+    if (busy || status?.syncing || !canBackup) return
+    setBusy(true)
+    setMessage('')
+    try { await enableBackup() }
+    catch (error) { setMessage(error.message) }
+    finally { setBusy(false) }
+  }
+
   const card = <div className="room-drive-backup">
     <div className="room-drive-backup-main">
-      <div><strong>내 기록 Google Drive 백업</strong><span>이 방의 내 기록과 사진을 Google 내 드라이브에 백업합니다.</span></div>
+      <div><strong>내 기록 Google Drive 백업</strong><span>선택한 달과 관계없이 이 방의 내 일기 전체(임시 저장 포함)를 백업합니다. 방별 폴더에 Google Docs 문서를 만들고 사진도 본문에 넣으며, 사진 원본도 함께 저장합니다. 문서는 앱 기록으로 자동 갱신됩니다.</span></div>
       <button type="button" role="switch" aria-label="내 기록 Google Drive 백업" aria-checked={Boolean(status?.enabled)}
         disabled={busy || !status || !canBackup} onClick={toggle} className={`room-drive-backup-switch ${status?.enabled ? 'on' : ''}`}>
         <span />
@@ -99,6 +108,7 @@ export default function RoomDriveBackupControl({ roomId, canBackup = true, check
     {!canBackup && <small role="status">{checkingMembership ? '방 회원 확인 중...' : '이 방의 회원으로 로그인하면 사용할 수 있어요.'}</small>}
     {status?.enabled && <small role="status">{status.error || (status.syncing ? '백업 중...' : status.lastSyncedAt
       ? `마지막 백업: ${new Date(status.lastSyncedAt).toLocaleString('ko-KR')}` : '첫 백업 대기 중...')}</small>}
+    {status?.enabled && status?.connected && <button type="button" className="room-drive-backup-reconnect" disabled={busy || status.syncing || !canBackup} onClick={syncNow}>지금 전체 백업</button>}
     {((status?.error && status?.connected) || (status?.enabled && !status?.connected)) && <button type="button" className="room-drive-backup-reconnect" disabled={busy} onClick={reconnect}>Google 다시 연결</button>}
     {message && <small className="room-drive-backup-error" role="alert">{message}</small>}
   </div>

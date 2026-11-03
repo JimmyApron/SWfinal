@@ -9,6 +9,7 @@ import LocationPicker from './LocationPicker'
 
 import { getCurrentPosition } from '../../services/geolocationService'
 import { getRouteTime } from '../../api/routeTimeApi'
+import { getApiBaseUrl } from '../../api/apiBaseUrl'
 import { decodePolyline } from '../../utils/decodePolyline'
 import { supabase } from '../../lib/supabaseClient'
 import {
@@ -1286,9 +1287,7 @@ function MapPage({ roomId }) {
   }
 
   const getCarRoutePath = async ({ origin, destination }) => {
-    const apiBaseUrl = (
-      process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api'
-    ).replace(/\/$/, '')
+    const apiBaseUrl = getApiBaseUrl()
     const url = `${apiBaseUrl}/kakao/route`
     const requestBody = {
       origin,
@@ -1733,8 +1732,16 @@ function MapPage({ roomId }) {
           : location
       )
     : []
-  const mapMemberRoutePaths = isFriendPanelOpen ? memberRoutePaths : []
-  const mapMemberRouteResults = isFriendPanelOpen ? memberRouteResults : []
+  const mapMemberRoutePaths = isFriendPanelOpen
+    ? memberRoutePaths
+    : memberRoutePaths.filter((route) =>
+        isMyLocationRecord(route, { currentUserId, currentGuestId })
+      )
+  const mapMemberRouteResults = isFriendPanelOpen
+    ? memberRouteResults
+    : memberRouteResults.filter((route) =>
+        isMyLocationRecord(route, { currentUserId, currentGuestId })
+      )
   const mapMemberLocationLabels = isFriendPanelOpen ? memberLocationLabels : {}
   const liveMyLocation = isValidMapPoint(currentLocation?.lat, currentLocation?.lng)
     ? currentLocation
@@ -2096,7 +2103,7 @@ function MapPage({ roomId }) {
   }
 
   useEffect(() => {
-    if (!isFriendPanelOpen || !activeMeetingPlace || registeredMemberLocations.length === 0) return
+    if (!activeMeetingPlace || registeredMemberLocations.length === 0) return
 
     const timeoutId = setTimeout(() => {
       calculateAllMemberRoutesToMiddlePlace(activeMeetingPlace, { silent: true })
