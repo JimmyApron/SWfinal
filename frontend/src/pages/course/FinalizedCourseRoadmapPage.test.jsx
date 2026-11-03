@@ -15,8 +15,8 @@ jest.mock("react-router-dom", () => ({
   useNavigate: jest.fn(),
   Link: ({ to, children, ...props }) => <a href={to} {...props}>{children}</a>,
 }), { virtual: true });
-jest.mock("../../components/map/KakaoMapView", () => function MockMap({ places, onPlaceSelect, selectedPlace }) {
-  return <div aria-label="테스트 지도">{places.map((place) => <button key={place.id} onClick={() => onPlaceSelect(place)}>{`지도 ${place.orderNumber}`}</button>)}{selectedPlace && <span>선택 {selectedPlace.name}</span>}</div>;
+jest.mock("../../components/map/KakaoMapView", () => function MockMap({ places, onPlaceSelect, selectedPlace, memberRoutePaths = [] }) {
+  return <div aria-label="테스트 지도" data-route-count={memberRoutePaths.length}>{places.map((place) => <button key={place.id} onClick={() => onPlaceSelect(place)}>{`지도 ${place.orderNumber}`}</button>)}{selectedPlace && <span>선택 {selectedPlace.name}</span>}</div>;
 });
 let roadmap;
 let navigate;
@@ -36,6 +36,22 @@ beforeEach(() => {
 function page() {
   return render(<FinalizedCourseRoadmapPage />);
 }
+
+test('확정된 도보 코스도 실제 보행 경로와 구간별 시간을 표시한다', async () => {
+  const originalFetch = global.fetch;
+  roadmap.course.recommendation_condition = '걸어서 이동';
+  roadmap.course.stops[0].latitude = 37.001;
+  const path = [{ lat: 37.001, lng: 127 }, { lat: 37.0005, lng: 127.001 }, { lat: 37, lng: 127 }];
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ segments: [path], duration: 180, distance: 200 }) });
+  try {
+    page();
+    await screen.findByText('실제 도보 경로 · 총 이동 약 3분');
+    expect(screen.getByLabelText('테스트 지도')).toHaveAttribute('data-route-count', '1');
+    expect(screen.getByRole('region', { name: '구간별 실제 이동 안내' })).toBeInTheDocument();
+    expect(global.fetch.mock.calls[0][0]).toContain('/route/walking');
+    expect(screen.queryByText('도보 경로 조회는 코스 추천 화면에서만 제공합니다.')).not.toBeInTheDocument();
+  } finally { global.fetch = originalFetch; }
+});
 const wrap = (ui) => render(ui);
 
 test("직접 URL의 모임·일정으로 복구, 최종 코스와 누락 정보 표시", async () => {

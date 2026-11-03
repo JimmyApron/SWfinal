@@ -52,8 +52,8 @@ export default function FinalizedCourseRoadmapPage() {
       {course.recommendation_condition && <p className="course-roadmap-muted">저장된 추천 조건: {course.recommendation_condition}</p>}
     </section>
     <section className="course-roadmap-card"><h2>방문 순서 지도</h2>
-      {places.length ? <CourseRouteMap places={places} travelMode={courseTravelMode(course)} selectedPlace={selectedPlace} onPlaceSelect={selectPlace} height="min(55vh, 420px)" /> : <p>지도에 표시할 좌표가 없습니다. 아래 방문 장소 목록을 확인해 주세요.</p>}
-      <p className="course-roadmap-muted">도보 코스는 방문 장소를 표시합니다. 좌표가 없는 장소는 지도에서 제외됩니다.</p>
+      {places.length ? <CourseRouteMap places={places} travelMode={courseTravelMode(course)} allowWalkingLookup selectedPlace={selectedPlace} onPlaceSelect={selectPlace} height="min(55vh, 420px)" /> : <p>지도에 표시할 좌표가 없습니다. 아래 방문 장소 목록을 확인해 주세요.</p>}
+      <p className="course-roadmap-muted">확정된 방문 순서에 따라 실제 이동 경로를 표시합니다. 구간별 이동수단과 소요 시간은 지도 아래에서 확인하세요. 좌표가 없는 구간은 경로를 표시하지 않습니다.</p>
     </section>
     {editing && <FinalizedCourseEditor scheduleId={Number(scheduleid)} course={course} schedule={schedule}
       onCancel={() => setEditing(false)} onSaved={async () => { setEditing(false); setReloadKey((key) => key + 1); }} />}
