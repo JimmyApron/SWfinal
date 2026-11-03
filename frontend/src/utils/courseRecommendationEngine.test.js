@@ -94,7 +94,8 @@ test('구글 평점을 연결해 최소 평점 미달·미확인 장소를 제�
   const result = await generateRecommendationResult({ condition: { ...condition, minRating: 4, priority: 'rating' }, schedule });
   expect(attachGoogleRatings).toHaveBeenCalled();
   expect(result.condition).toMatchObject({ minRating: 4, priority: 'rating' });
-  expect(result.courses[0].stops.map(stop => stop.id)).toEqual(['4', '5', '3']);
+  // Keep the high-rated places, but visit the closer one before backtracking.
+  expect(result.courses[0].stops.map(stop => stop.id)).toEqual(['4', '3', '5']);
   expect(result.courses.every(course => course.stops.every(stop => stop.rating >= 4))).toBe(true);
 });
 test('동일 장소 집합의 순서만 바뀐 코스도 중복으로 판단', () => {
@@ -473,4 +474,27 @@ test('거리 우선은 이전 장소와 가까운 후보를 먼저 선택', asyn
   searchPlacesByKeyword.mockResolvedValue([place(1), place(2, '카페', { lat: 37.02 }), place(3), place(4)]);
   const { courses } = await run({ priority: 'travel' });
   expect(courses[0].stops.map(stop => stop.id)).toEqual(['1', '3', '4']);
+});
+
+test('평점 우선이어도 같은 장소들을 가까운 순서로 방문해 왕복 이동을 줄인다', async () => {
+  searchPlacesByKeyword.mockResolvedValue([
+    place(1, '카페', { lat: 37, rating: 5 }),
+    place(2, '카페', { lat: 37.008, rating: 4.9 }),
+    place(3, '카페', { lat: 37.001, rating: 4.8 }),
+  ]);
+  const { courses } = await run({ priority: 'rating' });
+  expect(courses[0].stops.map(stop => stop.id)).toEqual(['1', '3', '2']);
+  const distance = courses[0].stops.reduce((total, stop) => total + stop.distanceFromPrevM, 0);
+  expect(distance).toBeLessThan(1000); // A→far→near would exceed 1.6 km.
+});
+
+test('선택 활동 입력 순서보다 가까운 활동을 먼저 배치하고 필수 활동은 유지한다', async () => {
+  searchPlacesByKeyword.mockResolvedValue([
+    place(1, '카페', { lat: 37, rating: 5 }),
+    place(2, '박물관', { lat: 37.008, rating: 4.9 }),
+    place(3, '공원', { lat: 37.001, rating: 4.8 }),
+  ]);
+  const { courses } = await run({ activities: ['cafe', 'culture', 'walk'], priority: 'rating' });
+  expect(courses[0].stops.map(stop => stop.id)).toEqual(['1', '3', '2']);
+  expect(courses[0].stops.map(stop => stop.category).sort()).toEqual(['공원', '박물관', '카페'].sort());
 });

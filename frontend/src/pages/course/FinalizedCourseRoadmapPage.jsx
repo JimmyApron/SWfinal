@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { getFinalizedRoadmap, shareFinalizedCourse } from "../../api/courseRoadmapApi";
-import KakaoMapView from "../../components/map/KakaoMapView";
+import CourseRouteMap from "../../components/map/CourseRouteMap";
+import { courseTravelMode } from '../../utils/courseTravelMode';
 import { externalMapLink, mapPlaces, numberInfo } from "../../utils/courseRoadmapUtils";
 import "./FinalizedCourseRoadmapPage.css";
 
@@ -47,8 +48,8 @@ export default function FinalizedCourseRoadmapPage() {
       {course.recommendation_condition && <p>저장된 추천 조건: {course.recommendation_condition}</p>}
     </section>
     <section className="course-roadmap-card"><h2>방문 순서 지도</h2>
-      {places.length ? <KakaoMapView places={places} routePath={places.length > 1 ? places : []} numberedPlaces selectedPlace={selectedPlace} onPlaceSelect={selectPlace} height="min(55vh, 420px)" /> : <p>지도에 표시할 좌표가 없습니다. 아래 방문 장소 목록을 확인해 주세요.</p>}
-      <p className="course-roadmap-muted">선은 방문 순서를 보여주는 직선이며 실제 도로 경로가 아닙니다. 좌표가 없는 장소는 지도에서 제외됩니다.</p>
+      {places.length ? <CourseRouteMap places={places} travelMode={courseTravelMode(course)} selectedPlace={selectedPlace} onPlaceSelect={selectPlace} height="min(55vh, 420px)" /> : <p>지도에 표시할 좌표가 없습니다. 아래 방문 장소 목록을 확인해 주세요.</p>}
+      <p className="course-roadmap-muted">도보 코스는 방문 장소를 표시합니다. 좌표가 없는 장소는 지도에서 제외됩니다.</p>
     </section>
     <section aria-label="방문 장소 타임라인"><h2>방문 장소</h2>
       {!stops.length && <p>등록된 방문 장소가 없습니다.</p>}

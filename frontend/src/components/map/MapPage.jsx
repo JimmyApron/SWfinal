@@ -1252,7 +1252,7 @@ function MapPage({ roomId }) {
             mode,
             path: routePath,
           })
-        } else {
+        } else if (mode !== 'walking') {
           routeResult.error = '경로 검색 불가'
         }
 
@@ -2325,7 +2325,7 @@ function MapPage({ roomId }) {
           <div className="transport-mode-dialog" style={{ borderRadius: '20px', padding: '24px', textAlign: 'center' }}>
             <h3 style={{ marginTop: 0 }}>🚗 이동수단 선택</h3>
             <p style={{ color: 'var(--secondary-text)', fontSize: '13px', marginBottom: '20px' }}>
-              정확한 도착 시간 계산을 위해<br />이동수단을 선택해 주세요.
+              이동수단을 선택해 주세요.<br />도보는 위치와 이동 상태만 표시합니다.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <button
@@ -2367,6 +2367,19 @@ function MapPage({ roomId }) {
                 }}
               >
                 🚌 대중교통
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectTransportMode('walking')}
+                style={{
+                  padding: '14px', borderRadius: '12px',
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: 'white', color: 'var(--text-color)',
+                  fontWeight: 'bold', fontSize: '15px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                }}
+              >
+                🚶 도보
               </button>
               <button
                 type="button"
@@ -3262,6 +3275,7 @@ function isValidMapPoint(lat, lng) {
 function normalizeTransportMode(mode) {
   if (mode === 'car' || mode === '자동차') return 'car'
   if (mode === 'transit' || mode === '대중교통') return 'transit'
+  if (mode === 'walking' || mode === 'walk' || mode === '도보') return 'walking'
   return mode || ''
 }
 
@@ -3286,6 +3300,7 @@ function getTransportModeLabel(mode) {
 
   if (normalizedMode === 'car') return '\uC790\uB3D9\uCC28'
   if (normalizedMode === 'transit') return '\uB300\uC911\uAD50\uD1B5'
+  if (['walking', 'walk', '도보'].includes(normalizedMode)) return '도보'
   return mode || ''
 }
 
