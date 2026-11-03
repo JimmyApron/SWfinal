@@ -3,10 +3,13 @@ import "@testing-library/jest-dom";
 import FinalizedCourseRoadmapPage from "./FinalizedCourseRoadmapPage";
 import FinalizedCoursePreview from "../../components/FinalizedCoursePreview";
 import CourseShareMessage from "../../components/CourseShareMessage";
-import { getFinalizedRoadmap, shareFinalizedCourse } from "../../api/courseRoadmapApi";
+import { getFinalizedRoadmap, resetFinalizedCourse, shareFinalizedCourse } from "../../api/courseRoadmapApi";
 import { useNavigate } from "react-router-dom";
 
-jest.mock("../../api/courseRoadmapApi", () => ({ getFinalizedRoadmap: jest.fn(), shareFinalizedCourse: jest.fn() }));
+jest.mock("../../api/courseRoadmapApi", () => ({ getFinalizedRoadmap: jest.fn(), resetFinalizedCourse: jest.fn(), shareFinalizedCourse: jest.fn() }));
+jest.mock('../../components/FinalizedCourseEditor', () => function MockEditor({ onCancel, onSaved }) {
+  return <div aria-label="코스 편집"><button onClick={onCancel}>편집 취소</button><button onClick={onSaved}>편집 저장</button></div>;
+});
 jest.mock("react-router-dom", () => ({
   useParams: () => ({ roomid: "2", scheduleid: "3" }),
   useNavigate: jest.fn(),
@@ -28,6 +31,7 @@ beforeEach(() => {
     ] } };
   getFinalizedRoadmap.mockReset().mockImplementation(async () => roadmap);
   shareFinalizedCourse.mockReset().mockResolvedValue({ sent: true });
+  resetFinalizedCourse.mockReset().mockResolvedValue({});
 });
 function page() {
   return render(<FinalizedCourseRoadmapPage />);
@@ -111,6 +115,28 @@ test("공유 전송 실패는 오류 안내", async () => {
   shareFinalizedCourse.mockRejectedValue(new Error("전송 실패 · 중복 전송 가능"));
   page();
   fireEvent.click(await screen.findByRole("button", { name: "채팅방에 코스 공유하기" }));
-  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("전송 실패"));
+  await waitFor(() => expect(screen.getByRole("status", { name: "코스 공유 및 변경 결과" })).toHaveTextContent("전송 실패"));
   expect(navigate).not.toHaveBeenCalled();
+});
+
+test('경로 지도를 유지하면서 코스를 편집하고 저장 후 다시 불러온다', async () => {
+  page();
+  fireEvent.click(await screen.findByRole('button', { name: '코스 수정' }));
+  expect(screen.getByLabelText('코스 편집')).toBeInTheDocument();
+  expect(screen.getByLabelText('테스트 지도')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '편집 저장' }));
+  await waitFor(() => expect(getFinalizedRoadmap).toHaveBeenCalledTimes(2));
+  expect(await screen.findByRole('button', { name: '코스 수정' })).toBeInTheDocument();
+});
+
+test('다시 정하기는 확정 해제 후 추천 화면으로 이동한다', async () => {
+  const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
+  try {
+    page();
+    fireEvent.click(await screen.findByRole('button', { name: '코스 다시 정하기' }));
+    await waitFor(() => expect(resetFinalizedCourse).toHaveBeenCalledWith(3));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/rooms/2/course-recommendation', {
+      state: { schedule: roadmap.schedule, roomId: 2 },
+    }));
+  } finally { confirm.mockRestore(); }
 });

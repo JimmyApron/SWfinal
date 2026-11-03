@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import KakaoMapView from "./KakaoMapView";
+import CourseRouteMap from './CourseRouteMap';
 
 let overlays;
 let polylines;
@@ -54,6 +55,17 @@ test("실제 지도 컴포넌트의 번호 마커·직선 Polyline·전체 범�
   expect(screen.getByRole("button", { name: "3. 셋째 장소" })).toHaveTextContent("3");
   expect(polylines[0].path).toHaveLength(2);
   expect(map.setBounds).toHaveBeenCalled();
+});
+
+test('추천 경로 응답이 실제 지도 Polyline까지 전달되어 표시된다', async () => {
+  const originalFetch = global.fetch;
+  const path = [{ lat: 37, lng: 127 }, { lat: 37.05, lng: 127 }, { lat: 37.1, lng: 127.1 }];
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ segments: [path], duration: 300 }) });
+  try {
+    render(<CourseRouteMap places={places.map((place, index) => ({ ...place, orderNumber: index + 1 }))} travelMode="walking" allowWalkingLookup />);
+    await screen.findByText('실제 도보 경로 · 총 이동 약 5분');
+    await waitFor(() => expect(polylines.some(line => line.path.length === 3 && line.strokeColor === '#16A34A' && line.strokeStyle === 'solid')).toBe(true));
+  } finally { global.fetch = originalFetch; }
 });
 test("마커 선택 콜백 및 타임라인에서 선택된 마커 강조", async () => {
   const select = jest.fn();

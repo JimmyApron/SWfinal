@@ -14,7 +14,7 @@ beforeEach(() => {
   window.scrollTo = jest.fn();
 });
 
-test('상세를 펼칠 때만 유효한 좌표의 방문 순서 지도 표시', () => {
+test('상세를 펼칠 때만 유효한 좌표의 방문 순서 지도 표시', async () => {
   useNavigate.mockReturnValue(jest.fn());
   useLocation.mockReturnValue({ search: '', state: { schedule: { id: 2, roomid: 1 }, recommendation: { courses: [{
     id: 'map', name: '지도 코스', stops: [
@@ -31,10 +31,25 @@ test('상세를 펼칠 때만 유효한 좌표의 방문 순서 지도 표시', 
     expect.objectContaining({ name: '첫 장소', lat: 37.5, lng: 127, orderNumber: 1 }),
     expect.objectContaining({ name: '세 번째', lat: 37.6, lng: 127.1, orderNumber: 3 }),
   ]);
-  expect(map.dataset.route).toBe(map.dataset.places);
+  expect(map.dataset.route).toBeUndefined();
   expect(map.dataset.numbered).toBe('true');
+  await screen.findByText('이동 수단 정보가 없어 경로를 표시할 수 없습니다.');
   fireEvent.click(screen.getByRole('button', { name: '코스 상세 접기' }));
   expect(screen.queryByTestId('course-map')).not.toBeInTheDocument();
+});
+
+test('이동 시간과 식사·활동·대기를 포함한 전체 코스 시간을 분리한다', () => {
+  useNavigate.mockReturnValue(jest.fn());
+  useLocation.mockReturnValue({ search: '', state: { schedule: { id: 2, roomid: 1 }, recommendation: { courses: [{
+    id: 'duration', name: '시간 구분 코스', travelMode: 'transit',
+    estimatedTravelTimeMin: 33, totalDurationMin: 608,
+    stops: [{ id: 'p1', placeName: '카페' }],
+  }] } } });
+  render(<CourseRecommendationResultPage />);
+  expect(screen.getByText('대중교통 이동')).toBeInTheDocument();
+  expect(screen.getByText('예상 이동 합계 약 33분')).toBeInTheDocument();
+  expect(screen.getByText('코스 전체 약 10시간 8분 · 식사·활동·대기 포함')).toBeInTheDocument();
+  expect(screen.queryByText('대중교통 이동 · 약 10시간 8분')).not.toBeInTheDocument();
 });
 
 test('추천 한 코스를 바로 확정하면 투표 대신 일정 상세 화면으로 이동', async () => {

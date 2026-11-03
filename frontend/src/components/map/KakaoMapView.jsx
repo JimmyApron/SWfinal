@@ -1089,7 +1089,7 @@ function KakaoMapView({
         path: linePath,
         strokeWeight: route.mode === 'transit' ? 4 : 5,
         strokeOpacity: route.mode === 'transit' ? 0.65 : 0.85,
-        strokeStyle: route.mode === 'transit' ? 'shortdash' : 'solid',
+        strokeStyle: 'solid',
       }
 
       if (route.mode === 'car') {
@@ -1098,6 +1098,10 @@ function KakaoMapView({
 
       if (route.mode === 'transit') {
         polylineOption.strokeColor = '#3366FF'
+      }
+      if (route.mode === 'walking') {
+        polylineOption.strokeColor = '#16A34A'
+        polylineOption.strokeStyle = 'solid'
       }
 
       const polyline = new window.kakao.maps.Polyline(polylineOption)

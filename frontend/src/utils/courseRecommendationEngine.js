@@ -380,7 +380,14 @@ function selectCourseCandidates(scoredPlaces, condition, schedule, diagnostic, t
     // Use a gap before the next meal, while reserving activities for later gaps.
     const activityFirst = clock + 60 <= nextMealStart &&
       (!hasActivitySinceMeal || activityIndices.length > reserveForLaterGaps);
-    const nextIndices = activityFirst ? [...activityIndices, mealIndex] : [mealIndex, ...activityIndices];
+    // Choose nearby activities first without moving meals or after-dinner visits
+    // outside the existing scheduling rules.
+    const previousStop = stops[stops.length - 1];
+    const closestSlotDistance = index => previousStop ? Math.min(...candidates
+      .filter(place => !used.has(place.id) && remainingSlots[index].matches(place))
+      .map(place => buildDistanceEstimate(previousStop, place))) : 0;
+    const nearbyActivityIndices = [...activityIndices].sort((a, b) => closestSlotDistance(a) - closestSlotDistance(b));
+    const nextIndices = activityFirst ? [...nearbyActivityIndices, mealIndex] : [mealIndex, ...nearbyActivityIndices];
     for (const slotIndex of nextIndices.filter(index => index >= 0)) {
     const slot = remainingSlots[slotIndex];
     const previous = stops[stops.length - 1];
@@ -391,10 +398,19 @@ function selectCourseCandidates(scoredPlaces, condition, schedule, diagnostic, t
       return true;
     }).map((place) => ({ place,
       travel: previous ? estimateTravelMinutes(previous, place, condition.travelMode) : 0,
+      // Include proximity to a later required stop so a tempting nearby stop
+      // does not unnecessarily send the rest of the course back across town.
+      routeDistance: previous ? buildDistanceEstimate(previous, place) + Math.min(
+        ...remainingSlots.filter((_, index) => index !== slotIndex).map(nextSlot => Math.min(
+          ...candidates.filter(next => next.id !== place.id && !used.has(next.id) && nextSlot.matches(next))
+            .map(next => buildDistanceEstimate(place, next))
+        )),
+        ...(remainingSlots.length === 1 ? [0] : [])
+      ) : 0,
       novelty: usage(place),
       startUsage: stops.length ? 0 : result.filter(course => placeIdentity(course[0]) === placeIdentity(place)).length,
     })).sort((a, b) =>
-      a.startUsage - b.startUsage || a.novelty - b.novelty ||
+      a.startUsage - b.startUsage || a.routeDistance - b.routeDistance || a.novelty - b.novelty ||
       (condition.priority === "budget" ? (estimateStopBudget(a.place, slot.mealKey).max ?? 100000) - (estimateStopBudget(b.place, slot.mealKey).max ?? 100000) : 0) ||
       (condition.priority === "travel" ? a.travel - b.travel : 0) ||
       b.place.score - a.place.score);
