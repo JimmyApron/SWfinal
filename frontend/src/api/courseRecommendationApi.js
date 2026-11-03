@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from "./apiBaseUrl";
+import { timeMinutes } from "../utils/mealTimeUtils";
 import { courseCombinationKey, courseOverlapCount, generateCourseRecommendations } from "../utils/courseRecommendationEngine";
 
 export function deduplicateRecommendationResult(payload) {
@@ -16,6 +17,8 @@ export function deduplicateRecommendationResult(payload) {
   }).slice(0, 5);
   return { ...payload, courses };
 }
+
+const formatClock = (minutes) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 
 // 지도의 도보 선과 같은 서버 API(/route/walking, 서버 캐시 공유)에서 실제 도보 시간(초)·거리(m)를 가져온다.
 async function fetchWalkingRoute(from, to) {
@@ -41,7 +44,7 @@ export async function applyWalkingRouteTimes(course) {
     return cache.get(key);
   };
 
-  const stops = await Promise.all(course.stops.map(async (stop, index) => {
+  const withRoute = await Promise.all(course.stops.map(async (stop, index) => {
     const previous = course.stops[index - 1];
     if (!previous || [previous, stop].some(s => s.latitude == null || s.longitude == null)) return stop;
     const route = await lookup(previous, stop);
@@ -49,8 +52,27 @@ export async function applyWalkingRouteTimes(course) {
     return { ...stop, travelTimeFromPrevMin: Math.max(1, Math.round(route.duration / 60)), distanceFromPrevM: Math.round(route.distance) };
   }));
 
+  // 이동 시간이 바뀌면 도착·출발 시각도 다시 맞춘다. 원래 계획한 시작 시각(식사 시간대·대기 포함)보다는
+  // 일찍 시작하지 않고, 실제 이동이 더 길면 그만큼 뒤로 민다.
+  let clock = null;
+  const stops = withRoute.map((stop, index) => {
+    const plannedStart = timeMinutes(stop.visitStartTime, null);
+    const stay = Number(stop.expectedStayMin) || 0;
+    if (index === 0 || clock == null || plannedStart == null) {
+      clock = plannedStart == null ? null : plannedStart + stay;
+      return stop;
+    }
+    const arrival = clock + (stop.travelTimeFromPrevMin || 0);
+    const start = Math.max(arrival, plannedStart);
+    clock = start + stay;
+    return { ...stop, visitStartTime: formatClock(start), visitEndTime: formatClock(start + stay), waitingTimeMin: start - arrival };
+  });
+
   const estimatedTravelTimeMin = stops.reduce((sum, stop, index) => sum + (index ? stop.travelTimeFromPrevMin || 0 : 0), 0);
-  return { ...course, stops, estimatedTravelTimeMin };
+  const firstStart = timeMinutes(stops[0]?.visitStartTime, null);
+  const lastEnd = timeMinutes(stops[stops.length - 1]?.visitEndTime, null);
+  const totalDurationMin = firstStart != null && lastEnd != null ? lastEnd - firstStart : course.totalDurationMin;
+  return { ...course, stops, estimatedTravelTimeMin, totalDurationMin };
 }
 
 export async function generateRecommendationResult({ condition, schedule }) {
