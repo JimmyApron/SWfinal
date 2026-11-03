@@ -3,7 +3,7 @@ import { getApiBaseUrl } from './apiBaseUrl'
 const API_BASE_URL = getApiBaseUrl()
 
 export async function getRouteTime({ origin, destination, mode }) {
-  const url = `${API_BASE_URL}/route/time`
+  const url = `${API_BASE_URL}/route/${mode === 'walking' ? 'walking' : 'time'}`
   const requestBody = {
     origin,
     destination,
@@ -54,7 +54,7 @@ export async function getRouteTime({ origin, destination, mode }) {
     })
   }
 
-  return data
+  return mode === 'walking' ? { ...data, path: (data.segments || []).flat() } : data
 }
 
 async function readResponseBody(response) {

@@ -1219,6 +1219,11 @@ function MapPage({ roomId }) {
                 .flatMap((encodedPath) => decodePolyline(encodedPath))
         }
 
+        if (mode === 'walking') {
+          routeSummary = await getRouteTime({ origin, destination: destinationPoint, mode })
+          routePath = routeSummary.path || []
+        }
+
         const durationMinutes = routeSummary?.duration
           ? Math.round(routeSummary.duration / 60)
           : null
@@ -1253,7 +1258,7 @@ function MapPage({ roomId }) {
             mode,
             path: routePath,
           })
-        } else if (mode !== 'walking') {
+        } else {
           routeResult.error = '경로 검색 불가'
         }
 
@@ -1533,7 +1538,9 @@ function MapPage({ roomId }) {
         schedule: {
           ...createdLocationOnlySchedule,
           roomid: currentRoomId,
-          isLocationOnly: true,
+          // The current detail page supports undecided dates. Avoid the
+          // legacy location-only form when opening the newly created draft.
+          isLocationOnly: false,
         },
       },
     })
@@ -2332,7 +2339,7 @@ function MapPage({ roomId }) {
           <div className="transport-mode-dialog" style={{ borderRadius: '20px', padding: '24px', textAlign: 'center' }}>
             <h3 style={{ marginTop: 0 }}>🚗 이동수단 선택</h3>
             <p style={{ color: 'var(--secondary-text)', fontSize: '13px', marginBottom: '20px' }}>
-              이동수단을 선택해 주세요.<br />도보는 위치와 이동 상태만 표시합니다.
+              이동수단을 선택해 주세요.<br />선택한 이동수단의 경로와 예상 이동시간을 표시합니다.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <button

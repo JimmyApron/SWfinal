@@ -488,7 +488,7 @@ function ConfirmedScheduleDetailPage() {
 
             let result = null;
 
-            if (mode === "transit") {
+            if (mode === "transit" || mode === "walking") {
               result = await getRouteTime({
                 origin,
                 destination,
@@ -509,6 +509,16 @@ function ConfirmedScheduleDetailPage() {
               routeResult.distanceKm = result.distance
                 ? (result.distance / 1000).toFixed(1)
                 : null;
+            }
+
+            if (mode === "walking" && result?.path?.length > 0) {
+              pathResults.push({
+                userid: memberLocation.userid,
+                guestid: memberLocation.guestid,
+                mode,
+                path: result.path,
+              });
+              hasPath = true;
             }
 
             if (mode === "transit" && result) {
@@ -1933,6 +1943,7 @@ async function readRouteResponseBody(response) {
 function normalizeTransportMode(mode) {
   if (mode === "car" || mode === "자동차") return "car";
   if (mode === "transit" || mode === "대중교통") return "transit";
+  if (["walking", "walk", "도보"].includes(mode)) return "walking";
   return mode || "";
 }
 
