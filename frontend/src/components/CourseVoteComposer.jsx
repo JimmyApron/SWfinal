@@ -12,11 +12,14 @@ export default function CourseVoteComposer({ schedules, schedule, scheduleId, on
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState(null);
   const [message, setMessage] = useState('');
+  const [chooserOpen, setChooserOpen] = useState(false);
   useEffect(() => { onEditingChange?.(!!draft); }, [draft, onEditingChange]);
   const preview = useMemo(() => draft ? buildManualCourse(draft, schedule) : null, [draft, schedule]);
-  const places = useMemo(() => (preview?.course?.stops || []).map((stop, i) => ({
-    id: stop.id, name: stop.placeName, address: stop.placeAddress, lat: Number(stop.lat), lng: Number(stop.lng), orderNumber: i + 1,
-  })), [preview]);
+  const places = useMemo(() => (draft?.stops || [])
+    .filter(stop => Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng)) && stop.lat !== '' && stop.lng !== '')
+    .map((stop, i) => ({
+      id: stop.id, name: stop.placeName, address: stop.placeAddress, lat: Number(stop.lat), lng: Number(stop.lng), orderNumber: i + 1,
+    })), [draft]);
   const open = (index = -1) => {
     const option = index >= 0 ? options[index] : null;
     setEditing(index);
@@ -65,12 +68,14 @@ export default function CourseVoteComposer({ schedules, schedule, scheduleId, on
           </div>
         </li>)}
       </ol>
-      {preview?.course && <section aria-label="직접 만든 코스 미리보기">
+      {places.length > 0 && <section aria-label="직접 만든 코스 미리보기">
         <h4>지도와 시간표</h4>
         <KakaoMapView places={places} routePath={places} numberedPlaces height="260px" />
-        <p>예상 소요 {preview.course.totalDurationMin}분 · 이동 {preview.course.estimatedTravelTimeMin}분</p>
-        {preview.course.stops.map((stop, index) => <p key={index}>{index + 1}. {stop.placeName} · {stop.visitStartTime}~{stop.visitEndTime}{index > 0 && ` · 이동 약 ${stop.travelTimeFromPrevMin}분`}</p>)}
-        <p className="course-composer-hint">지도 선과 이동 시간은 좌표 기반 추정입니다. 실제 경로·영업시간·비용은 별도로 확인해 주세요.</p>
+        {preview?.course && <>
+          <p>예상 소요 {preview.course.totalDurationMin}분 · 이동 {preview.course.estimatedTravelTimeMin}분</p>
+          {preview.course.stops.map((stop, index) => <p key={index}>{index + 1}. {stop.placeName} · {stop.visitStartTime}~{stop.visitEndTime}{index > 0 && ` · 이동 약 ${stop.travelTimeFromPrevMin}분`}</p>)}
+          <p className="course-composer-hint">지도 선과 이동 시간은 좌표 기반 추정입니다. 실제 경로·영업시간·비용은 별도로 확인해 주세요.</p>
+        </>}
       </section>}
       {!!preview?.errors.length && <ul role="status">{preview.errors.map(item => <li key={item}>{item}</li>)}</ul>}
       {message && <p role="status">{message}</p>}
@@ -80,11 +85,10 @@ export default function CourseVoteComposer({ schedules, schedule, scheduleId, on
       </div>
     </div>;
   return <section className="course-composer" aria-label="코스 후보 만들기">
-    <h3>코스 후보 만들기</h3>
     {!hideScheduleSelector && <label>연결할 확정 일정
       <select aria-label="연결할 확정 일정" value={scheduleId || ''} disabled={loading} onChange={event => {
         if ((options.length || draft) && !window.confirm('일정을 바꾸면 작성한 코스 후보가 초기화됩니다. 계속할까요?')) return;
-        onScheduleChange(event.target.value); setDraft(null); setEditing(null); setMessage('');
+        onScheduleChange(event.target.value); setDraft(null); setEditing(null); setMessage(''); setChooserOpen(false);
       }}>
         <option value="">일정을 선택해 주세요</option>
         {schedules.map(item => <option key={item.id} value={item.id}>{item.title || '확정 일정'} · {item.date} {item.starttime?.slice(0, 5)}~{item.endtime?.slice(0, 5)}</option>)}
@@ -93,14 +97,9 @@ export default function CourseVoteComposer({ schedules, schedule, scheduleId, on
     {loading && <p role="status">확정 일정을 불러오고 있습니다.</p>}
     {error && <p role="alert">{error}</p>}
     {!hideScheduleSelector && !loading && !error && !schedules.length && <p>먼저 모임에서 일정을 확정해 주세요.</p>}
-    <div className="course-composer-actions">
-      <button type="button" disabled={!schedule || !!draft} onClick={onRecommend}>추천받기</button>
-      <button type="button" disabled={!schedule || !!draft} onClick={() => open()}>직접 만들기</button>
-    </div>
-    {editing === -1 && editor}
-    <h4>투표 후보 {options.length}개</h4>
-    {!options.length && <p>추천받거나 직접 만든 코스를 후보에 추가해 주세요.</p>}
+    {!options.length && !draft && <p>일정을 고른 뒤 + 를 눌러 코스 후보를 추가해 주세요.</p>}
     {options.map((option, index) => <article className="course-candidate" key={index}>
+      <button type="button" className="course-candidate-remove" aria-label="후보 삭제" disabled={!!draft} onClick={() => onChange(options.filter((_, i) => i !== index))}>×</button>
       <strong>{option.course_name || option.optiontext}</strong>
       <div style={{ display: 'grid', gap: 6, margin: '12px 0' }}>{option.stops?.map((stop, stopIndex) =>
         <div key={stopIndex} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
@@ -117,10 +116,16 @@ export default function CourseVoteComposer({ schedules, schedule, scheduleId, on
       }</p>
       <div className="course-composer-actions">
         <button type="button" aria-expanded={editing === index && !!draft} aria-controls={editing === index && draft ? `course-editor-${index}` : undefined} disabled={!!draft || !schedule} onClick={() => open(index)}>수정·지도 보기</button>
-        <button type="button" disabled={!!draft} onClick={() => onChange(options.filter((_, i) => i !== index))}>후보 삭제</button>
       </div>
       {editing === index && editor}
     </article>)}
+    {editing === -1 && editor}
+    <button type="button" className="course-add-button" aria-label="코스 후보 추가" aria-expanded={chooserOpen} disabled={!schedule || !!draft} onClick={() => setChooserOpen(value => !value)}>+</button>
+    {!schedule && !loading && <p className="course-composer-hint">먼저 연결할 확정 일정을 선택해 주세요.</p>}
+    {chooserOpen && schedule && !draft && <div className="course-composer-actions course-add-chooser" role="group" aria-label="코스 후보 추가 방법">
+      <button type="button" onClick={() => { setChooserOpen(false); onRecommend(); }}>추천받기</button>
+      <button type="button" onClick={() => { setChooserOpen(false); open(); }}>직접 만들기</button>
+    </div>}
     {draft && <p>편집 중인 코스는 ‘투표 후보에 추가’ 또는 ‘후보 수정 완료’를 눌러야 반영됩니다.</p>}
   </section>;
 }

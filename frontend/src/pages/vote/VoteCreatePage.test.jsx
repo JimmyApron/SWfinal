@@ -33,7 +33,8 @@ beforeEach(() => {
 afterEach(() => jest.restoreAllMocks());
 
 async function addManual() {
-  await waitFor(() => expect(screen.getByText('직접 만들기')).toBeEnabled());
+  await waitFor(() => expect(screen.getByRole('button', { name: '코스 후보 추가' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: '코스 후보 추가' }));
   fireEvent.click(screen.getByText('직접 만들기'));
   fireEvent.change(screen.getByLabelText('코스 이름'), { target: { value: '직접 B' } });
   fireEvent.click(screen.getByText('장소 검색 결과 선택'));
@@ -43,7 +44,7 @@ async function addManual() {
 test('추천·직접 코스를 같은 투표에 저장하고 일정 원본 voteid는 덮어쓰지 않음', async () => {
   render(<VoteCreatePage />);
   await addManual();
-  expect(screen.getByText('투표 후보 2개')).toBeInTheDocument();
+  expect(screen.getAllByRole('article')).toHaveLength(2);
   fireEvent.click(screen.getByText('완료'));
   await waitFor(() => expect(createVote).toHaveBeenCalled());
   expect(createCourseWithStops).toHaveBeenCalledTimes(2);
@@ -56,7 +57,7 @@ test('추천·직접 코스를 같은 투표에 저장하고 일정 원본 votei
 test('추천 후보를 삭제하면 원래 selectedCourses 대신 남은 직접 코스만 저장', async () => {
   render(<VoteCreatePage />);
   await addManual();
-  fireEvent.click(screen.getAllByText('후보 삭제')[0]);
+  fireEvent.click(screen.getAllByLabelText('후보 삭제')[0]);
   fireEvent.click(screen.getByText('완료'));
   await waitFor(() => expect(createVote).toHaveBeenCalled());
   expect(createCourseWithStops).toHaveBeenCalledTimes(1);
@@ -66,6 +67,7 @@ test('추천 후보를 삭제하면 원래 selectedCourses 대신 남은 직접 
 test('추천 화면으로 이동할 때 제목과 직접 후보 초안을 전달', async () => {
   render(<VoteCreatePage />);
   await addManual();
+  fireEvent.click(screen.getByRole('button', { name: '코스 후보 추가' }));
   fireEvent.click(screen.getByText('추천받기'));
   expect(navigate).toHaveBeenCalledWith('/rooms/1/course-recommendation', expect.objectContaining({ state: expect.objectContaining({
     schedule, courseVoteDraft: expect.objectContaining({ title: '코스 투표', scheduleId: 3, options: expect.any(Array) }),
@@ -78,8 +80,8 @@ test('추천 화면에서 돌아오면 기존 직접 후보와 새 추천 후보
   useLocation.mockReturnValue({ state: { voteType: 'course', votePurpose: 'course', scheduleId: 3,
     selectedCourses: [recommendation], courseVoteDraft: { title: '유지할 제목', options: manual, scheduleId: 3 } } });
   render(<VoteCreatePage />);
-  await waitFor(() => expect(screen.getByText('추천받기')).toBeEnabled());
-  expect(screen.getByText('투표 후보 2개')).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole('button', { name: '코스 후보 추가' })).toBeEnabled());
+  expect(screen.getAllByRole('article')).toHaveLength(2);
   expect(screen.getByDisplayValue('유지할 제목')).toBeInTheDocument();
   expect(screen.getByText('직접 만든 초안')).toBeInTheDocument();
 });

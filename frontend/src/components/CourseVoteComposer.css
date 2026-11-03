@@ -1,4 +1,4 @@
-.course-composer { padding: 16px; margin: 12px 0 24px; border: 1px solid #e7e0ff; border-radius: 16px; background: #fcfbff; color: #252237; }
+.course-composer { padding: 0; margin: 12px 0 24px; border: none; border-radius: 0; background: transparent; color: #252237; }
 .course-composer h3, .course-composer h4 { margin: 0 0 12px; }
 .course-composer h4 { margin-top: 16px; }
 .course-composer label { display: block; font-size: 13px; flex: 1; min-width: 0; }
@@ -12,3 +12,22 @@
 .course-composer p { font-size: 13px; line-height: 1.6; }
 .course-composer-hint { color: #6c677a; }
 .course-composer [role=alert], .course-editor ul[role=status] { color: #b33636; font-size: 13px; line-height: 1.7; }
+
+/* 코스 후보: 장소 확정처럼 + 버튼으로 추가하고, 후보 박스 오른쪽 위 × 로 삭제 */
+.course-composer .course-add-button { display: block; width: 100%; height: 48px; margin: 12px 0 8px; padding: 0; border: 1px solid #ddd; border-radius: 14px; background: #fff; color: #333; font-size: 28px; font-weight: 400; line-height: 1; }
+.course-composer .course-add-chooser { display: grid; grid-template-columns: 1fr 1fr; margin: 0 0 12px; }
+.course-candidate { position: relative; }
+.course-composer .course-candidate-remove { position: absolute; top: 10px; right: 10px; width: auto; padding: 0; border: none; background: none; color: #9ca3af; font-size: 18px; font-weight: 400; line-height: 1; }
+.course-candidate > strong { display: block; padding-right: 24px; }
+
+/* 코스 편집기 안내 메시지: 머릿점은 유지하고, 점이 다른 글과 같은 왼쪽 선에서 시작하도록 맞춤 */
+.course-editor ul[role=status] { margin: 8px 0; padding: 0; list-style: disc inside; text-align: left; }
+
+/* 장소 검색줄: 코스 편집기의 공통 입력 여백이 섞이지 않게 하고, 입력칸과 검색 버튼 높이를 맞춤 */
+.course-composer .location-picker { margin-top: 8px !important; }
+.course-composer .location-picker-search-row { align-items: stretch; margin-bottom: 4px !important; }
+.course-composer .location-picker-input { flex: 1; width: auto; height: 42px; margin: 0; padding: 0 12px; box-sizing: border-box; }
+.course-composer .location-picker-search-button { height: 42px; margin: 0; padding: 0 16px; box-sizing: border-box; white-space: nowrap; }
+/* 검색줄과 안내 문구 사이 간격 줄이기 */
+.course-editor .course-stop-list { margin: 4px 0; }
+.course-editor ul[role=status] { margin: 4px 0 8px; }
