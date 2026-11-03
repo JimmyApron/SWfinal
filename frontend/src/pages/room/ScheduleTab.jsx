@@ -1389,14 +1389,12 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                               borderTop: showMySelection && (isSegmentStart || isSegmentSingle) ? mySelectionBorder : "none",
                               borderBottom: showMySelection
                                 ? ((isSegmentEnd || isSegmentSingle) ? mySelectionBorder : "none")
-                                : (time.endsWith(":30") ? "1px solid var(--border-color)" : "1px solid color-mix(in srgb, var(--border-color) 55%, transparent)"),
+                                : (selectable && availableCount > 0
+                                  ? `1px solid color-mix(in srgb, var(--accent-color) ${time.endsWith(":30") ? 80 : 60}%, var(--card-bg))`
+                                  : (time.endsWith(":30") ? "1px solid var(--border-color)" : "1px solid color-mix(in srgb, var(--border-color) 55%, transparent)")),
                               borderLeft: showMySelection ? mySelectionBorder : "none",
                               borderRight: showMySelection ? mySelectionBorder : "1px solid var(--border-color)",
-                              boxShadow: showMySelection
-                                ? `0 0 0 1px color-mix(in srgb, ${mySelectionBorderColor} 18%, transparent)`
-                                : (selectable && availableCount > 0
-                                  ? `inset 0 -${time.endsWith(":30") ? 2 : 1}px 0 var(--card-bg)`
-                                  : "none"),
+                              boxShadow: showMySelection ? `0 0 0 1px color-mix(in srgb, ${mySelectionBorderColor} 18%, transparent)` : "none",
 
                               cursor: selectable ? "pointer" : "default",
                               padding: 0,
