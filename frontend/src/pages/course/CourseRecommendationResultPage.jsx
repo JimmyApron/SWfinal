@@ -341,8 +341,6 @@ function CourseRecommendationResultPage() {
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                         <span style={PAGE_STYLES.summaryTag}>{course.stops.some(stop => stop.mealKey) || course.summary?.includes('식사 포함') || course.summary?.includes('식사가 포함') ? '식사 포함' : '식사 미포함'}</span>
                         <span style={PAGE_STYLES.summaryTag}>{({ walking: '도보 이동', transit: '대중교통 이동', car: '자동차 이동' })[courseTravelMode(course, recommendation?.condition?.travelMode)] || '이동 수단 미정'}</span>
-                        {course.estimatedTravelTimeMin != null && <span style={PAGE_STYLES.summaryTag}>예상 이동 합계 약 {course.estimatedTravelTimeMin}분</span>}
-                        {course.totalDurationMin > 0 && <span style={PAGE_STYLES.summaryTag}>코스 전체 약 {course.totalDurationMin >= 60 ? `${Math.floor(course.totalDurationMin / 60)}시간${course.totalDurationMin % 60 ? ` ${course.totalDurationMin % 60}분` : ''}` : `${course.totalDurationMin}분`} · 식사·활동·대기 포함</span>}
                         <span style={PAGE_STYLES.summaryTag}>{({ rating: '높은 평점 우선', budget: '예산 우선', variety: '다양한 활동 포함', travel: '이동 시간 최소화' })[course.priority || recommendation?.condition?.priority || (course.summary?.includes('평점') ? 'rating' : course.summary?.includes('예산 우선') ? 'budget' : 'travel')]}</span>
                         {course.barMode && <span style={PAGE_STYLES.summaryTag}>{course.barMode === 'dinner' ? '저녁 식사 · 주점 포함' : '식사 후 2차 포함'}</span>}
                       </div>
@@ -353,6 +351,15 @@ function CourseRecommendationResultPage() {
                     </div>
 
                     {expanded && <div id={`course-details-${course.id}`} role="region" aria-label={`${course.name} 상세 정보`} style={{ marginTop: "12px", display: "grid", gap: "8px" }}>
+                      <section aria-label="이동 및 코스 시간 안내" style={{ padding: '12px 14px', background: '#F7F5FF', borderRadius: 12, fontSize: 13, lineHeight: 1.7 }}>
+                        <strong>이동 종류와 시간</strong>
+                        <dl style={{ margin: '8px 0', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 16px' }}>
+                          <dt>선택한 이동수단</dt><dd style={{ margin: 0 }}>{({ walking: '도보', transit: '대중교통', car: '자동차' })[courseTravelMode(course, recommendation?.condition?.travelMode)] || '미정'}</dd>
+                          <dt>예상 이동 시간</dt><dd style={{ margin: 0 }}>{course.estimatedTravelTimeMin != null ? `합계 약 ${course.estimatedTravelTimeMin}분` : '정보 없음'}</dd>
+                          <dt>전체 코스 시간</dt><dd style={{ margin: 0 }}>{course.totalDurationMin > 0 ? `약 ${course.totalDurationMin >= 60 ? `${Math.floor(course.totalDurationMin / 60)}시간${course.totalDurationMin % 60 ? ` ${course.totalDurationMin % 60}분` : ''}` : `${course.totalDurationMin}분`}` : '정보 없음'} · 식사·활동·대기 포함</dd>
+                        </dl>
+                        <p style={{ margin: 0, color: '#66657A' }}>위 시간은 추천 단계의 추정치입니다. 실제 길찾기로 조회한 구간별 이동수단과 시간은 지도 아래에서 확인할 수 있어요.</p>
+                      </section>
                       {mapPlaces.length > 0 ? (
                         <div aria-label="코스 방문 순서 지도">
                           <CourseRouteMap places={mapPlaces} travelMode={courseTravelMode(course, recommendation?.condition?.travelMode)} allowWalkingLookup height="280px" />
@@ -360,7 +367,6 @@ function CourseRecommendationResultPage() {
                         </div>
                       ) : <p style={{ fontSize: 13, color: '#66657A' }}>지도에 표시할 장소 좌표가 없습니다.</p>}
                       {course.budgetEstimate && <p style={{ fontSize: 13, lineHeight: 1.6, color: "#66657A", margin: 0 }}>식사와 활동 종류를 바탕으로 계산한 금액이에요. 실제 이용 요금은 다를 수 있습니다. {course.budgetEstimate.status === "over" ? "설정한 예산보다 많이 들 수 있어요." : course.budgetEstimate.status === "uncertain" ? "선택한 예산 안에 가능한지 확인해 주세요." : ""}</p>}
-                      {expanded && <p style={{ fontSize: 13, color: '#66657A', margin: '0 0 4px' }}>총 이동 시간: {course.estimatedTravelTimeMin == null ? '정보 없음' : `${course.estimatedTravelTimeMin}분`} · 이동 시간과 비용은 추정치입니다.</p>}
                       {course.stops.map((stop, stopIndex) => (
                         <div key={`${course.id}-${stop.order || stopIndex}`} style={{ display: "flex", gap: "10px", alignItems: "flex-start", borderBottom: '1px solid #EEE7FF', padding: '8px 0' }}>
                           <div

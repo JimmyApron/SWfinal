@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import CourseRouteMap from './CourseRouteMap'
 import KakaoMapView from './KakaoMapView'
 jest.mock('./KakaoMapView', () => jest.fn(() => <div>map</div>))
@@ -48,13 +48,16 @@ test('car course displays all road vertices returned by Kakao', async () => {
   render(<CourseRouteMap places={places} travelMode="car" />)
   await screen.findByText('실제 자동차 경로 · 총 이동 약 5분')
   expect(KakaoMapView.mock.calls.at(-1)[0].memberRoutePaths).toEqual([{ mode: 'car', path }])
+  const details = within(screen.getByRole('region', { name: '구간별 실제 이동 안내' }))
+  expect(details.getByText('자동차')).toBeInTheDocument()
+  expect(details.getByText('약 5분')).toBeInTheDocument()
 })
 
 test('transit course displays Google step geometry and distinguishes walking sections', async () => {
   const encoded = '_p~iF~ps|U_ulLnnqC_mqNvxq`@'
   fetch.mockResolvedValue({ ok: true, json: async () => ({ duration: 600, steps: [
-    { travelMode: 'WALKING', encodedPolyline: encoded },
-    { travelMode: 'TRANSIT', encodedPolyline: encoded },
+    { travelMode: 'WALKING', encodedPolyline: encoded, duration: 180 },
+    { travelMode: 'TRANSIT', encodedPolyline: encoded, duration: 420, transitDetails: { lineShortName: '1호선' } },
   ] }) })
   render(<CourseRouteMap places={places} travelMode="transit" />)
   await screen.findByText('실제 대중교통 경로 · 총 이동 약 10분')
@@ -64,6 +67,10 @@ test('transit course displays Google step geometry and distinguishes walking sec
   expect(routes[0].path[1]).toEqual({ lat: 40.7, lng: -120.95 })
   expect(fetch).toHaveBeenCalledTimes(1)
   expect(fetch.mock.calls[0][0]).toContain('/route/time')
+  const details = within(screen.getByRole('region', { name: '구간별 실제 이동 안내' }))
+  expect(details.getByText('대중교통')).toBeInTheDocument()
+  expect(details.getByText('약 10분')).toBeInTheDocument()
+  expect(details.getByText('세부 구간: 도보 약 3분 → 1호선 약 7분')).toBeInTheDocument()
 })
 
 test('a failed section does not erase the other real walking routes', async () => {
@@ -77,7 +84,7 @@ test('a failed section does not erase the other real walking routes', async () =
   expect(screen.getByRole('status')).not.toHaveTextContent('총 이동 약')
 })
 
-test('recommendation transit mode displays short walks as walking geometry without querying Google', async () => {
+test('recommendation transit mode compares short walks using TMAP and retains detailed timing', async () => {
   const closePlaces = [{ lat: 37.5, lng: 127, orderNumber: 1 }, { lat: 37.503, lng: 127, orderNumber: 2 }]
   const path = [closePlaces[0], { lat: 37.502, lng: 127.001 }, closePlaces[1]]
   fetch.mockResolvedValue({ ok: true, json: async () => ({ distance: 450, duration: 360, segments: [path] }) })
@@ -86,4 +93,8 @@ test('recommendation transit mode displays short walks as walking geometry witho
   expect(KakaoMapView.mock.calls.at(-1)[0].memberRoutePaths).toEqual([{ mode: 'walking', path }])
   expect(fetch).toHaveBeenCalledTimes(1)
   expect(fetch.mock.calls[0][0]).toContain('/route/walking')
+  const details = within(screen.getByRole('region', { name: '구간별 실제 이동 안내' }))
+  expect(details.getByText('도보 · 가까운 구간 도보 추천')).toBeInTheDocument()
+  expect(details.getByText('약 6분')).toBeInTheDocument()
+  expect(details.getByText('450m')).toBeInTheDocument()
 })

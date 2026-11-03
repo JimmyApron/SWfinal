@@ -145,6 +145,64 @@ router.post("/reset-finalization", async (req, res) => {
   }
 });
 
+// Replace the pointer atomically; never delete the current finalization first.
+router.post('/replace-finalization', async (req, res) => {
+  try {
+    const scheduleId = Number(req.body?.scheduleId);
+    const courseId = Number(req.body?.courseId);
+    const expectedCourseId = Number(req.body?.expectedCourseId);
+    if (![scheduleId, courseId, expectedCourseId].every(id => Number.isSafeInteger(id) && id > 0)) {
+      throw new HttpError(400, '일정과 코스 정보를 확인해 주세요.');
+    }
+    const client = getAdmin();
+    const { data: schedule, error: scheduleError } = await client.from('confirmed_schedules')
+      .select('id, roomid, title').eq('id', scheduleId).maybeSingle();
+    if (scheduleError) throw scheduleError;
+    if (!schedule) throw new HttpError(404, '일정을 찾을 수 없어요.');
+    const actor = await authenticate(req, schedule.roomid);
+    const { data: course, error: courseError } = await client.from('courses').select('id')
+      .eq('id', courseId).eq('schedule_id', scheduleId).eq('room_id', schedule.roomid).maybeSingle();
+    if (courseError) throw courseError;
+    if (!course) throw new HttpError(400, '해당 일정에 연결된 코스가 아닙니다.');
+    const { data: stops, error: stopsError } = await client.from('course_stops').select('id').eq('course_id', courseId);
+    if (stopsError) throw stopsError;
+    if (!stops?.length) throw new HttpError(400, '방문 장소가 있는 코스를 선택해 주세요.');
+
+    const { data: saved, error } = await client.from('schedule_finalizations').update({
+      course_id: courseId, finalized_by_type: actor.type,
+      finalized_by_member_id: actor.type === 'member' ? actor.id : null,
+      finalized_by_guest_id: actor.type === 'guest' ? actor.id : null,
+      finalized_at: new Date().toISOString(),
+    }).eq('schedule_id', scheduleId).eq('course_id', expectedCourseId).select('*').maybeSingle();
+    if (error) throw error;
+    let finalization = saved;
+    if (!finalization) {
+      const current = await client.from('schedule_finalizations').select('*').eq('schedule_id', scheduleId).maybeSingle();
+      if (current.error) throw current.error;
+      if (Number(current.data?.course_id) !== courseId) {
+        throw new HttpError(409, '다른 참여자가 확정 코스를 변경했습니다. 최신 코스를 확인한 뒤 다시 선택해 주세요.');
+      }
+      finalization = current.data; // Retry after a lost success response.
+    }
+    let voteClosurePending = false;
+    try {
+      const closed = await client.from('votes').update({ isclosed: true }).eq('scheduleid', scheduleId).eq('votetype', 'course');
+      voteClosurePending = Boolean(closed.error);
+    } catch (_) { voteClosurePending = true; }
+    if (saved && courseId !== expectedCourseId) {
+      await notifyCourseChange({ schedule, actor, type: 'course_updated',
+        title: name => `${name}님이 확정 코스를 변경했어요`,
+        message: title => `"${title}"의 확정 코스를 변경했어요. 새 코스를 확인해 보세요.`,
+      }).catch(error => console.error('코스 변경 알림 실패:', error.message));
+    }
+    res.json({ ...finalization, replaced: true, voteClosurePending,
+      warning: voteClosurePending ? '코스는 변경되었지만 투표 종료 갱신에 실패했습니다.' : null });
+  } catch (error) {
+    if (!(error instanceof HttpError)) console.error('코스 변경 실패:', error.message);
+    res.status(error.status || 500).json({ message: error instanceof HttpError ? error.message : '확정 코스를 변경하지 못했습니다. 기존 코스를 다시 확인해 주세요.' });
+  }
+});
+
 const STOP_COLUMNS = [
   "place_id", "place_source", "place_name", "place_address", "category", "latitude", "longitude",
   "visit_start_time", "visit_end_time", "expected_stay_min", "travel_time_from_prev_min",

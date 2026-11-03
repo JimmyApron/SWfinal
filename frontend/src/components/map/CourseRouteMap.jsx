@@ -21,6 +21,7 @@ export default function CourseRouteMap({ places = [], travelMode, allowWalkingLo
       if (!['walking', 'car', 'transit'].includes(routeMode)) throw new Error('이동 수단 정보가 없어 경로를 표시할 수 없습니다.')
       const routes = []
       const failures = []
+      const legs = []
       let duration = 0
       let hasDuration = true
       let walkingLegs = 0
@@ -53,9 +54,14 @@ export default function CourseRouteMap({ places = [], travelMode, allowWalkingLo
           path,
         }))
         if (routeMode === 'transit' && segmentMode === 'walking') walkingLegs++
+        const steps = segmentMode === 'transit' ? (data.steps || []).map(step => ({
+          label: step.travelMode === 'WALKING' ? '도보' : step.transitDetails?.lineShortName || step.transitDetails?.lineName || '버스·지하철',
+          duration: step.duration,
+        })) : []
+        legs.push({ from: i - 1, to: i, mode: segmentMode, duration: data.duration, distance: data.distance, steps })
         if (typeof data.duration === 'number') duration += data.duration
         else hasDuration = false
-        if (!controller.signal.aborted) setState({ key, routes: [...routes], message: `실제 경로 조회 중… (${i}/${points.length - 1}구간)` })
+        if (!controller.signal.aborted) setState({ key, routes: [...routes], legs: [...legs], message: `실제 경로 조회 중… (${i}/${points.length - 1}구간)` })
         } catch (error) {
           if (controller.signal.aborted) return
           failures.push({ from: points[i - 1][2] || i, to: points[i][2] || i + 1, message: error.message === 'Failed to fetch' ? '길찾기 서버에 연결하지 못했습니다. 백엔드 실행 상태를 확인해 주세요.' : error.message })
@@ -66,7 +72,7 @@ export default function CourseRouteMap({ places = [], travelMode, allowWalkingLo
       const message = failures.length
         ? (points.length === 2 ? failures[0].message : `${routes.length ? '일부 경로만 표시됩니다. ' : '경로를 표시하지 못했습니다. '}${failures.map(failure => `${failure.from}→${failure.to}: ${failure.message}`).join(' / ')}`)
         : `실제 ${modeLabel} 경로${walkingLegs ? ` · 가까운 ${walkingLegs}구간은 도보 추천` : ''}${hasDuration ? ` · 총 이동 약 ${Math.ceil(duration / 60)}분` : ''}`
-      if (!controller.signal.aborted) setState({ key, routes, message })
+      if (!controller.signal.aborted) setState({ key, routes, legs, message })
     }
     load().catch(error => {
       if (!controller.signal.aborted) setState({ key, routes: [], message: error.message })
@@ -84,5 +90,27 @@ export default function CourseRouteMap({ places = [], travelMode, allowWalkingLo
         </span>
       ))}
     </div>}
+    {state.key === key && state.legs?.length > 0 && <section aria-label="구간별 실제 이동 안내" style={{ marginTop: 12, fontSize: 13 }}>
+      <strong>구간별 이동 종류와 시간</strong>
+      <ol style={{ listStyle: 'none', padding: 0, margin: '8px 0' }}>
+        {state.legs.map(leg => <li key={leg.from} style={{ padding: '10px 0', borderTop: '1px solid #E5E7EB' }}>
+          <strong>{places[leg.from]?.orderNumber || leg.from + 1}. {places[leg.from]?.name || '출발 장소'} → {places[leg.to]?.orderNumber || leg.to + 1}. {places[leg.to]?.name || '도착 장소'}</strong>
+          <dl style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 12px', margin: '8px 0' }}>
+            <dt>이동 종류</dt><dd style={{ margin: 0 }}>{({ walking: '도보', transit: '대중교통', car: '자동차' })[leg.mode]}{mode === 'transit' && leg.mode === 'walking' ? ' · 가까운 구간 도보 추천' : ''}</dd>
+            <dt>예상 소요 시간</dt><dd style={{ margin: 0 }}>{formatDuration(leg.duration)}</dd>
+            <dt>이동 거리</dt><dd style={{ margin: 0 }}>{typeof leg.distance === 'number' && Number.isFinite(leg.distance) && leg.distance >= 0 ? `${Math.round(leg.distance).toLocaleString('ko-KR')}m` : '정보 없음'}</dd>
+          </dl>
+          {leg.steps.length > 0 && <p style={{ margin: 0, color: 'var(--secondary-text, #66657A)' }}>세부 구간: {leg.steps.map(step => `${step.label} ${formatDuration(step.duration)}`).join(' → ')}</p>}
+        </li>)}
+      </ol>
+      <p style={{ margin: 0, color: 'var(--secondary-text, #66657A)' }}>길찾기 조회 시점의 예상 시간입니다. 경로 조회에 실패한 구간은 위 상태 안내를 확인해 주세요.</p>
+    </section>}
   </>
+}
+
+function formatDuration(seconds) {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) return '정보 없음'
+  const minutes = Math.ceil(seconds / 60)
+  if (minutes < 60) return `약 ${minutes}분`
+  return `약 ${Math.floor(minutes / 60)}시간${minutes % 60 ? ` ${minutes % 60}분` : ''}`
 }

@@ -47,8 +47,12 @@ test('이동 시간과 식사·활동·대기를 포함한 전체 코스 시간�
   }] } } });
   render(<CourseRecommendationResultPage />);
   expect(screen.getByText('대중교통 이동')).toBeInTheDocument();
-  expect(screen.getByText('예상 이동 합계 약 33분')).toBeInTheDocument();
-  expect(screen.getByText('코스 전체 약 10시간 8분 · 식사·활동·대기 포함')).toBeInTheDocument();
+  expect(screen.queryByText('이동 종류와 시간')).not.toBeInTheDocument();
+  expect(screen.queryByText(/10시간 8분/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '코스 상세 보기' }));
+  expect(screen.getByText('이동 종류와 시간')).toBeInTheDocument();
+  expect(screen.getByText('합계 약 33분')).toBeInTheDocument();
+  expect(screen.getByText('약 10시간 8분 · 식사·활동·대기 포함')).toBeInTheDocument();
   expect(screen.queryByText('대중교통 이동 · 약 10시간 8분')).not.toBeInTheDocument();
 });
 

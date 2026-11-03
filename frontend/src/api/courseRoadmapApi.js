@@ -50,6 +50,10 @@ export function resetFinalizedCourse(scheduleId) {
   return postCourseApi("/reset-finalization", { scheduleId }, "코스 확정을 해제하지 못했습니다.");
 }
 
+export function replaceFinalizedCourse(scheduleId, courseId, expectedCourseId) {
+  return postCourseApi('/replace-finalization', { scheduleId, courseId, expectedCourseId }, '확정 코스를 변경하지 못했습니다.');
+}
+
 // 확정된 코스의 방문 장소를 통째로 바꾼다. (course: buildCourseVoteDbRows 결과 모양)
 export function updateFinalizedCourseStops(scheduleId, course) {
   return postCourseApi("/update-stops", { scheduleId, course }, "코스를 수정하지 못했습니다.");
