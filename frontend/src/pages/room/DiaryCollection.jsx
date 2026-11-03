@@ -69,6 +69,7 @@ export default function DiaryCollection() {
   const [reactionCounts, setReactionCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [needsLogin, setNeedsLogin] = useState(false);
   const restoredScroll = useRef(false);
 
   const updateRoute = (changes) => {
@@ -81,10 +82,11 @@ export default function DiaryCollection() {
   };
 
   const load = useCallback(async () => {
-    setLoading(true); setError("");
+    setLoading(true); setError(""); setNeedsLogin(false);
     try {
       const auth = await getRoomDiaryIdentity(roomId);
-      if (!auth.user || !auth.identityId) throw new Error("이 방의 회원만 기록을 볼 수 있습니다.");
+      if (!auth.user) throw Object.assign(new Error("로그인이 필요합니다."), { name: "AuthSessionMissingError" });
+      if (!auth.identityId) throw new Error("이 방의 회원만 기록을 볼 수 있습니다.");
       const allMeetings = await getRoomMeetings(roomId);
       const currentMeetings = allMeetings.filter((meeting) => meeting.lifecycle_status !== "cancelled");
       // Keep diary visibility in the database RPC and cap concurrent calls for older rooms.
@@ -108,7 +110,11 @@ export default function DiaryCollection() {
       // getRoomDiaryIdentity already verifies active room membership; guests cannot reach this page.
       setMyTargetMeetings(currentMeetings.map((meeting) => meeting.id));
       setPhotos({}); setReactionCounts({});
-    } catch (loadError) { setError(loadError.message || "기록을 불러오지 못했습니다."); }
+    } catch (loadError) {
+      const missingSession = loadError.name === "AuthSessionMissingError" || loadError.message === "Auth session missing!";
+      setNeedsLogin(missingSession);
+      setError(missingSession ? "로그인 정보가 없습니다. 다시 로그인해 주세요." : loadError.message || "기록을 불러오지 못했습니다.");
+    }
     finally { setLoading(false); }
   }, [roomId]);
 
@@ -266,7 +272,7 @@ export default function DiaryCollection() {
       {view === "monthly" && !loading && selectedMonthKey && <div className="collection-month-row"><div className="collection-month-controls"><button type="button" disabled={!previousMonthKey} onClick={() => updateRoute({ month: parseMonth(previousMonthKey) })} aria-label="이전 달"><FiChevronLeft /></button><h2>{monthTitle(selectedMonthKey)}</h2><button type="button" disabled={!nextMonthKey} onClick={() => updateRoute({ month: parseMonth(nextMonthKey) })} aria-label="다음 달"><FiChevronRight /></button></div>{tab === "meetings" ? <span>{meetingsWithRecords.length}번 만남 · 기록 {records.length}개</span> : tab === "photos" ? <span>사진 {flatPhotos.length}장</span> : null}</div>}
       {view === "all" && !loading && !error && tab !== "mine" && <div className="collection-all-summary">{tab === "meetings" ? `전체 ${meetingsWithRecords.length}번 만남 · 기록 ${records.length}개` : `전체 사진 ${flatPhotos.length}장`}</div>}
       {loading && <p className="collection-state">기록을 불러오는 중…</p>}
-      {error && <div className="collection-error" role="alert">{error}<button type="button" onClick={load}>다시 불러오기</button></div>}
+      {error && <div className="collection-error" role="alert">{error}<button type="button" onClick={needsLogin ? () => navigate("/") : load}>{needsLogin ? "로그인하기" : "다시 불러오기"}</button></div>}
       {!loading && !error && tab === "meetings" && <>
         {renderUnread(ownMissingMeetings)}
         {(view === "all" ? meetingMonthKeys.slice(0, monthsToShow) : meetingMonthKeys).map((key) => {

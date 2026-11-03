@@ -25,6 +25,7 @@ function renderCollection({ from = "/rooms/7?tab=calendar", search = "?month=202
     <CurrentRoute />
     <Routes>
       <Route path="/rooms/:roomId/diaries" element={<DiaryCollection />} />
+      <Route path="/" element={<div>로그인 화면</div>} />
       <Route path="/rooms/:roomId" element={<div>방 캘린더</div>} />
       <Route path="/rooms/:roomId/meetings/:meetingId/diary" element={<div>기록 상세</div>} />
     </Routes>
@@ -42,6 +43,16 @@ beforeEach(() => {
   getDiaryPhotos.mockResolvedValue([{ id: "photo-1", url: "https://example.invalid/photo.jpg" }]);
   supabase.auth.getSession.mockResolvedValue({ data: { session: null } });
   supabase.from.mockReturnValue({ select: () => ({ in: async () => ({ data: [], error: null }) }) });
+});
+
+test("missing auth session offers login instead of retrying protected queries", async () => {
+  getRoomDiaryIdentity.mockRejectedValue(Object.assign(new Error("Auth session missing!"), { name: "AuthSessionMissingError" }));
+  renderCollection();
+  expect(await screen.findByRole("alert")).toHaveTextContent("다시 로그인해 주세요.");
+  expect(screen.queryByRole("button", { name: "다시 불러오기" })).not.toBeInTheDocument();
+  expect(getRoomMeetings).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "로그인하기" }));
+  expect(await screen.findByText("로그인 화면")).toBeInTheDocument();
 });
 
 test("monthly view settles after loading assets instead of repeatedly fetching and rendering", async () => {

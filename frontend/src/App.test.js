@@ -5,10 +5,12 @@ import { getFinalizedRoadmap } from './api/courseRoadmapApi';
 jest.mock('./api/courseRoadmapApi', () => ({ getFinalizedRoadmap: jest.fn() }));
 jest.mock('./lib/supabaseClient', () => ({ supabase: { auth: {
   getUser: jest.fn().mockResolvedValue({ data: { user: null }, error: null }),
+  getSession: jest.fn(),
   onAuthStateChange: jest.fn(() => ({ data: { subscription: { unsubscribe: jest.fn() } } })),
 } } }));
 beforeEach(() => {
   localStorage.clear();
+  supabase.auth.getSession.mockResolvedValue({ data: { session: { user: { id: 'member' } } }, error: null });
   supabase.auth.getUser.mockResolvedValue({ data: { user: null }, error: null });
   supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
 });

@@ -6,6 +6,7 @@ import { supabase } from "./lib/supabaseClient";
 import { ThemeProvider } from "./context/ThemeContext";
 
 import BottomNav from "./components/BottomNav";
+import AuthGate from "./components/AuthGate";
 
 import InviteCodePage from "./pages/auth/InviteCodePage";
 import LoginPage from "./pages/auth/LoginPage";
@@ -691,6 +692,7 @@ function App() {
     <GoogleOAuthProvider clientId={googleClientId}>
       <ThemeProvider>
         <BrowserRouter>
+          <AuthGate>
           <NotificationListener />
           <Layout>
             <Routes>
@@ -734,6 +736,7 @@ function App() {
               <Route path="/settings/accounts" element={<PaymentAccountsPage />} />
             </Routes>
           </Layout>
+          </AuthGate>
         </BrowserRouter>
       </ThemeProvider>
     </GoogleOAuthProvider>
