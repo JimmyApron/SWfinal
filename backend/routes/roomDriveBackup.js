@@ -3,7 +3,7 @@ const express = require('express')
 const { createClient } = require('@supabase/supabase-js')
 
 const router = express.Router()
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata'
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 const PHOTO_BUCKET = 'meetup-diary-photos'
 const syncing = new Set()
 let admin
@@ -108,9 +108,10 @@ async function tokenRequest(params) {
 
 async function accessToken(userId) {
   const { data: connection, error } = await getAdmin().from('google_drive_connections')
-    .select('encrypted_refresh_token').eq('user_id', userId).maybeSingle()
+    .select('encrypted_refresh_token,drive_scope').eq('user_id', userId).maybeSingle()
   if (error) throw error
   if (!connection) throw new HttpError(409, 'Google Drive를 먼저 연결해 주세요.')
+  if (connection.drive_scope !== DRIVE_SCOPE) throw new HttpError(409, '내 드라이브 백업을 위해 Google을 다시 연결해 주세요.')
   const token = await tokenRequest({
     client_id: process.env.GOOGLE_CLIENT_ID,
     client_secret: process.env.GOOGLE_CLIENT_SECRET,
@@ -143,8 +144,8 @@ async function listBackupFiles(token, prefix) {
   let pageToken = ''
   do {
     const params = new URLSearchParams({
-      spaces: 'appDataFolder',
-      q: `name contains '${prefix}' and trashed = false`,
+      spaces: 'drive',
+      q: `'root' in parents and name contains '${prefix}' and trashed = false`,
       fields: 'nextPageToken,files(id,name,mimeType)',
       pageSize: '1000',
     })
@@ -166,7 +167,7 @@ async function createDriveFile(token, name, content, mimeType) {
         'X-Upload-Content-Type': mimeType,
         'X-Upload-Content-Length': String(content.length),
       },
-      body: JSON.stringify({ name, parents: ['appDataFolder'], mimeType }),
+      body: JSON.stringify({ name, mimeType }),
     })
     const location = start.headers.get('location')
     if (!start.ok || !location) throw new Error(`Google Drive 업로드 시작 실패: ${start.status}`)
@@ -177,7 +178,7 @@ async function createDriveFile(token, name, content, mimeType) {
     })
   }
   const boundary = `backup_${crypto.randomUUID()}`
-  const metadata = Buffer.from(JSON.stringify({ name, parents: ['appDataFolder'], mimeType }))
+  const metadata = Buffer.from(JSON.stringify({ name, mimeType }))
   const body = Buffer.concat([
     Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n`),
     metadata,
@@ -316,14 +317,16 @@ async function syncBackup(userId, roomId) {
 router.get('/rooms/:roomId', handle(async (req, res) => {
   const { userId, roomId } = await requireMember(req)
   const [connection, preference] = await Promise.all([
-    getAdmin().from('google_drive_connections').select('user_id').eq('user_id', userId).maybeSingle(),
+    getAdmin().from('google_drive_connections').select('drive_scope').eq('user_id', userId).maybeSingle(),
     getAdmin().from('room_google_drive_backups').select('enabled,last_synced_at,last_error')
       .eq('user_id', userId).eq('room_id', roomId).maybeSingle(),
   ])
   if (connection.error) throw connection.error
   if (preference.error) throw preference.error
-  res.json({ connected: Boolean(connection.data), enabled: Boolean(preference.data?.enabled),
-    lastSyncedAt: preference.data?.last_synced_at || null, error: preference.data?.last_error || null,
+  const connected = connection.data?.drive_scope === DRIVE_SCOPE
+  res.json({ connected, enabled: Boolean(preference.data?.enabled),
+    lastSyncedAt: preference.data?.last_synced_at || null,
+    error: !connected && connection.data ? '내 드라이브 백업을 위해 Google을 다시 연결해 주세요.' : preference.data?.last_error || null,
     syncing: syncing.has(`${userId}:${roomId}`) })
 }))
 
@@ -347,6 +350,7 @@ router.post('/connection', handle(async (req, res) => {
   const { error } = await getAdmin().from('google_drive_connections').upsert({
     user_id: user.id,
     encrypted_refresh_token: encrypt(token.refresh_token),
+    drive_scope: DRIVE_SCOPE,
     connected_at: new Date().toISOString(),
   }, { onConflict: 'user_id' })
   if (error) throw error
@@ -359,9 +363,9 @@ router.put('/rooms/:roomId', handle(async (req, res) => {
   if (req.body.enabled) {
     requiredGoogleConfig()
     const { data, error } = await getAdmin().from('google_drive_connections')
-      .select('user_id').eq('user_id', userId).maybeSingle()
+      .select('drive_scope').eq('user_id', userId).maybeSingle()
     if (error) throw error
-    if (!data) throw new HttpError(409, 'Google Drive를 먼저 연결해 주세요.')
+    if (data?.drive_scope !== DRIVE_SCOPE) throw new HttpError(409, '내 드라이브 백업을 위해 Google을 다시 연결해 주세요.')
   }
   const { error } = await getAdmin().from('room_google_drive_backups').upsert({
     user_id: userId, room_id: roomId, enabled: req.body.enabled,

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useGoogleLogin } from '@react-oauth/google'
 import { connectRoomDriveBackup, getRoomDriveBackup, setRoomDriveBackup } from '../../api/roomDriveBackupApi'
 
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata'
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 
 export default function RoomDriveBackupControl({ roomId, canBackup = true, checkingMembership = false }) {
   const [status, setStatus] = useState(null)
@@ -89,7 +89,7 @@ export default function RoomDriveBackupControl({ roomId, canBackup = true, check
 
   return <div className="room-drive-backup">
     <div className="room-drive-backup-main">
-      <div><strong>내 기록 Google Drive 백업</strong><span>이 방의 내 기록과 사진을 Google Drive에 비공개로 백업합니다.</span></div>
+      <div><strong>내 기록 Google Drive 백업</strong><span>이 방의 내 기록과 사진을 Google 내 드라이브에 백업합니다.</span></div>
       <button type="button" role="switch" aria-label="내 기록 Google Drive 백업" aria-checked={Boolean(status?.enabled)}
         disabled={busy || !status || !canBackup} onClick={toggle} className={`room-drive-backup-switch ${status?.enabled ? 'on' : ''}`}>
         <span />
@@ -98,7 +98,7 @@ export default function RoomDriveBackupControl({ roomId, canBackup = true, check
     {!canBackup && <small role="status">{checkingMembership ? '방 회원 확인 중...' : '이 방의 회원으로 로그인하면 사용할 수 있어요.'}</small>}
     {status?.enabled && <small role="status">{status.error || (status.syncing ? '백업 중...' : status.lastSyncedAt
       ? `마지막 백업: ${new Date(status.lastSyncedAt).toLocaleString('ko-KR')}` : '첫 백업 대기 중...')}</small>}
-    {status?.error && status?.connected && <button type="button" className="room-drive-backup-reconnect" disabled={busy} onClick={reconnect}>Google 다시 연결</button>}
+    {((status?.error && status?.connected) || (status?.enabled && !status?.connected)) && <button type="button" className="room-drive-backup-reconnect" disabled={busy} onClick={reconnect}>Google 다시 연결</button>}
     {message && <small className="room-drive-backup-error" role="alert">{message}</small>}
   </div>
 }

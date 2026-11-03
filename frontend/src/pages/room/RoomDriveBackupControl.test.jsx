@@ -42,3 +42,19 @@ test('shows a disabled switch while room membership is unavailable', () => {
   expect(screen.getByText('이 방의 회원으로 로그인하면 사용할 수 있어요.')).toBeInTheDocument()
   expect(getRoomDriveBackup).not.toHaveBeenCalled()
 })
+
+test('existing hidden-folder connection asks for new My Drive permission', async () => {
+  jest.clearAllMocks()
+  const login = jest.fn(() => useGoogleLogin.mock.calls.at(-1)[0].onSuccess({ code: 'new-scope-code' }))
+  useGoogleLogin.mockImplementation(() => login)
+  getRoomDriveBackup.mockResolvedValue({ connected: false, enabled: true, error: '내 드라이브 백업을 위해 Google을 다시 연결해 주세요.' })
+  connectRoomDriveBackup.mockResolvedValue({ connected: true })
+  setRoomDriveBackup.mockResolvedValue({ enabled: true })
+
+  render(<RoomDriveBackupControl roomId={7} />)
+  const reconnect = await screen.findByRole('button', { name: 'Google 다시 연결' })
+  expect(useGoogleLogin.mock.calls.at(-1)[0].scope).toBe('https://www.googleapis.com/auth/drive.file')
+  fireEvent.click(reconnect)
+  await waitFor(() => expect(connectRoomDriveBackup).toHaveBeenCalledWith('new-scope-code'))
+  await waitFor(() => expect(setRoomDriveBackup).toHaveBeenCalledWith(7, true))
+})
