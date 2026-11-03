@@ -14,6 +14,7 @@ async function documentParts(buffer, multipart = false) {
 
 const originalFetch = global.fetch
 afterEach(() => { global.fetch = originalFetch })
+const root = { id: 'backup-root', name: 'MeetUP 기록 백업', parents: ['root'] }
 const folder = { id: 'folder-7', name: '사용자가 변경한 폴더 이름' }
 const document = { id: 'doc-7', name: '변경한 문서 이름', mimeType: 'application/vnd.google-apps.document', appProperties: { sykBackupDocument: '1' } }
 const photo = { id: 'photo-9', name: 'syk-room-7-member-member-1-photo-9', mimeType: 'image/jpeg' }
@@ -48,6 +49,13 @@ function options(overrides = {}) {
 
 test('creates a private room folder and a native Google Doc with photos in that folder', async () => {
   const requests = mockRequests([
+    { data: { files: [] }, check: (url) => assert.ok(new URL(url).searchParams.get('q').includes("key='sykBackupRoot'")) },
+    { data: root, check: (_, request) => {
+      const metadata = JSON.parse(request.body)
+      assert.equal(metadata.name, 'MeetUP 기록 백업')
+      assert.deepEqual(metadata.parents, ['root'])
+      assert.deepEqual(metadata.appProperties, { sykBackupRoot: '1' })
+    } },
     { data: { files: [] }, check: (url) => {
       const q = new URL(url).searchParams.get('q')
       assert.ok(q.includes("value='7:member-1'"))
@@ -55,8 +63,8 @@ test('creates a private room folder and a native Google Doc with photos in that 
     } },
     { data: folder, check: (_, request) => {
       const metadata = JSON.parse(request.body)
-      assert.equal(metadata.name, 'SYK 기록 백업 - 방 7')
-      assert.deepEqual(metadata.parents, ['root'])
+      assert.equal(metadata.name, '방 7')
+      assert.deepEqual(metadata.parents, ['backup-root'])
       assert.deepEqual(metadata.appProperties, { sykBackup: '7:member-1' })
     } },
     { data: { files: [] }, check: (url) => assert.ok(new URL(url).searchParams.get('q').includes("'folder-7' in parents")) },
@@ -84,7 +92,8 @@ test('creates a private room folder and a native Google Doc with photos in that 
 test('reuses renamed folder and document, paginates photos, and updates the same Doc', async () => {
   const orphan = { id: 'old-photo', name: 'syk-room-7-member-member-1-photo-deleted' }
   const requests = mockRequests([
-    { data: { files: [folder] } },
+    { data: { files: [root] } },
+    { data: { files: [{ ...folder, parents: ['backup-root'] }] } },
     { data: { files: [document], nextPageToken: 'page-2' } },
     { data: { files: [photo, orphan, { id: 'user-file', name: '나의 별도 문서' }] }, check: (url) => assert.equal(new URL(url).searchParams.get('pageToken'), 'page-2') },
     { data: document, check: async (url, request) => {
@@ -104,9 +113,38 @@ test('reuses renamed folder and document, paginates photos, and updates the same
   requests.done()
 })
 
+test('moves an existing room backup under the new root without recreating its document', async () => {
+  const requests = mockRequests([
+    { data: { files: [{ ...root, name: '기록 백업' }] } },
+    { data: root, check: (url, request) => {
+      assert.equal(new URL(url).pathname, '/drive/v3/files/backup-root')
+      assert.equal(new URL(url).searchParams.get('fields'), 'id,name')
+      assert.equal(request.method, 'PATCH')
+      assert.deepEqual(JSON.parse(request.body), { name: 'MeetUP 기록 백업' })
+    } },
+    { data: { files: [{ ...folder, name: 'SYK 기록 백업 - 방 7', parents: ['old-root'] }] } },
+    { data: { ...folder, name: '방 7', parents: ['backup-root'] }, check: (url, request) => {
+      const params = new URL(url).searchParams
+      assert.equal(request.method, 'PATCH')
+      assert.equal(params.get('addParents'), 'backup-root')
+      assert.equal(params.get('removeParents'), 'old-root')
+      assert.deepEqual(JSON.parse(request.body), { name: '방 7' })
+    } },
+    { data: { files: [document] }, check: (url) => assert.ok(new URL(url).searchParams.get('q').includes("'folder-7' in parents")) },
+    { data: document, check: (url, request) => {
+      assert.ok(url.includes('/doc-7?uploadType=media'))
+      assert.equal(request.method, 'PATCH')
+    } },
+  ])
+  await syncBackupFiles(options({ snapshot: { room_id: 7, diaries: [] } }))
+  requests.done()
+  assert.equal(requests.calls.filter((call) => call.method === 'POST').length, 0)
+})
+
 test('does not delete any photo if document update fails', async () => {
   const requests = mockRequests([
-    { data: { files: [folder] } },
+    { data: { files: [root] } },
+    { data: { files: [{ ...folder, parents: ['backup-root'] }] } },
     { data: { files: [document, photo, { id: 'old', name: 'syk-room-7-member-member-1-photo-old' }] } },
     { status: 500, data: { message: 'upload failed' } },
   ])
@@ -123,14 +161,14 @@ test('disabled backup makes no Drive requests', async () => {
 
 test('stops before photo upload if backup is turned off during sync', async () => {
   let checks = 0
-  const requests = mockRequests([{ data: { files: [folder] } }, { data: { files: [] } }])
+  const requests = mockRequests([{ data: { files: [root] } }, { data: { files: [{ ...folder, parents: ['backup-root'] }] } }, { data: { files: [] } }])
   await syncBackupFiles(options({ isEnabled: async () => ++checks === 1 }))
   requests.done()
 })
 
 test('large photos use resumable uploads with folder metadata', async () => {
   const requests = mockRequests([
-    { data: { files: [folder] } }, { data: { files: [document] } },
+    { data: { files: [root] } }, { data: { files: [{ ...folder, parents: ['backup-root'] }] } }, { data: { files: [document] } },
     { headers: { location: 'https://www.googleapis.com/upload/session' }, check: (url, request) => {
       assert.ok(url.includes('uploadType=resumable'))
       assert.deepEqual(JSON.parse(request.body).parents, ['folder-7'])

@@ -28,7 +28,7 @@ async function listFiles(token, query) {
   do {
     const params = new URLSearchParams({
       spaces: 'drive', q: `${query} and trashed = false`,
-      fields: 'nextPageToken,files(id,name,mimeType,appProperties)', pageSize: '1000',
+      fields: 'nextPageToken,files(id,name,mimeType,parents,appProperties)', pageSize: '1000',
     })
     if (pageToken) params.set('pageToken', pageToken)
     const page = await driveRequest(token, `${FILES_URL}?${params}`)
@@ -38,17 +38,54 @@ async function listFiles(token, query) {
   return files
 }
 
-async function getBackupFolder(token, roomId, userId) {
+async function getBackupRoot(token) {
+  const folders = await listFiles(token,
+    `mimeType = '${FOLDER_MIME}' and appProperties has { key='sykBackupRoot' and value='1' }`)
+  if (folders.length) {
+    const folder = folders[0]
+    if (folder.name !== '기록 백업') return folder
+    return driveRequest(token, `${FILES_URL}/${encodeURIComponent(folder.id)}?fields=id,name`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'MeetUP 기록 백업' }),
+    })
+  }
+  return driveRequest(token, `${FILES_URL}?fields=id,name`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: 'MeetUP 기록 백업', mimeType: FOLDER_MIME,
+      parents: ['root'], appProperties: { sykBackupRoot: '1' },
+    }),
+  })
+}
+
+async function getBackupFolder(token, roomId, userId, rootId) {
   // Private app metadata keeps the folder identifiable even after a user renames it.
   const key = `${roomId}:${userId}`
   const folders = await listFiles(token,
     `mimeType = '${FOLDER_MIME}' and appProperties has { key='sykBackup' and value='${queryValue(key)}' }`)
-  if (folders.length) return folders[0]
+  if (folders.length) {
+    const folder = folders[0]
+    const oldDefaultName = `SYK 기록 백업 - 방 ${roomId}`
+    const needsMove = !folder.parents?.includes(rootId)
+    const needsRename = folder.name === oldDefaultName
+    if (needsMove || needsRename) {
+      const params = new URLSearchParams({ fields: 'id,name,parents' })
+      if (needsMove) {
+        params.set('addParents', rootId)
+        if (folder.parents?.length) params.set('removeParents', folder.parents.join(','))
+      }
+      return driveRequest(token, `${FILES_URL}/${encodeURIComponent(folder.id)}?${params}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(needsRename ? { name: `방 ${roomId}` } : {}),
+      })
+    }
+    return folder
+  }
   return driveRequest(token, `${FILES_URL}?fields=id,name`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      name: `SYK 기록 백업 - 방 ${roomId}`, mimeType: FOLDER_MIME,
-      parents: ['root'], appProperties: { sykBackup: key },
+      name: `방 ${roomId}`, mimeType: FOLDER_MIME,
+      parents: [rootId], appProperties: { sykBackup: key },
     }),
   })
 }
@@ -88,7 +125,8 @@ async function uploadDriveFile(token, metadata, content, sourceMimeType, fileId)
 
 async function syncBackupFiles({ token, userId, snapshot, downloadPhoto, isEnabled }) {
   if (!(await isEnabled())) return
-  const folder = await getBackupFolder(token, snapshot.room_id, userId)
+  const root = await getBackupRoot(token)
+  const folder = await getBackupFolder(token, snapshot.room_id, userId, root.id)
   const files = await listFiles(token, `'${queryValue(folder.id)}' in parents`)
   const byName = new Map(files.map((file) => [file.name, file]))
   const prefix = `syk-room-${snapshot.room_id}-member-${userId}-photo-`
