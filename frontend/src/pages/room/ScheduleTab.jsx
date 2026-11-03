@@ -43,6 +43,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const [showAllTimes, setShowAllTimes] = useState(true);
   const [activeDragCandidateId, setActiveDragCandidateId] = useState(null);
   const [clickedSlot, setClickedSlot] = useState(null); // { candidate, time, availableMembers, unavailableMembers }
+  const [hoverSlot, setHoverSlot] = useState(null); // { x, y, candidate, time, available, unavailable }
   const [activeCandidateMenu, setActiveCandidateMenu] = useState(null); // 추가: 후보지 메뉴 상태
 
   const [confirmedSchedules, setConfirmedSchedules] = useState([]);
@@ -291,9 +292,7 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     }
   };
 
-  const handleCellClick = (candidate, time) => {
-    if (isSelectMode) return;
-
+  const getSlotParticipants = (candidate, time) => {
     const slotAvails = getSlotAvailabilities(candidate.id, time);
     const availableIds = slotAvails.map(a => a.userid);
     const allParticipants = [
@@ -301,8 +300,26 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
       ...guests.map(g => ({ id: g.id, nickname: g.nickname, type: 'guest' }))
     ];
 
-    const available = allParticipants.filter(p => availableIds.includes(p.id));
-    const unavailable = allParticipants.filter(p => !availableIds.includes(p.id));
+    return {
+      available: allParticipants.filter(p => availableIds.includes(p.id)),
+      unavailable: allParticipants.filter(p => !availableIds.includes(p.id)),
+    };
+  };
+
+  // 마우스를 올린 칸에서 누가 가능하다고 했는지 보여주는 팝업 (선택 모드에서는 띄우지 않음)
+  const showSlotHover = (event, candidate, time) => {
+    if (isSelectMode || isDragging) return;
+    setHoverSlot({ x: event.clientX, y: event.clientY, candidate, time, ...getSlotParticipants(candidate, time) });
+  };
+
+  const moveSlotHover = (event) => {
+    setHoverSlot((current) => (current ? { ...current, x: event.clientX, y: event.clientY } : current));
+  };
+
+  const handleCellClick = (candidate, time) => {
+    if (isSelectMode) return;
+
+    const { available, unavailable } = getSlotParticipants(candidate, time);
 
     setClickedSlot({
       candidate,
@@ -1354,10 +1371,17 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                               setActiveDragCandidateId(candidate.id);
                               handleSelectSlot(candidate, time, mode);
                             }}
-                            onMouseEnter={() => {
+                            onMouseEnter={(e) => {
                               if (isDragging && dragMode && selectable && activeDragCandidateId === candidate.id) {
                                 handleSelectSlot(candidate, time, dragMode);
                               }
+                              if (selectable) showSlotHover(e, candidate, time);
+                            }}
+                            onMouseMove={moveSlotHover}
+                            onMouseLeave={() => setHoverSlot(null)}
+                            onClick={() => {
+                              // 마우스가 없는 터치 기기에서는 탭하면 하단 상세 팝업으로 보여준다
+                              if (selectable && window.matchMedia?.("(hover: none)").matches) handleCellClick(candidate, time);
                             }}
                             style={{
                               backgroundColor: bgColor,
@@ -1425,6 +1449,53 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
               </button>
             ) : null}
           </div>
+
+          {/* 칸에 마우스를 올렸을 때 뜨는 가능 멤버 팝업 */}
+          {hoverSlot && !isSelectMode && (
+            <div
+              role="tooltip"
+              style={{
+                position: "fixed",
+                left: Math.max(8, Math.min(hoverSlot.x + 14, window.innerWidth - 228)),
+                top: hoverSlot.y + 190 > window.innerHeight ? Math.max(8, hoverSlot.y - 190) : hoverSlot.y + 16,
+                width: "212px",
+                boxSizing: "border-box",
+                padding: "10px 12px",
+                backgroundColor: "var(--card-bg)",
+                color: "var(--text-color)",
+                border: "1px solid var(--border-color)",
+                borderRadius: "10px",
+                boxShadow: "0 6px 20px rgba(0,0,0,0.18)",
+                fontSize: "12px",
+                pointerEvents: "none",
+                zIndex: 3000,
+              }}
+            >
+              <div style={{ fontSize: "11px", color: "var(--secondary-text)", marginBottom: "6px" }}>
+                {formatDateWithDay(hoverSlot.candidate.date)} {hoverSlot.time} ~ {getNextTime(hoverSlot.time)}
+              </div>
+              <div style={{ fontWeight: 700, marginBottom: "4px" }}>가능 {hoverSlot.available.length}명</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: hoverSlot.unavailable.length > 0 ? "8px" : 0 }}>
+                {hoverSlot.available.length > 0 ? hoverSlot.available.map((p) => (
+                  <span key={p.id} style={{ padding: "2px 8px", borderRadius: "999px", backgroundColor: "color-mix(in srgb, var(--accent-color) 22%, var(--card-bg))", fontWeight: 600 }}>
+                    {p.nickname || "닉네임 없음"}{p.id === currentUser?.id ? "(나)" : ""}
+                  </span>
+                )) : <span style={{ color: "var(--secondary-text)" }}>아직 없어요</span>}
+              </div>
+              {hoverSlot.unavailable.length > 0 && (
+                <>
+                  <div style={{ fontWeight: 700, color: "var(--secondary-text)", marginBottom: "4px" }}>미등록 {hoverSlot.unavailable.length}명</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                    {hoverSlot.unavailable.map((p) => (
+                      <span key={p.id} style={{ padding: "2px 8px", borderRadius: "999px", backgroundColor: "var(--muted-bg)", color: "var(--secondary-text)" }}>
+                        {p.nickname || "닉네임 없음"}{p.id === currentUser?.id ? "(나)" : ""}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {/* 슬롯 상세 정보 팝업 (바텀 시트 느낌) */}
           {clickedSlot && (

@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { useGoogleLogin } from "@react-oauth/google";
 import { FaCalendarAlt } from "react-icons/fa";
 import { supabase } from "../../lib/supabaseClient";
 import { getMyConfirmedSchedules } from "../../api/scheduleApi";
@@ -24,6 +23,9 @@ import {
   rejectCalendarShare,
 } from "../../api/calendarShareApi";
 import LocationPicker from "../../components/map/LocationPicker";
+import GoogleCalendarControl from "../../components/GoogleCalendarControl";
+import { getEventDayKeys } from "../../lib/eventRepeat";
+import { getMyRoomTodos, getRoomTodoCompletions, setRoomTodoDone } from "../../api/roomTodoApi";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const MONTHS = [
@@ -69,7 +71,7 @@ const REPEAT_OPTIONS = [
 
 const holidayCache = {};
 
-async function fetchHolidays(year, month) {
+export async function fetchHolidays(year, month) {
   const cacheKey = `${year}-${month}`;
   if (holidayCache[cacheKey]) return holidayCache[cacheKey];
 
@@ -107,7 +109,7 @@ async function fetchHolidays(year, month) {
   }
 }
 
-async function fetchGoogleCalendarEvents(year, month) {
+export async function fetchGoogleCalendarEvents(year, month) {
   const token = localStorage.getItem("google_calendar_token");
   const expiry = Number(localStorage.getItem("google_calendar_token_expiry") || 0);
 
@@ -152,6 +154,23 @@ async function fetchGoogleCalendarEvents(year, month) {
   }
 }
 
+const TODO_REMINDER_PRESETS = ["none", "0", "10", "60", "1440"];
+const TODO_UNIT_MINUTES = { min: 1, hour: 60, day: 1440 };
+
+// 저장된 분 단위 값을 폼 상태로 (프리셋이 아니면 "직접 설정" + 딱 맞는 가장 큰 단위)
+function parseTodoReminder(saved) {
+  const value = String(saved || "none");
+  if (TODO_REMINDER_PRESETS.includes(value)) return { reminder: value, value: "30", unit: "min" };
+  const minutes = Number(value);
+  if (!Number.isFinite(minutes) || minutes <= 0) return { reminder: "none", value: "30", unit: "min" };
+  const unit = minutes % 1440 === 0 ? "day" : minutes % 60 === 0 ? "hour" : "min";
+  return { reminder: "custom", value: String(minutes / TODO_UNIT_MINUTES[unit]), unit };
+}
+
+function buildTodoReminder(reminder, value, unit) {
+  return reminder === "custom" ? String(Math.round(Number(value) * TODO_UNIT_MINUTES[unit])) : reminder;
+}
+
 function pad(n) {
   return String(n).padStart(2, "0");
 }
@@ -174,6 +193,8 @@ const EMPTY_FORM = {
   customReminderUnit: "min",
   repeat: "none",
   memo: "",
+  shareToRoom: false,
+  roomids: [],
 };
 
 function CalendarPage() {
@@ -204,12 +225,20 @@ function CalendarPage() {
   const [todoDueTime, setTodoDueTime] = useState("");
   const [todoNoDeadline, setTodoNoDeadline] = useState(false);
   const [todoReminder, setTodoReminder] = useState("none");
+  const [todoCustomValue, setTodoCustomValue] = useState("30");
+  const [todoCustomUnit, setTodoCustomUnit] = useState("min");
   const [todos, setTodos] = useState([]);
+  const [roomTodos, setRoomTodos] = useState([]);
+  const [myRooms, setMyRooms] = useState([]);
+  const [roomTodoDone, setRoomTodoDoneRows] = useState([]);
+  const [roomMeta, setRoomMeta] = useState({});
   const [editingTodo, setEditingTodo] = useState(null);
   const [editTodoTitle, setEditTodoTitle] = useState("");
   const [editTodoDueDate, setEditTodoDueDate] = useState("");
   const [editTodoDueTime, setEditTodoDueTime] = useState("");
   const [editTodoReminder, setEditTodoReminder] = useState("none");
+  const [editTodoCustomValue, setEditTodoCustomValue] = useState("30");
+  const [editTodoCustomUnit, setEditTodoCustomUnit] = useState("min");
   const [editTodoNoDeadline, setEditTodoNoDeadline] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -231,12 +260,7 @@ function CalendarPage() {
   );
 
   const [showSidePanel, setShowSidePanel] = useState(false);
-  const [googleConnected, setGoogleConnected] = useState(
-    !!localStorage.getItem("google_calendar_token")
-  );
-  const [googleAutoSync, setGoogleAutoSync] = useState(
-    localStorage.getItem("google_calendar_auto_sync") === "true"
-  );
+  const [googleVersion, setGoogleVersion] = useState(0);
 
   const [sharingFriends, setSharingFriends] = useState([]);
   const [friendListForShare, setFriendListForShare] = useState([]);
@@ -255,37 +279,9 @@ function CalendarPage() {
     setter(next);
   };
 
-  const googleLogin = useGoogleLogin({
-    scope: "https://www.googleapis.com/auth/calendar.events",
-    onSuccess: (tokenResponse) => {
-      const expiry = Date.now() + tokenResponse.expires_in * 1000;
-
-      localStorage.setItem("google_calendar_token", tokenResponse.access_token);
-      localStorage.setItem("google_calendar_token_expiry", String(expiry));
-
-      setGoogleConnected(true);
-      alert("구글 캘린더가 연결되었습니다!");
-    },
-    onError: () => {
-      alert("구글 캘린더 연결에 실패했습니다.");
-    },
-  });
-
-  const handleGoogleDisconnect = () => {
-    localStorage.removeItem("google_calendar_token");
-    localStorage.removeItem("google_calendar_token_expiry");
-    localStorage.removeItem("google_calendar_auto_sync");
-
-    setGoogleConnected(false);
-    setGoogleAutoSync(false);
-  };
-
-  const handleAutoSyncToggle = async () => {
-    const next = !googleAutoSync;
-    localStorage.setItem("google_calendar_auto_sync", String(next));
-    setGoogleAutoSync(next);
-
-    if (!next || !currentUser) return;
+  // 구글 캘린더 "자동 추가"를 켤 때 기존 일정 일괄 추가
+  const handleGoogleAutoSyncEnabled = async () => {
+    if (!currentUser) return;
 
     // 켤 때 기존 일정 일괄 추가
     try {
@@ -483,6 +479,55 @@ function CalendarPage() {
     });
   }, []);
 
+  const loadRoomTodos = useCallback(async () => {
+    if (!currentUser) return;
+    try {
+      const first = dateKey(year, month, 1);
+      const last = dateKey(year, month, new Date(year, month + 1, 0).getDate());
+      const list = (await getMyRoomTodos(last)).filter((t) => !t.assignees?.length || t.assignees.map(String).includes(String(currentUser.id)));
+      setRoomTodos(list);
+      setRoomTodoDoneRows(await getRoomTodoCompletions(list.map((t) => t.id), first, last));
+      const roomIds = [...new Set(list.map((t) => t.roomid))];
+      if (!roomIds.length) return;
+      const [{ data: rooms }, { data: members }] = await Promise.all([
+        supabase.from("rooms").select("id, roomname").in("id", roomIds),
+        supabase.from("room_members").select("roomid").in("roomid", roomIds),
+      ]);
+      const meta = {};
+      roomIds.forEach((id) => { meta[id] = { name: "", memberCount: 0 }; });
+      (rooms || []).forEach((r) => { meta[r.id].name = r.roomname || ""; });
+      (members || []).forEach((m) => { if (meta[m.roomid]) meta[m.roomid].memberCount += 1; });
+      setRoomMeta(meta);
+    } catch {
+      // 공동 할 일 테이블이 없거나 조회 실패여도 홈 캘린더는 그대로 동작
+    }
+  }, [currentUser, year, month]);
+
+  useEffect(() => { loadRoomTodos(); }, [loadRoomTodos]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    supabase
+      .from("room_members")
+      .select("roomid, rooms(roomname)")
+      .eq("userid", currentUser.id)
+      .then(({ data }) => {
+        setMyRooms((data || []).map((m) => ({ id: m.roomid, name: m.rooms?.roomname || "이름 없는 방" })));
+      });
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return undefined;
+    let timer = null;
+    const reload = () => { window.clearTimeout(timer); timer = window.setTimeout(loadRoomTodos, 150); };
+    const channel = supabase
+      .channel(`home-room-todos-${currentUser.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "room_todos" }, reload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "room_todo_completions" }, reload)
+      .subscribe();
+    return () => { window.clearTimeout(timer); supabase.removeChannel(channel); };
+  }, [currentUser, loadRoomTodos]);
+
   useEffect(() => {
     sessionStorage.setItem("calendar_current", JSON.stringify(current));
   }, [current]);
@@ -537,7 +582,7 @@ function CalendarPage() {
     };
 
     loadAndSyncGoogle();
-  }, [year, month, currentUser]);
+  }, [year, month, currentUser, googleVersion]);
 
   const scheduleMap = {};
 
@@ -555,20 +600,42 @@ function CalendarPage() {
     }
   });
 
+  const roomTodoMap = {};
+  const roomFirstKey = dateKey(year, month, 1);
+  const roomLastKey = dateKey(year, month, new Date(year, month + 1, 0).getDate());
+  roomTodos.forEach((t) => {
+    getEventDayKeys(t, roomFirstKey, roomLastKey).forEach((key) => {
+      if (!roomTodoMap[key]) roomTodoMap[key] = [];
+      roomTodoMap[key].push(t);
+    });
+  });
+  const roomTodoDoneIds = (t, key) => roomTodoDone
+    .filter((r) => r.todoid === t.id && r.occurrencedate === key)
+    .map((r) => String(r.userid))
+    .filter((id) => !t.assignees?.length || t.assignees.map(String).includes(id));
+  const roomTodoPool = (t) => t.assignees?.length || roomMeta[t.roomid]?.memberCount || 1;
+  const roomTodoNeeded = (t) => Math.max(1, Math.min(t.requiredcount ?? roomTodoPool(t), roomTodoPool(t)));
+
+  const handleRoomTodoToggle = async (t, key) => {
+    const done = roomTodoDoneIds(t, key).includes(String(currentUser.id));
+    try {
+      await setRoomTodoDone({ todoId: t.id, date: key, userId: currentUser.id, done: !done });
+      await loadRoomTodos();
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
   const personalMap = {};
 
+  const monthFirstKey = dateKey(year, month, 1);
+  const monthLastKey = dateKey(year, month, new Date(year, month + 1, 0).getDate());
+
   personalEvents.forEach((e) => {
-    const start = new Date(e.date + "T00:00:00");
-    const end = e.enddate ? new Date(e.enddate + "T00:00:00") : start;
-
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
-        d.getDate()
-      )}`;
-
+    getEventDayKeys(e, monthFirstKey, monthLastKey, { personal: true }).forEach((key) => {
       if (!personalMap[key]) personalMap[key] = [];
       personalMap[key].push(e);
-    }
+    });
   });
 
   const googleMap = {};
@@ -622,13 +689,17 @@ function CalendarPage() {
 
   const handleTodoCreate = async () => {
     if (!todoTitle.trim() || !currentUser) return;
+    if (!todoNoDeadline && todoReminder === "custom" && !(Number(todoCustomValue) > 0)) {
+      alert("알림 시간을 1 이상으로 입력하세요.");
+      return;
+    }
     try {
       const newTodo = await createTodo({
         userId: currentUser.id,
         title: todoTitle.trim(),
         duedate: todoDueDate || null,
         duetime: todoNoDeadline ? null : todoDueTime || null,
-        reminder: todoNoDeadline ? "none" : todoReminder,
+        reminder: todoNoDeadline ? "none" : buildTodoReminder(todoReminder, todoCustomValue, todoCustomUnit),
       });
       setTodos((prev) => [newTodo, ...prev]);
       setTodoTitle("");
@@ -636,6 +707,8 @@ function CalendarPage() {
       setTodoDueTime("");
       setTodoNoDeadline(false);
       setTodoReminder("none");
+      setTodoCustomValue("30");
+      setTodoCustomUnit("min");
       setShowTodoModal(false);
     } catch (e) {
       alert(e.message);
@@ -669,18 +742,26 @@ function CalendarPage() {
     setEditTodoTitle(todo.title);
     setEditTodoDueDate(todo.duedate || "");
     setEditTodoDueTime(todo.duetime || "");
-    setEditTodoReminder(todo.reminder || "none");
+    const parsed = parseTodoReminder(todo.reminder);
+    setEditTodoReminder(parsed.reminder);
+    setEditTodoCustomValue(parsed.value);
+    setEditTodoCustomUnit(parsed.unit);
     setEditTodoNoDeadline(!todo.duedate);
   };
 
   const handleTodoUpdate = async () => {
     if (!editTodoTitle.trim() || !editingTodo) return;
+    if (!editTodoNoDeadline && editTodoReminder === "custom" && !(Number(editTodoCustomValue) > 0)) {
+      alert("알림 시간을 1 이상으로 입력하세요.");
+      return;
+    }
+    const nextReminder = editTodoNoDeadline ? "none" : buildTodoReminder(editTodoReminder, editTodoCustomValue, editTodoCustomUnit);
     try {
       await updateTodo(editingTodo.id, {
         title: editTodoTitle.trim(),
         duedate: editTodoDueDate || null,
         duetime: editTodoNoDeadline ? null : editTodoDueTime || null,
-        reminder: editTodoNoDeadline ? "none" : editTodoReminder,
+        reminder: nextReminder,
       });
       setTodos((prev) =>
         prev.map((t) =>
@@ -690,7 +771,7 @@ function CalendarPage() {
                 title: editTodoTitle.trim(),
                 duedate: editTodoNoDeadline ? null : editTodoDueDate || null,
                 duetime: editTodoNoDeadline ? null : editTodoDueTime || null,
-                reminder: editTodoNoDeadline ? "none" : editTodoReminder,
+                reminder: nextReminder,
               }
             : t
         )
@@ -722,6 +803,8 @@ function CalendarPage() {
       customReminderUnit: "min",
       repeat: event.repeat || "none",
       memo: event.memo || "",
+      shareToRoom: Boolean(event.roomids?.length),
+      roomids: (event.roomids || []).map(String),
     });
 
     setShowForm(true);
@@ -740,6 +823,11 @@ function CalendarPage() {
 
     if (form.enddate && form.enddate < form.startdate) {
       alert("종료 날짜가 시작 날짜보다 앞일 수 없습니다.");
+      return;
+    }
+
+    if (form.shareToRoom && form.roomids.length === 0) {
+      alert("공유할 방을 선택하세요.");
       return;
     }
 
@@ -773,6 +861,10 @@ function CalendarPage() {
         repeat: form.repeat,
         memo: form.memo.trim() || null,
       };
+
+      // 공용 캘린더 공유: 토글을 켜면 선택한 방에 연결, 끄면 연결 해제 (컬럼을 쓰지 않는 일반 저장에는 포함하지 않음)
+      if (form.shareToRoom) payload.roomids = form.roomids.map(Number);
+      else if (editingEvent?.roomids?.length) payload.roomids = [];
 
       if (editingEvent) {
         await updatePersonalEvent(editingEvent.id, payload);
@@ -840,13 +932,15 @@ function CalendarPage() {
   const selectedGoogle = selectedKey ? googleMap[selectedKey] || [] : [];
   const selectedTodos = selectedKey ? todoMap[selectedKey] || [] : [];
   const selectedHoliday = selectedKey ? holidays[selectedKey] : null;
+  const selectedRoomTodos = selectedKey ? roomTodoMap[selectedKey] || [] : [];
 
   const hasSelectedContent =
     selectedHoliday ||
     selectedSchedules.length > 0 ||
     selectedPersonal.length > 0 ||
     selectedGoogle.length > 0 ||
-    selectedTodos.length > 0;
+    selectedTodos.length > 0 ||
+    selectedRoomTodos.length > 0;
 
   return (
     <div
@@ -927,19 +1021,21 @@ function CalendarPage() {
           </button>
         </div>
 
-        <button
-          onClick={handleOpenSidePanel}
-          style={{
-            border: "none",
-            background: "none",
-            fontSize: "22px",
-            cursor: "pointer",
-            color: "var(--secondary-text)",
-            lineHeight: 1,
-          }}
-        >
-          ⋮
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <button
+            onClick={handleOpenSidePanel}
+            style={{
+              border: "none",
+              background: "none",
+              fontSize: "22px",
+              cursor: "pointer",
+              color: "var(--secondary-text)",
+              lineHeight: 1,
+            }}
+          >
+            ⋮
+          </button>
+        </div>
       </div>
 
       {/* Weekday row */}
@@ -1048,63 +1144,67 @@ function CalendarPage() {
                     </p>
                   )}
 
+                  {/* 일정: 얇은 색 막대 (최대 3개) */}
                   <div
                     style={{
                       display: "flex",
+                      flexDirection: "column",
                       gap: "2px",
-                      marginTop: "2px",
-                      flexWrap: "wrap",
-                      justifyContent: "center",
+                      width: "100%",
+                      marginTop: "3px",
                     }}
                   >
-                    {daySchedules.slice(0, 1).map((_, si) => (
-                      <div
-                        key={`s${si}`}
-                        style={{
-                          width: "5px",
-                          height: "5px",
-                          borderRadius: "50%",
-                          backgroundColor: "#7c79ff",
-                        }}
-                      />
-                    ))}
-
-                    {dayPersonal.slice(0, 2).map((e, pi) => (
-                      <div
-                        key={`p${pi}`}
-                        style={{
-                          width: "5px",
-                          height: "5px",
-                          borderRadius: "50%",
-                          backgroundColor: e.color || "#7c79ff",
-                        }}
-                      />
-                    ))}
-
-                    {dayGoogle.slice(0, 1).map((_, gi) => (
-                      <div
-                        key={`g${gi}`}
-                        style={{
-                          width: "5px",
-                          height: "5px",
-                          borderRadius: "50%",
-                          backgroundColor: "#4285F4",
-                        }}
-                      />
-                    ))}
-
-                    {dayTodos.slice(0, 1).map((_, ti) => (
-                      <div
-                        key={`t${ti}`}
-                        style={{
-                          width: "5px",
-                          height: "5px",
-                          borderRadius: "50%",
-                          backgroundColor: TODO_COLOR,
-                        }}
-                      />
-                    ))}
+                    {[
+                      ...daySchedules.map((s2) => ({ id: `s${s2.id}`, color: "#7c79ff" })),
+                      ...dayPersonal.map((e, pi) => ({ id: `p${e.id ?? pi}`, color: e.color || "#7c79ff" })),
+                      ...dayGoogle.map((g) => ({ id: `g${g.id}`, color: "#4285F4" })),
+                    ]
+                      .slice(0, 3)
+                      .map((bar) => (
+                        <div
+                          key={bar.id}
+                          style={{
+                            width: "100%",
+                            height: "3px",
+                            borderRadius: "2px",
+                            backgroundColor: bar.color,
+                          }}
+                        />
+                      ))}
                   </div>
+
+                  {/* 할일: 점 (개인 할일은 채움, 방 공동 할 일은 테두리) */}
+                  {(dayTodos.length > 0 || (roomTodoMap[key] || []).length > 0) && (
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "3px",
+                        marginTop: "auto",
+                        paddingBottom: "2px",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {[
+                        ...dayTodos.map((t) => ({ id: `t${t.id}`, room: false })),
+                        ...(roomTodoMap[key] || []).map((t) => ({ id: `r${t.id}`, room: true })),
+                      ]
+                        .slice(0, 3)
+                        .map((dot) => (
+                          <div
+                            key={dot.id}
+                            style={{
+                              width: "5px",
+                              height: "5px",
+                              boxSizing: "border-box",
+                              borderRadius: "50%",
+                              ...(dot.room
+                                ? { border: `1.5px solid ${TODO_COLOR}` }
+                                : { backgroundColor: TODO_COLOR }),
+                            }}
+                          />
+                        ))}
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -1301,6 +1401,60 @@ function CalendarPage() {
               </span>
             </div>
           ))}
+
+          {selectedRoomTodos.map((t) => {
+            const done = roomTodoDoneIds(t, selectedKey);
+            const mineDone = done.includes(String(currentUser?.id));
+            const needed = roomTodoNeeded(t);
+            const complete = done.length >= needed;
+            return (
+              <div
+                key={`room-${t.id}`}
+                style={{ display: "flex", alignItems: "center", gap: "8px", margin: "6px 0 0" }}
+              >
+                <button
+                  onClick={() => handleRoomTodoToggle(t, selectedKey)}
+                  aria-label={mineDone ? "완료 취소" : "완료 체크"}
+                  style={{
+                    width: "20px",
+                    height: "20px",
+                    borderRadius: "50%",
+                    border: `2px solid ${TODO_COLOR}`,
+                    backgroundColor: mineDone ? TODO_COLOR : "transparent",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    padding: 0,
+                  }}
+                >
+                  {mineDone && <span style={{ color: "#fff", fontSize: "11px", lineHeight: 1 }}>✓</span>}
+                </button>
+                <span
+                  onClick={() => navigate(`/rooms/${t.roomid}?tab=calendar&date=${selectedKey}`)}
+                  style={{
+                    flex: 1,
+                    fontSize: "13px",
+                    color: complete ? "#bbb" : "#333",
+                    textDecoration: complete ? "line-through" : "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  <span style={{ marginRight: "5px", fontSize: "11px", color: TODO_COLOR }}>
+                    [{roomMeta[t.roomid]?.name || "방"}]
+                  </span>
+                  {t.title}
+                  {t.duetime && !complete && (
+                    <span style={{ marginLeft: "5px", fontSize: "11px", color: "#aaa" }}>{t.duetime.slice(0, 5)}</span>
+                  )}
+                  <span style={{ marginLeft: "5px", fontSize: "11px", color: "#aaa" }}>
+                    {done.length}/{needed}명
+                  </span>
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -1851,108 +2005,13 @@ function CalendarPage() {
 
             <hr style={{ margin: "0 0 20px" }} />
 
-            {/* 구글 캘린더 연동 */}
-            <p
-              style={{
-                margin: "0 0 10px",
-                fontSize: "14px",
-                fontWeight: "600",
-                color: "var(--text-color)",
-              }}
-            >
-              구글 캘린더 연동
-            </p>
-
-            {googleConnected ? (
-              <div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    marginBottom: "12px",
-                  }}
-                >
-                  <span style={{ fontSize: "14px", color: "#4CAF50" }}>
-                    ✓ 연결됨
-                  </span>
-
-                  <button
-                    onClick={handleGoogleDisconnect}
-                    style={{
-                      fontSize: "13px",
-                      color: "#f44",
-                      border: "1px solid #f44",
-                      background: "none",
-                      borderRadius: "8px",
-                      padding: "4px 12px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    연결 해제
-                  </button>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    marginBottom: "6px",
-                  }}
-                >
-                  <span style={{ fontSize: "14px", color: "var(--text-color)" }}>
-                    확정 일정 자동 추가
-                  </span>
-
-                  <div
-                    onClick={handleAutoSyncToggle}
-                    style={{
-                      width: "44px",
-                      height: "24px",
-                      borderRadius: "12px",
-                      cursor: "pointer",
-                      backgroundColor: googleAutoSync ? "#7c79ff" : "var(--btn-bg)",
-                      position: "relative",
-                      transition: "background-color 0.2s",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "20px",
-                        height: "20px",
-                        borderRadius: "50%",
-                        backgroundColor: "var(--toggle-thumb-bg, var(--text-color))",
-                        position: "absolute",
-                        top: "2px",
-                        left: googleAutoSync ? "22px" : "2px",
-                        transition: "left 0.2s",
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <p style={{ fontSize: "11px", color: "var(--secondary-text)", margin: 0 }}>
-                  켜면 캘린더에 등록한 일정이 구글 캘린더에 자동으로 추가됩니다
-                </p>
-              </div>
-            ) : (
-              <button
-                onClick={() => googleLogin()}
-                style={{
-                  fontSize: "14px",
-                  color: "#fff",
-                  backgroundColor: "#4285F4",
-                  border: "none",
-                  borderRadius: "8px",
-                  padding: "8px 16px",
-                  cursor: "pointer",
-                }}
-              >
-                Google 캘린더 연결
-              </button>
-            )}
+            <GoogleCalendarControl
+              panel
+              onChange={() => setGoogleVersion((v) => v + 1)}
+              onAutoSyncEnabled={handleGoogleAutoSyncEnabled}
+              autoSyncLabel="확정 일정 자동 추가"
+              connectedHint="내 구글 캘린더 일정이 캘린더에 표시돼요."
+            />
           </div>
         </>
       )}
@@ -2178,7 +2237,7 @@ function CalendarPage() {
             {/* 알림 */}
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
               <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--secondary-text)", whiteSpace: "nowrap" }}>알림</span>
-              <select
+              <select className="select-inset"
                 value={todoReminder}
                 onChange={(e) => setTodoReminder(e.target.value)}
                 style={{
@@ -2197,8 +2256,33 @@ function CalendarPage() {
                 <option value="10">10분 전</option>
                 <option value="60">1시간 전</option>
                 <option value="1440">1일 전</option>
+                <option value="custom">직접 설정</option>
               </select>
             </div>
+
+            {todoReminder === "custom" && (
+              <div style={{ display: "flex", gap: "8px", margin: "-8px 0 16px" }}>
+                <input
+                  type="number"
+                  min="1"
+                  aria-label="알림 시간"
+                  value={todoCustomValue}
+                  onChange={(e) => setTodoCustomValue(e.target.value)}
+                  style={{ flex: 1, minWidth: 0, padding: "9px 10px", fontSize: "14px", border: "1px solid var(--border-color)", borderRadius: "8px", outline: "none", backgroundColor: "var(--input-bg)", color: "var(--text-color)" }}
+                />
+                <select
+                  className="select-inset"
+                  aria-label="알림 단위"
+                  value={todoCustomUnit}
+                  onChange={(e) => setTodoCustomUnit(e.target.value)}
+                  style={{ flex: 1, minWidth: 0, padding: "9px 10px", fontSize: "14px", border: "1px solid var(--border-color)", borderRadius: "8px", outline: "none", backgroundColor: "var(--input-bg)", color: "var(--text-color)" }}
+                >
+                  <option value="min">분 전</option>
+                  <option value="hour">시간 전</option>
+                  <option value="day">일 전</option>
+                </select>
+              </div>
+            )}
 
             {/* 추가 버튼 */}
             <button
@@ -2267,14 +2351,39 @@ function CalendarPage() {
 
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
               <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--secondary-text)", whiteSpace: "nowrap" }}>알림</span>
-              <select value={editTodoReminder} onChange={(e) => setEditTodoReminder(e.target.value)} style={{ flex: 1, padding: "9px 10px", fontSize: "14px", border: "1px solid var(--border-color)", borderRadius: "8px", outline: "none", backgroundColor: "var(--input-bg)", color: "var(--text-color)" }}>
+              <select className="select-inset" value={editTodoReminder} onChange={(e) => setEditTodoReminder(e.target.value)} style={{ flex: 1, padding: "9px 10px", fontSize: "14px", border: "1px solid var(--border-color)", borderRadius: "8px", outline: "none", backgroundColor: "var(--input-bg)", color: "var(--text-color)" }}>
                 <option value="none">알림 없음</option>
                 <option value="0">마감 정시</option>
                 <option value="10">10분 전</option>
                 <option value="60">1시간 전</option>
                 <option value="1440">1일 전</option>
+                <option value="custom">직접 설정</option>
               </select>
             </div>
+
+            {editTodoReminder === "custom" && (
+              <div style={{ display: "flex", gap: "8px", margin: "-8px 0 16px" }}>
+                <input
+                  type="number"
+                  min="1"
+                  aria-label="알림 시간"
+                  value={editTodoCustomValue}
+                  onChange={(e) => setEditTodoCustomValue(e.target.value)}
+                  style={{ flex: 1, minWidth: 0, padding: "9px 10px", fontSize: "14px", border: "1px solid var(--border-color)", borderRadius: "8px", outline: "none", backgroundColor: "var(--input-bg)", color: "var(--text-color)" }}
+                />
+                <select
+                  className="select-inset"
+                  aria-label="알림 단위"
+                  value={editTodoCustomUnit}
+                  onChange={(e) => setEditTodoCustomUnit(e.target.value)}
+                  style={{ flex: 1, minWidth: 0, padding: "9px 10px", fontSize: "14px", border: "1px solid var(--border-color)", borderRadius: "8px", outline: "none", backgroundColor: "var(--input-bg)", color: "var(--text-color)" }}
+                >
+                  <option value="min">분 전</option>
+                  <option value="hour">시간 전</option>
+                  <option value="day">일 전</option>
+                </select>
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: "8px" }}>
               <button
@@ -2342,8 +2451,22 @@ function CalendarPage() {
             </div>
 
             {/* 제목 */}
+            <label
+              htmlFor="home-event-title"
+              style={{
+                display: "block",
+                margin: "0 0 8px",
+                fontSize: "12px",
+                fontWeight: 800,
+                color: "var(--secondary-text)",
+              }}
+            >
+              제목
+            </label>
             <input
-              placeholder="제목"
+              id="home-event-title"
+              placeholder="일정 제목"
+              maxLength={120}
               value={form.title}
               onChange={(e) =>
                 setForm((f) => ({
@@ -2353,17 +2476,91 @@ function CalendarPage() {
               }
               style={{
                 width: "100%",
-                padding: "12px",
-                fontSize: "16px",
-                border: "none",
-                borderBottom: `2px solid ${form.color}`,
+                padding: "11px 12px",
+                fontSize: "13px",
+                border: "1px solid var(--border-color)",
+                borderRadius: "11px",
                 outline: "none",
                 boxSizing: "border-box",
                 marginBottom: "16px",
-                backgroundColor: "transparent",
+                backgroundColor: "var(--card-bg)",
                 color: "var(--text-color)",
               }}
             />
+
+            {/* 공용 캘린더 공개 (방 폼과 같은 디자인) */}
+            <div style={{ marginBottom: "16px" }}>
+              <div className="room-form-share" style={{ margin: 0, color: "var(--text-color)" }}>
+                <span>공용 캘린더 공개</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.shareToRoom}
+                  aria-label="공용 캘린더 공개"
+                  disabled={myRooms.length === 0}
+                  className={`room-tool-switch ${form.shareToRoom ? "on" : ""}`}
+                  style={myRooms.length === 0 ? { opacity: 0.4, cursor: "not-allowed" } : undefined}
+                  onClick={() =>
+                    setForm((f) => ({
+                      ...f,
+                      shareToRoom: !f.shareToRoom,
+                      roomids: !f.shareToRoom ? (f.roomids.length ? f.roomids : [String(myRooms[0].id)]) : f.roomids,
+                    }))
+                  }
+                >
+                  <i />
+                </button>
+              </div>
+
+              {myRooms.length === 0 && (
+                <p style={{ margin: "6px 0 0", fontSize: "12px", color: "var(--secondary-text)" }}>
+                  참여 중인 방이 없어서 공유할 수 없어요.
+                </p>
+              )}
+
+              {form.shareToRoom && myRooms.length > 0 && (
+                <>
+                  {myRooms.length > 1 && (
+                    <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                      {myRooms.map((r) => {
+                        const checked = form.roomids.includes(String(r.id));
+                        return (
+                          <label
+                            key={r.id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              fontSize: "14px",
+                              color: "var(--text-color)",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() =>
+                                setForm((f) => ({
+                                  ...f,
+                                  roomids: checked
+                                    ? f.roomids.filter((id) => id !== String(r.id))
+                                    : [...f.roomids, String(r.id)],
+                                }))
+                              }
+                            />
+                            {r.name}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <p style={{ margin: "6px 0 0", fontSize: "12px", color: "var(--secondary-text)" }}>
+                    {myRooms.length === 1 ? `${myRooms[0].name} 방의 ` : "선택한 방들의 "}
+                    팀원에게 보이고, 알림과 반복이 팀원 모두에게 적용돼요.
+                  </p>
+                </>
+              )}
+            </div>
 
             {/* 색상 */}
             <div style={{ marginBottom: "16px" }}>
@@ -2633,7 +2830,7 @@ function CalendarPage() {
                 알림
               </p>
 
-              <select
+              <select className="select-inset"
                 value={form.reminder}
                 onChange={(e) =>
                   setForm((f) => ({
@@ -2681,7 +2878,7 @@ function CalendarPage() {
                     }}
                   />
 
-                  <select
+                  <select className="select-inset"
                     value={form.customReminderUnit}
                     onChange={(e) =>
                       setForm((f) => ({
@@ -2838,7 +3035,7 @@ function CalendarPage() {
                 반복
               </p>
 
-              <select
+              <select className="select-inset"
                 value={form.repeat}
                 onChange={(e) =>
                   setForm((f) => ({
@@ -2894,41 +3091,27 @@ function CalendarPage() {
               />
             </div>
 
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              style={{
-                width: "100%",
-                padding: "14px",
-                backgroundColor: form.color,
-                color: "#fff",
-                border: "none",
-                borderRadius: "12px",
-                fontSize: "16px",
-                cursor: "pointer",
-                marginBottom: "8px",
-              }}
-            >
-              {saving ? "저장 중..." : "저장"}
-            </button>
+            {/* 저장/삭제 (공용 캘린더 폼과 같은 버튼) */}
+            <div className="room-form-actions">
+              {editingEvent && (
+                <button
+                  type="button"
+                  className="calendar-collection-button"
+                  onClick={() => handleDelete(editingEvent.id)}
+                >
+                  삭제
+                </button>
+              )}
 
-            {editingEvent && (
               <button
-                onClick={() => handleDelete(editingEvent.id)}
-                style={{
-                  width: "100%",
-                  padding: "12px",
-                  backgroundColor: "var(--bg-color)",
-                  color: "#f44",
-                  border: "1px solid #f44",
-                  borderRadius: "12px",
-                  fontSize: "15px",
-                  cursor: "pointer",
-                }}
+                type="button"
+                className="diary-publish-button"
+                onClick={handleSave}
+                disabled={saving}
               >
-                삭제
+                {saving ? "저장 중..." : "저장"}
               </button>
-            )}
+            </div>
           </div>
         </div>
       )}

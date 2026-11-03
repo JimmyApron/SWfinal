@@ -4,7 +4,8 @@ import { connectRoomDriveBackup, getRoomDriveBackup, setRoomDriveBackup } from '
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 
-export default function RoomDriveBackupControl({ roomId, canBackup = true, checkingMembership = false }) {
+export default function RoomDriveBackupControl({ roomId, canBackup = true, checkingMembership = false, compact = false }) {
+  const [open, setOpen] = useState(false)
   const [status, setStatus] = useState(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -87,7 +88,7 @@ export default function RoomDriveBackupControl({ roomId, canBackup = true, check
     googleLogin()
   }
 
-  return <div className="room-drive-backup">
+  const card = <div className="room-drive-backup">
     <div className="room-drive-backup-main">
       <div><strong>내 기록 Google Drive 백업</strong><span>이 방의 내 기록과 사진을 Google 내 드라이브에 백업합니다.</span></div>
       <button type="button" role="switch" aria-label="내 기록 Google Drive 백업" aria-checked={Boolean(status?.enabled)}
@@ -100,5 +101,15 @@ export default function RoomDriveBackupControl({ roomId, canBackup = true, check
       ? `마지막 백업: ${new Date(status.lastSyncedAt).toLocaleString('ko-KR')}` : '첫 백업 대기 중...')}</small>}
     {((status?.error && status?.connected) || (status?.enabled && !status?.connected)) && <button type="button" className="room-drive-backup-reconnect" disabled={busy} onClick={reconnect}>Google 다시 연결</button>}
     {message && <small className="room-drive-backup-error" role="alert">{message}</small>}
+  </div>
+  if (!compact) return card
+  return <div className="room-tool">
+    <button type="button" className={`room-tool-button ${status?.enabled ? 'on' : ''}`} aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+      백업{status?.enabled ? ' ON' : ''}{status?.error ? ' ⚠' : ''}
+    </button>
+    {open && <>
+      <div className="room-tool-backdrop" onClick={() => setOpen(false)} />
+      <div className="room-tool-popover" role="dialog" aria-label="내 기록 Google Drive 백업">{card}</div>
+    </>}
   </div>
 }

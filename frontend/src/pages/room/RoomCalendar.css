@@ -342,3 +342,133 @@
 .lightning-member-avatar img { width: 100%; height: 100%; object-fit: cover; }
 
 .lightning-field-error { margin: -3px 0 2px; color: #d8343c; font-size: 12px; line-height: 1.4; }
+
+/* 공용 / 일기 캘린더 전환 */
+.room-calendar-view-toggle { display: flex; gap: 4px; margin: 0 0 10px; padding: 3px; border-radius: 12px; background: #f0efff; }
+.room-calendar-view-toggle button { flex: 1; padding: 8px 0; border: 0; border-radius: 10px; background: transparent; color: #7a78a8; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.room-calendar-view-toggle button.active { background: #fff; color: #625fe8; box-shadow: 0 1px 4px rgba(32, 32, 65, .1); }
+.room-calendar-holiday { max-width: 100%; overflow: hidden; color: #f44; font-size: 8px; line-height: 1.1; white-space: nowrap; text-overflow: ellipsis; }
+.room-calendar-dots { display: flex; gap: 2px; justify-content: center; margin-top: auto; }
+.room-calendar-dots i { width: 5px; height: 5px; border-radius: 50%; }
+.room-shared-holiday { margin: 6px 0 0; font-size: 13px; }
+.room-shared-event { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; padding: 9px 11px; position: relative; overflow: hidden; padding-left: 15px; border-radius: 10px; background: #f8f8fc; font-size: 12px; color: #6b6a7c; }
+.room-shared-event strong { color: #26253a; font-size: 13px; }
+.room-shared-event em { color: var(--event-color); font-style: normal; font-weight: 700; }
+.room-shared-event.mine { cursor: pointer; }
+.room-event-colors { display: flex; gap: 8px; margin: 10px 0; }
+.room-event-colors button { width: 24px; height: 24px; border: 2px solid transparent; border-radius: 50%; cursor: pointer; }
+.room-event-colors button.selected { border-color: #26253a; }
+.room-event-allday { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 13px; }
+.room-member-legend { flex-wrap: wrap; row-gap: 6px; }
+.room-member-legend button { display: inline-flex; align-items: center; gap: 3px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.room-member-legend button.hidden-member { opacity: .35; text-decoration: line-through; }
+.room-event-color-hint { display: flex; align-items: center; gap: 6px; margin: 10px 0; font-size: 12px; color: #6b6a7c; }
+.room-event-color-hint i { width: 12px; height: 12px; border-radius: 50%; }
+.room-member-legend .room-color-edit { margin-left: auto; color: #625fe8; font-weight: 700; }
+.room-color-picker { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 0; }
+.room-color-picker button { width: 26px; height: 26px; border: 2px solid transparent; border-radius: 50%; cursor: pointer; }
+.room-color-picker button.selected { border-color: #26253a; }
+.room-color-picker button:disabled { opacity: .25; cursor: not-allowed; }
+.room-color-picker p { flex-basis: 100%; margin: 0; font-size: 11px; color: #9694a4; }
+
+/* 공동 할 일 */
+.room-shared-actions { display: flex; gap: 6px; }
+.room-shared-actions button { padding: 8px 10px; font-size: 12px; }
+.room-todo-dot { width: 7px !important; height: 7px !important; box-sizing: border-box; border: 1.5px solid #1ABC9C; border-radius: 50%; background: transparent; }
+.room-todo-dot.done { background: #1ABC9C; }
+.room-todo-item { display: flex; align-items: flex-start; gap: 10px; margin-top: 8px; padding: 9px 11px; position: relative; overflow: hidden; padding-left: 15px; border-radius: 10px; background: #f3fbf9; }
+.room-todo-item.complete .room-todo-body strong { color: #9aa0b4; text-decoration: line-through; }
+.room-todo-check { flex: none; width: 22px; height: 22px; padding: 0; border: 2px solid #1ABC9C; border-radius: 50%; background: #fff; color: #fff; font-size: 12px; line-height: 1; cursor: pointer; }
+.room-todo-check.checked { background: #1ABC9C; }
+.room-todo-body { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; font-size: 12px; color: #6b6a7c; }
+.room-todo-body strong { color: #26253a; font-size: 13px; }
+.room-todo-body small { color: #9aa0b4; font-weight: 500; }
+.room-todo-edit { flex: none; border: 0; background: transparent; color: #625fe8; font-size: 12px; font-weight: 700; cursor: pointer; }
+.room-todo-required { margin: 10px 0 0; padding: 8px 10px; border: 1px solid #ececf2; border-radius: 12px; font-size: 13px; }
+.room-todo-required label { display: flex; align-items: center; gap: 6px; padding: 4px 0; }
+.room-todo-required input[type="number"] { width: 52px; }
+
+/* 알림·반복 드롭다운: 기본 화살표가 끝에 붙어 보여서 안쪽으로 띄운 화살표를 사용 */
+.room-form-select { appearance: none; -webkit-appearance: none; padding-right: 36px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%239694a4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; background-size: 12px 8px; cursor: pointer; }
+.room-shared-event::before, .room-todo-item::before { position: absolute; top: 0; bottom: 0; left: 0; width: 4px; background: var(--event-color, #1ABC9C); content: ""; }
+
+/* 월 이동 줄 오른쪽 끝 도구 버튼 (공용: 구글 캘린더 / 일기: 드라이브 백업) */
+.room-calendar-month-row { position: relative; }
+.room-tool { position: absolute; top: 50%; right: 0; z-index: 30; transform: translateY(-50%); }
+.room-tool-button { display: inline-flex; height: 26px; align-items: center; gap: 3px; padding: 0 8px; border: 1px solid #e7e5f4; border-radius: 9px; background: #fff; color: #7a78a8; font: inherit; font-size: 11px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.room-tool-button.on { border-color: #cfcdff; background: #efeeff; color: #625fe8; }
+.room-tool-backdrop { position: fixed; inset: 0; z-index: 29; }
+.room-tool-popover { position: absolute; top: calc(100% + 6px); right: 0; z-index: 31; display: flex; width: 250px; box-sizing: border-box; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid #e7e5f4; border-radius: 13px; background: #fff; box-shadow: 0 8px 24px rgba(32, 32, 65, .13); transform: none; font-size: 12px; color: #6b6a7c; }
+.room-tool-popover > strong { color: #26253a; font-size: 13px; }
+.room-tool-popover small { color: #858393; font-size: 11px; }
+.room-tool-popover .room-drive-backup { margin: 0; }
+.room-tool-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.room-tool-switch { position: relative; width: 40px; height: 22px; flex: none; padding: 0; border: 0; border-radius: 99px; background: #cbcbd6; cursor: pointer; }
+.room-tool-switch.on { background: #7c79ff; }
+.room-tool-switch i { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.14); transition: transform .18s; }
+.room-tool-switch.on i { transform: translateX(18px); }
+.room-tool-primary { padding: 9px; border: 0; border-radius: 10px; background: #7c79ff; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.room-tool-danger { align-self: flex-start; padding: 5px 10px; border: 1px solid #f44; border-radius: 8px; background: transparent; color: #f44; font: inherit; font-size: 11px; cursor: pointer; }
+
+/* 공용/일기 전환 토글을 상단 헤더 구분선 바로 아래로 */
+.room-calendar-page { padding-top: 0; }
+.room-calendar-card { padding-top: 6px; }
+.room-calendar-view-toggle { margin-top: 0; }
+
+/* 홈 캘린더 헤더처럼 절대 위치가 아닌 곳에 놓는 구글 연동 버튼 */
+.room-tool.inline { position: relative; top: auto; right: auto; transform: none; }
+.room-tool.inline .room-tool-button { background: var(--card-bg, #fff); border-color: var(--border-color, #e7e5f4); }
+.room-tool.inline .room-tool-button.on { background: #efeeff; border-color: #cfcdff; }
+.room-tool.inline .room-tool-popover { background: var(--card-bg, #fff); }
+.room-tool.inline .room-tool-popover > strong { color: var(--text-color, #26253a); }
+
+/* 사이드 패널 안: 버튼 아래로 펼쳐지는 구글 동기화 */
+.room-tool.panel { position: static; transform: none; }
+.room-tool.panel .room-tool-button { width: 100%; height: 38px; justify-content: center; font-size: 13px; }
+.room-tool.panel .room-tool-popover { position: static; width: auto; margin-top: 8px; box-shadow: none; background: transparent; padding: 4px 2px; border: 0; }
+
+/* 인라인 스타일을 쓰는 select 도 화살표를 안쪽으로 (홈 캘린더 등) */
+select.select-inset { appearance: none !important; -webkit-appearance: none !important; padding-right: 36px !important; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%239694a4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important; background-repeat: no-repeat !important; background-position: right 14px center !important; background-size: 12px 8px !important; cursor: pointer; }
+
+/* 방 폼: 공개 토글, 저장/삭제 버튼 오른쪽 정렬 */
+.room-form-share { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0 0; font-size: 13px; font-weight: 700; color: #26253a; }
+.room-form-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 14px; }
+.room-form-actions .diary-publish-button { width: auto; margin: 0; padding-right: 26px; padding-left: 26px; }
+.room-form-actions .calendar-collection-button { margin: 0; }
+
+/* 공동 할 일 폼: 날짜/시간 줄 간격, 담당자 지정 */
+.room-todo-times { margin-top: 14px; }
+.room-todo-assignees { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e7e5f4; }
+.room-todo-assignees > span { font-size: 12px; font-weight: 800; color: #4d4b5c; }
+.room-todo-assignees small { font-weight: 500; color: #9694a4; }
+.room-todo-check:disabled { opacity: .35; cursor: not-allowed; }
+
+.room-reminder-custom { display: flex; gap: 8px; margin-top: 8px; }
+.room-reminder-custom > * { flex: 1; min-width: 0; }
+
+/* 메모란: 홈 캘린더와 같은 3줄 입력칸 */
+.room-memo-textarea { display: block; resize: none; line-height: 1.5; }
+
+.room-form-allday { display: flex; align-items: center; gap: 10px; margin: 12px 0 4px; font-size: 13px; font-weight: 700; color: #26253a; }
+
+/* 폼 하단 삭제/저장 버튼을 같은 크기로 */
+.room-form-actions .calendar-collection-button, .room-form-actions .diary-publish-button { box-sizing: border-box; min-width: 76px; height: 40px; margin: 0; padding: 0 18px; border-radius: 12px; font-size: 14px; font-weight: 700; line-height: 1; }
+.room-form-actions .calendar-collection-button, .room-form-actions .diary-publish-button { min-width: 0; height: 32px; padding: 0 14px; border-radius: 10px; font-size: 12px; }
+.room-form-actions .calendar-collection-button, .room-form-actions .diary-publish-button { min-height: 0; min-width: 56px; height: 32px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; border-width: 1px; border-style: solid; }
+
+/* 공용 캘린더: 날짜 칸 안에 일정 이름을 바로 표시 */
+.room-calendar-days.is-shared .room-calendar-day-wrap { aspect-ratio: auto; min-height: 84px; }
+.room-calendar-days.is-shared .room-calendar-day { height: 100%; min-height: 84px; aspect-ratio: auto; align-items: stretch; gap: 2px; padding: 3px 2px; }
+.room-calendar-days.is-shared .room-calendar-day-number { align-self: center; flex: none; }
+.room-calendar-days.is-shared .room-calendar-holiday { text-align: center; }
+.room-calendar-chips { display: flex; width: 100%; min-width: 0; flex-direction: column; gap: 2px; }
+.room-calendar-chip { display: block; width: 100%; min-width: 0; box-sizing: border-box; padding: 1px 3px; overflow: hidden; border-radius: 4px; color: #fff; font-size: 9px; font-weight: 700; line-height: 1.3; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.room-calendar-chip.done { opacity: .5; text-decoration: line-through; }
+.room-calendar-chip-more { color: #7a78a8; font-size: 9px; font-weight: 700; line-height: 1.2; text-align: center; }
+
+/* 공용 캘린더 날짜 칸: 일정은 글자 없는 얇은 막대, 할 일은 점 */
+.room-calendar-days.is-shared .room-calendar-day-wrap { min-height: 66px; }
+.room-calendar-days.is-shared .room-calendar-day { min-height: 66px; }
+.room-calendar-chips { gap: 2px; padding-top: 2px; }
+.room-calendar-chip { height: 3px; padding: 0; border-radius: 2px; font-size: 0; line-height: 0; }
+.room-calendar-days.is-shared .room-calendar-dots { margin-top: auto; padding-bottom: 2px; }
