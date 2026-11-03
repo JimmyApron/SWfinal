@@ -13,6 +13,7 @@ import RoomGoogleCalendarControl from "../../components/GoogleCalendarControl";
 import { fetchGoogleCalendarEvents } from "../calendar/CalendarPage";
 import { addEventToGoogleCalendar } from "../../api/googleCalendarApi";
 import "./RoomCalendar.css";
+import { isMeetingVisibleInSharedCalendar } from "../../utils/meetingCalendarVisibility";
 import { getMeetingMembers } from "../../utils/meetingParticipants";
 
 // 색은 일정이 아니라 사람에게 붙인다. 방 약속(#7c79ff)·개인 일정(회색)과 겹치지 않는 팀원 전용 팔레트
@@ -229,6 +230,7 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
     return Array.from({ length: weekCount * 7 }, (_, index) => new Date(first.getFullYear(), first.getMonth(), index - offset + 1));
   }, [month]);
   const selectedMeetings = meetingGroups[selectedDate] || [];
+  const selectedSharedMeetings = selectedMeetings.filter(isMeetingVisibleInSharedCalendar);
   const selectedDateHasLightning = selectedMeetings.some((meeting) => meeting.source_type === "lightning" && meeting.lifecycle_status !== "cancelled");
   const activeMeetingIndex = selectedMeetings.length ? selectedMeetingIndex % selectedMeetings.length : 0;
   const activeMeeting = selectedMeetings[activeMeetingIndex];
@@ -657,7 +659,7 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
             const dayEvents = eventsByDate[key] || [];
             const dayTodos = todosByDate[key] || [];
             const holiday = holidays[key];
-            const activeMeetings = dayMeetings.filter((meeting) => meeting.lifecycle_status !== "cancelled");
+            const activeMeetings = dayMeetings.filter(isMeetingVisibleInSharedCalendar);
             const hasRoomMeeting = activeMeetings.length > 0;
             // 일정은 날짜 칸에 얇은 색 막대로 바로 표시하고, 공동 할 일은 점으로 표시한다 (이름은 날짜를 눌러 확인)
             const chips = [
@@ -716,7 +718,7 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
         />
         <header className="calendar-selected-heading"><h2>{selectedDateLabel}</h2><div className="room-shared-actions"><button type="button" className="calendar-collection-button" disabled={!authUserId} onClick={() => openTodoForm()}>＋ 공동 할 일</button><button type="button" className="calendar-lightning-button" disabled={!authUserId} onClick={() => openEventForm()}>＋ 팀원 일정</button></div></header>
         {selectedHoliday && <p className="room-shared-holiday" style={{ color: selectedHoliday.public ? "#f44" : "#f90" }}>{selectedHoliday.public ? "🎌" : "📅"} {selectedHoliday.name}</p>}
-        {selectedMeetings.filter((meeting) => meeting.lifecycle_status !== "cancelled").map((meeting) => <div className="room-shared-event" key={meeting.id} style={{ "--event-color": "#7c79ff" }}>
+        {selectedSharedMeetings.map((meeting) => <div className="room-shared-event" key={meeting.id} style={{ "--event-color": "#7c79ff" }}>
           <strong>📌 {meeting.title || (meeting.source_type === "lightning" ? "번개 만남" : "확정 일정")}</strong>
           <span>{meeting.start_time ? meeting.start_time.slice(0, 5) : "하루종일"}{meeting.location ? ` · ${meeting.location}` : ""}</span>
         </div>)}
@@ -750,7 +752,7 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
             {authUserId && <button type="button" className="room-todo-edit" onClick={() => openTodoForm(todo)}>수정</button>}
           </div>;
         })}
-        {!selectedHoliday && selectedEvents.length === 0 && selectedMeetings.length === 0 && selectedTodos.length === 0 && selectedGoogleEvents.length === 0 && <div className="calendar-empty-meeting"><p>등록된 일정이 없습니다.</p></div>}
+        {!selectedHoliday && selectedEvents.length === 0 && selectedSharedMeetings.length === 0 && selectedTodos.length === 0 && selectedGoogleEvents.length === 0 && <div className="calendar-empty-meeting"><p>등록된 일정이 없습니다.</p></div>}
       </section>}
       {selectedDate && view === "diary" && <section
         className={`calendar-selected-section ${showEmptyDayPrompt ? "has-empty-day-prompt" : ""} ${isSheetDragging ? "is-dragging" : ""} ${isSheetDismissing ? "is-dismissing" : ""}`}

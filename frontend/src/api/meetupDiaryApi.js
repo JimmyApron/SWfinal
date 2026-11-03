@@ -32,7 +32,7 @@ export async function getRoomMeetings(roomId, firstDay, lastDay) {
   for (let from = 0; ; from += pageSize) {
     let query = supabase
       .from("room_meetings")
-      .select("id, source_type, source_schedule_id, title, meeting_date, start_time, end_time, is_all_day, location, location_address, lifecycle_status, attendance_status, created_at")
+      .select("id, source_type, source_schedule_id, title, meeting_date, start_time, end_time, is_all_day, location, location_address, lifecycle_status, attendance_status, created_at, updated_at")
       .eq("room_id", Number(roomId))
       .order("meeting_date")
       .order("created_at")
