@@ -1227,6 +1227,30 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
               >
                 + 날짜 추가
               </button>
+              <button
+                type="button"
+                onClick={() => navigate("/settings/timetable")}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "4px",
+                  marginLeft: "auto",
+                  minHeight: "28px",
+                  padding: "0 10px",
+                  border: "1px solid #7c5cff",
+                  borderRadius: "999px",
+                  background: "var(--card-bg)",
+                  color: "#7c5cff",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  whiteSpace: "nowrap",
+                  cursor: "pointer",
+                }}
+              >
+                <FiClock aria-hidden="true" />
+                고정 시간표
+              </button>
             </div>
 
             <div
