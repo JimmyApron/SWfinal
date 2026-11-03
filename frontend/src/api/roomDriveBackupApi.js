@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabaseClient'
 import { getApiBaseUrl } from './apiBaseUrl'
+import { readApiJson } from './apiResponse'
 
 async function request(path, options = {}) {
   const { data: { session }, error } = await supabase.auth.getSession()
@@ -8,12 +9,11 @@ async function request(path, options = {}) {
     ...options,
     headers: {
       Authorization: `Bearer ${session.access_token}`,
+      Accept: 'application/json',
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
     },
   })
-  const result = await response.json()
-  if (!response.ok) throw new Error(result.message || 'Drive 백업 요청에 실패했습니다.')
-  return result
+  return readApiJson(response, 'Drive 백업 요청에 실패했습니다.')
 }
 
 export const getRoomDriveBackup = (roomId) => request(`/rooms/${roomId}`)

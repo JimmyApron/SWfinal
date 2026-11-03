@@ -49,7 +49,13 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
   const [confirmedSchedules, setConfirmedSchedules] = useState([]);
   const [fixedConflictScheduleIds, setFixedConflictScheduleIds] = useState(new Set());
   const [additionalLocations, setAdditionalLocations] = useState([]);
+  const [showConfirmedForm, setShowConfirmedForm] = useState(false);
   const [showAddMethodSheet, setShowAddMethodSheet] = useState(false);
+  const [confirmedTitle, setConfirmedTitle] = useState("");
+  const [confirmedDate, setConfirmedDate] = useState("");
+  const [confirmedStartTime, setConfirmedStartTime] = useState("");
+  const [confirmedEndTime, setConfirmedEndTime] = useState("");
+  const [confirmedIsAllDay, setConfirmedIsAllDay] = useState(false);
   const [candidateViewMode, setCandidateViewMode] = useState("timetable"); // "timetable" | "calendar"
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
@@ -491,6 +497,54 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
     }
   };
 
+  const handleAddConfirmedSchedule = async () => {
+    if (!confirmedTitle.trim()) { alert("일정 제목을 입력하세요."); return; }
+    if (!confirmedDate) { alert("날짜를 선택하세요."); return; }
+    if (confirmedDate < getTodayStr()) { alert("과거 날짜는 선택할 수 없습니다."); return; }
+    if (!confirmedIsAllDay && (!confirmedStartTime || !confirmedEndTime)) { alert("시작 시간과 종료 시간을 선택하세요."); return; }
+    if (!confirmedIsAllDay && confirmedStartTime >= confirmedEndTime) { alert("시작 시간은 종료 시간보다 빨라야 합니다."); return; }
+
+    const { data: confirmedSchedule, error } = await supabase.from("confirmed_schedules").insert([{
+      roomid: Number(roomId),
+      title: confirmedTitle.trim(),
+      date: confirmedDate,
+      starttime: confirmedIsAllDay ? null : confirmedStartTime,
+      endtime: confirmedIsAllDay ? null : confirmedEndTime,
+      isallday: confirmedIsAllDay,
+    }]).select("id").single();
+
+    if (error) { alert("확정 일정 추가 실패"); return; }
+
+    // 📢 확정 일정 추가 알림 전송
+    try {
+      const scheduleTitle = `'${confirmedTitle.trim()}' `;
+      const scheduleMessage = `[${roomName}] 방에 ${scheduleTitle}일정이 확정되었습니다.`;
+      const notificationLink = `/rooms/${roomId}?tab=schedule${
+        confirmedSchedule?.id ? `&scheduleId=${confirmedSchedule.id}` : ""
+      }`;
+      const targetUserIds = [
+        ...members.map((member) => member.userid).filter(Boolean),
+        ...guests.map((guest) => guest.id).filter(Boolean),
+      ];
+      await createRoomNotifications({
+        roomId: Number(roomId),
+        senderId: currentUser?.id || localStorage.getItem("guest_id"),
+        type: "schedule_confirmed",
+        title: "🗓️ 일정 확정",
+        message: scheduleMessage,
+        link: notificationLink,
+        targetUserIds,
+      });
+    } catch (notifError) {
+      console.error("확정 일정 알림 생성 실패:", notifError);
+    }
+
+    await updateRoomLastActivity(roomId);
+    setConfirmedTitle(""); setConfirmedDate(""); setConfirmedStartTime(""); setConfirmedEndTime(""); setConfirmedIsAllDay(false);
+    setShowConfirmedForm(false);
+    await loadConfirmedSchedules();
+  };
+
   const handleToggleAbsence = async (schedule) => {
     const userId = currentUser?.id;
     if (!userId) return;
@@ -677,16 +731,16 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
           >
             <p style={{ margin: "0 0 16px", fontWeight: "bold", fontSize: "16px", color: "var(--text-color)", textAlign: "center" }}>일정 추가 방법</p>
             <button
-              onClick={() => { setShowAddMethodSheet(false); navigate(`/rooms/${roomId}/schedules/new`); }}
+              onClick={() => { setShowAddMethodSheet(false); setShowConfirmedForm(true); }}
               style={{ width: "100%", padding: "12px", marginBottom: "8px", backgroundColor: "#7c79ff", border: "none", borderRadius: "10px", fontSize: "15px", color: "#fff", cursor: "pointer" }}
             >
-              일정 만들기
+              직접 입력
             </button>
             <button
-              onClick={() => { setShowAddMethodSheet(false); navigate(`/rooms/${roomId}/schedules/new`, { state: { newScheduleDraft: { mode: 'direct' } } }); }}
+              onClick={() => { setShowAddMethodSheet(false); navigate(`/rooms/${roomId}/vote-create`, { state: { votePurpose: "schedule", voteType: "date", returnTab: "schedule" } }); }}
               style={{ width: "100%", padding: "12px", backgroundColor: "var(--btn-bg)", border: "none", borderRadius: "10px", fontSize: "15px", color: "var(--btn-text)", cursor: "pointer" }}
             >
-              코스 만들기
+              투표로 정하기
             </button>
           </div>
         </>
@@ -704,24 +758,50 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
             </h2>
           </div>
           <button
-            onClick={() => setShowAddMethodSheet(true)}
+            type="button"
+            onClick={() => {
+              if (showConfirmedForm) {
+                setShowConfirmedForm(false);
+              } else {
+                setShowAddMethodSheet(true);
+              }
+            }}
             style={{
-              padding: "5px 15px",
-              backgroundColor: "color-mix(in srgb, var(--accent-color) 16%, var(--card-bg))",
-              color: "#7C5CFF",
-              border: "1px solid #7C5CFF",
-              borderRadius: "20px",
-              cursor: "pointer",
+              padding: "6px 12px",
               fontSize: "13px",
-              fontWeight: "600",
-              transition: "all 0.2s",
-              position: "relative",
-              top: "-4px",
+              backgroundColor: "#7c79ff",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              cursor: "pointer",
             }}
           >
-            + 새 일정
+            {showConfirmedForm ? "취소" : "+ 새 일정"}
           </button>
         </div>
+
+        {showConfirmedForm && (
+          <div style={{ backgroundColor: "var(--card-bg)", borderRadius: "12px", padding: "16px", marginBottom: "16px", display: "flex", flexDirection: "column", gap: "10px", border: "1px solid var(--border-color)", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+            <input type="text" placeholder="일정 제목 (필수)" required maxLength={120} value={confirmedTitle} onChange={(e) => setConfirmedTitle(e.target.value)} style={{ padding: "10px 12px", border: "1px solid var(--border-color)", borderRadius: "8px", fontSize: "14px", outline: "none" }} />
+            <input type="date" min={getTodayStr()} value={confirmedDate} onChange={(e) => setConfirmedDate(e.target.value)} style={{ padding: "10px 12px", border: "1px solid var(--border-color)", borderRadius: "8px", fontSize: "14px", outline: "none" }} />
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", color: "var(--text-color)", cursor: "pointer" }}>
+              <input type="checkbox" checked={confirmedIsAllDay} onChange={(e) => setConfirmedIsAllDay(e.target.checked)} style={{ accentColor: "#7C5CFF" }} /> 하루종일
+            </label>
+            {!confirmedIsAllDay && (
+              <div style={{ display: "flex", gap: "8px" }}>
+                <select className="select-inset" value={confirmedStartTime} onChange={(e) => setConfirmedStartTime(e.target.value)} style={{ flex: 1, padding: "10px", border: "1px solid var(--border-color)", borderRadius: "8px", fontSize: "14px", outline: "none", backgroundColor: "var(--card-bg)" }}>
+                  <option value="">시작 시간</option>
+                  {timeSlots.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <select className="select-inset" value={confirmedEndTime} onChange={(e) => setConfirmedEndTime(e.target.value)} style={{ flex: 1, padding: "10px", border: "1px solid var(--border-color)", borderRadius: "8px", fontSize: "14px", outline: "none", backgroundColor: "var(--card-bg)" }}>
+                  <option value="">종료 시간</option>
+                  {timeSlots.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            )}
+            <button onClick={handleAddConfirmedSchedule} style={{ padding: "12px", backgroundColor: "#7C5CFF", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "14px", fontWeight: "700", marginTop: "4px" }}>추가하기</button>
+          </div>
+        )}
 
         {confirmedSchedules.length === 0 ? (
           <div style={{ padding: "32px 0", textAlign: "center", backgroundColor: "var(--card-bg)", borderRadius: "12px", border: "1px dashed var(--border-color)" }}>
@@ -1147,6 +1227,30 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
               >
                 + 날짜 추가
               </button>
+              <button
+                type="button"
+                onClick={() => navigate("/settings/timetable")}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "4px",
+                  marginLeft: "auto",
+                  minHeight: "28px",
+                  padding: "0 10px",
+                  border: "1px solid #7c5cff",
+                  borderRadius: "999px",
+                  background: "var(--card-bg)",
+                  color: "#7c5cff",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  whiteSpace: "nowrap",
+                  cursor: "pointer",
+                }}
+              >
+                <FiClock aria-hidden="true" />
+                고정 시간표
+              </button>
             </div>
 
             <div
@@ -1389,14 +1493,12 @@ function ScheduleTab({ roomId, ownerUserId, roomName }) {
                               borderTop: showMySelection && (isSegmentStart || isSegmentSingle) ? mySelectionBorder : "none",
                               borderBottom: showMySelection
                                 ? ((isSegmentEnd || isSegmentSingle) ? mySelectionBorder : "none")
-                                : (time.endsWith(":30") ? "1px solid var(--border-color)" : "1px solid color-mix(in srgb, var(--border-color) 55%, transparent)"),
+                                : (selectable && availableCount > 0
+                                  ? `1px solid color-mix(in srgb, var(--accent-color) ${time.endsWith(":30") ? 80 : 60}%, var(--card-bg))`
+                                  : (time.endsWith(":30") ? "1px solid var(--border-color)" : "1px solid color-mix(in srgb, var(--border-color) 55%, transparent)")),
                               borderLeft: showMySelection ? mySelectionBorder : "none",
                               borderRight: showMySelection ? mySelectionBorder : "1px solid var(--border-color)",
-                              boxShadow: showMySelection
-                                ? `0 0 0 1px color-mix(in srgb, ${mySelectionBorderColor} 18%, transparent)`
-                                : (selectable && availableCount > 0
-                                  ? `inset 0 -${time.endsWith(":30") ? 2 : 1}px 0 var(--card-bg)`
-                                  : "none"),
+                              boxShadow: showMySelection ? `0 0 0 1px color-mix(in srgb, ${mySelectionBorderColor} 18%, transparent)` : "none",
 
                               cursor: selectable ? "pointer" : "default",
                               padding: 0,

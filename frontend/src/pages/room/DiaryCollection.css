@@ -83,3 +83,5 @@
 .collection-unwritten-row em { margin-left: 5px; padding: 2px 5px; border-radius: 8px; background: #f0edff; color: #7774ed; font-size: 9px; font-style: normal; }
 .collection-unwritten-row button { padding: 6px 10px; border: 1px solid #d8d5ff; border-radius: 999px; background: #fff; color: #7774ed; font-size: 10px; font-weight: 700; white-space: nowrap; cursor: pointer; }
 @media (min-width: 700px) { .diary-collection-page { background: #fafafd; } .collection-topbar, .collection-body, .collection-tabs { background-color: #fff; } .collection-body { min-height: calc(100vh - 115px); padding-top: 15px; } }
+
+.collection-month-controls button:disabled { opacity: .3; cursor: default; }

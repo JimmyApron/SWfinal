@@ -1,4 +1,4 @@
-require('dotenv').config()
+require('dotenv').config({ path: require('node:path').join(__dirname, '.env') })
 
 const express = require('express')
 const cors = require('cors')
@@ -28,6 +28,7 @@ app.use('/api/settlement', settlementRouter)
 app.use('/api/timetable', timetableRouter)
 app.use('/api/course', courseRouter)
 app.use('/api/drive-backup', roomDriveBackupRouter)
+app.use('/api/diary', require('./routes/meetingParticipants'))
 
 // 🚀 백엔드 자동 마감 작업 시작
 startVoteCloserJob()

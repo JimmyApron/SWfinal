@@ -1,20 +1,18 @@
 export function getApiBaseUrl() {
-  const configuredBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api'
+  return resolveApiBaseUrl(process.env.REACT_APP_API_BASE_URL || '/api',
+    typeof window === 'undefined' ? null : window.location.href)
+}
+
+export function resolveApiBaseUrl(configuredBaseUrl, pageUrl) {
   const normalizedBaseUrl = configuredBaseUrl.replace(/\/$/, '')
+  if (!pageUrl) return normalizedBaseUrl
 
-  if (normalizedBaseUrl !== '/api' || typeof window === 'undefined') {
-    return normalizedBaseUrl
-  }
-
-  const { hostname, port } = window.location
-  const isDevServer = port && port !== '80' && port !== '443'
-
-  if (!isDevServer) {
-    return normalizedBaseUrl
-  }
-
-  const backendHostname =
-    hostname === '0.0.0.0' || hostname === '[::1]' ? 'localhost' : hostname
-
-  return `http://${backendHostname}:5000/api`
+  const page = new URL(pageUrl)
+  const api = new URL(normalizedBaseUrl, page)
+  const loopbackHosts = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]'])
+  const pointsToVisitorsComputer = loopbackHosts.has(api.hostname) && !loopbackHosts.has(page.hostname)
+  const mixedContent = page.protocol === 'https:' && api.protocol === 'http:'
+  // Both the public site and the local development server proxy /api to Express.
+  if (pointsToVisitorsComputer || mixedContent) return '/api'
+  return normalizedBaseUrl
 }

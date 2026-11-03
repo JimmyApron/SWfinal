@@ -1,4 +1,7 @@
 import { supabase } from "../lib/supabaseClient";
+import { scopeMeetingDiaryProgress } from "../utils/meetingParticipants";
+import { getApiBaseUrl } from "./apiBaseUrl";
+import { readApiJson } from "./apiResponse";
 
 const BUCKET = "meetup-diary-photos";
 
@@ -29,7 +32,7 @@ export async function getRoomMeetings(roomId, firstDay, lastDay) {
   for (let from = 0; ; from += pageSize) {
     let query = supabase
       .from("room_meetings")
-      .select("id, source_type, source_schedule_id, title, meeting_date, start_time, end_time, is_all_day, location, location_address, lifecycle_status, attendance_status, created_at")
+      .select("id, source_type, source_schedule_id, title, meeting_date, start_time, end_time, is_all_day, location, location_address, lifecycle_status, attendance_status, created_at, updated_at")
       .eq("room_id", Number(roomId))
       .order("meeting_date")
       .order("created_at")
@@ -40,8 +43,27 @@ export async function getRoomMeetings(roomId, firstDay, lastDay) {
     const { data, error } = await query;
     if (error) throw error;
     meetings.push(...(data || []));
-    if (!data || data.length < pageSize) return meetings;
+    if (!data || data.length < pageSize) break;
   }
+  const lightningIds = meetings.filter((meeting) => meeting.source_type === "lightning").map((meeting) => meeting.id);
+  if (!lightningIds.length) return meetings;
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  if (!session?.access_token) throw new Error("로그인을 다시 해 주세요.");
+  const participantsByMeeting = {};
+  for (let index = 0; index < lightningIds.length; index += 1000) {
+    const response = await fetch(`${getApiBaseUrl()}/diary/rooms/${roomId}/participants`, {
+      method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ meetingIds: lightningIds.slice(index, index + 1000) }),
+    });
+    const result = await readApiJson(response, "만남 참여자를 불러오지 못했습니다.");
+    if (!result?.participantsByMeeting || typeof result.participantsByMeeting !== "object" || Array.isArray(result.participantsByMeeting)) {
+      throw new Error("만남 참여자 응답이 올바르지 않습니다. 다시 시도해 주세요.");
+    }
+    Object.assign(participantsByMeeting, result.participantsByMeeting);
+  }
+  return meetings.map((meeting) => meeting.source_type === "lightning"
+    ? { ...meeting, participant_user_ids: participantsByMeeting[meeting.id] || [] } : meeting);
 }
 
 export async function getMeetingWithCurrentPlace(roomId, meeting) {
@@ -76,12 +98,12 @@ export async function getMeetingDiaryDetails(meetingId) {
   return data || [];
 }
 
-export async function getMeetingDiaryProgress(meetingId) {
+export async function getMeetingDiaryProgress(meetingId, meeting) {
   const { data, error } = await supabase.rpc("get_meeting_diary_progress", {
     p_meeting_id: meetingId,
   });
   if (error) throw error;
-  return data;
+  return scopeMeetingDiaryProgress(meeting, data);
 }
 
 export async function getMyMeetingDiary(meetingId) {

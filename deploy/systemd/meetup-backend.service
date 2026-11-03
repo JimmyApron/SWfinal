@@ -1,0 +1,14 @@
+[Unit]
+Description=Meetup backend
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/SWfinal/backend
+ExecStart=/usr/bin/env node server.js
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

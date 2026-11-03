@@ -1,5 +1,4 @@
 import { supabase } from "../lib/supabaseClient";
-import { getApiBaseUrl } from "./apiBaseUrl";
 import { hasFixedTimetableConflict } from "../utils/fixedTimetableUtils";
 
 // 시간표 캡처(에브리타임 등)를 읽어 수업 블록을 돌려받는다. (이미지는 서버에 남지 않는다)
@@ -7,15 +6,16 @@ import { hasFixedTimetableConflict } from "../utils/fixedTimetableUtils";
 export async function recognizeTimetableImage(file, { signal } = {}) {
   const { data } = await supabase.auth.getSession();
   const token = data?.session?.access_token;
+  if (!token) throw new Error("로그인이 만료됐어요. 다시 로그인한 후 시도해 주세요.");
 
   const formData = new FormData();
   formData.append("image", file);
 
   let response;
   try {
-    response = await fetch(`${getApiBaseUrl()}/timetable/ocr`, {
+    response = await fetch("/api/timetable/ocr", {
       method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: { Authorization: `Bearer ${token}` },
       body: formData,
       signal,
     });

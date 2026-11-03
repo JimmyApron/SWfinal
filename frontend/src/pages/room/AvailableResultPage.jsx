@@ -1,10 +1,14 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   getTopAvailableTimes,
   sortAvailableTimes,
   getTopConsecutiveDays,
 } from "../../utils/scheduleUtils";
+import { supabase } from "../../lib/supabaseClient";
+import { createRoomNotifications } from "../../api/notificationApi";
+import { updateRoomLastActivity } from "../../api/roomApi";
+import { getTodayStr } from "../../utils/scheduleUtils";
 // sortAvailableTimes는 당일 기본 정렬(사람 많은 순→오래 있는 순)에만 사용
 
 function formatDate(dateStr) {
@@ -26,6 +30,73 @@ function AvailableResultPage() {
   const [nDays, setNDays] = useState(2);
   const [selectedTimes, setSelectedTimes] = useState([]);
   const [selectedMultiDays, setSelectedMultiDays] = useState([]);
+
+  const [confirmation, setConfirmation] = useState(null);
+  const [title, setTitle] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const savingRef = useRef(false);
+
+  const openConfirmation = (event, schedules) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setConfirmation(schedules);
+    setTitle("");
+    setError("");
+  };
+
+  const confirmSchedule = async (event) => {
+    event.preventDefault();
+    if (savingRef.current) return;
+    if (!title.trim()) { setError("일정 제목을 입력해 주세요."); return; }
+    if (confirmation.some((schedule) => schedule.date < getTodayStr())) {
+      setError("과거 날짜는 확정할 수 없어요. 최신 분석 결과를 확인해 주세요.");
+      return;
+    }
+    savingRef.current = true;
+    setSaving(true);
+    setError("");
+    try {
+      const { data, error: saveError } = await supabase.from("confirmed_schedules")
+        .insert(confirmation.map((schedule) => ({
+          roomid: Number(roomid), title: title.trim(), date: schedule.date,
+          starttime: schedule.isallday ? null : schedule.starttime,
+          endtime: schedule.isallday ? null : schedule.endtime,
+          isallday: Boolean(schedule.isallday),
+        }))).select("id");
+      if (saveError) throw saveError;
+      // 저장 후 부가 작업 실패로 같은 일정이 다시 생성되지 않게 한다.
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        const results = await Promise.allSettled([
+          updateRoomLastActivity(roomid),
+          ...(data || []).map((schedule) => createRoomNotifications({
+            roomId: Number(roomid), senderId: authData?.user?.id || localStorage.getItem("guest_id"),
+            type: "schedule_confirmed", title: "🗓️ 일정 확정",
+            message: `'${title.trim()}' 일정이 확정되었습니다.`,
+            link: `/rooms/${roomid}?tab=schedule&scheduleId=${schedule.id}`,
+          })),
+        ]);
+        results.filter((result) => result.status === "rejected")
+          .forEach((result) => console.error("일정 확정 후 알림/활동 갱신 실패:", result.reason));
+      } catch (notificationError) {
+        console.error("일정 확정 후 알림 처리 실패:", notificationError);
+      }
+      navigate(`/rooms/${roomid}?tab=schedule${data?.[0]?.id ? `&scheduleId=${data[0].id}` : ""}`);
+    } catch (saveError) {
+      console.error("분석 결과 일정 확정 실패:", saveError);
+      setError("일정을 확정하지 못했어요. 다시 시도해 주세요.");
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+
+  const confirmButtonStyle = {
+    marginTop: "6px", padding: "5px 10px", minHeight: "28px", borderRadius: "999px",
+    border: "1px solid #7c79ff", backgroundColor: "#fff", color: "#7c79ff",
+    fontSize: "11px", fontWeight: "600", cursor: "pointer", whiteSpace: "nowrap",
+  };
 
   // 당일: 사람 많은 순 → 오래 있는 순 기준으로 자동 정렬
   const allBlocks = useMemo(() => getTopAvailableTimes(availabilities), [availabilities]);
@@ -108,6 +179,30 @@ function AvailableResultPage() {
         <h2 style={{ margin: 0, fontSize: "18px" }}>가능한 시간 결과</h2>
       </div>
 
+      {confirmation && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.35)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+          <form onSubmit={confirmSchedule} role="dialog" aria-modal="true" aria-labelledby="confirm-schedule-title"
+            style={{ width: "100%", maxWidth: "360px", maxHeight: "85vh", overflowY: "auto", padding: "22px", borderRadius: "18px", backgroundColor: "var(--card-bg, #fff)", color: "var(--text-color, #333)" }}>
+            <h3 id="confirm-schedule-title" style={{ margin: "0 0 14px", fontSize: "18px" }}>일정 확정하기</h3>
+            {confirmation.map((schedule) => (
+              <p key={schedule.date} style={{ fontSize: "13px", margin: "6px 0" }}>
+                {formatDate(schedule.date)} · {schedule.isallday ? "하루종일" : `${schedule.starttime} ~ ${schedule.endtime}`}
+              </p>
+            ))}
+            {confirmation.length > 1 && <p style={{ fontSize: "12px", color: "var(--secondary-text)" }}>날짜별로 하루종일 일정 {confirmation.length}개를 확정합니다.</p>}
+            <label htmlFor="direct-schedule-title" style={{ display: "block", fontSize: "13px", margin: "16px 0 6px" }}>일정 제목</label>
+            <input id="direct-schedule-title" autoFocus maxLength={120} value={title} disabled={saving}
+              onChange={(event) => setTitle(event.target.value)} placeholder="일정 제목을 입력해 주세요"
+              style={{ boxSizing: "border-box", width: "100%", padding: "11px", border: "1px solid #ddd", borderRadius: "10px", fontSize: "14px" }} />
+            {error && <p role="alert" style={{ color: "#dc2626", fontSize: "13px" }}>{error}</p>}
+            <div style={{ display: "flex", gap: "8px", marginTop: "18px" }}>
+              <button type="button" disabled={saving} onClick={() => setConfirmation(null)} style={{ flex: 1, padding: "11px", border: "1px solid #ddd", borderRadius: "999px", background: "transparent", color: "inherit", cursor: "pointer" }}>취소</button>
+              <button type="submit" disabled={saving} style={{ flex: 1, padding: "11px", border: "none", borderRadius: "999px", background: "#7c79ff", color: "#fff", fontWeight: "600", cursor: saving ? "wait" : "pointer" }}>{saving ? "확정 중..." : "확정하기"}</button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* 모드 탭 */}
       <div style={{ display: "flex", borderBottom: "1px solid #eee" }}>
         <button style={tabStyle(mode === "당일")} onClick={() => { setMode("당일"); setSelectedTimes([]); }}>당일</button>
@@ -171,12 +266,18 @@ function AvailableResultPage() {
                       </span>
                     </div>
                     <p style={{ margin: "6px 0 2px", fontSize: "14px", color: "#333" }}>{formatDate(time.date)}</p>
-                    <p style={{ margin: 0, fontSize: "13px", color: "#666" }}>
-                      {time.starttime} ~ {time.endtime}
-                      <span style={{ marginLeft: "8px", color: "#7c79ff" }}>
-                        ({hours > 0 ? `${hours}시간 ` : ""}{mins > 0 ? `${mins}분` : ""})
-                      </span>
-                    </p>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                      <p style={{ margin: 0, fontSize: "13px", color: "#666" }}>
+                        {time.starttime} ~ {time.endtime}
+                        <span style={{ marginLeft: "8px", color: "#7c79ff" }}>
+                          ({hours > 0 ? `${hours}시간 ` : ""}{mins > 0 ? `${mins}분` : ""})
+                        </span>
+                      </p>
+                      <button type="button" style={{ ...confirmButtonStyle, marginTop: 0, flexShrink: 0 }}
+                        onClick={(event) => openConfirmation(event, [{ ...time, isallday: false }])}>
+                        확정하기
+                      </button>
+                    </div>
                   </div>
                 </label>
               );
@@ -269,12 +370,18 @@ function AvailableResultPage() {
                     <p style={{ margin: "6px 0 2px", fontSize: "14px", color: "#333" }}>
                       {formatDate(result.startDate)} ~ {formatDate(result.endDate)}
                     </p>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
-                      {result.dates.map((d) => (
-                        <span key={d} style={{ fontSize: "12px", backgroundColor: "#f0f0ff", color: "#7c79ff", borderRadius: "6px", padding: "2px 7px" }}>
-                          {d}
-                        </span>
-                      ))}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginTop: "4px" }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", minWidth: 0 }}>
+                        {result.dates.map((d) => (
+                          <span key={d} style={{ fontSize: "12px", backgroundColor: "#f0f0ff", color: "#7c79ff", borderRadius: "6px", padding: "2px 7px" }}>
+                            {d}
+                          </span>
+                        ))}
+                      </div>
+                      <button type="button" style={{ ...confirmButtonStyle, marginTop: 0, flexShrink: 0 }}
+                        onClick={(event) => openConfirmation(event, result.dates.map((date) => ({ date, isallday: true })))}>
+                        확정하기
+                      </button>
                     </div>
                   </div>
                 </label>

@@ -1,5 +1,5 @@
 -- Aggregate-only diary progress for the room calendar's meeting card.
--- Requires 20261028120000_meetup_calendar_diaries.sql.
+-- Requires 20261028120001_meetup_calendar_diaries.sql.
 -- The count intentionally ignores attendance and confirmed_schedules.absentees:
 -- every current room member is a diary target, including excluded members.
 BEGIN;

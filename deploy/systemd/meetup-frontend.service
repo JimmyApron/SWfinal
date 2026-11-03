@@ -1,0 +1,16 @@
+[Unit]
+Description=Meetup frontend
+After=network.target meetup-backend.service
+Wants=meetup-backend.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/SWfinal/frontend
+ExecStart=/usr/bin/env npm start
+Environment=BROWSER=none
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target
