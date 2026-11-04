@@ -59,7 +59,7 @@ export default function MeetingDiaryEditorPage() {
 
   const back = ({ saved = false } = {}) => navigate(location.state?.from || `/rooms/${roomId}?tab=calendar`, {
     replace: !location.state?.from,
-    state: saved ? { diaryAutoSavedToast: true } : undefined,
+    state: location.state?.detailFrom ? { from: location.state.detailFrom } : saved ? { diaryAutoSavedToast: true } : undefined,
   });
 
   if (loading) return <main className="diary-fullscreen-loading">기록을 불러오는 중…</main>;
@@ -75,6 +75,6 @@ export default function MeetingDiaryEditorPage() {
     roomName={roomName}
     dateSubtitle={`${dateLabel(meeting.meeting_date)} · ${ordinal}번째 만남`}
     onClose={back}
-    onPublished={() => navigate(`/rooms/${roomId}/meetings/${meetingId}/diary`, { replace: true, state: { from: location.state?.from } })}
+    onPublished={() => navigate(`/rooms/${roomId}/meetings/${meetingId}/diary`, { replace: true, state: { from: location.state?.detailFrom || location.state?.from } })}
   />;
 }

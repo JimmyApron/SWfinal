@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FiArrowLeft, FiChevronLeft, FiChevronRight, FiMapPin } from "react-icons/fi";
-import { getDiaryPhotos, getMeetingDiaryDetails, getMeetingDiaryProgress, getMeetingWithCurrentPlace, getRoomDiaryIdentity, getRoomMeetings, saveDiaryReaction, deleteDiaryPhotosAndRecord } from "../../api/meetupDiaryApi";
+import { cancelLightningMeeting, deleteDiaryPhotosAndRecord, getDiaryPhotos, getMeetingDiaryDetails, getMeetingDiaryProgress, getMeetingWithCurrentPlace, getRoomDiaryIdentity, getRoomMeetings, saveDiaryReaction, updateLightningMeeting } from "../../api/meetupDiaryApi";
 import { supabase } from "../../lib/supabaseClient";
 import DiaryPhotoLightbox from "./DiaryPhotoLightbox";
+import LightningMeetingEditSheet from "./LightningMeetingEditSheet";
 import "./MeetingDiaryDetailPage.css";
 import { getMeetingMembers } from "../../utils/meetingParticipants";
 
@@ -21,6 +22,7 @@ export default function MeetingDiaryDetailPage() {
   const [meetingOrdinal, setMeetingOrdinal] = useState(0);
   const [room, setRoom] = useState(null);
   const [members, setMembers] = useState([]);
+  const [roomMembers, setRoomMembers] = useState([]);
   const [diaries, setDiaries] = useState([]);
   const [photosByDiary, setPhotosByDiary] = useState({});
   const [reactionRows, setReactionRows] = useState([]);
@@ -35,6 +37,7 @@ export default function MeetingDiaryDetailPage() {
   const [progress, setProgress] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [editingMeeting, setEditingMeeting] = useState(false);
 
   const selectedDiary = diaries.find((diary) => diary.author_auth_user_id === selectedAuthor) || null;
   const selectedAuthorMember = selectedDiary && members.find((member) => String(member.userid) === String(selectedDiary.author_auth_user_id));
@@ -63,7 +66,7 @@ export default function MeetingDiaryDetailPage() {
       try { meetingProgress = await getMeetingDiaryProgress(meetingId, currentMeeting); }
       catch (progressError) { setError(progressError.message || "기록 작성 현황을 불러오지 못했습니다."); }
       const loadedPhotos = await Promise.all(records.map(async (diary) => [diary.id, await getDiaryPhotos(diary.id)]));
-      setIdentity(auth.identityId); setUserId(auth.user.id); setRoom(roomData); setMembers(getMeetingMembers(currentMeeting, memberData || [])); setMeeting(currentMeeting);
+      setIdentity(auth.identityId); setUserId(auth.user.id); setRoom(roomData); setRoomMembers(memberData || []); setMembers(getMeetingMembers(currentMeeting, memberData || [])); setMeeting(currentMeeting);
       setMeetingOrdinal(meetings.findIndex((item) => item.id === meetingId) + 1);
       setDiaries(records); setProgress(meetingProgress || { published_count: new Set(records.map((diary) => diary.author_auth_user_id).filter(Boolean)).size, target_count: getMeetingMembers(currentMeeting, memberData || []).length, published_member_ids: records.map((diary) => diary.author_auth_user_id).filter(Boolean) }); setPhotosByDiary(Object.fromEntries(loadedPhotos));
       const requestedAuthor = new URLSearchParams(location.search).get("author");
@@ -92,7 +95,7 @@ export default function MeetingDiaryDetailPage() {
   }, [selectedDiaryId]);
 
   const back = () => navigate(location.state?.from || `/rooms/${roomId}?tab=calendar`, { replace: !location.state?.from });
-  const editDiary = () => navigate(`/rooms/${roomId}/meetings/${meetingId}/diary/edit`, { state: { from: `${location.pathname}${location.search}` } });
+  const editDiary = () => navigate(`/rooms/${roomId}/meetings/${meetingId}/diary/edit`, { state: { from: `${location.pathname}${location.search}`, detailFrom: location.state?.from || `/rooms/${roomId}?tab=calendar` } });
   const react = async (emoji) => {
     if (!selectedDiary || selectedDiary.author_auth_user_id === userId || busy) return;
     setBusy(true); setError("");
@@ -111,33 +114,67 @@ export default function MeetingDiaryDetailPage() {
     catch (deleteError) { setError(deleteError.message || "기록을 삭제하지 못했습니다."); }
     finally { setBusy(false); }
   };
+  const saveMeeting = async (changes) => {
+    if (!meeting || busy) return;
+    setBusy(true); setError("");
+    try {
+      await updateLightningMeeting({ roomId, meetingId, expectedUpdatedAt: meeting.updated_at, ...changes });
+      if (changes.date !== meeting.meeting_date) {
+        const stateKey = `room-calendar-state:${roomId}`;
+        let previous = {};
+        try { previous = JSON.parse(sessionStorage.getItem(stateKey) || "{}"); } catch { /* Use the new date below. */ }
+        sessionStorage.setItem(stateKey, JSON.stringify({ ...previous, month: `${changes.date.slice(0, 7)}-01`, selectedDate: changes.date, selectedMeetingIndex: 0 }));
+      }
+      setEditingMeeting(false);
+      await load();
+    } catch (saveError) {
+      setError(saveError.code === "40001" ? "다른 변경이 있어 저장하지 못했습니다. 새로고침 후 다시 확인해 주세요."
+        : saveError.message?.includes("A member with a diary cannot be removed") ? "기록을 작성한 멤버는 참여자에서 제외할 수 없습니다."
+          : saveError.message || "번개 만남을 수정하지 못했습니다.");
+    }
+    finally { setBusy(false); }
+  };
+  const removeMeeting = async () => {
+    if (!meeting || busy || !window.confirm("번개 만남을 삭제할까요? 캘린더에서는 사라지지만 작성된 기록은 기록 모아보기에 남습니다.")) return;
+    setBusy(true); setError("");
+    try {
+      await cancelLightningMeeting({ roomId, meetingId, expectedUpdatedAt: meeting.updated_at });
+      back();
+    } catch (deleteError) { setError(deleteError.code === "40001" ? "다른 변경이 있어 삭제하지 못했습니다. 새로고침 후 다시 확인해 주세요." : deleteError.message || "번개 만남을 삭제하지 못했습니다."); }
+    finally { setBusy(false); }
+  };
 
   if (loading) return <main className="meeting-diary-page"><p className="meeting-diary-state">기록을 불러오는 중…</p></main>;
   if (error && !meeting) return <main className="meeting-diary-page"><button className="meeting-diary-back" onClick={back}><FiArrowLeft /> 뒤로</button><p className="meeting-diary-state" role="alert">{error}</p></main>;
   const publishedByUserId = new Set(progress?.published_member_ids || []);
   const currentPosition = Math.max(0, visibleAuthors.indexOf(selectedAuthor));
   const meetingPlace = meeting?.location?.trim() || meeting?.location_address?.trim();
+  const isCancelledLightning = meeting?.source_type === "lightning" && meeting.lifecycle_status === "cancelled";
+  const canManageMeeting = Boolean(identity && roomMembers.some((member) => String(member.userid) === String(userId)) && meeting?.source_type === "lightning" && meeting.lifecycle_status !== "cancelled");
 
   return <main className="meeting-diary-page">
     <header className="meeting-diary-hero">
       <div className="meeting-diary-topbar"><button className="meeting-diary-back" onClick={back} aria-label="캘린더로 돌아가기"><FiArrowLeft /></button><strong>{room?.roomname || "모임"}</strong><span aria-hidden="true" /></div>
       <h1>{meeting?.title || "함께한 만남"}</h1><p>{dateLabel(meeting?.meeting_date)} · {meetingOrdinal}번째 만남</p>
       {meetingPlace && <p className="meeting-diary-location"><FiMapPin aria-hidden="true" />{meetingPlace}</p>}
+      {isCancelledLightning && <p className="meeting-diary-cancelled">삭제된 번개 만남</p>}
     </header>
+    {canManageMeeting && <div className="meeting-diary-meeting-actions"><button type="button" disabled={busy} onClick={() => { setError(""); setEditingMeeting(true); }}>번개 만남 수정</button><button type="button" className="delete" disabled={busy} onClick={removeMeeting}>번개 만남 삭제</button></div>}
     <section className="meeting-diary-members">
       <div className="meeting-diary-section-heading"><strong>우리의 기록</strong><span>{progress?.published_count ?? diaries.length}명 작성 · 전체 {members.length}명</span></div>
       <div className="meeting-diary-member-list" style={{ "--member-count": Math.max(members.length, 1) }}>{members.map((member) => {
         const hasDiary = publishedByUserId.has(String(member.userid));
+        const isCurrentUser = String(member.userid) === String(userId);
         const isSelected = selectedDiary?.author_auth_user_id === String(member.userid);
-        return <button key={member.userid} className={`meeting-diary-member ${hasDiary ? "written" : "unwritten"} ${isSelected ? "selected" : ""}`} disabled={!hasDiary} onClick={() => { setSelectedAuthor(String(member.userid)); setPhotoIndex(0); setPhotoSlideDirection(""); }}>
-          <span className="meeting-diary-avatar">{member.profiles?.profileimageurl ? <img src={member.profiles.profileimageurl} alt="" /> : String(member.userid) === String(userId) ? "나" : member.nickname?.slice(0, 1) || "?"}</span><span className="meeting-diary-member-caption"><strong>{String(member.userid) === String(userId) ? "나" : member.nickname || "친구"}</strong>{hasDiary && String(member.userid) === String(userId) && <small>🙂</small>}</span>{!hasDiary && <small>미작성</small>}
+        return <button key={member.userid} className={`meeting-diary-member ${hasDiary ? "written" : "unwritten"} ${isSelected ? "selected" : ""}`} disabled={!hasDiary && (!isCurrentUser || isCancelledLightning)} onClick={() => { if (!hasDiary) { editDiary(); return; } setSelectedAuthor(String(member.userid)); setPhotoIndex(0); setPhotoSlideDirection(""); }}>
+          <span className="meeting-diary-avatar">{member.profiles?.profileimageurl ? <img src={member.profiles.profileimageurl} alt="" /> : isCurrentUser ? "나" : member.nickname?.slice(0, 1) || "?"}</span><span className="meeting-diary-member-caption"><strong>{isCurrentUser ? "나" : member.nickname || "친구"}</strong>{hasDiary && isCurrentUser && <small>🙂</small>}</span>{!hasDiary && <small className={isCurrentUser && !isCancelledLightning ? "meeting-diary-write-prompt" : undefined}>{isCurrentUser && !isCancelledLightning ? "기록 작성하기" : "미작성"}</small>}
         </button>;
       })}</div>
     </section>
     <section className="meeting-diary-record">
       <div className="meeting-diary-record-actions">{selectedDiary && <span className="meeting-diary-visibility">{selectedDiary.visibility === "private" ? "🔒 나만 보기" : "🔓 공개"}</span>}{selectedDiary?.author_auth_user_id === userId && <div><button onClick={editDiary}>수정하기</button><button className="delete" disabled={busy} onClick={remove}>삭제하기</button></div>}</div>
       {error && <p className="meeting-diary-error" role="alert">{error}</p>}
-      {!selectedDiary ? <div className="meeting-diary-empty"><strong>아직 작성된 기록이 없어요</strong><p>이 만남을 함께한 하루를 기록해 보세요.</p>{identity && <button className="meeting-diary-create" onClick={editDiary}>✏️ 기록 남기기</button>}</div> : <>
+      {!selectedDiary ? <div className="meeting-diary-empty"><strong>아직 작성된 기록이 없어요</strong><p>이 만남을 함께한 하루를 기록해 보세요.</p>{identity && !isCancelledLightning && <button className="meeting-diary-create" onClick={editDiary}>✏️ 기록 남기기</button>}</div> : <>
         <div className="meeting-diary-title-row"><h2>{String(selectedDiary.author_auth_user_id) === String(userId) ? "나의 하루" : `${selectedAuthorMember?.nickname || "친구"}의 하루`}</h2>{selectedDiary.mood_emoji && <span className="meeting-diary-mood" aria-label={`기분 ${selectedDiary.mood_emoji}`}>{selectedDiary.mood_emoji}</span>}</div><time>{timeLabel(selectedDiary.published_at || selectedDiary.updated_at)}</time>
         {selectedPhotos.length > 0 && <><div className="meeting-diary-photo-carousel"><div className={`meeting-diary-photo-frame ${selectedPhotos.length > 1 ? "has-multiple-photos" : ""}`} role="button" tabIndex={0} aria-label="사진 크게 보기" onClick={() => { if (suppressPhotoClickRef.current) { suppressPhotoClickRef.current = false; return; } setShowPhotoLightbox(true); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setShowPhotoLightbox(true); } }} onPointerDown={(event) => { if (selectedPhotos.length < 2) return; photoDragRef.current = { startX: event.clientX, pointerId: event.pointerId }; suppressPhotoClickRef.current = false; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerUp={(event) => { const drag = photoDragRef.current; if (drag.startX === null || drag.pointerId !== event.pointerId) return; const delta = event.clientX - drag.startX; photoDragRef.current = { startX: null, pointerId: null }; if (Math.abs(delta) > 22) { const step = delta < 0 ? 1 : -1; const nextIndex = Math.max(0, Math.min(selectedPhotos.length - 1, photoIndex + step)); suppressPhotoClickRef.current = true; if (nextIndex !== photoIndex) { setPhotoSlideDirection(step > 0 ? "next" : "previous"); setPhotoIndex(nextIndex); } } }} onPointerCancel={() => { photoDragRef.current = { startX: null, pointerId: null }; }}><img key={selectedPhotos[photoIndex]?.id || photoIndex} className={photoSlideDirection ? `photo-slide-${photoSlideDirection}` : ""} src={selectedPhotos[photoIndex]?.url} alt={`기록 사진 ${photoIndex + 1}`} draggable="false" /><span className="meeting-diary-photo-count">▣ 사진 {selectedPhotos.length}장 · 크게 보기</span></div>{selectedPhotos.length > 1 && <><button type="button" className="meeting-diary-photo-arrow previous" aria-label="이전 사진" disabled={photoIndex === 0} onClick={() => { setPhotoSlideDirection("previous"); setPhotoIndex(photoIndex - 1); }}><FiChevronLeft /></button><button type="button" className="meeting-diary-photo-arrow next" aria-label="다음 사진" disabled={photoIndex >= selectedPhotos.length - 1} onClick={() => { setPhotoSlideDirection("next"); setPhotoIndex(photoIndex + 1); }}><FiChevronRight /></button></>}</div><div className="meeting-diary-dots">{selectedPhotos.map((photo, index) => <button key={photo.id} aria-label={`${index + 1}번째 사진`} className={index === photoIndex ? "active" : ""} onClick={() => { if (index === photoIndex) return; setPhotoSlideDirection(index > photoIndex ? "next" : "previous"); setPhotoIndex(index); }} />)}</div></>}
         <p className="meeting-diary-body">{selectedDiary.body}</p>
@@ -153,5 +190,6 @@ export default function MeetingDiaryDetailPage() {
       </>}
     </section>
     {showPhotoLightbox && <DiaryPhotoLightbox photos={selectedPhotos} index={Math.min(photoIndex, selectedPhotos.length - 1)} onChange={(updateIndex) => setPhotoIndex((current) => updateIndex(current))} onClose={() => setShowPhotoLightbox(false)} />}
+    {editingMeeting && <LightningMeetingEditSheet meeting={meeting} members={roomMembers} userId={userId} busy={busy} error={error} onClose={() => setEditingMeeting(false)} onSave={saveMeeting} />}
   </main>;
 }

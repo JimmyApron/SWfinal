@@ -88,7 +88,7 @@ export default function DiaryCollection() {
       if (!auth.user) throw Object.assign(new Error("로그인이 필요합니다."), { name: "AuthSessionMissingError" });
       if (!auth.identityId) throw new Error("이 방의 회원만 기록을 볼 수 있습니다.");
       const allMeetings = await getRoomMeetings(roomId);
-      const currentMeetings = allMeetings.filter((meeting) => meeting.lifecycle_status !== "cancelled");
+      const currentMeetings = allMeetings.filter((meeting) => meeting.lifecycle_status !== "cancelled" || meeting.source_type === "lightning");
       // Keep diary visibility in the database RPC and cap concurrent calls for older rooms.
       const recordSets = [];
       for (let start = 0; start < currentMeetings.length; start += 12) {
@@ -103,12 +103,13 @@ export default function DiaryCollection() {
       }
       const allVisible = recordSets.flatMap((set) => set.visibleRecords);
       const ownByMeeting = Object.fromEntries(recordSets.filter((set) => set.ownRecord).map((set) => [set.meetingId, set.ownRecord]));
+      const recordedIds = new Set(allVisible.map((diary) => diary.meeting_id));
       setUserId(auth.user.id);
-      setMeetings(currentMeetings);
+      setMeetings(currentMeetings.filter((meeting) => meeting.lifecycle_status !== "cancelled" || recordedIds.has(meeting.id)));
       setDiaries(allVisible);
       setMyEntries(ownByMeeting);
       // getRoomDiaryIdentity already verifies active room membership; guests cannot reach this page.
-      setMyTargetMeetings(currentMeetings.map((meeting) => meeting.id));
+      setMyTargetMeetings(currentMeetings.filter((meeting) => meeting.lifecycle_status !== "cancelled").map((meeting) => meeting.id));
       setPhotos({}); setReactionCounts({});
     } catch (loadError) {
       const missingSession = loadError.name === "AuthSessionMissingError" || loadError.message === "Auth session missing!";
@@ -250,7 +251,7 @@ export default function DiaryCollection() {
     const previewDiary = meetingRecords[meetingRecords.length - 1];
     return <article className="collection-meeting-card" key={meeting.id}>
       <button type="button" className="collection-card-main" onClick={() => openRecord(meeting, previewDiary || null)}>
-        <span className="collection-card-heading"><span><strong>{dateFormat(meeting.meeting_date, { month: "long", day: "numeric", weekday: "short" })}{meeting.source_type === "lightning" && " · ⚡"}</strong><small className="collection-appointment-line"><span>{meetingTitle(meeting)}</span>{meeting.location && <span className="collection-card-location">📍 {meeting.location}</span>}</small></span><b>{ordinal(meeting.id)}번째 만남</b></span>
+        <span className="collection-card-heading"><span><strong>{dateFormat(meeting.meeting_date, { month: "long", day: "numeric", weekday: "short" })}{meeting.source_type === "lightning" && " · ⚡"}</strong><small className="collection-appointment-line"><span>{meetingTitle(meeting)}{meeting.lifecycle_status === "cancelled" && " · 삭제된 만남"}</span>{meeting.location && <span className="collection-card-location">📍 {meeting.location}</span>}</small></span><b>{ordinal(meeting.id)}번째 만남</b></span>
         {meetingRecords.length > 0 && <span className="collection-photo-strip">{meetingRecords.flatMap((diary) => (photos[diary.id] || []).map((photo) => <span className="collection-photo-preview" key={photo.id} role="button" tabIndex={0} onClick={(event) => { event.stopPropagation(); openPhotos(diary, photo.id); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); openPhotos(diary, photo.id); } }} aria-label="사진 크게 보기"><img src={photo.url} alt="기록 사진" loading="lazy" /></span>))}</span>}
         {previewDiary && <><span className="collection-preview-text">{previewDiary.body || "사진 기록"}</span><span className="collection-reactions">{Object.entries((reactionCounts[previewDiary.id] || []).reduce((counts, emoji) => ({ ...counts, [emoji]: (counts[emoji] || 0) + 1 }), {})).slice(0, 3).map(([emoji, count]) => <span key={emoji}>{emoji} {count}</span>)}</span></>}
       </button>

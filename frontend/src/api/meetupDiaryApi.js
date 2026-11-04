@@ -32,7 +32,7 @@ export async function getRoomMeetings(roomId, firstDay, lastDay) {
   for (let from = 0; ; from += pageSize) {
     let query = supabase
       .from("room_meetings")
-      .select("id, source_type, source_schedule_id, title, meeting_date, start_time, end_time, is_all_day, location, location_address, lifecycle_status, attendance_status, created_at, updated_at")
+      .select("id, source_type, source_schedule_id, title, meeting_date, start_time, end_time, is_all_day, location, location_address, lifecycle_status, attendance_status, created_by_identity_id, created_at, updated_at")
       .eq("room_id", Number(roomId))
       .order("meeting_date")
       .order("created_at")
@@ -241,6 +241,31 @@ export async function updateLightningMeetingPlace({ roomId, meetingId, location,
     p_meeting_id: meetingId,
     p_location: location || null,
     p_location_address: address || null,
+  });
+  if (error) throw error;
+}
+
+export async function updateLightningMeeting({ roomId, meetingId, expectedUpdatedAt, date, title, startTime, endTime, location, address, participantUserIds }) {
+  const { error } = await supabase.rpc("update_room_lightning_meeting", {
+    p_room_id: String(roomId),
+    p_meeting_id: meetingId,
+    p_expected_updated_at: expectedUpdatedAt,
+    p_meeting_date: date,
+    p_title: title,
+    p_start_time: startTime || null,
+    p_end_time: endTime || null,
+    p_location: location || null,
+    p_location_address: address || null,
+    p_participant_user_ids: participantUserIds,
+  });
+  if (error) throw error;
+}
+
+export async function cancelLightningMeeting({ roomId, meetingId, expectedUpdatedAt }) {
+  const { error } = await supabase.rpc("cancel_room_lightning_meeting", {
+    p_room_id: String(roomId),
+    p_meeting_id: meetingId,
+    p_expected_updated_at: expectedUpdatedAt,
   });
   if (error) throw error;
 }

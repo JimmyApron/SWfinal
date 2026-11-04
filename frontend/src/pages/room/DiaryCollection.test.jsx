@@ -64,6 +64,13 @@ test("monthly view settles after loading assets instead of repeatedly fetching a
   expect(supabase.from).toHaveBeenCalledTimes(1);
 });
 
+test("삭제된 번개 만남의 작성된 기록은 기록 모아보기에 남는다", async () => {
+  getRoomMeetings.mockResolvedValue([{ ...meeting, source_type: "lightning", lifecycle_status: "cancelled", participant_user_ids: ["member-1"] }]);
+  renderCollection();
+  expect(await screen.findByText("삭제된 만남", { exact: false })).toBeInTheDocument();
+  expect(getMeetingDiaryDetails).toHaveBeenCalledWith(meeting.id);
+});
+
 test("photo and own-record tabs and period buttons update the displayed view", async () => {
   renderCollection();
   await screen.findByText("즐거운 하루");

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { FiImage, FiMapPin } from "react-icons/fi";
-import { createLightningMeeting, getCalendarDiaryThumbnails, getMeetingDiaryProgress, getRoomDiaries, getRoomDiaryIdentity, getRoomMeetings, updateLightningMeetingPlace } from "../../api/meetupDiaryApi";
+import { createLightningMeeting, getCalendarDiaryThumbnails, getMeetingDiaryProgress, getRoomDiaries, getRoomDiaryIdentity, getRoomMeetings } from "../../api/meetupDiaryApi";
 import { createPersonalEvent, deletePersonalEvent, getRoomSharedEvents, updatePersonalEvent } from "../../api/personalEventApi";
 import { supabase } from "../../lib/supabaseClient";
 import { fetchHolidays } from "../calendar/CalendarPage";
@@ -74,7 +74,6 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
   const [selectedMeetingIndex, setSelectedMeetingIndex] = useState(() => { try { return JSON.parse(sessionStorage.getItem(`room-calendar-state:${roomId}`) || "null")?.selectedMeetingIndex || 0; } catch { return 0; } });
   const [meetingProgressById, setMeetingProgressById] = useState({});
   const [showLightning, setShowLightning] = useState(false);
-  const [editingLightningMeetingId, setEditingLightningMeetingId] = useState(null);
   const [showDiarySavedToast, setShowDiarySavedToast] = useState(false);
   const [lightningTitle, setLightningTitle] = useState("");
   const [lightningTitleError, setLightningTitleError] = useState(false);
@@ -157,14 +156,16 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
         getRoomMeetings(roomId, firstDay, lastDay),
         getRoomMeetings(roomId),
       ]);
+      const visibleMonthMeetings = monthMeetings.filter((meeting) => meeting.source_type !== "lightning" || meeting.lifecycle_status !== "cancelled");
+      const visibleRoomMeetings = roomMeetings.filter((meeting) => meeting.source_type !== "lightning" || meeting.lifecycle_status !== "cancelled");
       const monthDiaries = await getRoomDiaries(roomId, roomMeetings.map((meeting) => meeting.id));
-      const monthMeetingIds = new Set(monthMeetings.map((meeting) => meeting.id));
+      const monthMeetingIds = new Set(visibleMonthMeetings.map((meeting) => meeting.id));
       const visibleRoomDiaryIds = monthDiaries
         .filter((diary) => monthMeetingIds.has(diary.meeting_id) && diary.status === "published" && diary.visibility === "room")
         .map((diary) => diary.id);
       const thumbnails = await getCalendarDiaryThumbnails(visibleRoomDiaryIds);
-      setMeetings(monthMeetings);
-      setAllMeetings(roomMeetings);
+      setMeetings(visibleMonthMeetings);
+      setAllMeetings(visibleRoomMeetings);
       setDiaries(monthDiaries);
       setDiaryCovers(thumbnails);
       setDiariesLoaded(true);
@@ -511,22 +512,11 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
   }
 
   function openLightningForm() {
-    setEditingLightningMeetingId(null);
     setLightningParticipantIds([]);
     setLightningTitleError(false);
     setLightningTitle(""); setLightningLocation(""); setLightningLocationAddress(""); setLightningSelectedPlace(null); setShowLightningPlacePicker(false); setLightningStart(""); setLightningEnd("");
     setError("");
     lightningRequestIdRef.current = null;
-    setShowLightning(true);
-  }
-
-  function openLightningPlaceEdit(meeting) {
-    setEditingLightningMeetingId(meeting.id);
-    setLightningLocation(meeting.location || "");
-    setLightningLocationAddress(meeting.location_address || "");
-    setLightningSelectedPlace(null);
-    setShowLightningPlacePicker(false);
-    setError("");
     setShowLightning(true);
   }
 
@@ -609,28 +599,6 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
       setShowLightning(false);
     } catch (createError) { setError(createError.message || "\uBC88\uAC1C \uB9CC\uB0A8 \uB4F1\uB85D\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."); }
     finally { setSavingLightning(false); }
-  };
-
-  const submitLightningPlaceEdit = async (event) => {
-    event.preventDefault();
-    if (savingLightning || !editingLightningMeetingId) return;
-    setError("");
-    try {
-      setSavingLightning(true);
-      await updateLightningMeetingPlace({
-        roomId,
-        meetingId: editingLightningMeetingId,
-        location: lightningLocation.trim(),
-        address: lightningLocationAddress.trim(),
-      });
-      await refreshCalendar();
-      setShowLightning(false);
-      setEditingLightningMeetingId(null);
-    } catch (saveError) {
-      setError(saveError.message || "번개 만남 장소를 수정하지 못했습니다.");
-    } finally {
-      setSavingLightning(false);
-    }
   };
 
   return (
@@ -773,7 +741,7 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
         {selectedMeetings.length === 0 && (showEmptyDayPrompt
           ? <div className="calendar-empty-day-prompt"><span className="calendar-empty-day-icon" aria-hidden="true">&#x26A1;&#xFE0F;</span><strong>&#xC774; &#xB0A0; &#xCE5C;&#xAD6C;&#xB4E4;&#xC744; &#xB9CC;&#xB0AC;&#xB098;&#xC694;?</strong><p>&#xC571;&#xC5D0;&#xC11C; &#xC815;&#xD558;&#xC9C0; &#xC54A;&#xC740; &#xBC88;&#xAC1C; &#xB9CC;&#xB0A8;&#xB3C4; &#xAE30;&#xB85D;&#xD560; &#xC218; &#xC788;&#xC5B4;&#xC694;</p><button type="button" className="calendar-empty-day-cta" disabled={!identity} onClick={openLightningForm}>&#x26A1;&#xFE0F; &#xBC88;&#xAC1C; &#xB9CC;&#xB0A8; &#xAE30;&#xB85D;&#xD558;&#xAE30;</button></div>
           : <div className="calendar-empty-meeting"><p>&#xB4F1;&#xB85D;&#xB41C; &#xB9CC;&#xB0A8;&#xC774; &#xC5C6;&#xC2B5;&#xB2C8;&#xB2E4;.</p></div>)}
-        {selectedMeetings.length > 0 && <div className={`calendar-meeting-carousel ${selectedMeetings.length > 1 ? "has-multiple" : "single"} ${activeMeeting?.source_type === "lightning" && activeMeeting.lifecycle_status !== "cancelled" && identity ? "has-place-edit" : ""} ${!isActiveRecordPublished && activeMeeting?.meeting_date <= today ? "has-record-hint" : ""}`}>
+        {selectedMeetings.length > 0 && <div className={`calendar-meeting-carousel ${selectedMeetings.length > 1 ? "has-multiple" : "single"} ${!isActiveRecordPublished && activeMeeting?.meeting_date <= today ? "has-record-hint" : ""}`}>
           {selectedMeetings.length > 1 && <button type="button" className="calendar-meeting-arrow previous" aria-label="&#xC774;&#xC804; &#xB9CC;&#xB0A8;" onClick={() => setSelectedMeetingIndex((activeMeetingIndex - 1 + selectedMeetings.length) % selectedMeetings.length)}>&#x2039;</button>}
           {activeMeeting && <article key={activeMeeting.id} className={`calendar-meeting-card ${isActiveRecordPublished ? "is-complete" : ""}`}>
               <div className="calendar-meeting-summary">
@@ -794,7 +762,6 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
                   {activeMeetingParticipants.length > 4 && <span className="calendar-participant-avatar calendar-participant-more">+{activeMeetingParticipants.length - 4}</span>}
                 </div>
                 <span className="calendar-record-count">{activeMeetingDiaryCount ?? "\u2014"}/{activeMeetingProgress?.target_count ?? activeMeetingParticipants.length}&#xBA85; &#xAE30;&#xB85D;</span>
-                {activeMeeting.source_type === "lightning" && activeMeeting.lifecycle_status !== "cancelled" && identity && <button type="button" className="calendar-lightning-place-edit" onClick={() => openLightningPlaceEdit(activeMeeting)}>장소 수정</button>}
                 {isActiveRecordPublished && <span className="calendar-record-complete-label">&#x2713; &#xB0B4; &#xAE30;&#xB85D; &#xC791;&#xC131; &#xC644;&#xB8CC;</span>}
               </div>
               </div>
@@ -863,7 +830,7 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
           <button type="submit" className="diary-publish-button" disabled={savingEvent}>{savingEvent ? "저장 중..." : "저장"}</button>
         </div>
       </form></div>}
-      {showLightning && <div className="diary-modal"><form className={`diary-sheet lightning-sheet ${showLightningPlacePicker ? "is-place-picker" : ""}`} onSubmit={showLightningPlacePicker ? (event) => event.preventDefault() : editingLightningMeetingId ? submitLightningPlaceEdit : submitLightning}>
+      {showLightning && <div className="diary-modal"><form className={`diary-sheet lightning-sheet ${showLightningPlacePicker ? "is-place-picker" : ""}`} onSubmit={showLightningPlacePicker ? (event) => event.preventDefault() : submitLightning}>
         {showLightningPlacePicker ? <>
           <header className="diary-sheet-header lightning-place-header"><button type="button" className="lightning-place-back" onClick={() => setShowLightningPlacePicker(false)} aria-label="번개 만남 화면으로 돌아가기">‹</button><h2>장소 선택</h2><button type="button" className="diary-icon-button" onClick={() => setShowLightning(false)} aria-label="닫기">&times;</button></header>
           <div className="lightning-place-picker" onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }}>
@@ -883,13 +850,6 @@ function RoomCalendarTab({ roomId, participants = [], settingsOpen = false }) {
               }}
             />
           </div>
-        </> : editingLightningMeetingId ? <>
-          <header className="diary-sheet-header"><div><p className="diary-eyebrow">{selectedDate}</p><h2>번개 만남 장소 수정</h2></div><button type="button" className="diary-icon-button" onClick={() => setShowLightning(false)} aria-label="닫기">&times;</button></header>
-          <label className="diary-field-label" htmlFor="lightning-location-edit">장소</label>
-          <div className="lightning-place-row"><input id="lightning-location-edit" className="diary-select" value={lightningLocation} onChange={(event) => { setLightningLocation(event.target.value); setLightningLocationAddress(""); setLightningSelectedPlace(null); }} maxLength={200} placeholder="장소를 입력해 주세요" /><button type="button" className="lightning-place-button" onClick={() => setShowLightningPlacePicker(true)}>지도에서 선택</button></div>
-          <p className="lightning-place-edit-hint">장소를 비워두면 미정으로 표시됩니다. 저장하면 기록 화면에도 반영돼요.</p>
-          {error && <p className="diary-error">{error}</p>}
-          <button type="submit" className="diary-publish-button" disabled={savingLightning}>{savingLightning ? "저장 중..." : "장소 저장"}</button>
         </> : <>
         <header className="diary-sheet-header"><div><p className="diary-eyebrow">{selectedDate ? new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "long" }).format(new Date(`${selectedDate}T12:00:00`)) : ""}</p><h2>&#x26A1;&#xFE0F; &#xBC88;&#xAC1C; &#xB9CC;&#xB0A8; &#xAE30;&#xB85D;&#xD558;&#xAE30;</h2></div><button type="button" className="diary-icon-button" onClick={() => setShowLightning(false)} aria-label="&#xB2EB;&#xAE30;">&times;</button></header>
         <div className="lightning-time-row"><label htmlFor="lightning-start">&#xC2DC;&#xC791; &#xC2DC;&#xAC04;<input id="lightning-start" type="time" value={lightningStart} onChange={(event) => setLightningStart(event.target.value)} /></label><label htmlFor="lightning-end">&#xC885;&#xB8CC; &#xC2DC;&#xAC04;<input id="lightning-end" type="time" value={lightningEnd} onChange={(event) => setLightningEnd(event.target.value)} /></label></div>

@@ -92,7 +92,6 @@
 .calendar-selected-heading { margin-bottom: 14px; }
 .calendar-selected-heading h2 { margin: 3px 0 0; font-size: 18px; }
 .calendar-meeting-badge { display: inline-flex; min-height: 36px; box-sizing: border-box; align-items: center; justify-content: center; padding: 0 10px; border-radius: 999px; background: #f0efff; color: #716ef0; font-size: 11px; font-weight: 700; white-space: nowrap; }
-.calendar-lightning-place-edit { position: relative; z-index: 2; min-height: 30px; margin-left: auto; padding: 0 9px; border: 1px solid #dcdcf0; border-radius: 9px; background: #fff; color: #625fe8; font: inherit; font-size: 11px; font-weight: 800; white-space: nowrap; cursor: pointer; pointer-events: auto; }
 .calendar-empty-meeting { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 15px; border-radius: 13px; background: #f8f8fb; color: #858393; font-size: 13px; }
 .calendar-empty-meeting p { margin: 0; }
 .calendar-empty-meeting button { border: 0; background: transparent; color: #706df1; font-weight: 700; cursor: pointer; }
@@ -118,8 +117,6 @@
 .calendar-meeting-info span, .calendar-meeting-info em { color: #8c8a99; font-size: 11px; font-style: normal; }
 .calendar-meeting-place-icon { vertical-align: -2px; }
 .calendar-meeting-participants { display: flex; align-items: center; gap: 9px; margin-top: 11px; padding-top: 10px; border-top: 1px solid #eeedf3; }
-.calendar-meeting-carousel.has-place-edit .calendar-meeting-participants { flex-wrap: wrap; }
-.calendar-meeting-carousel.has-place-edit .calendar-record-complete-label { flex-basis: 100%; margin-left: 0; text-align: left; }
 .calendar-participant-avatars { display: flex; align-items: center; padding-left: 2px; }
 .calendar-participant-avatar { display: grid; width: 27px; height: 27px; place-items: center; overflow: hidden; margin-left: -3px; border: 2px solid #faf9fd; border-radius: 50%; background: #d9d9e1; color: #fff; font-size: 10px; font-weight: 800; }
 .calendar-participant-avatar:nth-child(3n + 1) { background: #8a78f6; }
